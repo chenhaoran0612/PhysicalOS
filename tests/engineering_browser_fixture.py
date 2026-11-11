@@ -1,0 +1,38 @@
+"""Local-only UI fixtures, using real SSH protocol and the packaged agent runtime."""
+import json
+import sys
+import tempfile
+import time
+from test_product import Server
+from test_engineering import ResponsesFixture
+from ssh_fixture import SSHFixture
+from mcp_fixture import MCPFixture
+from test_extensions import ExtensionModel
+from test_workflows import WorkflowModel
+from brainos.server import Application,make_handler
+
+class WorkResponses(ResponsesFixture):
+    requests=[]
+    engineering=True
+
+# ux03: no pinned Codex binary on this machine -> the deterministic app-server stand-in (tests/codex_standin.py).
+import agent_binary  # noqa: E402,F401
+from brainos import agent_runtime  # noqa: E402
+CodexStandInRef=[None]
+if not agent_runtime.binary_path():
+    from codex_standin import CodexStandIn
+    CodexStandInRef[0]=CodexStandIn
+    _real_available=agent_runtime.available
+    agent_runtime.AgentProcess=CodexStandIn
+    agent_runtime.available=lambda:{**_real_available(),'available':True}
+
+if __name__=='__main__':
+    tmp=tempfile.TemporaryDirectory();app=Application(tmp.name)
+    api=Server(make_handler(app));model=Server(ResponsesFixture);work=Server(WorkResponses);ssh=SSHFixture();mcp=Server(MCPFixture);ext_model=Server(ExtensionModel);flow_model=Server(WorkflowModel)
+    config={'url':api.url,'model':model.url+'/v1','work':work.url+'/v1','ssh_port':ssh.port,'mcp':mcp.url+'/mcp','extension_model':ext_model.url+'/v1','workflow_model':flow_model.url+'/v1','runtime':'standin' if agent_runtime.AgentProcess is CodexStandInRef[0] else 'codex'}
+    with open(sys.argv[1] if len(sys.argv)>1 else '/tmp/neuxmind-engineering-qa.json','w') as f:json.dump(config,f)
+    print(json.dumps(config),flush=True)
+    try:
+        while True:time.sleep(1)
+    except KeyboardInterrupt:pass
+    finally:api.close();app.close();model.close();work.close();ssh.close();mcp.close();ext_model.close();flow_model.close();tmp.cleanup()

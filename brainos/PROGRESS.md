@@ -1,0 +1,127 @@
+# 桌面集成 Agent 进度日志（只追加）
+
+## 第 01 轮修复（R-07 解除急停、R-08 仿真证据）
+- 22:40 读契约 §1.1、审查 R-07/R-08、service/delivery/contracts/前端 / 基线 72 测试通过（20 跳过） / 改后端
+- 22:55 contracts 保留 simulated/vendor/model；onsite 按仿真标记存 scope:simulation；deploy/start/readiness 拒绝仿真证据；新增 reset_robot 与 /api/robots/reset；edge 网关支持 /v1/reset / 新测试 10 项通过，原 72 项通过（测试替身补 evidence_kind:device_run） / 改前端
+- 23:12 前端：机器人卡片/交付清单/报告列表/请求记录标注“仿真”，交付清单与机器人卡片显示“急停已锁存”和“解除急停”确认 / node --check 全通过；Playwright 验收通过、0 JS 异常，截图在 scratchpad/desktop-shots；原 delivery/journey 浏览器脚本仍通过 / 写文档并提交
+- 23:04 提交 4851462（iter01-fix(desktop)） / 根测试 82 项通过、20 跳过；浏览器验收通过 / 等总指挥合并，统一版本号（建议 0.7.2）
+
+## 第 02 轮（§4.5 桌面端接入新三层 + §4.1 异步现场测试客户端）
+- 读契约 §1、§4.1、§4.5，USER_EXPERIENCE，service/delivery/server/前端，spec 注册表与兼容性，runtime/cloud README / 基线 82 测试通过（20 跳过）；runtime 异步评估尚未提交，先用协议替身 / 开始写后端
+- 09:10 后端完成：robot_caps（v2 能力表/v1 回退）、skill_packages（O_NOFOLLOW 读取、预检、摘要确认后安装、request_id 幂等）、cloud_account（https/回环 http、凭据文件 600、钱包、按 manifest 过滤模型）、evaluations（async:true + 轮询、旧设备同步回退、unknown 不重试）、robots/stop、readiness 增加 testing / start_blocked / 新测试 31 项通过（2 项等待 runtime §4.1 提交后用真实 runtime 跑） / 开始写前端
+- 09:45 前端完成：robot_detail.js（能力表、技能包两步安装）、cloud.js（云平台账户页）、onsite.js（1.5 s 轮询、进行中状态、请求停止）、交付清单 testing / 急停禁用启动、部署页启动按钮禁用 / Playwright 验收通过，0 JS 异常，截图在 scratchpad/desktop-shots-02（已逐张查看 900×640 与 1440×930） / 跑全量回归
+- 10:20 runtime 工作区已有 §4.1 实现（未提交）：真实 runtime 两项异步测试通过；第 01 轮 runtime 仿真测试改为轮询到完成（断言不变） / 根测试 113 项通过、20 跳过；原 sim_reset / delivery / journey 浏览器脚本通过 / 写文档并提交；等 runtime 提交后复验
+- 10:50 等待 runtime 提交 25 分钟仍未提交；cloud 已提交 3e7f2f7，全量 113 项仍通过；真实 runtime §4.1 两项对其未提交工作区再次通过 / 交付，runtime 提交后需复验
+- 11:40 第 02 轮审查修复：逐级拒绝路径符号链接、拒绝硬链接与特殊文件（含 skill.json）、云地址 localhost→127.0.0.1、私网/链路本地默认拒绝且连接时校验实际地址、非三态评估状态记为未知；变异复验；文档更正 22→20
+
+## 第 03 轮（§5.3 工程助手切到云网关；接手上一个桌面 Agent）
+- 接手：上一个 Agent 在浏览器验收阶段卡住被停止；未提交工作区已由总指挥验证 tests/ 141 通过（23 跳过）、cloud/tests 186 通过 / 开始通读 git diff
+- 15:39 通读 git diff 完成：§5.3 开/关云会话、停止/失败关闭、本地账本 mock 断言、错误提示均到位；cloud 兼容改动（store/include/prompt_cache_key 按组织重键/client_metadata 校验后丢弃/namespace 工具/reasoning 项/列表 output；终止事件结算后再转发）合理 / 发现问题：关闭失败后继续会话会覆盖 cloud_session、旧会话丢失 → 已修（关闭失败也记入 cloud_runs，继续前先重试关闭），加测试 / 跑测试
+- 15:44 修复后测试：tests/ 3.13 含真实 Codex 142 通过 0 跳过（无二进制 142 通过 23 跳过）；3.10 venv 137 通过 20 跳过（cloud 依赖需 3.11+）；cloud/tests 186 通过；sdk 59 通过 / runtime 抽查与 PostgreSQL
+- 15:48 cloud/tests PostgreSQL 16 临时库 186 通过（库与角色已删除、集群已停）；runtime 227 通过（与 PG 并行时 test_async_evaluate 一项偶发失败，单独重跑通过——疑为 §5.2 遥测跨重启后测试取 [0] 个 runtime.started，交 runtime Agent） / 浏览器验收
+- 15:51 浏览器验收第 1 次：步骤 1–6a 通过，6b 超额失败——真实 Codex 先触发 Token 观察限额，interrupt 时轮次已结束报“no active turn to interrupt”，该错误压过了云端超额结论 → 修复：interrupt 对已结束轮次容错；云端超额结论优先（运行时错误附在后面）；云模型的观察限额提示改为“以云平台计量为准”；新增真实运行时超额测试 / 复跑
+- 15:52 浏览器验收第 2 次通过（真实 Codex 0.146.1，14 张截图，0 JS 错误，本机账本 0 条，云端扣除 2032 点与会话记录一致）；fixture 已停 / 查看截图
+- 15:56 截图已逐张查看（1440/900）；修复后回归：3.13 含 Codex 143 通过 0 跳过、无二进制 143 通过 24 跳过 / 写文档
+- 15:57 cloud/README（白名单表、流式终止事件、Echo tools、§5.3 对应关系）与 cloud/EVOLUTION_ENTRY 第 03 轮完成 / 写桌面文档
+- 15:58 文档完成（USER_EXPERIENCE 第 03 轮、ENGINEERING_ENGINE 云网关路径、brainos/EVOLUTION_ENTRY 第 03 轮） / 提交
+- 15:58 提交 3564d9e iter03(cloud)；随后提交 iter03(desktop) / 交付报告
+
+## 第 03 轮审查修复（Q3-03 / Q3-04 / Q3-07 等）
+- 16:30 读审查报告 docs/evolution/reviews/2026-11-08-iter03-review.md 与复现脚本 / 定位 Codex 配置项
+- 16:32 Q3-03/Q3-04：Codex 0.146.1 `features list` 确认开关；config.toml 加 shell_snapshot/plugins/remote_plugin/plugin_sharing/in_app_updates/skill_mcp_dependency_install=false、check_for_update_on_startup=false；关闭时清理 shell_snapshots/.tmp/plugins；runtime-home 86 MB→1.9 MB、无 .tmp/plugins；真实 Codex 回归测试 4 项（云令牌、自有密钥全盘扫描零命中、空闲 6 s 无插件克隆）+ 3 个变异均被杀 / Q3-07
+- 16:34 Q3-07/Q3-15 cloud：会话模型调用单独体积上限 8 MB（NEUXMIND_SESSION_MAX_BODY_BYTES，仍计入输入上界与预算），413 带 max_bytes 与“会话历史过长”提示；responses input 上限 1000→4096 项；prompt_cache_key 始终写入组织键（无键时用 default）；补 C4/C5 测试；4 个变异全杀 / 桌面端 413 提示与 Q3-16
+- 16:36 桌面端：413 payload_too_large 提示“会话历史过长，请新建工程任务继续”（真实 Codex + 小上限云端测试）；Q3-16 工作流把 cloud_close_failed/pending 视为费用待确认并补 B4 测试（4 种计量状态，变异被杀）/ 全量回归
+- 16:40 回归：tests 3.13 含 Codex 149 通过 0 跳过；3.10 144 通过 26 跳过；cloud SQLite 192、PostgreSQL 16 192（临时库已删、集群已停）；sdk 59 / 浏览器复验与文档
+- 16:41 浏览器 cloud03 复验通过（0 JS 异常）；文档：ENGINEERING_ENGINE（长会话体积、引擎落盘与网络）、USER_EXPERIENCE、cloud/README、两份 EVOLUTION_ENTRY / 提交
+
+## 第 04 轮（§6.2 本体适配工作流 + G-2 停止上界）
+- 17:22 读协作规则（第 9 条有界执行）、INTERFACES §5.3/§6、ENGINEERING_ENGINE、iter03 G-2 / 读 engineering.py、workflows.py
+- 17:28 G-2 完成：同步 RPC 等待可被停止取消（StopRequested）、interrupt 无响应即杀进程组、stop() 启动看门狗（STOP_DEADLINE_SECONDS=10，超时杀运行时，再 3 s 未退出则释放并标记 stop_forced）；tests/test_stop_bound.py 4 项真实 Codex（SIGSTOP 冻结真实运行时）通过；变异（去掉取消/看门狗）2 项失败 / 开始本体适配工作流
+- 17:39 本体适配后端完成：brainos/adaptation.py（模板 4 阶段、映射校验与“需确认”降级、脚手架/一致性子进程：最小环境/进程组/时限/停止）、workflows 支持产品执行阶段（kind=product，不调模型）与模板校验钩子、conformance_reports 集合、路由 engineering/adaptation/start；tests/runtime_double.py（§6.1/6.2 CLI 替身）、test_adaptation.py 14 项（真实 Codex 跑通四阶段、dry 失败进入风险、一致性停止有界+重试）全过 / 写前端
+- 17:42 浏览器验收第 1 次：fixture PID 6802（timeout 900）
+- 17:43 浏览器第 1 次失败：脚本进入了 #agents（档案按钮在 #robots），诊断截图已看；改脚本后第 2 次
+- 17:44 浏览器第 2 次失败：步骤 1–7（档案入口→启动→映射表→适配器→一致性摘要→报告→流程完成）通过，步骤 8 本体详情失败——SSH 接入的本体在 #robots 卡片上没有“能力与技能”入口（产品缺口）。按第 9 条停止浏览器验收；fixture 已停（PID 已杀），转为修复产品缺口并用测试覆盖
+- 17:44 修复：SSH 本体卡片显示“能力与技能”（有档案即可进入详情）、模板流程对话框加宽（映射表列不再被截）、阶段内一致性摘要带时间；补测试（详情接口与快照 conformance_reports）/ 跑全量 3.13 与 3.10
+- 17:47 全量 3.13 第一遍 167 项中 8 项失败：test_cloud_engineering 的 ReplayAppServer 替身不接受新 cancel 参数（签名补上，未放宽断言）；该文件 25 项复跑通过 / 全量 3.13 复跑 + 3.10
+- 17:50 全量：3.13（真实 Codex）167 通过 0 跳过；3.10 venv（真实 Codex）162 通过 26 跳过（cloud 依赖需 ≥3.11）/ 提交第一版；随后按运行时进行中的 CLI 形状（scaffold --spec/--out、conformance --adapter module:Class --out）对齐替身与调用
+- 17:54 对齐运行时进行中的 CLI（scaffold --spec/--out 输出入口 module.adapter:Class；conformance --adapter 入口 --out；报告 declared/levels）；映射阶段校验参数并把缺必填参数的可实现项降级为需确认；替身同形状；test_adaptation 替身模式 14 通过，真实运行时工具模式（运行时未提交工作区 + runtime/tests/ros2_double + 真实 Codex）11 通过 3 跳过 / 全量回归
+- 19:06 第 04 轮第二接手（桌面集成 Agent）：读 git diff 与 d8c0157、协作规则第 9 条、INTERFACES §6；目标对齐运行时 09c1297 真实 scaffold/conformance
+- 19:08 现状：未提交改动已按 scaffold --spec/--out 与 conformance --adapter 调用；偏差：报告解析容错猜测、退出码 2 未区分、ROS 2 模板适配器在 stage 3 无 rclpy 替身、摘要 levels 为字符串而非报告字段、validate_adapter 把 todo 当已声明。开始改 adaptation.py
+- 19:12 adaptation.py 对齐完成（严格解析 conformance.report.v1、退出码 0/1/2、stage 3 接运行时 rclpy 替身、摘要 levels/verdict/skip_kind/field_acceptance）；单元测试 16 通过 / 跑真实 Codex 四阶段
+- 19:13 前端：一致性摘要显示 levels 计数/blocked 原因、evidence_kind、simulated、field_acceptance:false、conformance_id、运行时/能力标准版本、manifest_digest（若有）、skip_kind、脚手架实现/待实现；浏览器验收第 1 次
+- 19:14 浏览器第 1 次：fixture PID 10338（timeout 900），脚本 timeout 180
+- 19:14 浏览器验收第 1 次通过（13 张截图已看，0 JS 异常；fixture 已停）/ 全量 3.13（真实 Codex）
+- 19:17 全量 3.13 第 1 遍：173 项 1 失败 test_cloud_engineering.test_session_busy_is_explained（与本改动无关的时序竞态：两个并发调用未必重叠；单文件 3 次复跑 1 次失败）；全量复跑 1 次
+- 19:19 全量 3.13 第 2 遍：172 通过、同一项失败（cloud f0eacde 之后出现的并发时序竞态，不在本改动范围；按第 9 条不再重跑该验收，记入遗留）/ 3.10 venv
+- 19:21 3.10 venv（scratchpad/desktop04/venv310，真实 Codex）168 项 142 通过 26 跳过（cloud 依赖 ≥3.11），test_adaptation 20 项 0 跳过 / 写文档
+- 19:22 文档：ENGINEERING_ENGINE、USER_EXPERIENCE、EVOLUTION_ENTRY（第 04 轮补充）/ 提交
+- 19:58 第 04 轮审查修复开始：读审查报告（Q4-20、退出码一致性变异、桌面 P2/P3、aborted/blocked 显示）
+- 19:59 Q4-20 修复：UpstreamGate（threading.Event）让第一次调用停在 Echo 上游时才发第二次；单测连续 20/20 通过 / 下一步 D4 与 aborted 显示
+- 20:01 adaptation：conformance_level（退出码一致性独立函数）、aborted/blocked 结论、阶段 3 断网（unshare -n / -r -n，macOS sandbox-exec）、阶段 2 静态篡改检查（Q4-13）、不复制 .pyc；写测试
+- 20:03 运行时工作区正被运行时 Agent 改动（conformance.py 'Suite' 无属性 k），真实运行时用例在主工作区失败；改在 git worktree（HEAD 0d765f1 + 我的未提交改动）中验收
+- 20:05 worktree 变异：D4（退出码一致性）、aborted 当通过、aborted+ok 被接受、篡改检查关闭、阶段门忽略检查、去掉断网 —— 6 个变异全部被杀；全量 3.13（worktree）
+- 20:07 全量 3.13（worktree，真实 Codex）184 通过 0 跳过 / 3.10
+- 20:09 浏览器复验第 1 次（worktree）
+- 20:09 浏览器复验第 1 次通过；加入 aborted 摘要渲染检查后第 2 次
+- 20:10 浏览器第 2 次通过（中止摘要文本断言通过；截图被对话框遮挡未目视确认，记遗留）；文档更新 / 提交
+- 23:33 ux01 桌面 Agent 开始：读协作规则、runtime cli/gateway/core、brainos 机器人/技能/云账户、web；方案：仿真机器人以子进程运行 neuxmind_runtime serve（--port 0，读首行 URL，stdin 断开即退出），示例技能库，实时状态面板
+- 23:44 后端（sim_robots/sim_child/runtime_bridge、示例库、实时状态、运行技能、云探测）+ 前端（sim.js、入口文案、能力卡片、技能库、云页）完成；浏览器验收第 1 次（fixture PID 26468，timeout 600）
+- 23:46 浏览器验收第 1 次通过（12 张截图已看）；build_macos.py 重构（--check / --freeze-check），launcher 支持 --nx-sim-child；开始 Linux 冻结冒烟
+- 23:48 Linux 冻结冒烟通过（PyInstaller 6.22.3：仿真四足 + 示例技能安装 + 运行 succeeded，子进程随后端退出）；Swift 文件夹选择器（WKScriptMessageHandler + NSOpenPanel，未能在 Linux 编译）；新增 tests/test_ux01_sim.py 17 项通过；开始全量
+- 00:00 浏览器验收 ux01 第 3 次通过（云页默认地址指向无服务端口以覆盖“连不上”）；desktop02 回归通过；全量进行中（spec OK，runtime 运行中）
+- 00:06 全量通过：spec 11、runtime 336、cloud 211、sdk 84、tests 201（39 跳过，环境相关）；ux01 17 项复跑通过；无残留进程；提交
+- 01:35 ux02 开始：阅读 ux01 与 DEMO，准备按用户路径审查全部侧栏页面
+- 01:41 审查走查完成（15 页截图 + 动作探测 + 仿真应用交付路径）；开始修复 a–d
+- 01:53 ux02 浏览器验收通过（tests/ux02_browser.cjs，11 张截图）；单元测试 tests/test_ux02.py 7 项通过；开始回归旧浏览器验收
+- 01:58 回归：ux01/sim_reset/desktop02 通过；cloud03 在“工程会话产物”一步失败，基线 v0.11.0 同样失败（与本次改动无关，记入遗留，不再重试）
+- 02:05 审查文档 docs/evolution/reviews/2026-11-09-ux-audit.md 完成；全量测试进行中
+- 02:25 全量：spec、runtime 通过；cloud/sdk/tests 运行中
+- 02:31 全量通过：spec 12、runtime 372、cloud 211、sdk 84、tests 208（跳过 39）；本次启动的服务与夹具均已停止；提交
+- 02:32 ux03 开始：阅读审查遗留与 cdfc8e4
+- 02:45 ux03：cloud03/adaptation 根因=本环境无 Codex 二进制（旧回放不执行工具调用/引擎未安装）；新增 tests/codex_standin.py，两项浏览器验收通过
+- 02:55 ux03：旧浏览器验收 engineering/discovery 选择器过时（档案按钮 inventory-report、证据 inventory-evidence），已更新；extensions 无 Codex 时跳过；其余通过；下一步 browser_smoke
+- 02:58 ux03：browser_smoke 改为交付清单流程后通过；开始 UX 修改（before 截图）
+- 03:03 ux03：步骤参数表单、参数中文标签与单位、白话登记技能、模型/服务/MCP/场景表单高级折叠、工作台仿真推荐、侧栏紧凑 已改，开始截图验证
+- 03:07 ux03 浏览器验收通过（tests/ux03_browser.cjs）；tests/test_ux03.py 通过；开始全部浏览器回归
+- 03:14 全部浏览器验收（含 browser_smoke，替身与真实 Codex）通过；审查文档补充 ux03；全量单元测试运行中
+- 03:41 全量通过：spec 12、runtime 372、cloud 211、sdk 84、tests 213（跳过 39）；本次启动的夹具与服务均已停止；提交
+- 04:21 ux04 开始：阅读 Q5-03/04/05/10/12 与 ux02.js/connector
+- 04:24 ux04：阅读完毕；方案=桌面错误带结构化 code/device_status，前端按码表分类（web/ux04.js），复位 409/卡住出路 + 重启仿真；开始改后端
+- 04:31 ux04：后端（结构化错误、复位拒绝/卡住、重启仿真、参数字段透传、描述去能力ID）与前端（分类器、字段错误、授权提示、复位出路、Q5-12）已改；下一步单测+浏览器验收
+- 04:34 ux04：单测 test_ux04（13 项，含 95 条码表检查）通过；跑 tests/ 全量回归
+- 04:41 ux04：tests/ux04_browser.cjs 通过（14 张截图）；检查截图后跑 ux01/02/03/sim_reset/desktop02 回归
+- 04:43 ux04：回归 ux01/ux02/ux03/sim_reset/desktop02 均通过（ux01/desktop02 的能力表断言改为在“技术细节”中查 ID）；开始 v0.12.0 before 截图
+- 04:45 ux04：before 截图（v0.12.0）完成；ux04 浏览器验收复跑通过；开始五套全量单测（后台）
+- 04:46 ux04：全量单测运行中（runtime 约 23 分钟）；EVOLUTION_ENTRY 已补 ux04 条目
+- 05:15 ux04：全量单测全绿（spec 12、runtime 395、cloud 211、sdk 84、tests 226/跳过 39）；浏览器 6 项通过；无遗留进程；提交
+- 06:23 ux05：开始（Q6-07/08/11、锁存守护状态、首次使用引导）；阅读审查与代码
+- 06:28 ux05：后端改完（错误字段透传、桌面500码、options 带类型、live 加锁存守护与 stop_not_obeyed）；开始前端
+- 06:31 ux05：前端改完（下拉选项、分类细分、复位说明、实时状态白话/锁存守护/硬件急停横幅、首次使用引导）；开始单测
+- 06:38 ux05：ux05 浏览器验收调试中（引导首屏重绘、整数选项改为下拉）
+- 06:41 ux05：ux05、ux04 浏览器验收通过；跑 ux01/02/03/sim_reset/desktop02 回归
+- 06:42 ux05：浏览器 7 项均通过；全量单测后台运行中；EVOLUTION_ENTRY 已补 ux05 条目
+- 06:49 ux05：第一次全量单测被外部 SIGTERM（rc=143，非测试失败）；重跑一次
+- 07:13 ux05：重跑 runtime/tests 419 项 OK；cloud/sdk/tests 运行中
+- 07:18 ux05：全量单测全绿（spec 12、runtime 419、cloud 211、sdk 84、tests 通过/跳过 39）；浏览器 7 项通过；无遗留进程；提交
+- 08:22 ux05-fix：开始（Q7-03 全局硬件急停横幅、Q7-04 浮点选项、Q7-11 仿真措辞）；阅读审查与代码
+- 08:31 ux05-fix：后端 robots/safety、typed_parameters、前端全局横幅/详情页/仿真措辞完成；单测 test_ux05_fix 19 项通过；开始浏览器验收
+- 08:35 ux05-fix：ux05_fix 浏览器验收（真实运行时 + 不服从停止驱动）通过；跑 8 项浏览器回归（后台）
+- 08:39 ux05-fix：浏览器 8 项（ux05_fix、ux01–05、sim_reset、desktop02）+ ux04_errors 通过；开始五套全量单测（后台）
+- 08:46 ux05-fix：runtime/tests 第一次被外部 SIGTERM（rc=143，非测试失败，同 ux05）；其余套件继续，之后单独重跑 runtime
+- 08:51 ux05-fix：spec 15、cloud 211、sdk 84、tests 265（跳过 39）通过；重跑 runtime/tests（后台）
+- 09:09 ux05-fix：runtime/tests 重跑中
+- 09:15 ux05-fix：五套全量单测全绿（spec 15、runtime 439、cloud 211、sdk 84、tests 265/跳过 39）；浏览器 8 项 + ux04_errors 通过；无遗留进程；提交
+- 10:24 ux05-fix2：开始（Q7b-04/05/06/07/08/10）；阅读审查与代码
+- 10:31 ux05-fix2：后端（类型化参数、复位时限/能力、relaxed_keys、全项目安全轮询）与前端文字改完；开始单测
+- 10:38 ux05-fix2：单测 test_ux05_fix2 17 项通过、ux05_fix 回归通过；新浏览器验收 ux05_fix2 调试中
+- 10:41 ux05-fix2：ux05_fix2 浏览器验收通过；EVOLUTION_ENTRY 已补；浏览器 9 项回归后台运行中
+- 10:45 ux05-fix2：浏览器 9 项 + ux04_errors 125 项通过，无遗留进程；开始五套全量单测（后台）
+- 11:16 ux05-fix2：五套全量单测全绿（spec 15、runtime 453、cloud 211、sdk 84、tests 282/跳过 39）；浏览器 9 项 + ux04_errors 通过；无遗留进程；提交
+- 12:39 ux05-fix3：开始（夹具 reset_expected_s、真运行时 reset_expire 主断言、漂移提示浏览器验收）
+- 12:46 ux05-fix3：夹具加 reset_expected_s=7 与急停后滑移的机器人（creep）；ux05_fix2 浏览器验收改为真运行时主断言 + 旧运行时打桩，漂移提示段落调试中
+- 12:51 ux05-fix3：ux05_fix2 浏览器验收通过（真运行时作废 + 旧运行时打桩 + 漂移提示）；九项浏览器回归后台运行中
+- 12:56 ux05-fix3：浏览器 9 项通过（ux05 迟到复位断言改为真运行时措辞）；五套全量单测运行中
+- 13:06 ux05-fix3：全量单测进行中
+- 13:16 ux05-fix3：全量单测进行中（spec/runtime 已过的见日志）
+- 13:26 ux05-fix3：全量单测进行中（runtime 套件较长）
+- 13:27 ux05-fix3：五套全量单测全绿（spec 17、runtime 470、cloud 211、sdk 84、tests 283/跳过 39）；浏览器 9 项通过；无遗留进程；提交

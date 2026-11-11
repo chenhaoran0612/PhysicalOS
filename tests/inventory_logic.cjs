@@ -1,0 +1,16 @@
+const {readFileSync}=require('node:fs');
+const vm=require('node:vm');
+const assert=require('node:assert/strict');
+const sandbox={document:{addEventListener(){}}};
+vm.createContext(sandbox);vm.runInContext(readFileSync('web/inventory.js','utf8'),sandbox);
+const item=(category,name,details,evidence_ids)=>({category,name,details,evidence_ids});
+const report=components=>({components});
+const diff=(a,b)=>sandbox.inventoryChanges(report(a),report(b));
+const a=item('sensors','相机','USB depth camera',['old']);
+assert.equal(diff([a],[{...a,evidence_ids:['new']}])[0].kind,'evidence');
+assert.equal(diff([a],[])[0].kind,'unrecorded');
+assert.equal(diff([a],[{...a,details:'USB depth camera, calibrated'}])[0].kind,'changed');
+assert.equal(diff([a,item('sensors','相机','second camera',['b'])],[item('sensors','相机','second camera',['b']),a]).length,0,'duplicate names must not collapse');
+assert.equal(diff([a],[item('compute','相机','GPU driver',['b'])]).length,2,'same label in different categories is not the same record');
+assert.equal(diff([a],[{...a,evidence_ids:['old','old']}]).length,0,'repeated evidence does not create a change');
+console.log('6 inventory comparison checks passed');

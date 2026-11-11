@@ -1,0 +1,11 @@
+# NeuxMind Cloud — pinned versions verified with Python 3.13 (2026-11-04).
+fastapi==0.162.0
+starlette==1.7.0
+pydantic==2.13.5
+SQLAlchemy==2.1.8
+uvicorn==0.54.0
+# Test client (fastapi.testclient) and dev tooling.
+httpx==0.28.1
+# PostgreSQL driver (DATABASE_URL=postgresql+psycopg://...). Available on PyPI;
+# not exercised by the test suite, which runs on SQLite.
+# psycopg[binary]==3.2.10

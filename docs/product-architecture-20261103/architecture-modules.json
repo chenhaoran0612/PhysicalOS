@@ -1,0 +1,302 @@
+[
+  {
+    "id": "mac-ui",
+    "title": "产品操作界面",
+    "responsibility": [
+      "描述任务 / 管理机器人",
+      "选模型 / 训练 / 仿真 / 测试",
+      "部署运行 / 查看费用与结果"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "mac-agent",
+    "title": "本地工程 Agent",
+    "responsibility": [
+      "读取项目与本体档案",
+      "编写适配器、技能与 Harness",
+      "编辑文件 / 执行命令 / 跑测试",
+      "调用所选模型与已授权工具"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "mac-access",
+    "title": "设备接入与调查",
+    "responsibility": [
+      "输入 SSH / 其他连接信息",
+      "识别硬件、软件、驱动与接口",
+      "证据和未知项保存到本体档案"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "mac-local",
+    "title": "本地工程与可视化环境",
+    "responsibility": [
+      "工程文件 / 本地测试 / 缓存",
+      "3D 场景视图 / 回放 / 调试",
+      "本地凭据与连接权限管理"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "mac-work",
+    "title": "项目交付工作流",
+    "responsibility": [
+      "每个应用保留版本与证据",
+      "用户确认测试、发布和运行",
+      "团队可复用模型、技能与适配包"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "agent-plan",
+    "title": "多角色任务编排",
+    "responsibility": [
+      "规划 / 接入 / 开发 / 测试"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "agent-worker",
+    "title": "隔离工程执行器",
+    "responsibility": [
+      "代码 / Shell / 文件 / 测试"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "agent-tools",
+    "title": "工具与扩展体系",
+    "responsibility": [
+      "Skills / MCP / SDK 插件"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "agent-harness",
+    "title": "Harness 工程闭环",
+    "responsibility": [
+      "环境 / 验证 / 重试 / 预算"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "data",
+    "title": "数据工程",
+    "responsibility": [
+      "采集 / 标注 / 质检 / 版本"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "sim",
+    "title": "仿真与数字孪生",
+    "responsibility": [
+      "物理 / 场景 / 传感器",
+      "任务演练 / 合成数据"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "teacher",
+    "title": "教师与示范生成",
+    "responsibility": [
+      "示教 / 遥操作 / 教师模型"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "train",
+    "title": "训练与模型优化 · GPU 作业",
+    "responsibility": [
+      "模仿学习 / 强化学习 / 微调 / 蒸馏 / 量化    ·    实验、指标、Checkpoint"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "model-gateway",
+    "title": "模型网关与供应商路由",
+    "responsibility": [
+      "平台代供 / 用户自带密钥    ·    限流、额度与 Token 计量"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "inference",
+    "title": "云端推理与模型目录",
+    "responsibility": [
+      "自研 / 开源 / 闭源    ·    对话、视觉、规划与教师服务"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "registry",
+    "title": "版本化资产仓库",
+    "responsibility": [
+      "本体 / 模型 / 数据 / 场景",
+      "技能 / 应用 / 适配器",
+      "来源、授权、依赖与证据"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "build",
+    "title": "部署包构建",
+    "responsibility": [
+      "权重 + 技能 + 适配包",
+      "运行配置 / 依赖 / 签名",
+      "按目标设备生成安装包"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "evaluate",
+    "title": "验证与准入",
+    "responsibility": [
+      "基准 / 仿真 / 回归",
+      "硬件在环 / 现场测试",
+      "安全、成功率与时延"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "release",
+    "title": "批准与发布",
+    "responsibility": [
+      "证据审查 / 用户审批",
+      "型号、算力兼容检查",
+      "签名与灰度发布"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "fleet",
+    "title": "运行与集群管理",
+    "responsibility": [
+      "任务分配 / 在线状态",
+      "日志告警 / 接管处置",
+      "版本追踪 / 回滚"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "rsi",
+    "title": "失败与经验 → 可验证的新候选",
+    "responsibility": [
+      "运行数据 / 研究记忆 → 假设与候选改动",
+      "沙箱实验 → 独立评测 → 归档与发布申请",
+      "模型、技能、适配器、Agent 与工具持续改进",
+      "评测规则、权限及生产发布由独立机制约束"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "edge-gateway",
+    "title": "设备网关与任务入口",
+    "responsibility": [
+      "设备身份 / 加密连接 / 命令去重",
+      "任务接收、取消、状态与人工接管"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "recorder",
+    "title": "执行记录与经验缓冲",
+    "responsibility": [
+      "观测 / 动作 / 成功失败 / 介入",
+      "本地回放、证据关联、按授权同步"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "orchestrate",
+    "title": "任务编排与技能运行",
+    "responsibility": [
+      "任务图 / 技能调用 / 超时 / 恢复 / 结束判定"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "memory",
+    "title": "本地状态与结构化记忆",
+    "responsibility": [
+      "场景状态 / 本体能力 / 任务进度 / 历史经验"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "perception",
+    "title": "多模态感知与状态估计",
+    "responsibility": [
+      "视觉 / 语音 / 力觉 / 位姿",
+      "观测同步与时序状态"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "policy",
+    "title": "端侧模型与专家路由",
+    "responsibility": [
+      "操作 / 导航 / 交互 / 运控",
+      "按任务与本体选择模型"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "action",
+    "title": "本体动作头",
+    "responsibility": [
+      "目标 / 轨迹 / 动作输出",
+      "成功失败与恢复信号"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "edge-packages",
+    "title": "模型 / 技能 / 应用 / 适配器仓库",
+    "responsibility": [
+      "缓存批准版本、依赖与配置",
+      "离线加载 / 版本绑定 / 回滚快照"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "edge-install",
+    "title": "端侧安装、更新与推理服务",
+    "responsibility": [
+      "签名、资源、硬件与接口兼容检查",
+      "原子切换 / 健康探测 / 异常回退"
+    ],
+    "domain": "edge"
+  },
+  {
+    "id": "external-models",
+    "title": "模型与数据来源",
+    "responsibility": [
+      "闭源模型 API / 开源模型与数据",
+      "用户自带密钥、模型或私有服务"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "external-compute",
+    "title": "外部计算与仿真资源",
+    "responsibility": [
+      "平台采购 / 企业私有 / 用户资源",
+      "GPU 集群与外部仿真服务"
+    ],
+    "domain": "cloud"
+  },
+  {
+    "id": "external-dev",
+    "title": "开发者与厂商生态",
+    "responsibility": [
+      "SDK / 插件 / 适配器 / 技能发布",
+      "厂商驱动、协议与本体资料",
+      "版本、兼容性和授权管理"
+    ],
+    "domain": "cloud"
+  }
+]

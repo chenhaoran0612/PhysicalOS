@@ -1,0 +1,48 @@
+# SDK Agent 进度日志
+
+- 22:25 开始第 01 轮 SDK 开发：阅读协作规则、接口契约、spec、runtime、cloud / 进行中 / 读完后设计包结构
+- 22:28 读完契约、spec、runtime（skills.py 入口为 '<file>.py:<函数或类>'，类会被实例化后调用 run）、cloud 路由与测试夹具 / 完成 / 开始写 sdk/neuxmind 基础层（bootstrap、错误、HTTP）
+- 22:32 完成 RobotClient、CloudClient、package（打包/校验/兼容性解释）、neuxmind.skill（兼容 runtime Skill 基类与异常）、testing（进程内仿真本体）、4 个模板 / 4 个模板生成后自身测试均通过 / 下一步写配置与 nx CLI、nx sim up
+- 22:39 完成 config、nx CLI 全部命令、nx sim up/down（真实子进程启动 runtime）；手动跑通 sim up→check→install→run --authorize --wait→stop→reset；RobotClient 集成测试 8 个 / 通过；偶发失败经查是审查 Agent 的 mutate.py 正在临时改 runtime/cloud 源码做变异测试（R5 账本指纹、R10 stop 路径），SDK 测试恰好抓到这些变异 / 下一步写 package、模板、CLI、云端集成测试
+- 22:42 写完 package/模板/CLI/云端集成测试：共 28 个，全部通过（约 16 秒）；云端用 uvicorn 线程起真实 app，运营员上架 Echo 替身模型 / 通过 / 下一步 pip install -e 验证 nx 入口、写 README 并按 5 分钟上手实跑
+- 22:42 pip install -e sdk/ 成功，nx 入口可用；用已安装的 nx 在全新 NEUXMIND_HOME 实跑 5 分钟上手全流程（sim up → new → 模板自测 → check → install → run --authorize --wait → 起机械臂 → 跨本体 check → stop → sim down）/ 全部按预期 / 下一步写 README、EVOLUTION_ENTRY
+- 22:45 写完 README（安装、5 分钟上手、CLI/Python API 参考、写技能、测技能、配置）与 EVOLUTION_ENTRY；全量回归：sdk 28/28（连续 3 次）、tests 72（20 跳过）、spec 7、runtime 71、cloud 73 全部通过 / 完成 / 提交 sdk/
+- 23:41 收到总指挥指令：云端新增邮箱验证（118c54f）；sdk CloudTests.setUpClass 因运营员未验证失败（已复现）/ 开始 / 在 CloudClient、nx、测试、文档中加入邮箱验证与网关参数友好错误
+- 23:47 邮箱验证支持完成：CloudClient.verify_email/resend_verification、nx verify-email [--resend]、register/login/whoami 验证提示、infer 参数本地白名单（n_unsupported/parameter_not_allowed）、新错误码中文提示；sdk 29/29（连续 2 次），tests 82、spec 11、runtime 109、cloud 112 全部通过 / 完成 / 提交 iter01-fix(sdk)
+- 00:44 收到总指挥指令：云端 N-01 修复（48999d2）——验证需本人会话、认领、找回密码 / 开始 / 改 CloudClient、nx、测试、文档
+- 00:49 N-01 适配完成：verify_email 带会话、claim / password-reset（客户端与 nx）、202 claim_sent 提示、新错误码提示；sdk 31/31（连续 2 次，runtime 工作区有修复 Agent 未提交改动），tests 82、spec 11、runtime 126、cloud 125 通过 / 完成 / 提交 iter01-fix2(sdk)
+- 09:26 开始第 02 轮 SDK：阅读协作规则、契约 §2/§3/§4.3/§4.4、ADR-012/016、cloud README（会话/流式/串行化）/ 进行中 / 读 sdk 现有代码与 cloud 流式实现
+- 09:42 完成网关会话封装 neuxmind/gateway.py（GatewaySession 上下文管理器、chat/responses 非流式与流式、GatewayStream 读到连接关闭、GatewayStreamError/StreamInterrupted、断开后查询会话恢复用量、close 遇 session_busy 等待后用同一 request_id 重发）、_http.open_stream、CloudClient.gateway.open_session/session/close_session、nx chat / nx sessions show；新测试 test_gateway_sessions.py 16 个（真实 cloud + Echo 替身 + 断流 TCP 代理）/ 通过 / 下一步修计时测试、pyproject、文档、变异测试
+- 09:45 计时测试：并发跑 runtime+cloud 测试时复现到同文件另一处计时竞态（test_invoke_command_and_action_with_authorize：读 adapter.cmd 与 25 ms 墙钟的速度看门狗竞速）；test_cancel_and_wait_timeout 50+ 次未复现，按分析加固（同步到技能进程真正发出运动指令、断言 wait_timeout 时仍 running 且未被取消、终止等待 10→60 s 活性上限）；加固后压力下 8×8 次全过 / 完成 / 下一步 README、变异测试
+- 09:57 变异测试（git worktree，独立副本）：23 个变异全部被杀死（首轮 M19/M20 存活 → 新增断言后杀死）；注意：共享 scratchpad 里已有别的 Agent 的 worktree 'wt'，我误把 sdk 副本复制进去，已用 git archive 恢复成其 HEAD 的 sdk/ / 完成 / 下一步全量回归
+- 10:03 全量：sdk 48/48 连续 3 次；spec 11、runtime 171（含其未提交改动）、cloud 160、tests 113（跳过 20）通过；runtime/pyproject.toml 仍未提交 → 只声明 neuxmind-spec / 完成 / 提交 iter02(sdk)
+- 13:49 开始第 03 轮 SDK：阅读协作规则、契约 §3/§5.0–5.4、runtime/cloud/sdk README / 进行中 / 读 sdk 代码与 runtime 模型安装、cloud 模型包实现
+- 13:53 3.10：建 venv（/opt/nx-py310），pip install -e spec -e runtime -e sdk；requires-python 改为 >=3.10；sdk 48 个测试在 3.10 下直接通过（cloud 的 SQLAlchemy 2.1.8 需 3.11，测试 venv 用 2.0.57）。探查 runtime：v2 invoke 带 model_id/name 时 runtime 未记录 name（变更请求）；model.install_* 事件不带 run_id / 进行中 / 写 RobotClient 模型与遥测方法
+- 13:58 完成 RobotClient（models/install_model/remove_model/find_model/run_events/events_since/tail/latest_seq，运行时错误中文提示）、CloudClient.model_install_args、neuxmind/models.py（install_from_cloud、resolve_model）、nx models install/installed/remove、nx telemetry tail [--run] [--follow]、nx robot status 沙箱/模型/遥测；新测试 test_models_telemetry.py 9 个（真实 runtime 原生 model.install + 本地包服务 + 真实 cloud）/ 通过 / 下一步看实际输出、全量 3.13/3.10、变异测试
+- 14:06 sdk/tests 57 个：3.13 连续 3 次、3.10 venv 连续 3 次全过 / 完成 / 下一步非 root（nxtest）试跑、变异测试
+- 14:23 变异测试（git worktree wt03，独立副本）：30 个变异，27 个被杀死；3 个存活经分析为等价变异（N05 最近 N 条裁剪在 seq 连续时冗余；N18 本地能力检查——运行时在任何安装请求前就以 404 拒绝；N20 sha 小写——云端已规范化）；补强测试：本地拒绝只读 manifest、包信息缺字段、签名地址优先、model_in_use 文案、测试间清理运行 / 完成 / 下一步写文档、全量回归
+- 14:36 文档：README（3.10 安装与测试、§5.5 端侧模型安装、§5.6 遥测、CLI/API 表、测试覆盖、已知限制；顺带修正技能无沙箱的过时描述）、EVOLUTION_ENTRY 第 03 轮（含 3 条 runtime 变更请求）；其他目录回归：spec 11、runtime 223、cloud 186、tests 全过（跳过 23，桌面 Agent 工作区状态）/ 完成 / 最终 3.13×3 + 3.10×3 运行中
+- 14:42 最终：sdk/tests 57 个 3.13×3、3.10×3 全过；worktree 已删除 / 完成 / 提交 iter03(sdk)
+- 15:01 收到总指挥：runtime 07e0d0c（目录 ID、run_id、model_runtimes）/ 完成适配：find_models、installed 目录 ID 列、remove 直接用目录 ID + model_ambiguous、进度取自 model.install_progress 事件、2 个新测试；nx models list --robot 已能看到端侧包（测试验证）/ 3.13×3、3.10×3 运行中
+- 15:07 sdk/tests 59 个：3.13×3、3.10×3 全过 / 完成 / 提交 iter03(sdk): adopt catalog model ids from runtime
+- 18:24 开始第 04 轮 SDK+云：阅读协作规则、契约 §2/§3/§6、CAPABILITIES v1.1、runtime/sdk/cloud README / 进行中 / 读代码
+- 18:27 读完 runtime scaffold/conformance/CLI、cloud fleet/catalog；实测 sim 报告 ~35 KB（sim_arm motion 在 10× 倍速下夹爪 cancel 失败，待 1× 复核）/ 进行中 / 先写云端 conformance 摘要
+- 18:31 云端：conformance.py（报告校验/绑定/摘要/require_level）、POST /robots/{id}/conformance、POST /robots/{id}/skills/check、catalog require_level；test_conformance 15 个通过 / 进行中 / 全量 SQLite + PG
+- 18:32 临时 PG16 集群 /tmp/nx-sdk04-pg 端口 55434（postmaster PID 977），用完删除 / 进行中 / cloud PG 全量
+- 18:39 SDK：neuxmind/adapters.py（new/test/load）、RobotClient conformance 方法、CloudClient upload/check_skill/compatible(require_level)、nx adapter new|test、nx robot conformance [--upload]、models list --require-level、安装进度改用 run.progress（旧运行时回退事件）；手动冒烟 scaffold→static→dry（ROS 2 替身）通过 / 进行中 / 写 sdk 测试
+- 18:41 sdk 新测试 test_adapters_conformance 20 个通过 / 进行中 / sdk 全量 3.13 + 3.10
+- 18:46 e2e 测试 test_e2e_adapter（scaffold→test→serve 子进程→conformance motion→upload→require_level）通过；sdk 3.13 79/79、3.10（scratchpad venv，SQLAlchemy 2.0.57）79/79 / 进行中 / 真实 CLI 演示
+- 18:46 演示：云端 dev 服务 :18804 PID 10905 10906 （timeout 1500），注意第一次误用 NEUXMIND_DATABASE_URL 在 cloud/ 下生成了 sqlite，已删除
+- 18:47 演示完成（demo1-3.txt 在 scratchpad/sdk04/demo），rover/云端/仿真进程已结束 / 进行中 / worktree 变异测试
+- 18:50 变异测试在 worktree scratchpad/sdk04/wt 后台运行（38 个变异）/ 进行中 / 同时写文档
+- 18:52 文档：sdk README（CLI 表、§5.1/5.2 API、§5.7 本体适配、测试表、已知限制）、cloud README（设备群端点、摘要校验表、require_level 规则、表结构）；复核 sim_arm motion：1× 通过，20× 夹爪 cancel/stop_latency 失败（runtime 计时问题）/ 进行中 / 等变异结果
+- 18:55 变异 38 个：35 杀死；S11（首次上传不登记）、S19（未声明能力不入表）补测试后杀死；S02（CLI 本地 motion 检查）与 RobotClient 的检查重复，等价；worktree 已删除 / 进行中 / 最终全量回归
+- 18:57 cloud 最终：SQLite 208、PG16 208 通过；临时 PG 集群已停止并删除 / 进行中 / sdk 3.13+3.10、runtime/spec 回归
+- 19:00 sdk 最终：3.13 81、3.10 81 通过 / 进行中 / runtime 回归（后台）
+- 19:04 已提交 ead00a8 iter04(sdk)、f0eacde iter04(cloud)；runtime 304、spec 11 通过；tests/ 回归运行中 / 进行中
+- 19:05 tests/ 167 个通过（跳过 38，桌面 Agent 工作区状态）/ 完成 / 交付（PROGRESS 这一行未提交，留作工作区记录）
+- 19:58 第 04 轮审查修复开始：读 reviews/2026-11-09-iter04-review.md（Q4-08/09/13 及 sdk/cloud P2/P3）/ 进行中
+- 20:02 修复代码完成（cloud：报告 manifest_digest 必须匹配/缺失不采信、未来 generated_at 拒绝、测试跟进 posture dry；sdk：脚手架输入白名单+失败清理、--id --upload digest 检查、motion 提示、信任边界说明）；共享工作区 runtime 有 runtime Agent 半成品（conformance.py 未提交，Suite.k/stop_count 报错），sdk 上传类测试因此失败 → 改在 HEAD 的 worktree 中验证 / 进行中
+- 20:03 worktree scratchpad/sdk04/wt2（HEAD 0d765f1 的已提交 runtime + 本次 sdk/cloud 改动）中跑全量 / 进行中
+- 20:03 临时 PG16 集群重建（/tmp/nx-sdk04-pg :55434），wt2 全量后台运行
+- 20:11 wt2（HEAD 已提交 runtime）：cloud SQLite 211、PG16 211、sdk 3.13 84、3.10 84 全过；变异 11 个（C04 复验 + 10 个新）全部杀死；worktree 与临时 PG 已清理。共享工作区 runtime 仍有未提交半成品，sdk 上传类测试在共享区会因此失败，待 runtime 提交后重跑 / 进行中 / 提交

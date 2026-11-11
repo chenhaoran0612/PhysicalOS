@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuxmind"
+version = "0.1.0"
+description = "NeuxMind Robot OS developer SDK and the `nx` command line"
+readme = "README.md"
+requires-python = ">=3.10"
+# Core SDK: standard library only, plus the shared spec and the edge runtime
+# (local skill tests, `nx sim up`). Install from the repository with
+# `pip install -e spec/ -e runtime/ -e sdk/`. Inside the repository both packages
+# are also found by relative path (neuxmind/_bootstrap.py), and
+# NEUXMIND_SPEC_PATH / NEUXMIND_RUNTIME_PATH keep working.
+dependencies = ["neuxmind-spec>=1.0", "neuxmind-runtime>=0.2"]
+
+[project.scripts]
+nx = "neuxmind.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["neuxmind*"]

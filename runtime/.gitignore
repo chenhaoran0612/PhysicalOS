@@ -1,0 +1,4 @@
+.nx-runtime-state/
+__pycache__/
+*.egg-info/
+build/

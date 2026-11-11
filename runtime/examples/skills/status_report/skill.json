@@ -1,0 +1,12 @@
+{
+  "schema": "skill.package.v1",
+  "id": "status_report",
+  "version": "0.1.0",
+  "title": "状态报告",
+  "description": "只依赖 system.health，任何本体都能运行；本体提供电池、里程计、关节、IMU 时一并报告。用于演示跨本体复用。",
+  "entry": "skill.py:run",
+  "requires": [{"id": "system.health"}],
+  "optional": [{"id": "sensor.battery"}, {"id": "base.odometry"}, {"id": "joint.state"}, {"id": "sensor.imu"}],
+  "parameters": [],
+  "timeout_s": 30
+}

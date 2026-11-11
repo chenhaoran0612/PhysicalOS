@@ -1,0 +1,6 @@
+Bundled engineering tools
+
+Native runtime: see Codex-LICENSE.txt and Codex-NOTICE.txt.
+Ripgrep 15.2.0 (e89fff89ac) is copied from the same integrity-verified Codex 0.146.1 darwin-arm64 npm archive. Its binary SHA-256 and archive member path are pinned in runtime-lock.json.
+Ripgrep source: https://github.com/BurntSushi/ripgrep/tree/e89fff89ac
+License: ripgrep-MIT.txt. The binary reports PCRE2 10.45 support; see PCRE2-LICENSE.txt.

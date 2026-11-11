@@ -1,0 +1,16 @@
+{
+  "version": "0.146.1",
+  "source": "https://github.com/openai/codex/tree/rust-v0.146.1",
+  "commit": "abb1de9be901ab658fec7bbbc4a1fa2e85512be3",
+  "platform": "darwin-arm64",
+  "tarball": "https://registry.npmjs.org/@openai/codex/-/codex-0.146.1-darwin-arm64.tgz",
+  "integrity": "sha512-zvXxiGRuKCOoFQyh7lRC2SHwomM2VNzHralyeP+i6fxLjQ5grpmnfJpnLs54+GkK7K5nEpkj7chqjlKbMELgZw==",
+  "files": {
+    "codex": "35d248101b211d6248ad4e6b8c1d441fe81236da87afb9f3e9ea51a049e9f179",
+    "codex-code-mode-host": "ded818b3c4ed59075789697d1d34c3e15db9d164011b075ed69a9460ebc19a78",
+    "rg": "710a0cd270ad670228e45dc792b907c7bd50532f5bbc1c701f198af3fcd29703"
+  },
+  "archive_paths": {
+    "rg": "package/vendor/aarch64-apple-darwin/codex-path/rg"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "skill.package.v1",
+  "id": "patrol",
+  "version": "0.1.0",
+  "title": "巡逻",
+  "description": "依次导航到一组航点，可循环多圈。任何提供 base.navigate_to 的本体都能运行；若本体有 legged.posture，会先站立。",
+  "entry": "skill.py:run",
+  "requires": [{"id": "base.navigate_to"}, {"id": "safety.stop"}],
+  "optional": [{"id": "legged.posture"}, {"id": "base.odometry"}],
+  "parameters": [
+    {"name": "waypoints", "type": "object", "required": true, "title": "航点", "description": "机器人依次要去的位置，每个点填 x、y 坐标（以起点为原点）", "unit": "m"},
+    {"name": "loops", "type": "int", "required": false, "default": 1, "title": "圈数", "description": "走完全部航点算一圈，要走几圈", "unit": "圈", "min": 1, "max": 10},
+    {"name": "tolerance", "type": "float", "required": false, "default": 0.15, "title": "到达容差", "description": "离航点多近算到达", "unit": "m", "min": 0.05, "max": 1.0}
+  ],
+  "timeout_s": 600
+}

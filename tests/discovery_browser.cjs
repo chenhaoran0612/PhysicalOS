@@ -1,0 +1,37 @@
+const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
+const fs=require('fs');
+(async()=>{
+ const cfg=JSON.parse(fs.readFileSync(process.argv[2]||process.env.BRAIN_QA_CONFIG||'/tmp/neuxmind-discovery-ui.json'));
+ const browser=await chromium.launch({executablePath:process.env.BRAIN_CHROMIUM_PATH});
+ const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const click=async a=>{const d=page.locator(`#dialog[open] [data-action="${a}"]`);await (await d.count()?d:page.locator(`[data-action="${a}"]`)).first().click();};
+ const fill=async(n,v)=>page.locator(`#dialog [name="${n}"]`).fill(String(v));
+ const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(150);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
+ await page.goto(cfg.url);await click('account');await fill('name','本体接入验收');await fill('email','discovery@example.test');await fill('password','fixture-password-123');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
+ await click('journey-start');await fill('name','未知厂商机器人');await fill('objective','调查现有本体的硬件、服务与源码配置');await submit();
+ await page.goto(cfg.url+'/#robots');await click('engine-ssh');await fill('name','厂商协议验收本体');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();
+ await page.locator('#dialog').getByText('确认 SSH 主机指纹',{exact:true}).waitFor();await page.locator('#dialog input[type=checkbox]').check();await submit();
+ // First robot has no model yet. Configuring it must return to this robot.
+ await page.locator('#dialog').getByText('选择工程模型',{exact:true}).waitFor();await click('engine-own-model');await fill('name','本体调查模型');await fill('base_url',cfg.model);await fill('model','fixture-agent');await fill('api_key','fixture-private-key');await submit();
+ await page.locator('#dialog').getByText('让 Agent 调查本体',{exact:true}).waitFor();
+ if(!(await page.locator('[name=robot_id] option:checked').innerText()).includes('厂商协议'))throw Error('Lost robot after model configuration');
+ await page.locator('[name=data_authorized]').check();await fill('max_tokens',10000);await submit();
+ await page.locator('[data-action=engine-approval]').waitFor({timeout:25000});await click('engine-approval');
+ await page.locator('#dialog').getByText('在机器人上执行 SSH 命令',{exact:true}).waitFor();
+ if(!(await page.locator('#dialog pre').innerText()).includes('systemctl show robot-stack'))throw Error('Missing exact command');
+ await page.screenshot({path:'artifacts/discovery-ssh-approval.png'});
+ await page.locator('[name=decision]').selectOption('accept');await submit();
+ await page.locator('[data-action=engine-approval]').waitFor({timeout:25000});await click('engine-approval');await page.locator('#dialog').getByText('读取新发现的本体目录',{exact:true}).waitFor();
+ await page.locator('[name=decision]').selectOption('accept');await submit();
+ await page.locator('#engine-live [data-action=inventory-report]').waitFor({timeout:25000});
+ await page.locator('#engine-live [data-action=engine-artifact]').waitFor({timeout:25000});await page.screenshot({path:'artifacts/discovery-agent-session.png'});
+ await page.locator('#engine-live [data-action=inventory-report]').click();await page.locator('#dialog').getByText('robot-stack',{exact:true}).waitFor();
+ if(!(await page.locator('#dialog').textContent()).includes('基础调查 1 / 9'))throw Error('Partial coverage hidden');
+ await page.screenshot({path:'artifacts/discovery-evidence-inventory.png'});
+ await click('inventory-evidence');await page.locator('#dialog').getByText('设备调查依据',{exact:true}).waitFor();if(!(await page.locator('#dialog').innerText()).includes('evidence-'))throw Error('No evidence');
+ await click('close');await page.goto(cfg.url+'/#robots');await page.getByText('查看上次调查',{exact:true}).waitFor();await page.setViewportSize({width:900,height:640});
+ const chrome=()=>page.evaluate(()=>({top:document.querySelector('.topbar').getBoundingClientRect().top,left:document.querySelector('#sidebar').getBoundingClientRect().top,scroll:scrollY}));
+ const before=await chrome();await page.locator('.content-scroll').hover();await page.mouse.wheel(0,1500);await page.waitForTimeout(150);if(JSON.stringify(before)!==JSON.stringify(await chrome()))throw Error('Chrome moved');
+ if(errors.length)throw Error(errors.join('\n'));
+ console.log(JSON.stringify({passed:true,sshFirst:true,modelReturn:true,commandAndScopeApproval:true,partialCoverage:true,evidence:true,localAnalysisArtifact:true,fixedChrome:true,jsErrors:errors.length}));await browser.close();
+})().catch(e=>{console.error(e);process.exit(1)});

@@ -1,0 +1,99 @@
+flowchart TB
+  subgraph L0["客户端"]
+    direction LR
+    desktop["任务与交付工作台<br/>已有"]
+    local["本地工作空间<br/>已有"]
+    connect["设备连接管理<br/>已有"]
+    ux["开发与可视化工具<br/>规划"]
+    dist["安装与客户端维护<br/>框架"]
+  end
+  subgraph L1["平台控制面"]
+    direction LR
+    iam["组织、身份与访问<br/>规划"]
+    assets["统一资产与版本<br/>框架"]
+    jobs["作业与流程控制<br/>框架"]
+    catalog["平台供给与模型目录<br/>框架"]
+    billing["用量、额度与商业计费<br/>框架"]
+  end
+  subgraph L2["工程 Agent 与 Harness"]
+    direction LR
+    agent["内置工程运行时<br/>已有"]
+    roles["多角色任务协作<br/>已有"]
+    discovery["本体调查与工程上下文<br/>已有"]
+    tools["工程扩展与二次开发<br/>已有"]
+    sandbox["远程工程与插件生态<br/>规划"]
+  end
+  subgraph L3["资源执行面"]
+    direction LR
+    gateway["统一模型网关<br/>规划"]
+    data["数据与经验工厂<br/>规划"]
+    teacher["教师与采集执行器<br/>规划"]
+    train["训练与模型优化<br/>规划"]
+    sim["仿真与测试执行器<br/>规划"]
+  end
+  subgraph L4["验证与发布"]
+    direction LR
+    harness["配置与工程检查<br/>已有"]
+    eval["独立模型与任务评测<br/>规划"]
+    registry["模型与能力制品库<br/>框架"]
+    release["验证与发布门<br/>框架"]
+    fleet["机群与发布运营<br/>规划"]
+  end
+  subgraph L5["机器人端"]
+    direction LR
+    edge["Edge 接入网关<br/>框架"]
+    loader["包管理与推理运行时<br/>规划"]
+    task["任务与技能执行<br/>规划"]
+    observe["同步观测与状态估计<br/>规划"]
+    policy["专业端侧模型池<br/>规划"]
+  end
+  subgraph L6["本体与硬件"]
+    direction LR
+    adapter["本体适配器与驱动插件<br/>框架"]
+    oem["保留厂商运控与硬件边界<br/>外部"]
+    bodies["任意形态，通过能力契约适配<br/>外部"]
+  end
+  desktop --> local
+  local --> assets
+  local --> jobs
+  local --> catalog
+  connect --> discovery
+  jobs --> roles
+  roles --> agent
+  agent --> tools
+  agent --> sandbox
+  agent --> gateway
+  discovery --> assets
+  catalog --> gateway
+  jobs --> train
+  jobs --> sim
+  billing -.预算与计量.-> jobs
+  iam -.授权.-> jobs
+  data --> train
+  gateway --> teacher
+  teacher --> sim
+  teacher -.执行后轨迹.-> data
+  sim -.轨迹与结果.-> data
+  train --> eval
+  agent --> harness
+  harness --> eval
+  eval --> registry
+  registry --> release
+  release --> fleet
+  release --> edge
+  edge --> loader
+  edge --> task
+  loader --> policy
+  observe --> policy
+  task --> supervisor["执行监督与动作仲裁<br/>规划"]
+  policy --> supervisor
+  supervisor --> adapter
+  adapter --> oem
+  oem --> bodies
+  bodies -.观测与反馈.-> observe
+  observe -.授权经验.-> data
+  data -.失败信号.-> rsi["RSI：发现→提案→沙箱→独立验证→归档<br/>研究代理自身改进 / 规划"]
+  rsi --> train
+  rsi --> sandbox
+  rsi --> eval
+  fleet -.灰度与运行反馈.-> edge

@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuxmind-spec"
+version = "1.1.0"
+description = "NeuxMind Robot OS capability standard, manifest v2 and skill package v1 (stdlib only)"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["neuxmind_spec"]

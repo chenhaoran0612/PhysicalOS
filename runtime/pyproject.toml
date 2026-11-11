@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuxmind-runtime"
+version = "0.4.0"
+description = "NeuxMind Robot OS edge runtime: HAL, safety supervisor, sandboxed skill runtime, v1/v2 HTTP gateway (stdlib only)"
+readme = "README.md"
+requires-python = ">=3.10"
+# Standard library only (ADR-003). The shared spec is the one dependency;
+# inside the repository it is also found by relative path (neuxmind_runtime/_paths.py).
+dependencies = ["neuxmind-spec"]
+
+[project.scripts]
+neuxmind-runtime = "neuxmind_runtime.cli:main"
+
+[tool.setuptools]
+packages = ["neuxmind_runtime", "neuxmind_runtime.adapters"]
