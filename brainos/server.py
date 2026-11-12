@@ -4,12 +4,13 @@ import os
 import signal
 import threading
 from http.cookies import SimpleCookie
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .auth import Identity
 from .errors import error_payload
+from .httpd import FastBindHTTPServer
 from .service import Platform
 from .commerce import Commerce
 
@@ -225,7 +226,7 @@ def main():
     parser.add_argument('--operator-email',default=os.environ.get('BRAIN_OPERATOR_EMAIL',''))
     args=parser.parse_args()
     app=Application(args.state_dir,args.operator_email)
-    server=ThreadingHTTPServer(('127.0.0.1',args.port),make_handler(app))
+    server=FastBindHTTPServer(('127.0.0.1',args.port),make_handler(app))
     server.daemon_threads=True
     print(f'NeuxMind Robot OS http://127.0.0.1:{server.server_port}',flush=True)
     def terminate(_signum,_frame):

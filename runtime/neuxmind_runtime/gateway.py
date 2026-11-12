@@ -29,6 +29,7 @@ import json
 import re
 import secrets
 import socket
+import socketserver
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -435,6 +436,15 @@ class BoundedHTTPServer(ThreadingHTTPServer):
         self.rejected = 0
         self.evicted = 0
         super().__init__(address, handler)
+
+    def server_bind(self):
+        # HTTPServer.server_bind() sets server_name via socket.getfqdn(host), a reverse-DNS
+        # lookup that can block for tens of seconds on a slow resolver (~35 s for 127.0.0.1
+        # on some Macs) before the socket listens. Nothing reads server_name; skip the lookup.
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
 
     def slot_for(self, sock):
         return self._by_sock.get(sock)

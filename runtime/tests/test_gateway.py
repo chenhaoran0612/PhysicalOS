@@ -251,6 +251,22 @@ class GatewayServerTests(unittest.TestCase):
             server.close()
             fx.close()
 
+    def test_binding_does_not_reverse_resolve_the_listen_address(self):
+        # http.server's default server_bind() calls socket.getfqdn(host). With a slow
+        # resolver that reverse lookup of 127.0.0.1 took ~35 s and the runtime was not
+        # listening in time for scripts/demo.py (30 s budget).
+        fx = RuntimeFixture()
+        try:
+            with mock.patch("socket.getfqdn", side_effect=AssertionError("reverse DNS lookup during bind")):
+                server = GatewayServer(fx.runtime, TOKEN, port=0)
+            try:
+                self.assertEqual(server.httpd.server_name, "127.0.0.1")
+                self.assertGreater(server.port, 0)
+            finally:
+                server.close()
+        finally:
+            fx.close()
+
 
 def _half_open(port: int, count: int, payload: bytes = b"POST /v2/stop HTTP/1.1\r\nHost: x\r\n") -> list:
     """Unauthenticated connections that never finish their headers (slowloris)."""

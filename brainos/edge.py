@@ -6,10 +6,11 @@ import json
 import os
 import secrets
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
 from .contracts import validate_manifest
+from .httpd import FastBindHTTPServer
 from .store import Store
 
 
@@ -129,7 +130,7 @@ def main():
     module,cls=args.adapter.split(':',1)
     adapter=getattr(importlib.import_module(module),cls)()
     gateway=Gateway(adapter,os.environ.get('BRAIN_EDGE_TOKEN',''),args.state_dir)
-    server=ThreadingHTTPServer((args.host,args.port),make_handler(gateway))
+    server=FastBindHTTPServer((args.host,args.port),make_handler(gateway))
     server.daemon_threads=True
     print(f'Robot OS Edge gateway http://{args.host}:{server.server_port}',flush=True)
     try:
