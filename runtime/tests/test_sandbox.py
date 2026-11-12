@@ -7,6 +7,7 @@ import json
 import os
 import signal
 import stat
+import subprocess
 import sys
 import tempfile
 import time
@@ -504,6 +505,84 @@ def run(ctx):
     os._exit(9)
 '''
 
+HEADROOM_PROBE = '''
+import os, threading
+def run(ctx, cap=128):
+    done = []
+    worker = threading.Thread(target=done.append, args=(1,))
+    worker.start()
+    worker.join()
+    r, w = os.pipe()
+    children = []
+    try:
+        while len(children) < cap:           # fork until RLIMIT_NPROC refuses
+            try:
+                pid = os.fork()
+            except BlockingIOError:
+                break
+            if pid == 0:
+                os.close(w)
+                os.read(r, 1)                # parked until the pipe closes
+                os._exit(0)
+            children.append(pid)
+    finally:
+        os.close(w)
+        for pid in children:
+            os.waitpid(pid, 0)
+    return {"thread": done == [1], "forks": len(children)}
+'''
+
+
+class HiddenTasksTests(unittest.TestCase):
+    """RLIMIT_NPROC counts every task of the skill uid on the kernel, but ``/proc`` in a PID
+    namespace (a runtime in a container) only shows that namespace's tasks. On a shared
+    Docker host the uid's tasks in other containers made "visible + extra_tasks" smaller
+    than the real count, so the skill could not start one thread or process
+    (``BlockingIOError: [Errno 11]``)."""
+
+    TASK_SLACK = 8        # other tasks of the uid starting/ending meanwhile (runtime threads, ...)
+
+    def test_tasks_outside_our_proc_view_do_not_use_up_the_headroom(self):
+        fx = RuntimeFixture("quadruped", time_scale=1.0)
+        helpers = []
+        try:
+            user = fx.runtime.sandboxes.user
+            uid = user[0] if user else os.getuid()
+            if uid == 0:
+                self.skipTest("RLIMIT_NPROC does not apply to a root skill user")
+            extra = fx.runtime.sandboxes.config.extra_tasks
+            hidden = extra + 16
+            as_skill_user = {"user": user[0], "group": user[1], "extra_groups": []} if user else {}
+            # Same session as the runtime: never mistaken for skill processes by the reaper.
+            helpers = [subprocess.Popen(["sleep", "60"], **as_skill_user) for _ in range(hidden)]
+            real_count = sandbox_module.count_tasks
+
+            def partial_view(of_uid):          # the helpers live "in another container"
+                n = real_count(of_uid)
+                return n if n is None or of_uid != uid else max(0, n - hidden)
+
+            fx.install(custom_package("headroom", HEADROOM_PROBE))
+            with mock.patch.object(sandbox_module, "count_tasks", partial_view):
+                before = real_count(uid)
+                run_id = fx.run("headroom")
+                record = fx.wait(run_id, 20)
+            self.assertEqual(record["status"], "succeeded", record["error"])
+            self.assertTrue(record["result"]["thread"])
+            # The helpers count (the limit is at least the uid's visible count + headroom;
+            # tasks the uid has in other containers can only add to it) ...
+            limit = sandbox_events(fx, run_id, "sandbox.started")[0]["limits"]["RLIMIT_NPROC"]
+            self.assertGreaterEqual(limit, before + extra - self.TASK_SLACK)
+            # ... and it is still a bound: the skill process plus its forks get the headroom,
+            # wherever the uid's other tasks live (previously: no fork at all).
+            forks = record["result"]["forks"]
+            self.assertGreaterEqual(forks, extra - 1 - self.TASK_SLACK)
+            self.assertLessEqual(forks, extra - 1 + self.TASK_SLACK)
+        finally:
+            for helper in helpers:
+                helper.kill()
+                helper.wait()
+            fx.close()
+
 
 class HostileRuntimeTests(unittest.TestCase):
     def test_infinite_loop_ignoring_stop_is_killed_and_stop_is_fast(self):
@@ -528,7 +607,9 @@ class HostileRuntimeTests(unittest.TestCase):
             fx.close()
 
     def test_fork_bomb_is_contained(self):
-        fx = RuntimeFixture("quadruped", http=True)
+        # Wall-clock run timeout (30 s): with the default time_scale=20 the run timed out
+        # after 1.5 s, racing the 1 s of forking below plus the stop (seen as "运行超时").
+        fx = RuntimeFixture("quadruped", time_scale=1.0, http=True)
         try:
             user = fx.runtime.sandboxes.user
             uid = user[0] if user else os.getuid()
@@ -547,7 +628,7 @@ class HostileRuntimeTests(unittest.TestCase):
                 self.assertLessEqual(count_tasks(uid), bound)
             self.assertLess(timed_http_stop(fx), STOP_BUDGET_S)
             record = wait_until(lambda: (r := fx.runtime.runner.get(run_id))["status"] != "running" and r, 6)
-            self.assertEqual(record["status"], "stopped")
+            self.assertEqual(record["status"], "stopped", record.get("error"))
             self.assertTrue(wait_until(lambda: process_gone(pid), 3))
             if user is not None and fx.runtime.sandboxes.cgroup_base is not None:
                 # Including the children that called setsid(): the cgroup reached them all.
@@ -564,7 +645,9 @@ class HostileRuntimeTests(unittest.TestCase):
 
     def test_log_and_output_flood(self):
         config = SandboxConfig(max_requests_per_s=5000, request_burst=500, max_log_events=100)
-        fx = RuntimeFixture("quadruped", http=True, sandbox=config)
+        # Wall-clock run timeout (30 s): the flood needs ~1.3-2.5 s of real time in a
+        # Docker Desktop VM, more than the 1.5 s the default time_scale=20 left it.
+        fx = RuntimeFixture("quadruped", time_scale=1.0, http=True, sandbox=config)
         try:
             fx.install(custom_package("flood", FLOOD, parameters=[{"name": "n", "type": "int", "default": 3000}]))
             before = fx.runtime.events.last_seq
