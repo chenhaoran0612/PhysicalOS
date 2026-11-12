@@ -1,5 +1,5 @@
 'use strict';
-// Issue #4：模型与算力——连接 TokenFans。本体调查、工程任务、协作流程与本体适配没有单独选择模型时，默认使用这里选定的模型。
+// Issue #4：模型与算力——工程助手的大模型只对接 TokenFans，在“云平台账户”页配置。本体调查、工程任务、协作流程与本体适配都使用这里选定的默认模型。
 // API Key 只保存在本机工作空间的凭据文件中；账号密码只用于一次换取 Key，不会保存。页面只拿到连接摘要。
 
 function modelCompute() {
@@ -31,9 +31,9 @@ function modelComputeConnectChoices() {
 function modelComputeDefaultForm(mc) {
   const options = mc.models.map(m => [m, m]);
   const missing = !mc.default_model
-    ? notice('还没有默认模型（原来的默认模型可能已不在 TokenFans 可用列表中）。选择一个模型后，未单独选模型的任务才会使用 TokenFans。', true) : '';
+    ? notice('还没有默认模型（原来的默认模型可能已不在 TokenFans 可用列表中）。选择一个模型后，工程助手才能调用模型。', true) : '';
   return `${missing}<form data-form="tkf-default" class="tkf-default"><div class="form-error" role="alert"></div>
-    ${field('默认模型', select('model', options, mc.default_model || ''), `${modelComputeUses}未单独选择模型时使用它。列表来自 TokenFans 的 Codex 模型目录（${mc.models.length} 个）。`)}
+    ${field('默认模型', select('model', options, mc.default_model || ''), `${modelComputeUses}使用它；已建的协作流程保持创建时的模型。列表来自 TokenFans 的 Codex 模型目录（${mc.models.length} 个）。`)}
     <div class="button-row"><button class="button small" type="submit">设为默认模型</button>${button('刷新模型列表', 'tkf-refresh', 'secondary small')}</div></form>`;
 }
 
@@ -54,27 +54,34 @@ function modelComputePanel() {
   const head = `<div class="panel-head"><h2>TokenFans 模型与算力</h2>${mc.connected ? badge('已连接', 'good') : badge('未连接')}</div>`;
   if (!mc.connected) {
     return `<section class="panel tkf-panel">${head}<div class="panel-body">
-      <p class="tkf-lead">连接 TokenFans 后，${modelComputeUses}在没有单独选择模型时，默认使用你在这里选定的模型；费用从你的 TokenFans 账户余额扣除。</p>
+      <p class="tkf-lead">工程助手的大模型只对接 TokenFans：${modelComputeUses}都使用你在这里选定的默认模型，费用从你的 TokenFans 账户余额扣除。连接前，这些功能无法调用模型。</p>
       ${modelComputeConnectChoices()}
       <p class="inline-note">接入说明：<span class="mono">${h(mc.docs_url || 'https://tokenfans.ai/integrations/api')}</span>。账号登录使用 TokenFans 控制台接口（不在其公开 API 文档中）；登录失败时可改用 API Key。</p>
     </div></section>`;
   }
   return `<section class="panel tkf-panel">${head}<div class="panel-body">
     ${modelComputeDetails(mc)}${modelComputeDefaultForm(mc)}
-    <div class="tkf-foot"><span class="inline-note">已在项目里单独配置的模型不受影响；工程任务按 TokenFans 账单计费，Token 观察限额仍然生效。</span>
+    <div class="tkf-foot"><span class="inline-note">工程任务按 TokenFans 账单计费，Token 观察限额仍然生效。</span>
     <div class="button-row">${button('更换 Key', 'tkf-key', 'secondary small')}${button('重新登录', 'tkf-login', 'secondary small')}${button('断开连接', 'tkf-disconnect', 'secondary small')}</div></div>
   </div></section>`;
 }
 
-// One option in the "选择工程模型" dialog (ux02.js).
+// The only option in the "工程模型" dialog (ux02.js).
 function modelComputeOption(option) {
   const mc = modelCompute();
   const ready = mc.connected && mc.default_model;
-  return option('TokenFans 模型（默认）', '一个 TokenFans 账户：粘贴 API Key 或用账号登录。',
+  return option('TokenFans 模型', '一个 TokenFans 账户：在“云平台账户”页粘贴 API Key 或用账号登录。',
     '从 TokenFans 账户余额按用量扣费；Key 只保存在这台电脑上。',
-    button(mc.connected ? '管理 TokenFans' : '连接 TokenFans', 'go-resources', mc.connected ? 'secondary small' : 'small'),
-    ready ? `<p class="inline-note">已连接：未单独选模型的任务默认使用 <span class="mono">${h(mc.default_model)}</span>。</p>`
-      : mc.connected ? '<p class="inline-note">已连接，但还没有默认模型。</p>' : '<p class="inline-note">连接后，所有项目默认使用它。</p>');
+    button(mc.connected ? '管理 TokenFans' : '连接 TokenFans', 'go-cloud', mc.connected ? 'secondary small' : 'small'),
+    ready ? `<p class="inline-note">已连接：所有项目使用 <span class="mono">${h(mc.default_model)}</span>。</p>`
+      : mc.connected ? '<p class="inline-note">已连接，但还没有默认模型。</p>' : '<p class="inline-note">连接后，所有项目都使用它。</p>');
+}
+
+// 平台模型与算力 page: the TokenFans settings moved to 云平台账户 (issue #4 follow-up).
+function modelComputePointer() {
+  const mc = modelCompute();
+  const state = mc.connected ? `已连接 TokenFans，默认模型 <span class="mono">${h(mc.default_model || '未选择')}</span>。` : '尚未连接 TokenFans。';
+  return notice(`工程助手的大模型只对接 TokenFans，在“云平台账户”页配置。${state} ` + button(mc.connected ? '管理 TokenFans' : '连接 TokenFans', 'go-cloud', 'secondary small'));
 }
 
 async function modelComputeAction(type) {
@@ -96,7 +103,7 @@ async function modelComputeAction(type) {
   }
   if (type === 'tkf-disconnect') {
     return dialog('断开 TokenFans', '删除这台电脑上保存的 TokenFans API Key',
-      `<div class="dialog-body"><p>断开后，未单独选择模型的任务将无法启动，直到重新连接；已选用 TokenFans 的进行中流程在下一步会提示重新连接；正在运行的工程会话会用已取得的 Key 跑完当前这一轮。项目里单独配置的其他模型不受影响。</p>
+      `<div class="dialog-body"><p>断开后，工程助手无法调用模型，本体调查、工程任务、协作流程与本体适配都要等重新连接后才能启动；进行中的流程在下一步会提示重新连接；正在运行的工程会话会用已取得的 Key 跑完当前这一轮。</p>
       <div class="button-row">${button('断开连接', 'tkf-disconnect-confirm', 'danger small')}${button('取消', 'close', 'secondary small')}</div></div>`);
   }
   if (type === 'tkf-disconnect-confirm') {

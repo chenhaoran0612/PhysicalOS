@@ -16,6 +16,12 @@ Credentials
   never put in the registry, the state snapshot, audit events or responses;
   the engine receives it through its environment at run time.
 
+Only TokenFans (issue #4 follow-up)
+The desktop offers TokenFans as the only model source: the state snapshot lists
+only the TokenFans profiles, and the TokenFans panel lives on the 云平台账户 page.
+Profiles of other kinds (own API, platform offer, cloud gateway) stay in the
+registry so that older sessions and workflows still load; they are not offered.
+
 Default model
 Every project gets one managed agent model profile (``billing='tokenfans'``)
 that follows the default model chosen here. A discovery, engineering task or
@@ -57,10 +63,10 @@ EMAIL = re.compile(r'[^@\s]{1,128}@[^@\s]{1,253}')
 MODEL_ID = re.compile(r'[^\s\x00-\x1f\x7f]{1,200}')
 CURRENCY = re.compile(r'[A-Z]{3,10}')
 
-NOT_CONNECTED = 'TokenFans 尚未连接：请在“平台模型与算力”页连接 TokenFans，或为任务选择其他模型'
-NO_MODEL = '请选择工程模型，或在“平台模型与算力”页连接 TokenFans 作为默认模型'
-NO_DEFAULT = '尚未选择 TokenFans 默认模型：请在“平台模型与算力”页选择默认模型，或为任务选择其他模型'
-MODEL_GONE = '所选 TokenFans 模型已不在可用列表中：请在“平台模型与算力”页重新选择默认模型'
+NOT_CONNECTED = 'TokenFans 尚未连接：请在“云平台账户”页连接 TokenFans'
+NO_MODEL = '工程助手只使用 TokenFans 模型：请先在“云平台账户”页连接 TokenFans'
+NO_DEFAULT = '尚未选择 TokenFans 默认模型：请在“云平台账户”页选择默认模型'
+MODEL_GONE = '所选 TokenFans 模型已不在可用列表中：请在“云平台账户”页重新选择默认模型'
 KEY_REJECTED = 'TokenFans 拒绝了该 API Key：请检查 Key 是否完整、是否已在 TokenFans 控制台重新生成'
 NO_ACCOUNT_KEY = '该 TokenFans 账户还没有 API Key：请先在 TokenFans 控制台的账户总览中生成 Key，再回来登录或直接粘贴 Key'
 STATUS_MESSAGES = {

@@ -19,7 +19,7 @@ Agent 将发现分类到系统、计算硬件、传感器、执行器、接口�
 | 工具执行 | 批量基础体检、单项复查、完整证据分页、SFTP 读文件；单次审批的 SSH 命令与会话目录扩展；本地原生命令、文件修改与分析 |
 | 交互 | 流式事件、任务计划、差异、提问和单次权限审批；并发请求排队 |
 | 多 Agent | 产品级串行角色编排、阶段验收与交付快照已实现；运行时子 Agent 功能保留，但尚未做真实模型协作验收；并行与分支流程未实现 |
-| 工程模型 | TokenFans 默认模型（工作空间级，见下文）；自有 Responses 工具调用 API；平台网关模型目录、预算预留、会话令牌、关停计量结算 |
+| 工程模型 | 只对接 TokenFans（工作空间级，在“云平台账户”页配置，见下文）；自有 API、平台网关与云平台模型的后端路径保留给历史会话，界面不再提供 |
 | SSH 接入 | 密码、私钥、本机 SSH Agent；钉住主机指纹；只读调查和限定目录 SFTP；直连或经一台跳板机；真机只读实时状态 |
 | 本体档案 | 按机器人保存版本、原始证据、未知项、适配建议 |
 | Skills | 项目内创建、导入 SKILL.md/文本技能包、导出、停用与不可变版本；任务明确选择并原生加载 |
@@ -43,7 +43,9 @@ Agent 将发现分类到系统、计算硬件、传感器、执行器、接口�
 
 ### TokenFans：工作空间默认模型（issue #4）
 
-“平台模型与算力”页顶部可以连接 [TokenFans](https://tokenfans.ai/integrations/api)（OpenAI 兼容网关）。连接后，本体调查、工程任务、协作流程阶段与本体适配**没有单独选择模型时**默认使用这里选定的模型；所有模型选择框也默认选中它。已在项目里单独配置的模型不受影响。
+“云平台账户”页顶部连接 [TokenFans](https://tokenfans.ai/integrations/api)（OpenAI 兼容网关）。**桌面端的大模型只对接 TokenFans**：本体调查、工程任务、协作流程阶段与本体适配都使用这里选定的默认模型，工程模型对话框和所有模型选择框只提供 TokenFans；“平台模型与算力”页只保留一条指向“云平台账户”的提示。云平台本身（网关上游）不变。
+
+其他来源（自有 API、平台付费模型、云平台网关模型）不再在界面中提供：状态快照的 `agent_models` 只列出可用的 TokenFans 配置；已有的其他配置仍保留在本机注册表中，旧会话与旧流程可以继续读取和运行，后端接口（`/api/engineering/models` 等）也保留，供测试与历史数据使用。依赖这些界面入口的旧浏览器验收脚本（`tests/engineering_browser.cjs`、`discovery_browser.cjs`、`workflows_browser.cjs`、`extensions_browser.cjs`、`ux02_browser.cjs`、`cloud03_browser.cjs`）需要改为先连接 TokenFans 替身，尚未迁移。
 
 - **两种连接方式**：粘贴 `sk-tkf-` API Key；或用 TokenFans 账号的邮箱 + 密码登录一次——桌面端调用 TokenFans 控制台接口 `POST /auth/login` → `GET /auth/my-key`（读取账户 Key）→ `GET /v1/me/billing/balance`（余额，仅展示）→ `POST /auth/logout`。这些控制台接口不在 TokenFans 公开 API 文档中，可能变化；失败时改用 API Key。密码与控制台令牌只用于这一次交换，**不保存**。
 - **校验与模型列表**：用 Key 调用 `GET {origin}/codex/v1/models`（Codex 路由，面向编码 Agent）；工程引擎的 `base_url` 为 `{origin}/codex/v1`，以 Responses 协议调用。
