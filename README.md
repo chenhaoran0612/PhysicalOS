@@ -1,6 +1,8 @@
 # NeuxMind Robot OS
 
-> **0.8.0（第 01 轮进化）起，本项目从"Mac 桌面控制台"升级为跨本体机器人操作系统与开发平台。** 目标架构见 [docs/TARGET_ARCHITECTURE.md](docs/TARGET_ARCHITECTURE.md)，进化记录见 [docs/evolution/](docs/evolution/)。
+> **0.8.0（第 01 轮进化）起，本项目从"Mac 桌面控制台"升级为跨本体机器人操作系统与开发平台。** 目标架构见 [docs/TARGET_ARCHITECTURE.md](docs/TARGET_ARCHITECTURE.md)，进化记录见 [docs/evolution/](docs/evolution/)，全部文档的索引见 [docs/README.md](docs/README.md)。
+>
+> 当前发布版本 **0.14.0**（第 07 轮）。需求从第 08 轮起以 GitHub issue 下达、每个 issue 一个分支并行开发，由总指挥合并到 `integration` 分支、全量测试并打包后交用户测试，流程见 [docs/AGENT_COLLABORATION.md](docs/AGENT_COLLABORATION.md#issue-驱动的并行开发2026-11-12-起)，进度见 [docs/evolution/live/STATUS.md](docs/evolution/live/STATUS.md)。
 
 ## 0.8.0 组成
 
@@ -35,8 +37,12 @@ python3 -m unittest discover -s spec/tests
 python3 -m unittest discover -s runtime/tests
 pip install -r cloud/requirements.txt && python3 -m unittest discover -s cloud/tests
 python3 -m unittest discover -s sdk/tests
-python3 -m unittest discover -s tests      # 桌面端
+python3 -m unittest discover -s tests      # 桌面端（含 tests/test_version.py：各处版本号一致）
 ```
+
+- `runtime/` 与 `sdk/` 的技能进程沙箱只支持 Linux（`os.waitid`、降权用户），在 macOS 上这两套测试会失败或超时，**不能用 Mac 上的结果判断它们**。在 Linux 容器里跑：仓库只读挂载进 `python:3.13-slim`，复制到容器内，`pip install -r requirements-runtime.txt -r cloud/requirements.txt && pip install -e spec -e runtime -e sdk`，再以非 root 用户运行上面的命令。
+- 桌面端有 39 项测试需要内置工程引擎（`.build/agent-runtime/bin/codex`，由 `scripts/prepare_agent_runtime.py` 准备，或设置 `NEUXMIND_TEST_AGENT_BINARY`），缺少时自动跳过；发布前的全量测试必须带上它。
+- 浏览器验收脚本是 `tests/*_browser.cjs` + 对应的 `*_browser_fixture.py`，用法写在各脚本开头。
 
 ---
 
@@ -48,17 +54,16 @@ python3 -m unittest discover -s tests      # 桌面端
 
 ## 安装与运行
 
-- macOS 安装包：`dist/NeuxMind-Robot-OS-0.7.1-arm64.dmg` 或同名 `.pkg`。
+- macOS 安装包：`dist/NeuxMind-Robot-OS-<版本>-arm64.dmg` 或同名 `.pkg`（当前发布版本 0.14.0；`dist/` 不进 Git，由 `scripts/build_macos.py` 生成）。
 - 原生宿主使用 Cocoa + WKWebView，内置独立 Python 后端，最终用户不需要安装开发环境。
 - 当前构建为 Apple Silicon、macOS 13+ 开发预览。Intel Mac、Windows 尚未构建验证。
 - 安装包采用 ad-hoc 本地签名，尚未进行 Developer ID 签名和 Apple 公证。
 - 数据存放在 `~/Library/Application Support/NeuxMind Robot OS/state/`。应用更新不覆盖用户数据。
 - 菜单“连接平台服务…”可连接运营方部署的 HTTPS 工作台；本机工作空间保留。当前没有默认的已上线云平台地址。
 
-源码开发：
+源码开发（在仓库根目录执行）：
 
 ```sh
-cd apps/robot-os
 python3 -m brainos.server --port 8788
 ```
 
@@ -125,6 +130,17 @@ python3 -m brainos.server --operator-email operator@example.com
 
 平台作业创建时预留额度，提交时传递 `max_units` 与 `max_minutes`。执行器必须实施硬预算。成功、失败或取消后的可信 `usage_units` 与 `usage_evidence_ref` 用于结算；网络超时、未知结果或缺少计量证据保留预留，等待核对，不自动重复执行。定价由资源版本固定，旧任务保留原价格。
 
+## 云平台本地运行
+
+云平台（`cloud/`）可以在本机 Docker 里运行（PostgreSQL 16 + 云 API，自动写入演示数据），这是演示配置，不是生产部署：
+
+```sh
+docker compose -f cloud/compose.yaml up -d --build --wait   # http://127.0.0.1:8800
+NX_DEMO_CLOUD=docker python3 scripts/demo.py up             # 或：演示脚本改用 Docker 里的云平台
+```
+
+细节与注意事项见 [cloud/README.md](cloud/README.md#本地-docker演示用不是生产部署)。
+
 ## 工程结构
 
 ```text
@@ -140,12 +156,13 @@ brainos/
   workflows.py    多角色阶段执行、交接快照与验收
   agent_runtime.py 内置 app-server 生命周期与协议
   device_access.py SSH 探针、主机指纹与受控配置读取
+  httpd.py        控制台与设备网关共用的 HTTP 服务器（绑定时不做反向 DNS）
   edge.py         设备端网关与幂等请求记录
   store.py        本地 SQLite 持久化
   server.py       桌面 API 与静态资源
 web/              产品工作台
 desktop/          原生 macOS 宿主与安装说明
-scripts/          可重复打包脚本
+scripts/          可重复打包脚本、演示脚本、版本号统一改写（set_version.py）
 tests/            测试专用协议替身与验收
 docs/             系统架构、接入契约和交接
 ```
@@ -160,10 +177,15 @@ node --check web/extensions.js
 node --check web/workflows.js
 node --check web/journey.js
 node --check web/planner.js
+for f in web/*.js tests/*.cjs; do node --check "$f" || echo "FAIL $f"; done   # 全部前端文件
+# 发版时先统一改写版本号（构建脚本、后端、引擎客户端、关于窗口、Info.plist、侧栏、安装说明、冒烟测试）：
+python3 scripts/set_version.py 0.15.0        # 不带参数则列出各处当前版本
 # 在独立构建环境安装 PyInstaller 和 requirements-runtime.txt 后：
 .build/packaging-venv/bin/python scripts/prepare_agent_runtime.py
 .build/packaging-venv/bin/python scripts/build_macos.py
 ```
+
+`scripts/build_macos.py` 会先删除再重建 `dist/NeuxMind Robot OS.app`：从某个工作区打包前，先退出从那里启动的 App。
 
 测试设备与模型仅位于 `tests/`，不会包含在产品模型库或正常启动流程中。测试通过证明平台协议和门禁，不证明真实机器人的动作、安全或任务可靠性。
 

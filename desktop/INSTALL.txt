@@ -1,4 +1,4 @@
-NeuxMind Robot OS 0.7.1 — macOS Apple Silicon 开发预览
+NeuxMind Robot OS 0.14.0 — macOS Apple Silicon 开发预览
 
 要求：Apple Silicon（M1 或更新），macOS 13 或更新。
 安装：将 NeuxMind Robot OS.app 拖入 Applications，然后打开。

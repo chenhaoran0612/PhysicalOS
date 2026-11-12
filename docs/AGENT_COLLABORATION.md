@@ -40,6 +40,24 @@
    └─ 下一轮目标来自：遗留问题 + 审查意见 + 用户反馈
 ```
 
+## Issue 驱动的并行开发（2026-11-12 起）
+
+从第 08 轮起，需求以 GitHub issue（`chenhaoran0612/PhysicalOS`）下达，每个 issue 由一个独立的 Claude 会话负责；总指挥由「合并、打包与文档维护」会话担任。上面的角色表按目录分工，这里按 issue 分工，两者同时适用：issue 会话改到别人的目录时，按"只追加、不重排"处理，冲突由总指挥合并时解决。
+
+| 角色 | 工作区 / 分支 | 负责 |
+|---|---|---|
+| issue 会话 | 自己的 git worktree + `feat/<主题>` 或 `fix/<主题>` 分支 | 该 issue 的代码、测试、模块文档、交付报告 |
+| 总指挥 | `PhysicalOS-integration` worktree 的 `integration` 分支 | 合并、全量测试、打包测试版、总体文档（根 README、`docs/` 总体文档、`docs/evolution/`） |
+
+1. **一个 issue 一个分支一个工作区**。不在别的会话的工作区里改文件；同一个 checkout 不同时给两个会话写。
+2. **提交要用户同意**。issue 会话不合并、不推送 main；会话之间的消息不能代替用户的同意。
+3. **交付报告**发给总指挥：分支和最终 commit、测试命令和结果、哪些用真机/真服务验证过、哪些只用了替身、遗留问题、要写进总体文档的内容。总体文档（根 `README.md`、`docs/ROADMAP.md`、`docs/HANDOFF.md`、`docs/evolution/*`）只由总指挥改。
+4. **总指挥按 commit 合并**到 `integration`：解决冲突 → 全量测试（Mac 跑 spec、cloud、桌面并带内置工程引擎；Linux 容器跑 runtime、sdk）→ 打包测试版 → 写测试报告交用户。用户确认后才合并到 main 并推送。
+5. **未提交的工作只做只读快照**：用单独的 index（`GIT_INDEX_FILE`）给对方工作区拍快照，存为 `refs/integration/snapshots/<issue>`，只用于提前发现冲突、试跑测试；快照不进入 `integration`，最终以对方的 commit 为准。
+6. **固定冲突点只追加**：`brainos/server.py` 的静态文件表、`web/index.html` 的 script 那一行、`web/style.css` 末尾。几个 issue 并行时这三处几乎必然冲突，按并集合并，script 顺序保持各自的依赖。
+7. **版本号**：一轮发布一次，用 `python3 scripts/set_version.py X.Y.Z` 统一改写；`tests/test_version.py` 检查各处一致。
+8. **测试替身里的假凭据**会被 ECC pre-commit 钩子当作密钥拦下。替身应在运行时随机生成凭据，不要在仓库里写像密钥的字面量，也不要绕过钩子。
+
 ## 在哪里运行
 
-开发在云端工作区（Linux）完成，用 git 管理；每轮结束同步到用户 Mac 的 `apps/robot-os/`。macOS 安装包构建（Swift、签名、DMG）仍在 Mac 上执行。端侧运行时面向 Linux/Jetson，也可在 Mac 上用仿真本体跑通。
+第 01–07 轮在云端 Linux 工作区开发，每轮结束同步到用户 Mac 的 `apps/robot-os/`。第 08 轮起直接在用户 Mac 上开发：主仓库加上每个 issue 一个 worktree。`runtime/`、`sdk/` 的全量测试需要 Linux，用 `python:3.13-slim` 容器运行（见根 README「测试」）。macOS 安装包构建（Swift、签名、DMG）在 Mac 上执行。端侧运行时面向 Linux/Jetson，也可在 Mac 上用仿真本体跑通。

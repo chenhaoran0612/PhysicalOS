@@ -2,20 +2,23 @@
 
 > 全部使用**仿真本体**，不连接真实机器人，不产生真实扣费。界面上的「仿真」标签是有意的诚实设计，演示时不要遮挡。
 
-## 启动 / 关闭（macOS 终端）
+## 启动 / 关闭（macOS 终端，在仓库根目录执行）
 
 ```bash
 # 启动（桌面控制台 + 仿真四足 + 仿真机械臂），自动打开浏览器
-cd ~/Desktop/仿真引擎项目/apps/robot-os && .build/packaging-venv/bin/python scripts/demo.py up && open http://127.0.0.1:8788
+.build/packaging-venv/bin/python scripts/demo.py up && open http://127.0.0.1:8788
 
-# 同时演示云平台（首次需安装云端依赖）
-cd ~/Desktop/仿真引擎项目/apps/robot-os && .build/packaging-venv/bin/pip install -q -r cloud/requirements.txt && .build/packaging-venv/bin/python scripts/demo.py up && open http://127.0.0.1:8788
+# 同时演示云平台：本机进程（SQLite，每次 up 重建；首次需安装云端依赖）
+.build/packaging-venv/bin/pip install -q -r cloud/requirements.txt && .build/packaging-venv/bin/python scripts/demo.py up && open http://127.0.0.1:8788
 
-# 关闭
-cd ~/Desktop/仿真引擎项目/apps/robot-os && .build/packaging-venv/bin/python scripts/demo.py down
+# 或者用 Docker 里的云平台（PostgreSQL，数据保留；见 cloud/README.md「本地 Docker」）
+NX_DEMO_CLOUD=docker .build/packaging-venv/bin/python scripts/demo.py up && open http://127.0.0.1:8788
+
+# 关闭（Docker 云平台一并停止）
+.build/packaging-venv/bin/python scripts/demo.py down
 ```
 
-`dist/` 中的 App 是旧版 0.7.1，不要用于演示。启动后终端会打印两台仿真机器人的地址与令牌。
+演示用源码启动的控制台；`dist/` 里的 App 只有在和源码同一版本时才可替代（看侧栏底部的版本号）。启动后终端会打印两台仿真机器人的地址与令牌。
 
 | 服务 | 地址 |
 |---|---|
@@ -33,7 +36,7 @@ cd ~/Desktop/仿真引擎项目/apps/robot-os && .build/packaging-venv/bin/pytho
 3. **能力表**（核心卖点）：卡片上点「能力与技能」。每项能力标明是否会产生运动、是否需现场授权、限位与速度上限。对比四足与机械臂的能力差异。
    讲点：上层应用与模型只认标准能力，不认型号；安全级别由协议规定。
 4. **技能包与兼容性**（重点）：能力窗口底部「安装技能包」，路径填
-   `/Users/zhangyu/Desktop/仿真引擎项目/apps/robot-os/runtime/examples/skills/wave`。
+   `<仓库根目录>/runtime/examples/skills/wave`（填绝对路径）。
    机械臂显示「兼容：可以安装」，四足显示不兼容并说明缺少的能力；四足改装 `.../skills/patrol` 则兼容。
    讲点：写一次技能，平台自动判断能装到哪些机器人上。
 5. **云平台账户**（商业模式）：「云平台账户」→「修改地址」填 `http://127.0.0.1:8800` →「登录」。展示钱包（可用、已预留、余额），下滑到「适合这台机器人的模型」，切换机器人，推荐模型随之变化。

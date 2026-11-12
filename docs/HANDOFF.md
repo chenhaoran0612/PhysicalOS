@@ -1,5 +1,7 @@
 # macOS 桌面交付 — 2026-10-15
 
+> **历史文档，不再更新。** 记录 0.2.0–0.7.1 桌面版的交接（当时代码位于另一个仓库的 `apps/robot-os/`、分支 `codex/rigid-articulation`）。0.8.0 起的变更、验证和遗留见 [evolution/EVOLUTION_LOG.md](evolution/EVOLUTION_LOG.md)，当前状态见 [ROADMAP.md](ROADMAP.md)。
+
 分支：`codex/rigid-articulation`。本任务代码均位于 `apps/robot-os/`，尚未提交；仓库原有大量修改未触碰。白皮书依据为 `output/robot-brain-whitepaper-20261014/index.html`。现有 Studio、集群、隧道和展示服务未修改。
 
 ## 当前产物
