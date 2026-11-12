@@ -11,6 +11,10 @@ Usage (from the repository root, e.g. apps/robot-os):
     python3 scripts/demo.py up        # start everything, print URLs / tokens
     python3 scripts/demo.py status    # show what is running
     python3 scripts/demo.py down      # stop everything
+    python3 scripts/demo.py seed [URL]   # seed a cloud that is already running
+
+NX_DEMO_CLOUD=docker runs the cloud platform in Docker instead (cloud/compose.yaml:
+PostgreSQL + the cloud API); its database is kept between runs.
 
 Everything is local (127.0.0.1) and simulated. Nothing here touches real
 hardware, real payment or a real model provider. State lives in .demo/ and is
@@ -42,6 +46,13 @@ CLOUD_PORT = int(os.environ.get("NX_DEMO_CLOUD_PORT", "8800"))
 
 OPS_EMAIL, DEMO_EMAIL = "ops@demo.local", "demo@demo.local"
 DEMO_PASSWORD = "NeuxMind-demo-2026"
+DEMO_CREDITS = 50000
+
+# Where the cloud platform runs: "local" = a process from this source tree (SQLite,
+# recreated on every `up`); "docker" = cloud/compose.yaml (PostgreSQL, data kept).
+CLOUD_MODE = os.environ.get("NX_DEMO_CLOUD", "local")
+COMPOSE_FILE = ROOT / "cloud" / "compose.yaml"
+DOCKER_CLOUD_MARK = DEMO / "cloud.docker"
 
 # Catalog models for the demo. Package references are placeholders: the demo
 # shows catalog filtering and licensing, not real model downloads.
@@ -123,29 +134,87 @@ def cloud_available() -> bool:
 
 
 def seed_cloud(base: str) -> dict:
+    """Demo operator, demo user, catalog models and credits.
+
+    Safe to repeat: the Docker cloud keeps its database between starts, so every
+    step accepts what an earlier run already created and books the credits only once.
+    """
     api = base + "/api/v1"
-    def register(email):
+
+    def verify(email, token, dev):
+        s, d = http("POST", api + "/auth/verify-email", {"token": dev}, token)
+        if s != 200:
+            raise RuntimeError(f"验证 {email} 失败：{s} {d}")
+
+    def account(email):
+        status, data = http("POST", api + "/auth/login", {"email": email, "password": DEMO_PASSWORD})
+        if status == 200:
+            if not data.get("user", {}).get("email_verified"):
+                # An earlier seed stopped between registering and verifying.
+                s, resent = http("POST", api + "/auth/verify-email/resend", token=data["token"])
+                dev = resent.get("dev_verification_token")
+                if not dev:
+                    raise RuntimeError(f"{email} 的邮箱未验证，云平台也没有返回开发验证令牌（不是 dev 环境？）：{s} {resent}")
+                verify(email, data["token"], dev)
+            return data["token"]
         status, data = http("POST", api + "/auth/register", {"email": email, "password": DEMO_PASSWORD, "name": email.split("@")[0]})
+        if status == 409 and data.get("code") == "email_taken":
+            raise RuntimeError(f"{email} 已存在，但不能用演示密码登录，这个数据库里不是本脚本写入的演示数据。"
+                               f"要重建 Docker 云平台的演示数据库：docker compose -f cloud/compose.yaml down -v")
         if status != 201:
             raise RuntimeError(f"注册 {email} 失败：{status} {data}")
-        token = data["token"]
         dev = data.get("dev_verification_token")
         if dev:
-            s, d = http("POST", api + "/auth/verify-email", {"token": dev}, token)
-            if s != 200:
-                raise RuntimeError(f"验证 {email} 失败：{s} {d}")
-        return token, data
-    ops_token, _ = register(OPS_EMAIL)
+            verify(email, data["token"], dev)
+        return data["token"]
+
+    ops_token = account(OPS_EMAIL)
     for card in DEMO_MODELS:
         s, d = http("POST", api + "/admin/models", card, ops_token)
-        if s not in (200, 201):
+        if s not in (200, 201) and d.get("code") != "model_exists":
             raise RuntimeError(f"上架模型 {card['id']} 失败：{s} {d}")
-    user_token, user = register(DEMO_EMAIL)
-    org = user.get("org_id") or http("GET", api + "/me", token=user_token)[1].get("current_org_id")
-    s, d = http("POST", api + f"/admin/wallets/{org}/adjust", {"delta": 50000, "reason": "演示额度"}, ops_token)
+    user_token = account(DEMO_EMAIL)
+    s, wallet = http("GET", api + "/wallet", token=user_token)
+    if s != 200:
+        raise RuntimeError(f"读取演示钱包失败：{s} {wallet}")
+    # The ledger books a reference once, so repeating this adjustment adds nothing
+    # (and refuses a different amount: changing DEMO_CREDITS needs a fresh database).
+    s, d = http("POST", api + f"/admin/wallets/{wallet['org_id']}/adjust",
+                {"delta": DEMO_CREDITS, "reason": "演示额度", "reference": "demo-seed-credits"}, ops_token)
     if s not in (200, 201):
         raise RuntimeError(f"充值演示额度失败：{s} {d}")
-    return {"operator": OPS_EMAIL, "user": DEMO_EMAIL, "password": DEMO_PASSWORD, "credits": 50000}
+    return {"operator": OPS_EMAIL, "user": DEMO_EMAIL, "password": DEMO_PASSWORD, "credits": DEMO_CREDITS}
+
+
+def compose(*args: str) -> None:
+    env = dict(os.environ, NEUXMIND_CLOUD_PORT=str(CLOUD_PORT))
+    subprocess.run(["docker", "compose", "-f", str(COMPOSE_FILE), *args], cwd=str(ROOT), env=env, check=True)
+
+
+def start_docker_cloud(base: str) -> dict:
+    """PostgreSQL + the cloud API from cloud/compose.yaml, seeded from here."""
+    # Marked first, so that `down` also removes containers of a start that failed half-way.
+    DOCKER_CLOUD_MARK.touch()
+    try:
+        # Only db + cloud: the compose file's own `seed` job would race the seeding below.
+        compose("up", "-d", "--build", "--wait", "cloud")
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise SystemExit(f"Docker 云平台启动失败（{exc}）。确认 Docker 正在运行；"
+                         f"日志：docker compose -f {COMPOSE_FILE} logs cloud")
+    if not wait_for(base + "/api/v1/capabilities/registry", seconds=60):
+        raise SystemExit(f"Docker 云平台启动失败，见 docker compose -f {COMPOSE_FILE} logs cloud")
+    return {"url": base, "docker": True, **seed_cloud(base)}
+
+
+def require_free_cloud_port(base: str) -> None:
+    """The local cloud must own its port. Anything else answering there (e.g. the Docker
+    cloud started by hand) would be seeded and shown as the fresh local one."""
+    try:
+        http("GET", base + "/healthz", timeout=1)
+    except Exception:
+        return
+    raise SystemExit(f"{base} 已有服务在响应（可能是 Docker 云平台）。改用 NX_DEMO_CLOUD=docker python3 scripts/demo.py up，"
+                     f"或先停止它：docker compose -f {COMPOSE_FILE} down")
 
 
 def up() -> None:
@@ -171,12 +240,15 @@ def up() -> None:
         if not wait_for(robot["url"] + "/v1/status", robot["token"]):
             raise SystemExit(f"仿真机器人 {name} 启动失败，见 {DEMO/'logs'/('robot-'+name+'.log')}")
 
-    if cloud_available():
+    base = f"http://127.0.0.1:{CLOUD_PORT}"
+    if CLOUD_MODE == "docker":
+        info["cloud"] = start_docker_cloud(base)
+    elif cloud_available():
+        require_free_cloud_port(base)
         cenv = dict(env, NEUXMIND_ENV="dev", NEUXMIND_OPERATOR_EMAILS=OPS_EMAIL,
                     DATABASE_URL=f"sqlite:///{DEMO/'cloud.sqlite3'}",
                     NEUXMIND_PUBLIC_BASE_URL=f"http://127.0.0.1:{CLOUD_PORT}")
         spawn("cloud", [py, "-m", "neuxmind_cloud", "serve", "--host", "127.0.0.1", "--port", str(CLOUD_PORT)], cenv, pids)
-        base = f"http://127.0.0.1:{CLOUD_PORT}"
         if not wait_for(base + "/api/v1/capabilities/registry"):
             raise SystemExit(f"云平台启动失败，见 {DEMO/'logs'/'cloud.log'}")
         info["cloud"] = {"url": base, **seed_cloud(base)}
@@ -207,7 +279,8 @@ def print_info(info: dict) -> None:
     print(f"\n3) 示例技能包文件夹：{info['examples']}/patrol  （四足可装）、 …/wave（机械臂可装）、 …/status_report（都可装）\n")
     if info.get("cloud"):
         c = info["cloud"]
-        print(f"4) 云平台：地址 {c['url']}")
+        where = "（Docker：cloud/compose.yaml，数据库保留在卷中）" if c.get("docker") else ""
+        print(f"4) 云平台：地址 {c['url']} {where}")
         print(f"   演示账号 {c['user']}   密码 {c['password']}   （已验证邮箱，钱包 {c['credits']} 点）")
         print(f"   运营账号 {c['operator']}   密码 {c['password']}")
     else:
@@ -217,24 +290,47 @@ def print_info(info: dict) -> None:
 
 
 def down(quiet: bool = False) -> None:
-    if not PIDS.exists():
+    docker_cloud = DOCKER_CLOUD_MARK.exists()
+    if not PIDS.exists() and not docker_cloud:
         if not quiet:
             print("没有正在运行的演示环境")
         return
-    for name, pid in json.loads(PIDS.read_text()).items():
+    if PIDS.exists():
+        stop_processes(json.loads(PIDS.read_text()))
+        PIDS.unlink()
+    if docker_cloud:
+        try:
+            compose("down")         # containers only; the database volume stays
+        except (OSError, subprocess.CalledProcessError) as exc:
+            # Docker missing or not running: do not block the next up / down on it.
+            print(f"警告：没能停止 Docker 云平台（{exc}）。Docker 可用后执行：docker compose -f {COMPOSE_FILE} down")
+        DOCKER_CLOUD_MARK.unlink(missing_ok=True)
+    if not quiet:
+        print("演示环境已停止")
+
+
+def stop_processes(pids: dict) -> None:
+    for pid in pids.values():
         try:
             os.killpg(pid, signal.SIGTERM)
         except (ProcessLookupError, PermissionError):
             continue
     time.sleep(1.0)
-    for name, pid in json.loads(PIDS.read_text()).items():
+    for pid in pids.values():
         try:
             os.killpg(pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
-    PIDS.unlink()
-    if not quiet:
-        print("演示环境已停止")
+
+
+def seed(base: str = "") -> None:
+    """Seed a cloud that is already running (the `seed` job of cloud/compose.yaml)."""
+    base = (base or f"http://127.0.0.1:{CLOUD_PORT}").rstrip("/")
+    if not wait_for(base + "/api/v1/capabilities/registry", seconds=60):
+        raise SystemExit(f"云平台 {base} 没有响应")
+    c = seed_cloud(base)
+    print(f"云平台 {base} 演示数据已就绪：演示账号 {c['user']}，运营账号 {c['operator']}，"
+          f"密码 {c['password']}，钱包 {c['credits']} 点，模型 {len(DEMO_MODELS)} 个")
 
 
 def status() -> None:
@@ -246,4 +342,7 @@ def status() -> None:
 
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else "up"
-    {"up": up, "down": down, "status": status}.get(command, lambda: print(__doc__))()
+    if command == "seed":
+        seed(*sys.argv[2:3])
+    else:
+        {"up": up, "down": down, "status": status}.get(command, lambda: print(__doc__))()

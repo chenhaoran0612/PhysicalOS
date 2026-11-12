@@ -1,0 +1,7 @@
+# The only image built from the repository root is cloud/Dockerfile. Send it just what
+# it copies, not .build/, dist/ or the rest of the tree.
+*
+!cloud/requirements.txt
+!cloud/neuxmind_cloud
+!spec/neuxmind_spec
+**/__pycache__

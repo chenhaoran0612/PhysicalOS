@@ -1,0 +1,71 @@
+# Local / demo deployment of the NeuxMind cloud platform: PostgreSQL + the cloud API,
+# plus a one-shot job that seeds the demo accounts, catalog models and credits.
+#
+#   docker compose -f cloud/compose.yaml up -d --build --wait   # start: http://127.0.0.1:8800
+#   docker compose -f cloud/compose.yaml logs seed              # demo accounts and password
+#                                                               # (the seed job ends a few seconds after `up` returns)
+#   docker compose -f cloud/compose.yaml down                   # stop; the database is kept
+#   docker compose -f cloud/compose.yaml down -v                # stop and delete the database
+#
+# NOT a production deployment. NEUXMIND_ENV=dev turns on the Echo test model, the
+# operator e-mail allow-list and the well-known demo password, so the API is published
+# on the loopback interface only and the database is not published at all. For a real
+# deployment see the notes in cloud/Dockerfile and cloud/README.md (prod environment,
+# TLS in front, operators created with `create-operator`, secrets from a secret store).
+name: neuxmind-cloud
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: neuxmind
+      POSTGRES_DB: neuxmind
+      # Local default only; the database is reachable from this compose network alone.
+      # NEUXMIND_DB_PASSWORD: letters, digits, "-" and "_" only (it is put into DATABASE_URL
+      # as is), and PostgreSQL reads it only when the volume is first created (`down -v` to change it).
+      POSTGRES_PASSWORD: ${NEUXMIND_DB_PASSWORD:-neuxmind-local-dev}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neuxmind -d neuxmind"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  cloud:
+    build:
+      context: ..
+      dockerfile: cloud/Dockerfile
+    image: neuxmind-cloud:local
+    environment:
+      NEUXMIND_ENV: dev
+      DATABASE_URL: postgresql+psycopg://neuxmind:${NEUXMIND_DB_PASSWORD:-neuxmind-local-dev}@db:5432/neuxmind
+      NEUXMIND_PUBLIC_BASE_URL: http://127.0.0.1:${NEUXMIND_CLOUD_PORT:-8800}
+      NEUXMIND_OPERATOR_EMAILS: ops@demo.local
+    ports:
+      - "127.0.0.1:${NEUXMIND_CLOUD_PORT:-8800}:8800"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8800/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  # Demo operator, demo user, catalog models and credits (scripts/demo.py seed).
+  # Runs once per `up` and changes nothing when the database is already seeded.
+  seed:
+    image: neuxmind-cloud:local
+    command: ["python", "/seed/demo.py", "seed", "http://cloud:8800"]
+    volumes:
+      - ../scripts/demo.py:/seed/demo.py:ro
+    depends_on:
+      cloud:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  db-data:

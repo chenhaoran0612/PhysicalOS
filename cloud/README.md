@@ -411,6 +411,23 @@ token 套餐（法币）
 
 管理命令：`init-db`、`create-operator <email> [--name]`、`verify-email <email> [--force]`、`grant-operator <email>`、`revoke-operator <email>`、`sweep`。
 
+### 本地 Docker（演示用，不是生产部署）
+
+`cloud/compose.yaml` 在本机 Docker 里启动 PostgreSQL 16 和云平台，并自动写入演示数据（演示账号、运营账号、4 个模型、50000 点）。在仓库根目录执行：
+
+```bash
+docker compose -f cloud/compose.yaml up -d --build --wait   # 启动：http://127.0.0.1:8800
+docker compose -f cloud/compose.yaml logs seed              # 查看演示账号与密码
+docker compose -f cloud/compose.yaml down                   # 停止，数据库保留
+docker compose -f cloud/compose.yaml down -v                # 停止并删除数据库
+```
+
+- 运行在 `NEUXMIND_ENV=dev`：开启 Echo 替身模型、运营员邮箱白名单和公开的演示密码，所以端口只发布在 `127.0.0.1`，数据库不对外发布。**不要把这份配置放到公网。**
+- 数据库在名为 `neuxmind-cloud_db-data` 的卷里，重启后数据还在；写入演示数据的 `seed` 任务每次启动都会运行，已有数据时什么都不改。`up --wait` 返回后还要等几秒，`seed` 任务才结束（首次启动时演示账号在那之后才能登录）。
+- 可选环境变量：`NEUXMIND_CLOUD_PORT`（默认 8800）、`NEUXMIND_DB_PASSWORD`（本地默认值，只在 compose 网络内可达）。数据库密码只能用字母、数字、`-`、`_`（它被原样拼进 `DATABASE_URL`），并且只在卷第一次创建时生效，之后要改先 `down -v`。
+- `db` 和 `cloud` 设了 `restart: unless-stopped`：Docker 重启后它们会自己起来，不想要时执行 `down`。
+- `NX_DEMO_CLOUD=docker python3 scripts/demo.py up` 用这套容器代替本机进程里的云平台，其余（仿真机器人、控制台）不变；`scripts/demo.py down` 一并停止容器。
+
 ## 已知限制
 
 1. **真实支付渠道没有接入**：Stripe / 支付宝 / 微信支付只有骨架。接入时要实现各渠道自己的验签方式（Stripe-Signature、RSA2、APIv3 AEAD），不能沿用 sandbox 的 HMAC 格式。
