@@ -124,6 +124,12 @@ result = accepted("ssh ops@203.0.113.10 'sudo systemctl status ssh'", endpoint('
 assert.equal(result.resolveOnJump, false, 'a remote command that is not ssh stays an ignored remote command');
 
 refused("ssh ops@203.0.113.10 'ssh -o HostName=10.0.0.9 dog'", /HostName/);                 // ssh would not resolve "dog" then
+// Options of the inner ssh apply on the jump host, where this app runs no login: they are explained, not dropped silently.
+result = nested("ssh ops@203.0.113.10 'ssh -A -i ~/.ssh/dog_key dog'", endpoint('dog', null, ''), endpoint('203.0.113.10', 22, 'ops'));
+assert.ok(result.notes.some(note => note.includes('-i') && note.includes('跳板机上的文件')), 'an inner key file lives on the jump host');
+assert.ok(result.notes.some(note => note.includes('-A')), 'an inner -A is mentioned');
+result = nested("ssh ops@203.0.113.10 'ssh -F ~/robots.conf dog'", endpoint('dog', null, ''), endpoint('203.0.113.10', 22, 'ops'));
+assert.ok(result.notes.some(note => note.includes('-F') && note.includes('默认')), 'an inner config file is not what resolves the name');
 
 assert.equal(parse('   ').ok, false);
 console.log(`${checks} ssh command checks passed`);

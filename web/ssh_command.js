@@ -186,6 +186,15 @@ function sshSharedNotes(found) {
   return notes;
 }
 
+// Options of the inner ssh of a nested command. They apply on the jump host, where nothing logs in from here.
+function sshInnerNotes(inner) {
+  const notes = [];
+  if (inner.keyFile) notes.push('内层 ssh 的密钥文件（-i）是跳板机上的文件，这里用不到：最后一跳在本机登录，请确认本机的 SSH Agent 里有能登录目标机的密钥，或在下面粘贴私钥内容。');
+  if (inner.configFile) notes.push('内层 ssh 指定了配置文件（-F）。解析名称时用的是跳板机上默认的 SSH 配置，那个文件里的设置不会生效；如果名称只写在那个文件里，请直接填写目标机的地址。');
+  if (inner.agentForwarding) notes.push('内层 ssh 的 -A 已忽略：这里不做 Agent 转发。');
+  return notes;
+}
+
 // ssh [-J jump] target [command]
 function sshDirectResult(found) {
   const {spec, endpoint: target} = sshEndpointOf(found, '目标', SSH_DEFAULT_PORT);
@@ -226,7 +235,7 @@ function sshNestedResult(outer) {
   if (sshLooksLikeAlias(jump.host)) {
     notes.push(`“${jump.host}”像是 ~/.ssh/config 里的别名。这里不读取那个文件，请换成能直接访问的主机名或 IP。`);
   }
-  notes.push(...sshSharedNotes(outer));
+  notes.push(...sshSharedNotes(outer), ...sshInnerNotes(inner));
   if (inner.remote.length) notes.push('已忽略内层 ssh 后面的远程命令。');
   return {target, jump, notes, resolveOnJump: true};
 }
