@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory() as tmp:
         def api(path,p=None):
             req=urllib.request.Request(base+'/api/'+path,data=json.dumps(p).encode() if p is not None else None,headers={'Content-Type':'application/json'})
             return json.load(opener.open(req,timeout=30))
-        assert api('health')['version']=='0.14.0'
+        assert api('health')['version']=='0.15.0'
         with opener.open(base+'/inventory.js',timeout=10) as response:
             assert b'function inventoryOpen(' in response.read()
         api('register',{'name':'Frozen QA','email':'frozen@example.test','password':'test-password-123'})
@@ -125,6 +125,6 @@ with tempfile.TemporaryDirectory() as tmp:
 
 
         assert b'planSubmit' in opener.open(base+'/planner.js').read()
-        print(json.dumps({'adaptive_discovery':True,'bundled_search_tool':True,'ssh_scope_approval':True,'immutable_application_revision':True,'application_delivery_checklist':True,'training_result_saved':True,'job_recipe_preview_and_execution':True,'role_workflow':True,'review_gates':True,'upstream_snapshot':True,'skills_and_mcp':True,'call_approval':True,'frozen_backend' :True,'packaged_ssh':True,'embedded_agent':True,'inventory_saved':True,'version':'0.14.0'}))
+        print(json.dumps({'adaptive_discovery':True,'bundled_search_tool':True,'ssh_scope_approval':True,'immutable_application_revision':True,'application_delivery_checklist':True,'training_result_saved':True,'job_recipe_preview_and_execution':True,'role_workflow':True,'review_gates':True,'upstream_snapshot':True,'skills_and_mcp':True,'call_approval':True,'frozen_backend' :True,'packaged_ssh':True,'embedded_agent':True,'inventory_saved':True,'version':'0.15.0'}))
     finally:
         process.terminate();process.wait(timeout=10);ssh.close();model.close();mcp.close();ext_model.close();flow_model.close();recipe_service.close();edge.close();gateway.store.close();deep_ssh.close();deep_model.close()
