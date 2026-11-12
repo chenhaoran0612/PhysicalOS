@@ -21,6 +21,9 @@ class SSHFixture:
         self.forward_to={tuple(x) for x in forward_to or []};self.forwarded=[];self.forwarding=True
         self.banner_delay=0;self.auth_delay=0     # seconds: a slow link, for timeout tests
         self.unanswered=set()                     # commands that get no output and no exit status
+        self.exec_answer_delay=0                  # seconds before the request to run a command is answered at all
+        self.exit_before_output=set()             # commands whose exit status is sent before their output
+        self.released=threading.Event()           # set on close: ends any wait above
         self.key=paramiko.RSAKey.generate(2048);self.closed=False;self.transports=[];self.commands=[]
         self.socket=socket.socket();self.socket.bind(('127.0.0.1',0));self.socket.listen();self.socket.settimeout(.2)
         self.port=self.socket.getsockname()[1];self.thread=threading.Thread(target=self.accept,daemon=True);self.thread.start()
@@ -46,7 +49,7 @@ class SSHFixture:
                 if tuple(destination) not in owner.forward_to:return paramiko.OPEN_FAILED_CONNECT_FAILED
                 forwards[chanid]=tuple(destination);return paramiko.OPEN_SUCCEEDED
             def check_channel_exec_request(self,channel,command):
-                owner.commands.append(command.decode());ready.set();return True
+                owner.commands.append(command.decode());owner.released.wait(owner.exec_answer_delay);ready.set();return True
         class Files(paramiko.SFTPServerInterface):
             def canonicalize(self,path):return owner.links.get(path,posixpath.normpath(path))
             def stat(self,path):
@@ -76,8 +79,11 @@ class SSHFixture:
                 if channel.get_id() in forwards:self.pump(channel,forwards.pop(channel.get_id()));continue
                 if ready.wait(2) and owner.commands[-1] in owner.unanswered:ready.clear();continue
                 if ready.is_set():
-                    channel.sendall(owner.command_outputs.get(owner.commands[-1],b'Linux test-fixture\nCPU: ARM protocol fixture\nROS: test-only\n'))
-                    channel.send_exit_status(0);channel.close();ready.clear()
+                    command=owner.commands[-1];early=command in owner.exit_before_output
+                    if early:channel.send_exit_status(0);time.sleep(.3)
+                    channel.sendall(owner.command_outputs.get(command,b'Linux test-fixture\nCPU: ARM protocol fixture\nROS: test-only\n'))
+                    if not early:channel.send_exit_status(0)
+                    channel.close();ready.clear()
         except (OSError,paramiko.SSHException,EOFError):pass
         finally:t.close()
     def pump(self,channel,destination):
@@ -99,6 +105,6 @@ class SSHFixture:
         threading.Thread(target=copy,args=(channel.recv,upstream.sendall),daemon=True).start()
         threading.Thread(target=copy,args=(upstream.recv,channel.sendall),daemon=True).start()
     def close(self):
-        self.closed=True;self.socket.close()
+        self.closed=True;self.released.set();self.socket.close()
         for t in self.transports:t.close()
         self.thread.join(timeout=2)

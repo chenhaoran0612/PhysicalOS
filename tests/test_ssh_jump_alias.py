@@ -80,12 +80,13 @@ class JumpAliasTests(base.SshCase):
         self.assertEqual(self.jump.transports, [])
 
     def test_a_name_that_needs_a_further_hop_is_refused(self):
-        self.jump.command_outputs[self.resolve] = self.ssh_config(extra='proxyjump inner-gate\n')
+        for setting in ('proxyjump inner-gate', 'proxycommand ssh -W %h:%p inner-gate'):
+            with self.subTest(setting=setting):
+                self.jump.command_outputs[self.resolve] = self.ssh_config(extra=setting + '\n')
+                with self.assertRaises(ValueError) as caught:
+                    self.scan_both()
+                self.assertIn('多跳', str(caught.exception))
 
-        with self.assertRaises(ValueError) as caught:
-            self.scan_both()
-
-        self.assertIn('多跳', str(caught.exception))
         self.assertEqual(self.target.transports, [])
 
     def test_a_jump_host_that_cannot_resolve_the_name_says_so(self):
@@ -107,6 +108,65 @@ class JumpAliasTests(base.SshCase):
 
         self.assertIn('解析', str(caught.exception))
         self.assertLess(waited, 6)
+
+    def test_a_jump_host_that_never_answers_the_request_to_run_the_lookup_does_not_hang_the_scan(self):
+        self.jump.exec_answer_delay = 8                               # the session opens; the request itself is ignored
+        with mock.patch.object(device_access, 'CHANNEL_TIMEOUT', 1):
+            started = time.monotonic()
+            with self.assertRaises(ValueError) as caught:
+                self.scan_both()
+            waited = time.monotonic() - started
+
+        self.assertIn('解析', str(caught.exception))
+        self.assertLess(waited, 6)
+
+    def test_a_jump_session_that_is_already_gone_is_a_plain_refusal(self):
+        client = mock.Mock()
+        client.get_transport.return_value = None                      # what paramiko answers once the connection is closed
+
+        with self.assertRaises(ValueError) as caught:
+            device_access.resolve_on_jump(client, {'host': self.ALIAS, 'port': None, 'username': ''})
+
+        self.assertIn('解析', str(caught.exception))
+
+    def test_an_exit_status_that_arrives_before_the_output_does_not_lose_the_answer(self):
+        self.jump.exit_before_output.add(self.resolve)                # an ssh server may report the exit first
+
+        second = self.scan_both()
+
+        self.assertEqual((second['host'], second['port']), ('127.0.0.1', self.target.port))
+
+    def test_an_answer_longer_than_the_limit_is_not_trusted(self):
+        # The last value of a setting counts, so an answer that was cut short cannot be relied on.
+        self.jump.command_outputs[self.resolve] = self.ssh_config() + b'x' * (device_access.RESOLVE_OUTPUT_LIMIT + 1)
+
+        with self.assertRaises(ValueError) as caught:
+            self.scan_both()
+
+        self.assertIn('解析', str(caught.exception))
+        self.assertEqual(self.target.transports, [])
+
+    def test_values_from_the_jump_host_are_checked_like_typed_ones(self):
+        answers = {'a host that reads as an option': 'hostname -oProxyCommand=reboot\nuser robot\nport 22\n',
+                   'shell text in the host': 'hostname 127.0.0.1;reboot\nuser robot\nport 22\n',
+                   'shell text in the user': 'hostname 127.0.0.1\nuser robot$(reboot)\nport 22\n',
+                   'a port that is not a number': 'hostname 127.0.0.1\nuser robot\nport ssh\n',
+                   'a port out of range': 'hostname 127.0.0.1\nuser robot\nport 99999\n'}
+        for case, answer in answers.items():
+            with self.subTest(case=case):
+                self.jump.command_outputs[self.resolve] = answer.encode()
+                with self.assertRaises(ValueError):
+                    self.scan_both()
+
+        self.assertEqual(self.jump.forwarded, [])                     # nothing was opened towards such an address
+        self.assertEqual(self.target.transports, [])
+
+    def test_text_printed_after_the_answer_that_is_not_a_setting_changes_nothing(self):
+        self.jump.command_outputs[self.resolve] = self.ssh_config() + b'\nsession closed, goodbye\n'
+
+        second = self.scan_both()
+
+        self.assertEqual((second['host'], second['port'], second['username']), ('127.0.0.1', self.target.port, 'robot'))
 
     def test_noise_before_the_answer_is_not_taken_for_the_answer(self):
         # A login script on the jump host may print anything before ssh's own output.

@@ -496,6 +496,18 @@ class LiveStatusTests(SshCase):
         self.assertEqual(view['status']['load'], [0.52, 0.61, 0.4])
         self.assertEqual(view['status']['memory']['used_percent'], 75)
 
+    def test_a_robot_that_never_answers_the_request_to_run_the_status_command_is_not_waited_for(self):
+        connection = self.connect_directly(watch_services=SERVICES)
+        self.target.exec_answer_delay = 8                             # the session opens; the request itself is ignored
+        with mock.patch.object(device_status, 'COMMAND_TIMEOUT_SECONDS', 1):
+            started = time.monotonic()
+            view = self.status(connection)
+            waited = time.monotonic() - started
+
+        self.assertFalse(view['reachable'])
+        self.assertEqual((view['error']['hop'], view['error']['reason']), ('device', 'timeout'))
+        self.assertLess(waited, 6)
+
     def test_polling_reuses_one_ssh_session(self):
         connection = self.connect_through_jump(watch_services=SERVICES)
         self.status(connection)
@@ -681,6 +693,52 @@ class StatusSessionLifetimeTests(unittest.TestCase):
             sessions.read(self.connection('late'), {})
 
         self.assertEqual(FakeDevice.opened, [])
+
+
+class ForgetfulChannel:
+    """paramiko's Channel when close() lands just before exec_command starts to wait: exec_command first
+    clears the channel's event (Channel._event_pending), so the wakeup that close() gave is lost."""
+
+    def __init__(self):
+        self.event, self.closed = threading.Event(), False
+
+    def close(self):
+        self.closed = True
+        self.event.set()
+
+    def exec_command(self, command):
+        time.sleep(0.2)                                               # the time limit passes here
+        self.event.clear()
+        if not self.event.wait(5):
+            raise AssertionError('exec_command was never woken')
+        raise paramiko.SSHException('Channel closed.')
+
+
+class RequestCommandTests(unittest.TestCase):
+    def test_a_close_that_exec_command_forgot_still_ends_the_wait(self):
+        started = time.monotonic()
+
+        with self.assertRaises(TimeoutError):
+            device_access.request_command(ForgetfulChannel(), 'true', 0.05)
+
+        self.assertLess(time.monotonic() - started, 2)
+
+    def test_nothing_is_asked_when_no_time_is_left(self):
+        channel = mock.Mock()
+
+        for remaining in (0, -3):                                     # e.g. the job's own deadline has passed
+            with self.subTest(remaining=remaining):
+                with self.assertRaises(TimeoutError):
+                    device_access.request_command(channel, 'true', remaining)
+
+        channel.exec_command.assert_not_called()
+
+    def test_an_error_before_the_time_limit_is_passed_on_as_it_is(self):
+        channel = mock.Mock()
+        channel.exec_command.side_effect = paramiko.SSHException('Channel is not open')
+
+        with self.assertRaises(paramiko.SSHException):
+            device_access.request_command(channel, 'true', 5)
 
 
 if __name__ == '__main__':

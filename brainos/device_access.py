@@ -5,6 +5,7 @@ import io
 import re
 import socket
 import stat
+import threading
 import time
 from pathlib import PurePosixPath
 
@@ -209,20 +210,42 @@ def credentials(p,prefix='',label=''):
     return auth,secret
 
 
+def request_command(channel,command,timeout):
+    """Ask the host to run ``command`` on an open session channel. paramiko waits for the answer to this
+    request without any time limit, so the channel is closed when none came after ``timeout`` seconds:
+    that ends the wait, and TimeoutError is raised. With no time left nothing is asked."""
+    if timeout<=0:raise TimeoutError('no time left to ask the host to run a command')
+    expired,returned=threading.Event(),threading.Event()
+    def give_up():
+        expired.set();channel.close()
+        # exec_command clears the channel's event just before it waits on it, so a close that landed a
+        # moment earlier is forgotten: keep signalling until the call has returned.
+        while not returned.wait(.05):channel.event.set()
+    watchdog=threading.Timer(timeout,give_up);watchdog.daemon=True;watchdog.start()
+    try:channel.exec_command(command)
+    except Exception:
+        if not expired.is_set():raise              # whatever is raised after the limit is the limit's doing
+    finally:returned.set();watchdog.cancel()
+    if expired.is_set():raise TimeoutError('the host did not answer the request to run a command')
+
+
 def resolve_command(name):return 'ssh -G -- '+name       # prints ssh's effective configuration; connects to nothing
 
 
 def _output_of(client,command):
-    """(stdout text, failed) of one short command, within CHANNEL_TIMEOUT overall however the host behaves."""
+    """(stdout text, failed) of one short command, within CHANNEL_TIMEOUT overall however the host behaves.
+    Output that reaches RESOLVE_OUTPUT_LIMIT counts as failed: part of an answer is not an answer."""
+    deadline=time.monotonic()+CHANNEL_TIMEOUT
     channel=client.get_transport().open_session(timeout=CHANNEL_TIMEOUT)
     try:
-        channel.exec_command(command);deadline=time.monotonic()+CHANNEL_TIMEOUT;output=bytearray()
+        request_command(channel,command,deadline-time.monotonic());output=bytearray()
         while len(output)<RESOLVE_OUTPUT_LIMIT:
-            if channel.recv_ready():output.extend(channel.recv(8192))
-            elif channel.exit_status_ready():break
-            elif time.monotonic()>=deadline:raise TimeoutError('no answer in time')
-            else:time.sleep(.02)
-        return output[:RESOLVE_OUTPUT_LIMIT].decode('utf-8','replace'),not channel.exit_status_ready() or channel.recv_exit_status()!=0
+            # Read to the end of the output: the exit status may arrive before the last of it.
+            channel.settimeout(max(deadline-time.monotonic(),0));data=channel.recv(8192)
+            if not data:break
+            output.extend(data)
+        complete=len(output)<RESOLVE_OUTPUT_LIMIT and channel.status_event.wait(max(deadline-time.monotonic(),0))
+        return output[:RESOLVE_OUTPUT_LIMIT].decode('utf-8','replace'),not complete or channel.recv_exit_status()!=0
     finally:channel.close()
 
 
@@ -232,10 +255,13 @@ def resolve_on_jump(client,p):
     import paramiko
     name,port,user=named_target(p)
     try:text,failed=_output_of(client,resolve_command(name))
-    except (OSError,EOFError,paramiko.SSHException):raise ValueError('没能在跳板机上解析目标名称；请重试，或直接填写目标机的地址') from None
+    except (OSError,EOFError,AttributeError,paramiko.SSHException):     # AttributeError: the session is already gone
+        raise ValueError('没能在跳板机上解析目标名称；请重试，或直接填写目标机的地址') from None
     settings={}
     for line in text.splitlines():
-        # ssh -G prints each setting once; whatever a login script printed before it is overwritten.
+        # ssh -G prints each setting once, and a login script prints before the command runs, so the last
+        # value of a setting is ssh's. A line printed after ssh's output would count if it reads as a
+        # setting; what was resolved is shown to the user next to the fingerprint, and checked like typed input.
         key,_,value=line.strip().partition(' ');settings[key.lower()]=value.strip()
     if failed or not settings.get('hostname'):raise ValueError('跳板机上的 ssh 没能解析这个名称（ssh -G 没有给出结果）；请直接填写目标机的地址')
     if any(settings.get(key,'none').lower()!='none' for key in ('proxyjump','proxycommand')):
@@ -307,8 +333,10 @@ class SSHDevice:
         clean=self.clean if redact else str
         channel=self.client.get_transport().open_session(timeout=CHANNEL_TIMEOUT)
         try:
-            channel.settimeout(2);channel.exec_command(command);deadline=min(time.monotonic()+timeout,getattr(self,'deadline',float('inf')))
-            output=bytearray();error=bytearray();limited=False
+            channel.settimeout(2);deadline=min(time.monotonic()+timeout,getattr(self,'deadline',float('inf')))
+            output=bytearray();error=bytearray();limited=False;unanswered=False
+            try:request_command(channel,command,deadline-time.monotonic())
+            except TimeoutError:unanswered=True;deadline=0     # reported like a command that did not finish in time
             while time.monotonic()<deadline:
                 if self.stop_event and self.stop_event.is_set():break
                 for ready,read,buffer in [(channel.recv_ready,channel.recv,output),(channel.recv_stderr_ready,channel.recv_stderr,error)]:
@@ -319,7 +347,7 @@ class SSHDevice:
                 if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():break
                 if limited:break
                 time.sleep(.02)
-            timed_out=not channel.exit_status_ready()
+            timed_out=unanswered or not channel.exit_status_ready()    # the closed channel of an unanswered request reads as exited
             code=channel.recv_exit_status() if not timed_out else None
             return {'stdout':clean(output.decode('utf-8','replace')),
                     'stderr':clean(error.decode('utf-8','replace')),'exit_code':code,'truncated':limited,'timed_out':timed_out,
