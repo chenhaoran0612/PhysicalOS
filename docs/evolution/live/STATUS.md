@@ -8,7 +8,7 @@
 | 来源 | 内容 | 会话 | 分支 / 工作区 | 状态 | 集成 |
 |---|---|---|---|---|---|
 | 修复 | 回环绑定不做反向 DNS；本地 Docker 云平台 | （上一会话） | `fix/loopback-bind-skip-reverse-dns`（已推送 origin） | ✅ 已提交 | ✅ 已合入 `integration` |
-| #3 | 跳板机接入、粘贴 ssh 命令、真机只读实时状态 | PhysicalOS 代码解读 | `feat/ssh-jump-host-live-status` · `PhysicalOS/` | 🟡 功能完成；审查 1×P1（扫描指纹时不区分哪一跳）、1×P2 待修；**等用户同意提交** | 快照已合入测试包（含该 P1） |
+| #3 | 跳板机接入、粘贴 ssh 命令、真机只读实时状态 | PhysicalOS 代码解读 | `feat/ssh-jump-host-live-status` · `PhysicalOS/` | 🟡 功能完成，审查意见（1×P1、1×P2、P3）已修复；**等用户同意提交** | 修复后的快照已合入测试包 |
 | #4 | TokenFans 模型与算力，工作空间默认模型 | PhysicalOS issue #4 | `feat/tokenfans-model-compute` · `PhysicalOS-tokenfans/` | 🟡 功能完成，审查意见已全部修复；**等用户同意提交** | 修复后的快照已合入测试包 |
 | #2 | 初始化硬件扫描与修复（SKILL，默认用 #4 的模型） | PhysicalOS issue #2 | 未建分支 | 🟡 开发中 | — |
 | 总指挥 | 文档核对、版本号统一与测试、0.15.0 | 合并、打包与文档维护 | `integration` · `PhysicalOS-integration/` | ✅ | — |
