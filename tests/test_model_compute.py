@@ -275,6 +275,45 @@ class ModelComputeTests(unittest.TestCase):
                 self.mc.connect_key({'api_key': tkf.API_KEY})
         self.assertEqual(list((Path(self.root) / 'credentials').iterdir()), [])
 
+    def test_stand_in_routes_responses_by_model_for_browser_acceptance(self):
+        import urllib.request
+        from http.server import BaseHTTPRequestHandler
+
+        class Upstream(BaseHTTPRequestHandler):
+            seen = []
+            def log_message(self, *args):
+                pass
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                Upstream.seen.append((self.path, body['model']))
+                raw = b'data: {"type":"response.completed"}\n\n'
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/event-stream')
+                self.send_header('Content-Length', str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+        upstream = tkf._QuickServer(('127.0.0.1', 0), Upstream)
+        import threading
+        threading.Thread(target=upstream.serve_forever, daemon=True).start()
+        routed = tkf.TokenFansFixture(routes={'fixture-work': f'http://127.0.0.1:{upstream.server_port}/v1'})
+        try:
+            with patch.dict(os.environ, {'NEUXMIND_TOKENFANS_URL': routed.url}):
+                summary = self.mc.connect_key({'api_key': tkf.API_KEY})
+                self.assertEqual(summary['models'], ['fixture-work'])
+                model = self.app.engineering.resolve_model(self.pid, None)
+                profile, _ = self.app.engineering._model({'id': 'agent-session-fixture', 'model_id': model['id'], 'model': model['model']})
+                req = urllib.request.Request(profile['base_url'] + '/responses', method='POST',
+                                             data=json.dumps({'model': profile['model'], 'stream': True}).encode(),
+                                             headers={'Authorization': 'Bearer ' + profile['api_key'], 'Content-Type': 'application/json'})
+                with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=10) as r:
+                    self.assertIn(b'response.completed', r.read())
+            self.assertEqual(Upstream.seen, [('/v1/responses', 'fixture-work')])
+        finally:
+            routed.close()
+            upstream.shutdown()
+            upstream.server_close()
+
     def test_key_hint_never_shows_more_than_four_characters_of_a_short_key(self):
         from brainos.model_compute import key_hint
         self.assertEqual(key_hint('abcdefghijklmnop'), '…mnop')

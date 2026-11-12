@@ -124,4 +124,10 @@ async function modelComputeSubmit(kind, p) {
   render();
   toast(kind === 'tkf-default' ? '默认模型已设为 ' + summary.default_model
     : '已连接 TokenFans，默认模型：' + (summary.default_model || '请选择'));
+  // An investigation that stopped for a missing model continues with its robot (engineering.js).
+  const pending = typeof enginePendingDiscoveryRobot !== 'undefined' ? enginePendingDiscoveryRobot : null;
+  if (pending && rows('agent_models').length && rows('robots').some(r => r.id === pending)) {
+    enginePendingDiscoveryRobot = null;
+    return engineAction('engine-discover', pending);
+  }
 }

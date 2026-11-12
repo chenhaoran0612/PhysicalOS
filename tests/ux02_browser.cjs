@@ -94,17 +94,19 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
   await page.locator('#main [data-action="engine-work"]').first().click();
   await dlg('.model-why').waitFor();
   const why = await dlg('.dialog-body').innerText();
-  for (const want of ['这一步需要先给助手配一个大模型', '阅读机器人资料、编写接入程序和测试', 'NeuxMind 云平台模型', '平台付费模型',
-    '自己的模型 API', 'API 地址、模型 ID 和密钥', '不需要助手模型']) {
+  for (const want of ['这一步需要先给助手配一个大模型', '阅读机器人资料、编写接入程序和测试', 'TokenFans 模型',
+    '粘贴 API Key 或用账号登录', '不需要助手模型']) {
     assert(why.includes(want), '助手模型说明缺少：' + want);
   }
-  assert(!(await dlg('[data-action="engine-cloud-model"]').count()), '未登录云平台时不应出现“使用云平台模型”');
-  assert(await dlg('[data-action="go-cloud"]').count() === 1, '缺少“先登录云平台账户”');
-  assert(await dlg('button:has-text("暂未上架")').isDisabled(), '平台模型未上架时应显示为不可用，而不是死胡同');
+  // Issue #4: the assistant's large models come only from TokenFans, configured on 云平台账户.
+  for (const gone of ['engine-cloud-model', 'engine-platform-model', 'engine-own-model']) {
+    assert(!(await dlg(`[data-action="${gone}"]`).count()), '工程模型对话框不应再提供：' + gone);
+  }
+  assert(await dlg('[data-action="go-cloud"]').count() === 1, '缺少“连接 TokenFans”（前往云平台账户）');
   await shot('04-assistant-model-needed');
-  await click('engine-own-model');
-  await page.locator('form[data-form=engine-model]').waitFor();
-  await click('close');
+  await click('go-cloud');
+  await page.locator('#main .tkf-panel [data-action="tkf-key"]').waitFor();
+  assert(await page.locator('#main .tkf-panel [data-action="tkf-login"]').count() === 1, '云平台账户页缺少 TokenFans 账号登录');
 
   // ---------------------------------------------------------------- (b) generated parameter form
   await go('robots');

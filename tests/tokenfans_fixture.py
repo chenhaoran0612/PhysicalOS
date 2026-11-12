@@ -7,11 +7,16 @@ Shapes follow the TokenFans console and API docs (https://tokenfans.ai/integrati
 * ``GET /v1/me/billing/balance`` (Bearer console token) -> {data: {balance_minor, currency}}
 * ``POST /auth/logout`` (Bearer console token)
 * ``GET /codex/v1/models`` (Bearer API key) -> {object: "list", data: [{id}, ...]}
+* ``POST /codex/v1/responses`` (Bearer API key), only with ``routes``: forwarded unchanged to
+  the Responses fixture registered for the request's ``model`` (browser acceptance scripts
+  keep their scripted model behaviour behind TokenFans, one model id per flow).
 """
 import json
 import secrets
 import socketserver
 import threading
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # Fake credentials, freshly random for every run: nothing credential-like is committed.
@@ -31,10 +36,23 @@ class _QuickServer(ThreadingHTTPServer):
         self.server_name, self.server_port = self.server_address[:2]
 
 
+def _forward(url, raw):
+    """POST ``raw`` to a local Responses fixture; returns (status, content type, body)."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    req = urllib.request.Request(url, data=raw, method='POST', headers={'Content-Type': 'application/json'})
+    try:
+        with opener.open(req, timeout=180) as response:
+            return response.status, response.headers.get('Content-Type', 'application/json'), response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers.get('Content-Type', 'application/json'), exc.read()
+
+
 class TokenFansFixture:
-    def __init__(self):
+    def __init__(self, routes=None):
+        """``routes``: optional {model id: Responses fixture base URL (ending in /v1)}."""
         self.requests = []
-        self.models = list(MODELS)
+        self.routes = dict(routes or {})
+        self.models = list(self.routes) or list(MODELS)
         self.deep_logout = False
         fixture = self
 
@@ -79,7 +97,21 @@ class TokenFansFixture:
 
             def do_POST(self):
                 length = int(self.headers.get('Content-Length') or 0)
-                body = json.loads(self.rfile.read(length) or b'{}')
+                raw = self.rfile.read(length)
+                body = json.loads(raw or b'{}')
+                if self.path == '/codex/v1/responses':
+                    self._record({'model': body.get('model')})
+                    if self._bearer() != API_KEY:
+                        return self._send(401, {'error': {'message': 'unauthorized', 'type': 'unauthorized'}})
+                    upstream = fixture.routes.get(body.get('model'))
+                    if not upstream:
+                        return self._send(404, {'error': {'message': 'model not available', 'type': 'not_found'}})
+                    status, kind, data = _forward(upstream.rstrip('/') + '/responses', raw)
+                    self.send_response(status)
+                    self.send_header('Content-Type', kind)
+                    self.send_header('Content-Length', str(len(data)))
+                    self.end_headers()
+                    return self.wfile.write(data)
                 self._record(body)
                 if self.path == '/auth/login':
                     if body.get('email') == EMAIL and body.get('password') == PASSWORD:

@@ -1,5 +1,6 @@
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
+const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  // issue #4: models run only through TokenFans
 (async()=>{
  const cfg=JSON.parse(fs.readFileSync(process.argv[2]||process.env.BRAIN_QA_CONFIG||'/tmp/neuxmind-engineering-qa.json'));
  const browser=await chromium.launch({executablePath:process.env.BRAIN_CHROMIUM_PATH});
@@ -9,7 +10,7 @@ const fs=require('fs');
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(300);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
  await page.goto(cfg.url);await click('account');await fill('name','协作流程验收');await fill('email',`flow-${Date.now()}@example.test`);await fill('password','fixture-password-123');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await click('journey-start');await fill('name','多角色工程交接');await fill('objective','验证阶段输出、验收、预算与交接');await submit();
- await page.goto(cfg.url+'/#agents');await click('engine-models');await click('engine-own-model');await fill('name','流程模型（本地测试）');await fill('base_url',cfg.workflow_model);await fill('model','fixture');await fill('api_key','fixture-flow-secret');await submit();await click('go-workflows');await click('engine-flow-create');
+ await connectTokenFans(page,cfg);await useTokenFansModel(page,cfg,'fixture-workflow');await page.goto(cfg.url+'/#agents');await click('go-workflows');await click('engine-flow-create');
  await fill('name','本体分析与适配协作');await fill('objective','通过两个独立角色验证工程文件交接');await fill('max_total_tokens',4000);
  await page.locator('[data-action=engine-flow-remove]').last().click();await page.locator('[data-action=engine-flow-remove]').last().click();
  await page.locator('[data-action=engine-flow-up]').last().click();await page.locator('[data-action=engine-flow-down]').first().click();
