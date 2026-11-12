@@ -40,7 +40,8 @@ class AgentProcess:
         if not binary:raise ValueError('工程引擎未安装，请安装完整桌面版本')
         extensions=extensions or {'skills':[],'mcp':[]}
         local_tools=engineering or analysis_tools
-        if not engineering and (extensions['skills'] or extensions['mcp']):raise ValueError('调查会话不能加载工程扩展')
+        # Device sessions may load only product-owned built-in Skills (issue #2 hardware-init), never project extensions.
+        if not engineering and (extensions['mcp'] or any(not x.get('builtin') for x in extensions['skills'])):raise ValueError('调查会话不能加载工程扩展')
         self.events=queue.Queue(maxsize=4096)
         self.pending={};self.lock=threading.RLock();self.counter=0;self.closed=False
         home,work=Path(home),Path(work)

@@ -1,4 +1,5 @@
-// Browser acceptance: connect a robot through a jump host (two fingerprint steps), watch its
+// Browser acceptance: connect a robot through a jump host (two fingerprint steps, then the issue #2
+// hardware scan through the same route), watch its
 // read-only live status, change the watched services, connect a second robot directly, and
 // connect a third one by pasting an ssh command.
 // Fixture: tests/ssh_jump_browser_fixture.py (local SSH protocol fixtures, no real machine).
@@ -27,6 +28,14 @@ const fs = require('fs');
     for (const t of texts) if (!text.includes(t)) throw Error(`Missing "${t}" in: ${text.slice(0, 400)}`);
   };
   const card = name => page.locator('article.card', {hasText: name});
+  // Issue #2: a new connection first scans the hardware (read-only), then continues to the investigation.
+  const throughHardwareScan = async (expected = [], screenshot = '') => {
+    await dialog.getByText('硬件清单', {exact: true}).waitFor({timeout: 30000});
+    await expectText(dialog, ['硬件初始化', ...expected]);
+    if (screenshot) { fs.mkdirSync('artifacts', {recursive: true}); await page.screenshot({path: screenshot}); }
+    await page.locator('#dialog [data-action="engine-discover"]').first().click();
+    await dialog.getByText('选择工程模型', {exact: true}).waitFor();
+  };
   const confirmFingerprint = async title => {
     await dialog.getByText(title, {exact: true}).waitFor();
     await page.locator('#dialog input[type=checkbox]').check();
@@ -62,7 +71,8 @@ const fs = require('fs');
   await dialog.getByText('第 2 步：确认目标机指纹', {exact: true}).waitFor();
   await expectText(dialog, ['经跳板机', `${cfg.jump_user}@127.0.0.1:${cfg.jump_port}`]);
   await confirmFingerprint('第 2 步：确认目标机指纹');
-  await dialog.getByText('选择工程模型', {exact: true}).waitFor();      // connected: the next step of onboarding
+  // connected: the hardware scan runs through the jump host
+  await throughHardwareScan(['经跳板机', '/dev/ttyUSB0', '需要处理的问题'], 'artifacts/ssh-jump-hardware-scan.png');
   await click('close');
 
   // 2. Live status: read-only, names the route, shows the device's own numbers and the watched services.
@@ -93,7 +103,7 @@ const fs = require('fs');
   await robotLogin('局域网里的机器人');
   await submit();
   await confirmFingerprint('确认 SSH 主机指纹');
-  await dialog.getByText('选择工程模型', {exact: true}).waitFor();
+  await throughHardwareScan(['/dev/ttyUSB0']);
   await click('close');
   await page.goto(cfg.url + '/#robots');
   if ((await card('局域网里的机器人').innerText()).includes('跳板机')) throw Error('Direct robot shows a jump host');
@@ -137,14 +147,14 @@ const fs = require('fs');
   await submit();
   await confirmFingerprint('第 1 步：确认跳板机指纹');
   await confirmFingerprint('第 2 步：确认目标机指纹');
-  await dialog.getByText('选择工程模型', {exact: true}).waitFor();
+  await throughHardwareScan(['经跳板机']);
   await click('close');
   await page.goto(cfg.url + '/#robots');
   await expectText(card('粘贴命令接入的机器人'), ['经跳板机', `${cfg.target_user}@127.0.0.1:${cfg.target_port}`]);
 
   if (errors.length) throw Error(errors.join('\n'));
   console.log(JSON.stringify({passed: true, jumpTwoStepFingerprints: true, liveStatus: true, statusRefreshes: true,
-                              watchedServicesEdited: true, directUnchanged: true, pastedCommand: true,
+                              watchedServicesEdited: true, directUnchanged: true, pastedCommand: true, hardwareScanAfterConnect: true,
                               jsErrors: errors.length}));
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

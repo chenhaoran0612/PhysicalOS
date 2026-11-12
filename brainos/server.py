@@ -86,6 +86,10 @@ def make_handler(application):
         def do_GET(self):
             if not self.trusted():
                 return
+            # Issue #2: its own static files, kept apart from the shared table below.
+            extra={'/hardware.js':('hardware.js','text/javascript; charset=utf-8'),'/hardware.css':('hardware.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            if extra:
+                return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
             files={'/':('index.html','text/html; charset=utf-8'),'/app.js':('app.js','text/javascript; charset=utf-8'),'/inventory.js':('inventory.js','text/javascript; charset=utf-8'),'/engineering.js':('engineering.js','text/javascript; charset=utf-8'),'/ssh_command.js':('ssh_command.js','text/javascript; charset=utf-8'),'/ssh_jump.js':('ssh_jump.js','text/javascript; charset=utf-8'),'/extensions.js':('extensions.js','text/javascript; charset=utf-8'),'/workflows.js':('workflows.js','text/javascript; charset=utf-8'),'/adaptation.js':('adaptation.js','text/javascript; charset=utf-8'),'/journey.js':('journey.js','text/javascript; charset=utf-8'),'/planner.js':('planner.js','text/javascript; charset=utf-8'),'/results.js':('results.js','text/javascript; charset=utf-8'),'/delivery.js':('delivery.js','text/javascript; charset=utf-8'),'/revisions.js':('revisions.js','text/javascript; charset=utf-8'),'/robot_detail.js':('robot_detail.js','text/javascript; charset=utf-8'),'/cloud.js':('cloud.js','text/javascript; charset=utf-8'),'/model_compute.js':('model_compute.js','text/javascript; charset=utf-8'),'/onsite.js':('onsite.js','text/javascript; charset=utf-8'),'/sim.js':('sim.js','text/javascript; charset=utf-8'),'/ux02.js':('ux02.js','text/javascript; charset=utf-8'),'/ux03.js':('ux03.js','text/javascript; charset=utf-8'),'/ux04_errors.js':('ux04_errors.js','text/javascript; charset=utf-8'),'/ux04.js':('ux04.js','text/javascript; charset=utf-8'),'/ux05.js':('ux05.js','text/javascript; charset=utf-8'),'/safety.js':('safety.js','text/javascript; charset=utf-8'),'/style.css':('style.css','text/css; charset=utf-8')}
             if path in files:
@@ -163,6 +167,9 @@ def make_handler(application):
                         'engineering/artifact':service.engineering.artifact,
                         'engineering/stop':service.engineering.stop,'engineering/answer':service.engineering.answer,
                         'engineering/evidence':service.engineering.evidence,
+                        # Issue #2: hardware initialisation (read-only scan, repair sessions with the built-in Skill)
+                        'engineering/hardware/scan':service.hardware.scan,'engineering/hardware/detail':service.hardware.scan_detail,
+                        'engineering/hardware/repair':service.hardware.start_repair,'engineering/hardware/skill':service.hardware.skill,
                         'connections/configure':service.configure_connection,'services':service.add_service,'services/connect':service.connect_service,
                         'models':service.add_model,'models/infer':service.infer,'datasets':service.add_dataset,
                         'models/use':service.use_catalog_model,'models/deploy':service.deploy_model,

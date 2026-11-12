@@ -32,7 +32,8 @@ VERSION='0.15.0'
 
 # (source, destination inside the bundle). Destinations mirror the source tree so that
 # brainos finds them at the same place relative to itself (brainos/runtime_bridge.py).
-DATA=[(ROOT/'web','web'),(ROOT/'runtime'/'examples'/'skills','runtime/examples/skills')]
+DATA=[(ROOT/'web','web'),(ROOT/'runtime'/'examples'/'skills','runtime/examples/skills'),
+      (ROOT/'brainos'/'skills','brainos/skills')]     # issue #2: built-in hardware-init Skill (text files)
 PATHS=[ROOT,ROOT/'spec',ROOT/'runtime']
 PACKAGES=['brainos','neuxmind_spec','neuxmind_runtime']
 # Imported lazily (inside functions or by name) and therefore named explicitly.
