@@ -26,6 +26,7 @@ DEFAULT_ROOTS=['/opt/ros','/etc/ros','/etc/robot','/usr/local/share']
 # takes over a second and the agent may offer several keys: measured on a real one, the key
 # exchange took 3-5 s and the login 6 s, which the earlier 8 s limits did not always cover.
 TCP_TIMEOUT=10;HANDSHAKE_TIMEOUT=20;AUTH_TIMEOUT=20;CHANNEL_TIMEOUT=15
+RESOLVE_OUTPUT_LIMIT=65536      # bytes of `ssh -G` output read from a jump host
 SENSITIVE=re.compile(r'(?:^|/)(?:\.ssh|\.aws|\.config|\.env[^/]*|\.git|credentials?[^/]*|secrets?[^/]*|[^/]*(?:private[._-]?key|id_rsa|id_ed25519)[^/]*)(?:/|$)',re.I)
 
 
@@ -38,16 +39,43 @@ def redact(text):
     return text
 
 
-def target(p):
-    host=p.get('host','').strip();user=p.get('username','').strip();port=p.get('port',22)
+def _host(value):
+    host=value.strip() if isinstance(value,str) else ''
     if not host or len(host)>253 or not re.fullmatch(r'[A-Za-z0-9._:%-]+',host) or host.startswith('-'):
         raise ValueError('请输入主机名或 IP 地址，不包含命令或 URL')
     # DNS labels are 1-63 characters; anything else fails deep inside name resolution with a codec error.
     if ':' not in host and any(not 1<=len(label)<=63 for label in host.removesuffix('.').split('.')):
         raise ValueError('主机名无效：每一段要有 1–63 个字符，例如 robot.example.com')
+    return host
+
+
+def _user(value):
+    user=value.strip() if isinstance(value,str) else ''
     if not re.fullmatch(r'[A-Za-z0-9_.@-]{1,80}',user) or user.startswith('-'):raise ValueError('SSH 用户名无效')
+    return user
+
+
+def _port(port):
     if isinstance(port,bool) or not isinstance(port,int) or not 1<=port<=65535:raise ValueError('SSH 端口无效')
-    return host,port,user
+    return port
+
+
+def target(p):return _host(p.get('host')),_port(p.get('port',22)),_user(p.get('username'))
+
+
+def named_target(p):
+    """A target the jump host resolves, as in ``ssh gate 'ssh name'``: user and port may be left to the jump
+    host's ssh config (None / ''). The name ends up in a command on the jump host, so it is checked as a host."""
+    user=p.get('username');port=p.get('port')
+    return _host(p.get('host')),None if port in (None,'') else _port(port),_user(user) if user not in (None,'') else ''
+
+
+def check_target(p,jump):
+    """Validate the target of a scan request before anything is contacted. True if the jump host resolves it."""
+    resolve=bool(p.get('resolve_on_jump'))
+    if resolve and not jump:raise ValueError('只有经跳板机连接时，才能按跳板机上的 SSH 配置解析目标名称')
+    (named_target if resolve else target)(p)
+    return resolve
 
 
 def fingerprint(key):return 'SHA256:'+base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip('=')
@@ -181,10 +209,50 @@ def credentials(p,prefix='',label=''):
     return auth,secret
 
 
-def inspect_through_jump(p,jump,secret):
-    """Read the device's host key through a jump host whose own fingerprint is already confirmed."""
+def resolve_command(name):return 'ssh -G -- '+name       # prints ssh's effective configuration; connects to nothing
+
+
+def _output_of(client,command):
+    """(stdout text, failed) of one short command, within CHANNEL_TIMEOUT overall however the host behaves."""
+    channel=client.get_transport().open_session(timeout=CHANNEL_TIMEOUT)
+    try:
+        channel.exec_command(command);deadline=time.monotonic()+CHANNEL_TIMEOUT;output=bytearray()
+        while len(output)<RESOLVE_OUTPUT_LIMIT:
+            if channel.recv_ready():output.extend(channel.recv(8192))
+            elif channel.exit_status_ready():break
+            elif time.monotonic()>=deadline:raise TimeoutError('no answer in time')
+            else:time.sleep(.02)
+        return output[:RESOLVE_OUTPUT_LIMIT].decode('utf-8','replace'),not channel.exit_status_ready() or channel.recv_exit_status()!=0
+    finally:channel.close()
+
+
+def resolve_on_jump(client,p):
+    """Where ``ssh <name>`` would go from the jump host: its ssh config decides, aliases included.
+    Returns the request with the real host, port and user filled in."""
+    import paramiko
+    name,port,user=named_target(p)
+    try:text,failed=_output_of(client,resolve_command(name))
+    except (OSError,EOFError,paramiko.SSHException):raise ValueError('没能在跳板机上解析目标名称；请重试，或直接填写目标机的地址') from None
+    settings={}
+    for line in text.splitlines():
+        # ssh -G prints each setting once; whatever a login script printed before it is overwritten.
+        key,_,value=line.strip().partition(' ');settings[key.lower()]=value.strip()
+    if failed or not settings.get('hostname'):raise ValueError('跳板机上的 ssh 没能解析这个名称（ssh -G 没有给出结果）；请直接填写目标机的地址')
+    if any(settings.get(key,'none').lower()!='none' for key in ('proxyjump','proxycommand')):
+        raise ValueError('这个名称在跳板机上还配置了下一跳（ProxyJump 或 ProxyCommand），不支持多跳')
+    try:port=port or int(settings.get('port') or 22)
+    except ValueError:raise ValueError('跳板机的 SSH 配置里，这个名称的端口无效') from None
+    return {**p,'host':settings['hostname'],'port':port,'username':user or settings.get('user',''),'alias':name}
+
+
+def inspect_through_jump(p,jump,secret,resolve=False):
+    """Read the device's host key through a jump host whose own fingerprint is already confirmed.
+    With ``resolve`` the jump host is first asked what the target's name stands for."""
     client=open_client(jump,jump['auth'],secret,jump['fingerprint'],'jump')
-    try:return inspect_host(p,open_tunnel(client,p),'device',True)
+    try:
+        if resolve:p=resolve_on_jump(client,p)
+        scan=inspect_host(p,open_tunnel(client,p),'device',True)
+        return {**scan,'alias':p['alias']} if resolve else scan
     finally:client.close()
 
 

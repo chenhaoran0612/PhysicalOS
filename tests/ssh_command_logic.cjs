@@ -97,5 +97,33 @@ result = accepted('ssh -A u@h.example.com', endpoint('h.example.com', 22, 'u'));
 assert.ok(result.notes.some(note => note.includes('Agent 转发')), 'agent forwarding is not done and the user is told');
 accepted('ssh u@::ffff:192.0.2.1', endpoint('::ffff:192.0.2.1', 22, 'u'));
 
+// Nested form: ssh to the jump host and run ssh there. It means what ssh means: the first
+// host is the jump host, and the inner name is resolved by the jump host's own ssh config.
+const nested = (text, target, jump) => {
+  const parsed = accepted(text, target, jump);
+  assert.equal(parsed.resolveOnJump, true, `${text}: the inner name belongs to the jump host`);
+  return parsed;
+};
+result = nested("ssh -tt -p 2222 ops@203.0.113.10 'ssh -tt dog'",
+                endpoint('dog', null, ''), endpoint('203.0.113.10', 2222, 'ops'));
+assert.ok(!result.notes.some(note => note.includes('已忽略')), 'the inner ssh is the target, not an ignored command');
+assert.ok(result.notes.some(note => note.includes('跳板机上的 SSH 配置')), 'the user is told where the name is resolved');
+nested('ssh ops@203.0.113.10 ssh dog', endpoint('dog', null, ''), endpoint('203.0.113.10', 22, 'ops'));       // unquoted
+nested('ssh ops@203.0.113.10 "ssh -p 2200 robot@dog.internal"',
+       endpoint('dog.internal', 2200, 'robot'), endpoint('203.0.113.10', 22, 'ops'));
+nested("ssh ops@203.0.113.10 'ssh -l robot 192.168.50.20'",
+       endpoint('192.168.50.20', null, 'robot'), endpoint('203.0.113.10', 22, 'ops'));
+result = nested("ssh ops@203.0.113.10 'ssh dog uptime'", endpoint('dog', null, ''), endpoint('203.0.113.10', 22, 'ops'));
+assert.ok(result.notes.some(note => note.includes('远程命令')), 'a command after the inner host is still ignored');
+assert.equal(parse('ssh -J ops@203.0.113.10 robot@192.168.1.100').resolveOnJump, false, '-J resolves nothing on the jump host');
+refused("ssh ops@203.0.113.10 'ssh mid ssh dog'", /一跳/);                                  // three hosts
+refused("ssh ops@203.0.113.10 'ssh -J mid dog'", /一跳/);
+refused("ssh -J gate.example.com ops@203.0.113.10 'ssh dog'", /一跳/);
+refused("ssh ops@203.0.113.10 'ssh'", /目标/);
+result = accepted("ssh ops@203.0.113.10 'sudo systemctl status ssh'", endpoint('203.0.113.10', 22, 'ops'));
+assert.equal(result.resolveOnJump, false, 'a remote command that is not ssh stays an ignored remote command');
+
+refused("ssh ops@203.0.113.10 'ssh -o HostName=10.0.0.9 dog'", /HostName/);                 // ssh would not resolve "dog" then
+
 assert.equal(parse('   ').ok, false);
 console.log(`${checks} ssh command checks passed`);

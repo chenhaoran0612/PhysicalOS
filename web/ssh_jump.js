@@ -22,13 +22,18 @@ function sshCommandField() {
 function sshSetControl(name, value) {
   const control = $(`#dialog [name="${name}"]`);
   if (!control) return;
-  control.value = value;
+  if (control.type === 'checkbox') control.checked = Boolean(value);
+  else control.value = value ?? '';
   control.dispatchEvent(new Event('change', {bubbles: true}));
 }
 
 function sshCommandSummary(parsed) {
   const {target, jump} = parsed;
   const route = jump ? `，经跳板机 ${h(sshEndpoint(jump))}` : '，直连';
+  if (parsed.resolveOnJump) {
+    const notes = `<ul>${parsed.notes.map(note => `<li>${h(note)}</li>`).join('')}</ul>`;
+    return notice(`已填好：目标名称 ${h(target.host)}${route}。认证方式已设为“本机 SSH Agent”；用密码或私钥的话在下面改。${notes}`);
+  }
   const notes = parsed.notes.length ? `<ul>${parsed.notes.map(note => `<li>${h(note)}</li>`).join('')}</ul>` : '';
   return notice(`已填好：目标 ${h(sshEndpoint(target))}${route}。认证方式已设为“本机 SSH Agent”` +
                 `（终端里能免密码连上，通常就是它）；用密码或私钥的话在下面改。${notes}`);
@@ -54,6 +59,7 @@ function sshApplyCommand(text) {
     sshSetControl('jump_port', jump.port);
     sshSetControl('jump_username', jump.username);
     sshSetControl('jump_auth', 'agent');
+    sshSetControl('resolve_on_jump', parsed.resolveOnJump);
   }
   // The name follows the command only while it is still the one a command filled in.
   const name = $('#dialog [name="name"]');
@@ -84,7 +90,20 @@ function sshRouteFields() {
     field('跳板机认证方式', `<select name="jump_auth" required disabled>${options}</select>`) +
     `<div id="ssh-jump-password">${field('跳板机密码', '<input name="jump_password" type="password" autocomplete="new-password" disabled>')}</div>` +
     `<div id="ssh-jump-key" hidden>${field('跳板机私钥', '<textarea name="jump_private_key" spellcheck="false" placeholder="粘贴私钥内容" disabled></textarea>')}` +
-    `${field('私钥解密口令（可选）', '<input name="jump_passphrase" type="password" autocomplete="new-password" disabled>')}</div></div>`;
+    `${field('私钥解密口令（可选）', '<input name="jump_passphrase" type="password" autocomplete="new-password" disabled>')}</div>` +
+    '<label class="hardware-confirm"><input type="checkbox" name="resolve_on_jump" value="1" disabled>' +
+    '<span>目标机名称按跳板机上的 SSH 配置解析（它是跳板机 ~/.ssh/config 里的名称）。用户名和端口留空时也取那里的配置。</span></label></div>';
+}
+
+// A name the jump host resolves brings its own user and port, so those two fields may stay empty.
+function sshSyncNamedTarget() {
+  const named = $('#dialog [name=route]')?.value === 'jump' && $('#dialog [name=resolve_on_jump]')?.checked;
+  for (const name of ['username', 'port']) {
+    const control = $(`#dialog [name="${name}"]`);
+    if (!control) continue;
+    control.required = !named;
+    if (name === 'username') control.placeholder = named ? '留空：用跳板机配置里的用户' : 'robot';
+  }
 }
 
 function sshWatchField(value = '') {
@@ -95,12 +114,17 @@ function sshWatchField(value = '') {
 
 const sshServiceList = text => String(text || '').split('\n').map(x => x.trim()).filter(Boolean);
 const sshEndpoint = e => `${e.username}@${e.host}:${e.port}`;
-const sshRouteLabel = c => c?.jump ? `（经跳板机 ${sshEndpoint(c.jump)}）` : '';
+const sshRouteLabel = c => c?.jump ? `（经跳板机 ${sshEndpoint(c.jump)}${c.alias ? `，跳板机上的名称 ${c.alias}` : ''}）` : '';
 
 function sshScanRequest(draft) {
   const request = {project_id: projectId, host: draft.host, port: Number(draft.port), username: draft.username};
   if (draft.route === 'jump') {
     request.jump = {host: draft.jump_host, port: Number(draft.jump_port), username: draft.jump_username};
+    if (draft.resolve_on_jump) {                        // user and port may be left to the jump host's config
+      request.resolve_on_jump = true;
+      request.port = draft.port ? Number(draft.port) : null;
+      request.username = draft.username || '';
+    }
   }
   return request;
 }
@@ -115,7 +139,8 @@ function sshJumpFingerprintForm(scan) {
 
 function sshFingerprintForm(scan) {
   const through = scan.jump ? `（经跳板机 ${sshEndpoint(scan.jump)}）` : '';
-  return form(scan.jump ? '第 2 步：确认目标机指纹' : '确认 SSH 主机指纹', h(sshEndpoint(scan) + through),
+  const resolved = scan.alias ? `${scan.alias} → ` : '';         // what the jump host's ssh config made of the name
+  return form(scan.jump ? '第 2 步：确认目标机指纹' : '确认 SSH 主机指纹', h(resolved + sshEndpoint(scan) + through),
               notice('请与设备管理员或已知主机记录核对指纹。确认后才发送认证信息。') +
               json({fingerprint: scan.fingerprint, key_type: scan.key_type}) +
               '<label class="hardware-confirm"><input type="checkbox" required><span>已核对这是我要连接的设备。</span></label>',
@@ -140,6 +165,7 @@ document.addEventListener('change', e => {
     box.hidden = !viaJump;
     box.querySelectorAll('input,select,textarea').forEach(control => { control.disabled = !viaJump; });
   }
+  if (e.target.matches('[name=route],[name=resolve_on_jump]')) sshSyncNamedTarget();
   if (e.target.matches('[name=jump_auth]')) {
     $('#ssh-jump-password').hidden = e.target.value !== 'password';
     $('#ssh-jump-key').hidden = e.target.value !== 'key';

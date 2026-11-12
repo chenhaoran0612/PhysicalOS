@@ -72,7 +72,7 @@ async function engineSubmit(kind,p,f){
  if(kind==='engine-ssh-jump')return sshJumpSubmit();
  if(kind==='engine-status-services')return sshServicesSubmit(p,f);
  if(kind==='engine-ssh'){
-  const draft={...p,port:Number(p.port),robot_id:f.dataset.id||undefined,read_roots:p.read_roots.split('\n').map(x=>x.trim()).filter(Boolean),watch_services:sshServiceList(p.watch_services),ssh_command:undefined};
+  const draft={...p,port:p.port?Number(p.port):null,robot_id:f.dataset.id||undefined,read_roots:p.read_roots.split('\n').map(x=>x.trim()).filter(Boolean),watch_services:sshServiceList(p.watch_services),ssh_command:undefined};
   const scan=await api('engineering/ssh/scan',sshScanRequest(draft));
   // Through a jump host the first answer is the jump host's own key (ssh_jump.js continues from there).
   if(scan.stage==='jump'){sshDraft={...draft,jump_check_id:scan.id,trust_jump_fingerprint:scan.fingerprint};return sshJumpFingerprintForm(scan);}

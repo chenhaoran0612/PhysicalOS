@@ -141,14 +141,58 @@ function sshArguments(text) {
   if (tokens[0] === '$') tokens.shift();
   while (tokens.length && SSH_ENV_ASSIGNMENT.test(tokens[0])) tokens.shift();      // LC_ALL=C ssh ...
   if (!tokens.length) throw Error('请粘贴一条 ssh 命令');
-  if (/^ssh(\.exe)?$/i.test(tokens[0].split('/').pop())) tokens.shift();
+  if (sshIsSshProgram(tokens[0])) tokens.shift();
   else if (!tokens[0].includes('@') && !/^ssh:\/\//i.test(tokens[0])) {
     throw Error('只能解析 ssh 命令，例如：ssh -J 用户@跳板机 用户@目标机');
   }
   return tokens;
 }
 
-function sshNotes(found, spec, target, jump) {
+const sshIsSshProgram = token => /^ssh(\.exe)?$/i.test(String(token).split('/').pop());
+
+// Options, destination and the remote command (the tokens after the destination) of one ssh invocation.
+function sshScan(tokens) {
+  const found = {destination: '', user: '', port: null, hostName: '', jump: undefined,
+                 keyFile: false, configFile: false, agentForwarding: false, remote: []};
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === '--') {
+      if (!found.destination && tokens[i + 1] !== undefined) found.destination = tokens[++i];
+      found.remote = tokens.slice(i + 1);
+      break;
+    }
+    if (token.startsWith('-') && token.length > 1) { i = sshReadOptions(found, tokens, i); continue; }
+    if (found.destination) { found.remote = tokens.slice(i); break; }       // what follows the host runs on it
+    found.destination = token;
+  }
+  if (!found.destination) throw Error('命令里没有目标主机：ssh 后面要有 用户名@主机');
+  // A quoted remote command arrives as one token: ssh gate 'ssh -tt dog'.
+  if (found.remote.length === 1 && /\s/.test(found.remote[0])) found.remote = sshTokens(found.remote[0]);
+  return found;
+}
+
+// The endpoint an invocation names. Without a port the caller decides: 22, or whatever resolves the name.
+function sshEndpointOf(found, label, defaultPort) {
+  const spec = sshEndpointSpec(found.destination);
+  const port = found.port ?? (spec.port === null ? defaultPort : sshPortNumber(spec.port));
+  return {spec, endpoint: sshCheckedEndpoint(found.hostName || spec.host, port, found.user || spec.username, label)};
+}
+
+function sshSharedNotes(found) {
+  const notes = [];
+  if (found.agentForwarding) notes.push('命令里的 -A 已忽略：这里不做 Agent 转发，两跳各自用本机的 SSH Agent 登录。');
+  if (found.configFile) notes.push('命令里指定了配置文件（-F）。这里不读取 SSH 配置文件，其中的设置不会生效。');
+  if (found.keyFile) notes.push('命令里指定了密钥文件（-i）。这里不读取本机的密钥文件：请先用 ssh-add 把它加入 SSH Agent，或在下面粘贴私钥内容。');
+  return notes;
+}
+
+// ssh [-J jump] target [command]
+function sshDirectResult(found) {
+  const {spec, endpoint: target} = sshEndpointOf(found, '目标', SSH_DEFAULT_PORT);
+  const jump = found.jump
+    ? sshCheckedEndpoint(found.jump.host, found.jump.port === null ? SSH_DEFAULT_PORT : sshPortNumber(found.jump.port),
+                         found.jump.username, '跳板机')
+    : null;
   const notes = [];
   if (!target.username) notes.push('命令里没有写用户名，请在下面补上 SSH 用户名。');
   if (jump && !jump.username) notes.push('命令里没有写跳板机用户名，请在下面补上。');
@@ -160,40 +204,40 @@ function sshNotes(found, spec, target, jump) {
       notes.push(`“${host}”像是 ~/.ssh/config 里的别名。这里不读取那个文件，请换成能直接访问的主机名或 IP。`);
     }
   }
-  if (found.agentForwarding) notes.push('命令里的 -A 已忽略：这里不做 Agent 转发，两跳各自用本机的 SSH Agent 登录。');
-  if (found.configFile) notes.push('命令里指定了配置文件（-F）。这里不读取 SSH 配置文件，其中的设置不会生效。');
-  if (found.keyFile) notes.push('命令里指定了密钥文件（-i）。这里不读取本机的密钥文件：请先用 ssh-add 把它加入 SSH Agent，或在下面粘贴私钥内容。');
-  if (found.command) notes.push('已忽略命令末尾的远程命令。');
-  return notes;
+  notes.push(...sshSharedNotes(found));
+  if (found.remote.length) notes.push('已忽略命令末尾的远程命令。');
+  return {target, jump, notes, resolveOnJump: false};
+}
+
+// ssh jump 'ssh target': the first host is the jump host and, as with ssh itself, the inner
+// name is resolved by the jump host's ssh config (an alias there means nothing on this machine).
+function sshNestedResult(outer) {
+  const inner = sshScan(outer.remote.slice(1));
+  const hops = (outer.jump ? 1 : 0) + (inner.jump ? 1 : 0) + (sshIsSshProgram(inner.remote[0]) ? 1 : 0);
+  if (hops) throw Error(`只支持一跳跳板机，这条命令里有 ${hops + 1} 跳`);
+  // With HostName ssh connects there and does not resolve the name, which this form cannot express.
+  if (inner.hostName) throw Error('嵌套命令里的 -o HostName 不支持：请把内层 ssh 的目标直接写成那个地址');
+  const jump = sshEndpointOf(outer, '跳板机', SSH_DEFAULT_PORT).endpoint;
+  const target = sshEndpointOf(inner, '目标', null).endpoint;
+  const notes = [`“${target.host}”会按跳板机上的 SSH 配置解析，和在跳板机上执行 ssh ${target.host} 一样；` +
+                 '解析出的地址、用户名和端口会在确认指纹时显示。',
+                 '最后一跳在本机登录（本机的 SSH Agent、密钥或密码），不使用跳板机上保存的密钥。'];
+  if (!jump.username) notes.push('命令里没有写跳板机用户名，请在下面补上。');
+  if (sshLooksLikeAlias(jump.host)) {
+    notes.push(`“${jump.host}”像是 ~/.ssh/config 里的别名。这里不读取那个文件，请换成能直接访问的主机名或 IP。`);
+  }
+  notes.push(...sshSharedNotes(outer));
+  if (inner.remote.length) notes.push('已忽略内层 ssh 后面的远程命令。');
+  return {target, jump, notes, resolveOnJump: true};
 }
 
 function sshParse(text) {
-  const tokens = sshArguments(text);
-  const found = {destination: '', user: '', port: null, hostName: '', jump: undefined,
-                 keyFile: false, configFile: false, agentForwarding: false, command: false};
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token === '--') {
-      if (!found.destination && tokens[i + 1] !== undefined) found.destination = tokens[++i];
-      found.command = i + 1 < tokens.length;
-      break;
-    }
-    if (token.startsWith('-') && token.length > 1) { i = sshReadOptions(found, tokens, i); continue; }
-    if (found.destination) { found.command = true; break; }       // what follows the host is the remote command
-    found.destination = token;
-  }
-  if (!found.destination) throw Error('命令里没有目标主机：ssh 后面要有 用户名@主机');
-  const spec = sshEndpointSpec(found.destination);
-  const port = found.port ?? (spec.port === null ? SSH_DEFAULT_PORT : sshPortNumber(spec.port));
-  const target = sshCheckedEndpoint(found.hostName || spec.host, port, found.user || spec.username, '目标');
-  const jump = found.jump
-    ? sshCheckedEndpoint(found.jump.host, found.jump.port === null ? SSH_DEFAULT_PORT : sshPortNumber(found.jump.port),
-                         found.jump.username, '跳板机')
-    : null;
-  return {target, jump, notes: sshNotes(found, spec, target, jump)};
+  const found = sshScan(sshArguments(text));
+  return sshIsSshProgram(found.remote[0]) ? sshNestedResult(found) : sshDirectResult(found);
 }
 
-// {ok: true, target, jump, notes} or {ok: false, error}. jump is null for a direct connection.
+// {ok: true, target, jump, notes, resolveOnJump} or {ok: false, error}. jump is null for a direct
+// connection; with resolveOnJump the target is a name for the jump host to resolve (its port may be null).
 function sshParseCommand(text) {
   try {
     return {ok: true, ...sshParse(String(text ?? ''))};

@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 
-from brainos import device_status, hardware_scan
+from brainos import device_access, device_status, hardware_scan
 from brainos.server import Application, make_handler
 from ssh_fixture import SSHFixture
 from test_product import Server
@@ -24,7 +24,10 @@ if __name__ == '__main__':
     watched = (SERVICES, ['bridge'], [])        # every watch list the browser test sets
     target = SSHFixture(command_outputs={**{device_status.status_command(names): STATUS_OUTPUT for names in watched},
                                          hardware_scan.SCAN_EXEC: jetson().encode()})      # issue #2: scan after connecting
-    jump = SSHFixture(username=JUMP_USER, password=JUMP_PASSWORD, forward_to=[('127.0.0.1', target.port)])
+    # What `ssh dog` would connect to from the jump host: the answer its `ssh -G dog` gives.
+    alias = {device_access.resolve_command('dog'): f'user robot\nhostname 127.0.0.1\nport {target.port}\n'.encode()}
+    jump = SSHFixture(username=JUMP_USER, password=JUMP_PASSWORD, forward_to=[('127.0.0.1', target.port)],
+                      command_outputs=alias)
     info = {'url': api.url, 'target_port': target.port, 'target_user': 'robot', 'target_password': 'fixture-password',
             'jump_port': jump.port, 'jump_user': JUMP_USER, 'jump_password': JUMP_PASSWORD, 'services': SERVICES}
     with open(sys.argv[1] if len(sys.argv) > 1 else '/tmp/neuxmind-ssh-jump-ui.json', 'w') as f:

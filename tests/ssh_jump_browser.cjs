@@ -34,7 +34,9 @@ const fs = require('fs');
     await expectText(dialog, ['硬件初始化', ...expected]);
     if (screenshot) { fs.mkdirSync('artifacts', {recursive: true}); await page.screenshot({path: screenshot}); }
     await page.locator('#dialog [data-action="engine-discover"]').first().click();
-    await dialog.getByText('选择工程模型', {exact: true}).waitFor();
+    // No model is configured yet, so the investigation first shows the model dialog (issue #4:
+    // the engineering model comes from TokenFans only).
+    await dialog.getByText('工程助手的大模型只对接 TokenFans', {exact: true}).waitFor();
   };
   const confirmFingerprint = async title => {
     await dialog.getByText(title, {exact: true}).waitFor();
@@ -152,9 +154,38 @@ const fs = require('fs');
   await page.goto(cfg.url + '/#robots');
   await expectText(card('粘贴命令接入的机器人'), ['经跳板机', `${cfg.target_user}@127.0.0.1:${cfg.target_port}`]);
 
+  // 6. The nested form `ssh gate 'ssh dog'`: the first host is the jump host and "dog" is a name
+  //    only the jump host knows. Its ssh config resolves it; user and port stay empty in the form.
+  await click('engine-ssh');
+  await command.fill(`ssh -tt -p ${cfg.jump_port} ${cfg.jump_user}@127.0.0.1 'ssh -tt dog'`);
+  await command.dispatchEvent('change');
+  await expectText(page.locator('#ssh-command-result'), ['目标名称 dog', '经跳板机', '跳板机上的 SSH 配置']);
+  const nested = {host: await value('host'), port: await value('port'), username: await value('username'),
+                  route: await value('route'), jump_port: await value('jump_port'),
+                  resolve: await page.locator('#dialog [name=resolve_on_jump]').isChecked()};
+  const wanted = {host: 'dog', port: '', username: '', route: 'jump', jump_port: String(cfg.jump_port), resolve: true};
+  if (JSON.stringify(nested) !== JSON.stringify(wanted)) throw Error('Nested command filled: ' + JSON.stringify(nested));
+  await fill('name', '跳板机上叫 dog 的机器人');
+  await page.locator('#dialog [name=auth]').selectOption('password');
+  await page.locator('#dialog [name=jump_auth]').selectOption('password');
+  await fill('password', cfg.target_password); await fill('jump_password', cfg.jump_password);
+  await submit();                                                       // user and port are empty and that is fine
+  await confirmFingerprint('第 1 步：确认跳板机指纹');
+  await dialog.getByText('第 2 步：确认目标机指纹', {exact: true}).waitFor();
+  await expectText(dialog, [`dog → ${cfg.target_user}@127.0.0.1:${cfg.target_port}`]);     // resolved, shown before trusting
+  await page.screenshot({path: 'artifacts/ssh-nested-resolved.png'});
+  await confirmFingerprint('第 2 步：确认目标机指纹');
+  await throughHardwareScan(['经跳板机']);
+  await click('close');
+  await page.goto(cfg.url + '/#robots');
+  await expectText(card('跳板机上叫 dog 的机器人'), ['经跳板机', '跳板机上的名称 dog']);
+  await card('跳板机上叫 dog 的机器人').locator('[data-action="engine-status"]').click();
+  await status.getByText('在线', {exact: true}).waitFor({timeout: 15000});
+  await expectText(status, ['dog-fixture', '经跳板机']);
+
   if (errors.length) throw Error(errors.join('\n'));
   console.log(JSON.stringify({passed: true, jumpTwoStepFingerprints: true, liveStatus: true, statusRefreshes: true,
-                              watchedServicesEdited: true, directUnchanged: true, pastedCommand: true, hardwareScanAfterConnect: true,
-                              jsErrors: errors.length}));
+                              watchedServicesEdited: true, directUnchanged: true, pastedCommand: true,
+                              nestedCommand: true, hardwareScanAfterConnect: true, jsErrors: errors.length}));
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

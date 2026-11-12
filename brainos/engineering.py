@@ -239,9 +239,8 @@ class Engineering:
         the jump host's key first (no credentials sent anywhere), then, once that fingerprint is
         confirmed and the jump login supplied, the device's key through the jump host."""
         self.platform.project(p.get('project_id'))
-        jump=device_access.jump_target(p)
+        jump=device_access.jump_target(p);resolve=device_access.check_target(p,jump)
         if jump and not p.get('jump_check_id'):
-            device_access.target(p)
             scan={**device_access.inspect_host(jump,hop='jump'),'stage':'jump'}
         elif jump:
             first=self._host_check(p.get('jump_check_id'),p.get('project_id'))
@@ -249,7 +248,7 @@ class Engineering:
             if p.get('trust_jump_fingerprint')!=first['fingerprint']:raise ValueError('请核对并确认跳板机主机指纹')
             auth,secret=device_access.credentials(p,'jump_','跳板机 ')
             jump.update(auth=auth,fingerprint=first['fingerprint'])
-            scan={**device_access.inspect_through_jump(p,jump,secret),'jump':jump}
+            scan={**device_access.inspect_through_jump(p,jump,secret,resolve),'jump':jump}
         else:scan=device_access.inspect_host(p)
         scan.update(id=uid('ssh-key'),project_id=p['project_id'],scanned_at=time.time())
         self.store.put('host_key_checks',scan);return scan
@@ -264,7 +263,7 @@ class Engineering:
         if scan.get('stage')=='jump':raise ValueError('这一步只确认了跳板机；请继续读取并确认目标机的指纹')
         if p.get('trust_fingerprint')!=scan['fingerprint']:raise ValueError('请核对并确认设备主机指纹')
         auth,secret=device_access.credentials(p)
-        connection={k:scan[k] for k in ('host','port','username','fingerprint','project_id')}
+        connection={k:scan[k] for k in ('host','port','username','fingerprint','project_id','alias') if k in scan}
         connection.update(id=uid('connection'),kind='ssh',auth=auth,read_roots=device_access.validate_roots(p.get('read_roots',device_access.DEFAULT_ROOTS)),
                           watch_services=device_status.validate_services(p.get('watch_services',[])),created_at=now())
         if scan.get('jump'):
