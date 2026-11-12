@@ -151,9 +151,10 @@ function cloudModels() {
 function cloud() {
   const a = cloudAccount();
   if (!cloudView.loaded && !cloudView.loading) setTimeout(cloudLoad);
-  return heading('CLOUD PLATFORM', '云平台账户', '登录 NeuxMind 云平台，查看钱包余额，以及适合当前机器人能力的模型。',
+  return heading('CLOUD PLATFORM', '云平台账户', '配置工程助手使用的 TokenFans 大模型；登录 NeuxMind 云平台，查看钱包余额与适合当前机器人能力的模型。',
     a.logged_in ? button('刷新', 'cloud-refresh', 'secondary') : '') +
-    notice('本版本中工程助手仍使用你在“助手工具”里配置的模型与本地记账，不经过云平台网关，避免重复计费。') +
+    // Issue #4: the large models the desktop runs come only from TokenFans, configured here.
+    (typeof modelComputePanel === 'function' ? modelComputePanel() + '<div class="spacer"></div>' : '') +
     `<div class="grid-two">${cloudAccountPanel(a)}${cloudAddressPanel(a)}</div>` + cloudWallet() + cloudModels();
 }
 

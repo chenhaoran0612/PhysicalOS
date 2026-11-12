@@ -400,29 +400,19 @@ document.addEventListener('toggle', e => {
 }, true);
 
 // ---------------------------------------------------------------- 4. assistant model (工程助手)
-// What the model is for, the three ways to get one, and what each needs -- instead of a bare picker.
+// What the model is for and how to get it (issue #4: only TokenFans) -- instead of a bare picker.
 function engineModelsDialog(reason) {
   const models = rows('agent_models');
-  const logged = typeof cloudAccount === 'function' && cloudAccount().logged_in;
-  const offers = state.catalog.filter(x => x.kind === 'reasoning');
   const why = reason === 'needed' && !models.length
     ? `<section class="plan-review model-why"><h3>这一步需要先给助手配一个大模型</h3><p>工程助手靠大模型阅读机器人资料、编写接入程序和测试。你刚才要做的事需要它，配好后回到这里继续即可。</p></section>`
     : `<section class="plan-review model-why"><h3>助手模型是做什么的</h3><p>工程助手靠大模型阅读机器人资料、编写接入程序和测试。它与机器人身上运行的模型（模型库）分开管理。</p></section>`;
   const option = (title, needs, cost, action, extra = '') =>
     `<article class="card model-option"><div class="card-body"><h3>${title}</h3><p><b>需要：</b>${needs}</p><p><b>费用：</b>${cost}</p>${extra}</div><div class="card-bottom">${action}</div></article>`;
-  const cloud = option('NeuxMind 云平台模型', '一个云平台账户（登录即可）。', '从云平台钱包按用量扣费。',
-    logged ? button('使用云平台模型', 'engine-cloud-model', 'small') : button('先登录云平台账户', 'go-cloud', 'secondary small'),
-    logged ? `<p class="inline-note">已登录：${h(cloudAccount().email || '')}</p>` : '<p class="inline-note">登录云平台账户后即可选用。</p>');
-  const platform = option('平台付费模型', '平台运营方已上架工程模型。', '从本机工作空间额度按用量扣费。',
-    offers.length ? button('使用平台付费模型', 'engine-platform-model', 'secondary small')
-      : `<button type="button" class="button secondary small" disabled>暂未上架</button>`,
-    offers.length ? '' : '<p class="inline-note">当前还没有可选的平台工程模型。</p>');
-  const own = option('自己的模型 API', '模型服务的 API 地址、模型 ID 和密钥。服务需支持 OpenAI Responses 接口与工具调用（OpenAI 或兼容网关均可）。',
-    '由该模型服务商直接收取；密钥只保存在这台电脑上。', button('配置自己的模型', 'engine-own-model', 'secondary small'));
+  // Issue #4: the assistant's large models come only from TokenFans (configured on 云平台账户).
   const tokenfans = typeof modelComputeOption === 'function' ? modelComputeOption(option) : '';
   const skip = models.length ? '' : notice('暂时不想配置？添加仿真机器人、安装示例技能、运行并观看它动起来，都不需要助手模型。 ' + button('去我的机器人', 'go-robots', 'secondary small'));
-  return dialog('选择工程模型', '工程助手需要一个大模型才能工作',
-    `<div class="dialog-body">${why}${models.length ? engineModelsSummary() : ''}<div class="cards model-options">${tokenfans}${cloud}${platform}${own}</div>${skip}</div>`);
+  return dialog('工程模型', '工程助手的大模型只对接 TokenFans',
+    `<div class="dialog-body">${why}${models.length ? engineModelsSummary() : ''}<div class="cards model-options">${tokenfans}</div>${skip}</div>`);
 }
 
 // ---------------------------------------------------------------- 5. installed skills -> project skills

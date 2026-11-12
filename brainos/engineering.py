@@ -125,8 +125,9 @@ class Engineering:
 
     def snapshot(self):
         result={kind:self.store.list(kind) for kind in ('agent_models','device_connections','agent_sessions','robot_inventories')}
-        # A TokenFans profile without a connection or default model is kept for its sessions, not offered.
-        result['agent_models']=[m for m in result['agent_models'] if m.get('available') is not False]
+        # Issue #4: the desktop runs models only through TokenFans. Other profiles (and a TokenFans
+        # profile without a connection or default) stay stored for their sessions but are not offered.
+        result['agent_models']=[m for m in result['agent_models'] if m.get('billing')=='tokenfans' and m.get('available') is not False]
         return result | {'agent_engine':agent_runtime.available()} | self.extensions.snapshot()
 
     def coverage(self,sid):

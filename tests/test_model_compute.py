@@ -154,6 +154,16 @@ class ModelComputeTests(unittest.TestCase):
         self.mc.set_default({'model': 'kimi-k2.6'})
         self.assertEqual(self.app.engineering._model(session)[0]['model'], 'gpt-5.5-codex')
 
+    def test_only_tokenfans_models_are_offered_but_older_ones_still_load(self):
+        own = self.app.engineering.model_add({'project_id': self.pid, 'name': 'Own', 'model': 'own-model',
+                                              'base_url': 'http://127.0.0.1:9/v1', 'api_key': 'own-key-123'})
+        self.assertEqual(self.app.snapshot()['agent_models'], [])
+        self.mc.connect_key({'api_key': tkf.API_KEY})
+        offered = self.app.snapshot()['agent_models']
+        self.assertEqual([m['billing'] for m in offered], ['tokenfans'])
+        # A session or workflow made earlier with another model still resolves (it is only hidden).
+        self.assertEqual(self.app.engineering.resolve_model(self.pid, own['id'])['id'], own['id'])
+
     def test_workflow_stage_without_a_model_uses_the_default(self):
         self.mc.connect_key({'api_key': tkf.API_KEY})
         definition = self.app.workflows.create({'project_id': self.pid, 'name': 'Default model flow', 'objective': 'Use the default',

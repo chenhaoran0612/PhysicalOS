@@ -268,3 +268,4 @@ dialog.wide{width:min(920px,calc(100% - 32px))}
 .tkf-foot .inline-note{margin:0;max-width:520px}
 @media(max-width:850px){.tkf-meta{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.tkf-choices,.tkf-meta{grid-template-columns:1fr}}
+.model-options .model-option:only-child{grid-column:1/-1}
