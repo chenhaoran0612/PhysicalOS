@@ -84,17 +84,26 @@ function modelComputePointer() {
   return notice(`工程助手的大模型只对接 TokenFans，在“云平台账户”页配置。${state} ` + button(mc.connected ? '管理 TokenFans' : '连接 TokenFans', 'go-cloud', 'secondary small'));
 }
 
+// The key or password typed into a TokenFans form must not stay in the closed dialog's inputs.
+function modelComputeForgetOnClose() {
+  $('#dialog').addEventListener('close', () => {
+    $('#dialog').querySelectorAll('form[data-form^="tkf-"] input[type=password]').forEach(i => { i.value = ''; });
+  }, {once: true});
+}
+
 async function modelComputeAction(type) {
   if (type === 'tkf-key') {
-    return form('粘贴 TokenFans API Key', '连接前会用这个 Key 读取 TokenFans 模型目录来校验',
+    form('粘贴 TokenFans API Key', '连接前会用这个 Key 读取 TokenFans 模型目录来校验',
       field('API Key', '<input name="api_key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-tkf-…" required>',
         '在 TokenFans 控制台 → 账户总览复制。Key 只保存在这台电脑的工作空间凭据文件中，页面不会再显示完整 Key。'), 'tkf-key', '校验并连接');
+    return modelComputeForgetOnClose();
   }
   if (type === 'tkf-login') {
-    return form('用 TokenFans 账号登录', '登录一次，读取账户的 API Key 与余额',
+    form('用 TokenFans 账号登录', '登录一次，读取账户的 API Key 与余额',
       field('邮箱', '<input name="email" type="email" autocomplete="username" required>') +
       field('密码', '<input name="password" type="password" autocomplete="current-password" required>', '密码只用于这一次登录，不会保存；读取 Key 后会立即退出 TokenFans 控制台会话。') +
       notice('账号登录使用 TokenFans 控制台接口（不在其公开 API 文档中），如果失败请改用“粘贴 API Key”。'), 'tkf-login', '登录并连接');
+    return modelComputeForgetOnClose();
   }
   if (type === 'tkf-refresh') {
     await api('model-compute/models', {});
