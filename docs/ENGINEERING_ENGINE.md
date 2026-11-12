@@ -203,7 +203,7 @@ Mac 包增加同一已固定上游归档中的 ripgrep 15.2.0（e89fff89ac），
 2. 用户确认跳板机指纹后，再次调用 `scan`（带 `jump_check_id`、`trust_jump_fingerprint` 和跳板机凭据）：登录跳板机，通过它读取目标机的主机密钥。
 3. 用户确认目标机指纹后调用 `connect`，两跳的指纹都保存在连接记录里；之后每次连接都按这两个指纹校验，任何一跳不一致即拒绝。
 
-读取指纹和连接失败时都会说明是哪一跳、什么原因（`ConnectError.hop` 为 `jump` 或 `device`；`reason` 为 `unreachable`（连不上）、`no_ssh`（地址能连上但不是 SSH 服务）、`auth`、`key`、`fingerprint`，或跳板机关闭了 TCP 转发时的 `forbidden`）。实时状态里会话中途断开、分不清是哪一跳时，`hop` 为 `connection`。只支持一跳；不读取本机 SSH 配置文件，不做 Agent 转发。跳板机凭据与设备凭据一样只保存在本机用户存储，不进入快照和模型上下文。
+读取指纹和连接失败时都会说明是哪一跳、什么原因（`ConnectError.hop` 为 `jump` 或 `device`；`reason` 为 `unreachable`（连不上）、`timeout`（应答太慢）、`no_ssh`（地址能连上但不是 SSH 服务）、`auth`、`key`、`fingerprint`，或跳板机关闭了 TCP 转发时的 `forbidden`）。实时状态里会话中途断开、分不清是哪一跳时，`hop` 为 `connection`。只支持一跳；不读取本机 SSH 配置文件，不做 Agent 转发。跳板机凭据与设备凭据一样只保存在本机用户存储，不进入快照和模型上下文。
 
 **真机实时状态。** 通过 SSH 接入的机器人（直连或经跳板机）在卡片上有“实时状态”。`POST /api/engineering/ssh/status` 在设备上执行一条产品固定的只读命令（`brainos/device_status.py` 的 `status_command`），不经过模型，不接受用户输入的命令文本；页面每 3 秒读取一次。显示：
 
@@ -214,4 +214,8 @@ Mac 包增加同一已固定上游归档中的 ripgrep 15.2.0（e89fff89ac），
 
 后端为每个连接复用一个 SSH 会话，60 秒没有读取就由定期清理关闭，重新接入机器人时旧连接的会话立即关闭；状态命令 6 秒超时。设备没有报告的项目显示为“—”，不填零。这里的状态只来自操作系统，不包含电量、位姿等机器人层数据（那需要适配器），也不代表机器人可以运动。
 
-测试：`tests/test_ssh_jump.py`（两端都是本机 SSH 协议替身；密码、私钥和真实 `ssh-agent` 三种登录）；命令解析 `node tests/ssh_command_logic.cjs`；浏览器验收 `tests/ssh_jump_browser_fixture.py` + `tests/ssh_jump_browser.cjs`。未在真实机器人上验证。
+**连接各阶段的时限。** 建立 TCP 连接 10 秒、握手 20 秒、认证 20 秒、打开通道 15 秒（`brainos/device_access.py` 的 `TCP_TIMEOUT` 等常量）。经公网跳板机时每个来回都要 1 秒以上，SSH Agent 里有几把密钥就要试几次；最初每个阶段 8 秒的时限在真实跳板机上会偶发超时，并被误报为“连不上”。
+
+测试：`tests/test_ssh_jump.py`（两端都是本机 SSH 协议替身；密码、私钥和真实 `ssh-agent` 三种登录；慢链路超时）；命令解析 `node tests/ssh_command_logic.cjs`；浏览器验收 `tests/ssh_jump_browser_fixture.py` + `tests/ssh_jump_browser.cjs`。
+
+真机验证（2026-11-12）：经一台公网跳板机连接一台四足机器人的机载电脑，两跳都用本机 SSH Agent 登录，两跳指纹都与本机 `known_hosts` 的记录一致；只执行了上面那条只读状态命令。首次读取（新建两跳会话）约 13 秒，之后复用会话每次约 1 秒，读到的主机名、负载、内存、磁盘、温度、失败的服务和关注的服务状态与人工排查一致。页面上的操作流程（粘贴命令、两步确认指纹）没有在真机上走过，只在协议替身上验收过。

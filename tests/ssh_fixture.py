@@ -3,6 +3,7 @@
 As a jump host it forwards direct-tcpip channels, only to the addresses listed in ``forward_to``."""
 import socket
 import threading
+import time
 import io
 import os
 import posixpath
@@ -18,6 +19,7 @@ class SSHFixture:
         self.username=username or DEFAULT_LOGIN[0];self.password=password or DEFAULT_LOGIN[1];self.auth_attempts=[]
         self.authorized_keys={key.asbytes() for key in authorized_keys or []};self.key_logins=0
         self.forward_to={tuple(x) for x in forward_to or []};self.forwarded=[];self.forwarding=True
+        self.banner_delay=0;self.auth_delay=0     # seconds: a slow link, for timeout tests
         self.key=paramiko.RSAKey.generate(2048);self.closed=False;self.transports=[];self.commands=[]
         self.socket=socket.socket();self.socket.bind(('127.0.0.1',0));self.socket.listen();self.socket.settimeout(.2)
         self.port=self.socket.getsockname()[1];self.thread=threading.Thread(target=self.accept,daemon=True);self.thread.start()
@@ -31,7 +33,7 @@ class SSHFixture:
         owner=self
         class Protocol(paramiko.ServerInterface):
             def check_auth_password(self,username,password):
-                owner.auth_attempts.append(username)
+                time.sleep(owner.auth_delay);owner.auth_attempts.append(username)
                 return paramiko.AUTH_SUCCESSFUL if username==owner.username and password==owner.password else paramiko.AUTH_FAILED
             def check_auth_publickey(self,username,key):
                 if username!=owner.username or key.asbytes() not in owner.authorized_keys:return paramiko.AUTH_FAILED
@@ -65,6 +67,7 @@ class SSHFixture:
         t=paramiko.Transport(client);self.transports.append(t);t.add_server_key(self.key);ready=threading.Event();forwards={}
         t.set_subsystem_handler('sftp',paramiko.SFTPServer,Files)
         try:
+            time.sleep(self.banner_delay)
             t.start_server(server=Protocol())
             while not self.closed and t.is_active():
                 channel=t.accept(.2)
