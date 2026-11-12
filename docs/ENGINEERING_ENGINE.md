@@ -45,7 +45,7 @@ Agent 将发现分类到系统、计算硬件、传感器、执行器、接口�
 
 “云平台账户”页顶部连接 [TokenFans](https://tokenfans.ai/integrations/api)（OpenAI 兼容网关）。**桌面端的大模型只对接 TokenFans**：本体调查、工程任务、协作流程阶段与本体适配都使用这里选定的默认模型，工程模型对话框和所有模型选择框只提供 TokenFans；“平台模型与算力”页只保留一条指向“云平台账户”的提示。云平台本身（网关上游）不变。
 
-其他来源（自有 API、平台付费模型、云平台网关模型）不再在界面中提供：状态快照的 `agent_models` 只列出可用的 TokenFans 配置；已有的其他配置仍保留在本机注册表中，旧会话与旧流程可以继续读取和运行，后端接口（`/api/engineering/models` 等）也保留，供测试与历史数据使用。依赖这些界面入口的旧浏览器验收脚本（`tests/engineering_browser.cjs`、`discovery_browser.cjs`、`workflows_browser.cjs`、`extensions_browser.cjs`、`ux02_browser.cjs`、`cloud03_browser.cjs`）需要改为先连接 TokenFans 替身，尚未迁移。
+其他来源（自有 API、平台付费模型、云平台网关模型）不再在界面中提供：状态快照的 `agent_models` 只列出可用的 TokenFans 配置；已有的其他配置仍保留在本机注册表中，旧会话与旧流程可以继续读取和运行，后端接口（`/api/engineering/models` 等）也保留，供测试与历史数据使用。浏览器验收脚本（`tests/engineering_browser.cjs`、`discovery_browser.cjs`、`workflows_browser.cjs`、`extensions_browser.cjs`、`ux02_browser.cjs`、`cloud03_browser.cjs`）已迁移：夹具启动带路由的 TokenFans 替身（`TokenFansFixture(routes={模型 ID: 该流程的 Responses 夹具})`，按请求的 `model` 转发 `/codex/v1/responses`），脚本经 `tests/tokenfans_browser.cjs` 在“云平台账户”页粘贴替身 Key 并按流程切换默认模型；`cloud03` 断言对话框只提供 TokenFans，云平台模型改经后端接口添加和启动，再在界面核对云端计量、错误提示与本机账本。SSH 接入后先出现硬件初始化（#2），脚本从其中进入本体调查。
 
 - **两种连接方式**：粘贴 `sk-tkf-` API Key；或用 TokenFans 账号的邮箱 + 密码登录一次——桌面端调用 TokenFans 控制台接口 `POST /auth/login` → `GET /auth/my-key`（读取账户 Key）→ `GET /v1/me/billing/balance`（余额，仅展示）→ `POST /auth/logout`。这些控制台接口不在 TokenFans 公开 API 文档中，可能变化；失败时改用 API Key。密码与控制台令牌只用于这一次交换，**不保存**。
 - **校验与模型列表**：用 Key 调用 `GET {origin}/codex/v1/models`（Codex 路由，面向编码 Agent）；工程引擎的 `base_url` 为 `{origin}/codex/v1`，以 Responses 协议调用。

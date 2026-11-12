@@ -1,7 +1,10 @@
 // Browser acceptance for round 03 (contract §5.3): engineering assistant on cloud-platform models.
-// Covers: choosing a cloud model after cloud login, an engineering task and an SSH discovery run on
-// cloud models, the cloud metering panel, and user-facing errors (wallet too small, overage lock,
-// budget below the cloud minimum, logged out). Proves no local ledger entry is written.
+// Issue #4: the UI offers only TokenFans models, before and after cloud login (checked here). The
+// cloud gateway path stays in the backend for older sessions and the engineering API, so cloud
+// models are added and runs started through the API, and their sessions are checked in the UI:
+// an engineering task and an SSH discovery run on cloud models, the cloud metering panel, and
+// user-facing errors (wallet too small, overage lock, budget below the cloud minimum, logged out).
+// Proves no local ledger entry is written.
 // Start tests/cloud03_browser_fixture.py first.
 // Usage: node tests/cloud03_browser.cjs [config.json] [screenshot-dir]
 const {chromium} = require(process.env.BRAIN_PLAYWRIGHT_MODULE || 'playwright');
@@ -56,7 +59,28 @@ const SMALL = {width: 900, height: 640};
   const waitLive = async (text, timeout = 60000) => {
     await page.locator('#engine-live').getByText(text, {exact: false}).first().waitFor({timeout});
   };
-  const selectModel = label => page.locator('#dialog [name=model_id]').selectOption({label});
+  // The 工程模型 dialog offers TokenFans and nothing else (issue #4).
+  const tokenfansOnly = async (when, name) => {
+    await page.goto(cfg.url + '/#agents');
+    await click('engine-models');
+    await dlg('.model-option').first().waitFor();
+    const titles = await dlg('.model-option h3').allTextContents();
+    assert(titles.length === 1 && titles[0].includes('TokenFans'), when + '：工程模型只应提供 TokenFans：' + titles);
+    for (const gone of ['engine-cloud-model', 'engine-platform-model', 'engine-own-model']) {
+      assert(!(await dlg(`[data-action="${gone}"]`).count()), when + '：不应提供 ' + gone);
+    }
+    await shot(name);
+    await click('close');
+  };
+  // Start a run through the engineering API and open its session view, as the form would.
+  const startRun = (route, payload) => page.evaluate(async ([route, payload]) => {
+    try {
+      const s = await api(route, {project_id: projectId, data_authorized: true, max_minutes: 15, ...payload});
+      await refresh(true);
+      await engineAction('engine-session', s.id);
+      return {id: s.id};
+    } catch (e) { return {error: e.message}; }
+  }, [route, payload]);
 
   // ------------------------------------------------------------ workspace + project
   await page.goto(cfg.url);
@@ -73,13 +97,8 @@ const SMALL = {width: 900, height: 640};
   await page.locator('#dialog').waitFor({state: 'hidden'});
   const projectId = await page.evaluate(() => projectId);
 
-  // ------------------------------------------------------------ 1. logged out: no cloud option
-  await page.goto(cfg.url + '/#agents');
-  await click('engine-models');
-  await dlg(':text("登录云平台账户后")').first().waitFor();
-  assert(!(await dlg('[data-action="engine-cloud-model"]').count()), '未登录时不应出现云平台模型');
-  await shot('01-models-logged-out');
-  await click('close');
+  // ------------------------------------------------------------ 1. logged out: TokenFans only
+  await tokenfansOnly('未登录云平台', '01-models-logged-out');
 
   // ------------------------------------------------------------ 2. cloud login
   await page.goto(cfg.url + '/#cloud');
@@ -94,35 +113,26 @@ const SMALL = {width: 900, height: 640};
   await shot('02-cloud-logged-in');
   const walletStart = (await fixture('/fixture/state')).cloud_wallet;
 
-  // ------------------------------------------------------------ 3. choose cloud models
+  // ------------------------------------------------------------ 3. cloud models: not offered in the UI, still in the API
+  await tokenfansOnly('已登录云平台', '03-models-logged-in');
+  const listing = await page.evaluate(() => api('cloud/gateway-models', {}));
+  const echo = (listing.models || []).find(m => m.id === 'echo-code');
+  assert(echo && String(echo.name).includes('Echo 编码模型') && echo.pricing && echo.pricing.credits === 10,
+    '云平台模型目录缺少计价：' + JSON.stringify(listing).slice(0, 400));
+  const models = await page.evaluate(async ids => {
+    const out = {};
+    for (const id of ids) out[id] = (await api('engineering/models/cloud', {project_id: projectId, model: id})).id;
+    await refresh(true);
+    return out;
+  }, ['echo-code', 'echo-discover', 'echo-overrun']);
   await page.goto(cfg.url + '/#agents');
-  await click('engine-models');
-  await dlg('[data-action="engine-cloud-model"]').waitFor();
-  await shot('03-models-logged-in');
-  await click('engine-cloud-model');
-  await dlg('[name=cloud_model]').waitFor();
-  const options = await dlg('[name=cloud_model] option').allTextContents();
-  assert(options.some(o => o.includes('Echo 编码模型') && o.includes('10 点 / 千 token')), '云平台模型列表缺少计价：' + options);
-  await shot('04-choose-cloud-model');
-  await page.locator('#dialog [name=cloud_model]').selectOption('echo-code');
-  await submit();
-  for (const id of ['echo-discover', 'echo-overrun']) {
-    await page.evaluate(async id => { await api('engineering/models/cloud', {project_id: projectId, model: id}); await refresh(true); }, id);
-  }
-  await page.goto(cfg.url + '/#agents');
-  await page.locator('#main :text("云平台计费")').first().waitFor();
-  await shot('05-agents-cloud-models');
+  await page.locator('#main h1').waitFor();
+  assert(!(await page.locator('#main :text("云平台计费")').count()), '云平台模型不应出现在工程助手的模型列表中');
+  await shot('05-agents-tokenfans-only');
 
   // ------------------------------------------------------------ 4. engineering task on a cloud model
-  await click('engine-work');
-  await fill('name', '云端：适配器工程');
-  await selectModel('云平台 · Echo 编码模型（测试替身）');
-  const budget = await page.locator('#dialog [name=max_tokens]').inputValue();
-  assert(Number(budget) >= 80000, '选择云平台模型后预算应提升到云端最低值以上：' + budget);
-  assert(await page.locator('#dialog [data-cloud-budget]').isVisible(), '未显示云平台预算说明');
-  await shot('06-work-form-cloud-budget');
-  await page.locator('#dialog [name=data_authorized]').check();
-  await submit();
+  let run = await startRun('engineering/work', {model_id: models['echo-code'], name: '云端：适配器工程', objective: '为本体生成适配器', max_tokens: 80000});
+  assert(run.id, '云平台模型的工程任务未能启动：' + run.error);
   await waitLive('云平台已结算');
   await page.locator('#engine-live [data-action=engine-artifact]').first().waitFor({timeout: 20000});
   let text = await live();
@@ -136,12 +146,8 @@ const SMALL = {width: 900, height: 640};
   // ------------------------------------------------------------ 5. discovery on a cloud model
   const seeded = await fixture('/fixture/seed-ssh?project=' + projectId);
   await page.evaluate(() => refresh(true));
-  await page.goto(cfg.url + '/#robots');
-  await click('engine-discover', seeded.robot_id);
-  await selectModel('云平台 · Echo 调查模型（测试替身）');
-  await page.locator('#dialog [name=data_authorized]').check();
-  await shot('08-discovery-form');
-  await submit();
+  run = await startRun('engineering/start', {robot_id: seeded.robot_id, model_id: models['echo-discover'], max_tokens: 200000});
+  assert(run.id, '云平台模型的本体调查未能启动：' + run.error);
   await waitLive('云平台已结算');
   text = await live();
   assert(text.includes('云端会话') && text.includes('云平台扣除'), '调查会话缺少云端计量');
@@ -150,13 +156,8 @@ const SMALL = {width: 900, height: 640};
 
   // ------------------------------------------------------------ 6. errors
   // 6a. wallet too small for the budget (1,000,000 tokens × 10 / 1k = 10,000 credits)
-  await page.goto(cfg.url + '/#agents');
-  await click('engine-work');
-  await fill('name', '云端：预算超过钱包');
-  await selectModel('云平台 · Echo 编码模型（测试替身）');
-  await fill('max_tokens', 1000000);
-  await page.locator('#dialog [name=data_authorized]').check();
-  await submit();
+  run = await startRun('engineering/work', {model_id: models['echo-code'], name: '云端：预算超过钱包', objective: 'x', max_tokens: 1000000});
+  assert(run.id, '预算超过钱包的任务应先创建再报错：' + run.error);
   await waitLive('云平台钱包可用点数不足', 30000);
   text = await live();
   assert(/需要 10000 点，可用 \d+ 点/.test(text), '钱包不足提示缺少数字：' + text.slice(0, 400));
@@ -164,24 +165,21 @@ const SMALL = {width: 900, height: 640};
   await click('close');
 
   // 6b. overage lock
-  await click('engine-work');
-  await fill('name', '云端：用量超出预留');
-  await selectModel('云平台 · Echo 超额模型（测试替身）');
-  await page.locator('#dialog [name=data_authorized]').check();
-  await submit();
+  run = await startRun('engineering/work', {model_id: models['echo-overrun'], name: '云端：用量超出预留', objective: 'x', max_tokens: 80000});
+  assert(run.id, '超额模型的任务未能启动：' + run.error);
   await waitLive('超过了预留', 60000);
   await waitLive('超出预留的调用', 15000);
   await shot('11-error-overage', true);
   await click('close');
 
   // 6c. budget below the cloud minimum (server-side check; bypass the form's min attribute)
-  const small = await page.evaluate(async () => {
+  const small = await page.evaluate(async id => {
     try {
-      await api('engineering/work', {project_id: projectId, model_id: rows('agent_models').find(m => m.model === 'echo-code').id,
+      await api('engineering/work', {project_id: projectId, model_id: id,
         name: 'x', objective: 'x', data_authorized: true, max_tokens: 30000, max_minutes: 1});
       return '';
     } catch (e) { return e.message; }
-  });
+  }, models['echo-code']);
   assert(small.includes('至少 80000'), '小预算提示错误：' + small);
 
   // 6d. logged out: the cloud model is refused before anything starts
@@ -189,15 +187,8 @@ const SMALL = {width: 900, height: 640};
   await click('cloud-logout');
   if (await dlg('button[type=submit]').count()) await submit();
   await page.waitForTimeout(500);
-  await page.goto(cfg.url + '/#agents');
-  await click('engine-work');
-  await fill('name', '云端：未登录');
-  await selectModel('云平台 · Echo 编码模型（测试替身）');
-  await page.locator('#dialog [name=data_authorized]').check();
-  const loggedOut = await submit(true);
-  assert(loggedOut.includes('云平台未登录'), '未登录提示错误：' + loggedOut);
-  await shot('12-error-logged-out');
-  await click('close');
+  run = await startRun('engineering/work', {model_id: models['echo-code'], name: '云端：未登录', objective: 'x', max_tokens: 80000});
+  assert(!run.id && String(run.error).includes('云平台未登录'), '未登录提示错误：' + JSON.stringify(run));
 
   // ------------------------------------------------------------ 7. ledger: cloud only
   const state = await fixture('/fixture/state');

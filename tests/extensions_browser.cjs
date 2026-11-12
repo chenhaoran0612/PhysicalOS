@@ -1,5 +1,6 @@
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
+const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  // issue #4: models run only through TokenFans
 (async()=>{
  const cfg=JSON.parse(fs.readFileSync(process.argv[2]||process.env.BRAIN_ENGINE_QA_CONFIG||'/tmp/neuxmind-engineering-qa.json'));
  // Skills and MCP are loaded and called by the real Codex runtime; the app-server stand-in (tests/codex_standin.py)
@@ -18,7 +19,7 @@ const fs=require('fs');
  await click('engine-ext-skill-revise');await fill('version','2.0.0');exported.files['SKILL.md']=exported.files['SKILL.md'].replace('SKILL_BROWSER_MARKER','SKILL_BROWSER_REVISION_2');await page.locator('[name=package_file]').setInputFiles({name:'robot-review.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(exported))});await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await click('engine-ext-mcp-add');await fill('name','本地知识库 MCP（测试）');await fill('url',cfg.mcp);await fill('token','fixture-mcp-token');await page.locator('[name=connection_authorized]').check();await submit();await page.locator('[name=enabled_tools][value=lookup_robot]').waitFor({timeout:20000});await page.locator('[name=enabled_tools][value=lookup_robot]').check();await page.locator('[name=enabled]').check();await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await page.screenshot({path:'artifacts/engineering-extensions.png'});
- await page.goto(cfg.url+'/#agents');await click('engine-models');await click('engine-own-model');await fill('name','扩展调用模型（测试）');await fill('base_url',cfg.extension_model);await fill('model','fixture');await fill('api_key','fixture-model-token');await submit();
+ await connectTokenFans(page,cfg);await useTokenFansModel(page,cfg,'fixture-extension');await page.goto(cfg.url+'/#agents');
  await click('engine-work');await fill('name','使用 Skill 与 MCP 调查接口');await page.locator('[name=skill_ids]').first().check();await page.locator('[name=mcp_ids]').first().check();await page.locator('[name=data_authorized]').check();await fill('max_tokens',1000);await fill('max_minutes',1);await submit();
  await page.locator('[data-action=engine-approval]').waitFor({timeout:20000});await click('engine-approval');await page.screenshot({path:'artifacts/mcp-tool-approval.png'});await page.locator('[name=decision]').selectOption('accept');await submit();await page.locator('#engine-live [data-action=engine-resume]').waitFor({timeout:20000});
  const content=await page.locator('#engine-live').innerText();if(!content.includes('2.0.0')||!content.includes('MCP 工具')||!content.includes('已完成'))throw Error('Missing extension session evidence');await page.screenshot({path:'artifacts/extensions-agent-session.png'});await click('close');
