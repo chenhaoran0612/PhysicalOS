@@ -81,6 +81,7 @@ function auth(login=false){form(login?'登录工作空间':'创建你的工作�
 const split=v=>v.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);
 const parse=v=>{try{return JSON.parse(v);}catch{throw Error('JSON 格式无效，请检查引号、逗号和括号');}};
 async function action(type,id,el){
+ if(type.startsWith('hardware-'))return hardwareAction(type,id);   // issue #2
  if(type.startsWith('inventory-'))return inventoryAction(type,id);
  if(type==='detail-robot_inventories')return inventoryAction('inventory-report',id);
  if(type.startsWith('revision-'))return revisionAction(type,id,el);
@@ -160,6 +161,7 @@ document.addEventListener('click',async e=>{const el=e.target.closest('[data-act
 document.addEventListener('submit',async e=>{const f=e.target.closest('[data-form]');if(!f)return;e.preventDefault();const b=f.querySelector('[type="submit"]'),error=$('.form-error',f);b.disabled=true;error.textContent='';const data=Object.fromEntries(new FormData(f)),kind=f.dataset.form;let result;try{
  if(kind==='register'||kind==='login'){result=await api(kind,data);await refresh(true);$('#dialog').close();toast(kind==='register'?'工作空间已创建':'已登录');if(typeof journeyResume!=='undefined'&&journeyResume){journeyResume=false;return action('project-add');}return;}
  const p={...data,project_id:projectId};
+ if(kind.startsWith('hardware-'))return await hardwareSubmit(kind,p,f);   // issue #2
  if(kind.startsWith('revision-'))return await revisionSubmit(kind,p,f);
  if(kind==='robot-reset')return await robotResetSubmit(p,f);
  if(kind.startsWith('skillpkg-'))return await skillPackageSubmit(kind,p,f);

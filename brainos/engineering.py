@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from . import agent_runtime, connector, device_access, device_status
 from .contracts import required_text
 from .service import now, uid
+from . import hardware_init  # issue #2: hardware scan and repair sessions
 
 ACTIVE=('starting','running','waiting_input','cancelling')
 # §5.3: a Codex 0.146.1 request is ~50 KB (instructions + tool schemas); the
@@ -512,6 +513,7 @@ class Engineering:
         if not isinstance(args,dict):raise ValueError('工具参数必须为对象')
         s=self.store.get('agent_sessions',sid)
         if not device:raise ValueError('此会话未连接机器人')
+        if name in hardware_init.TOOL_NAMES or (name=='device_exec' and s.get('mode')=='repair'):return self.platform.hardware.tool(sid,s,name,args,device,approved)
         if name=='device_overview':
             results=[]
             for probe in device_access.PROBES:
@@ -646,8 +648,9 @@ class Engineering:
                          'evidence':[e for e in self.store.list('device_evidence') if e['session_id']==sid]}
                 if (work/'DEVICE_CONTEXT.json').is_symlink():raise ValueError('本体上下文文件不能为符号链接')
                 (work/'DEVICE_CONTEXT.json').write_text(json.dumps(context,ensure_ascii=False,indent=2))
+                if s.get('mode')=='repair':self.platform.hardware.prepare_workspace(s,work)
             extensions=self.extensions.runtime_selection(s) if engineering else None
-            process=agent_runtime.AgentProcess(root/'runtime-home',root/'workspace',profile,engineering=engineering,extensions=extensions,analysis_tools=not engineering,cancel=handle['stop']);handle['process']=process
+            process=agent_runtime.AgentProcess(root/'runtime-home',root/'workspace',profile,engineering=engineering,extensions=extensions if engineering else hardware_init.session_extensions(s),analysis_tools=not engineering,cancel=handle['stop']);handle['process']=process
             if handle['stop'].is_set():final='interrupted';return
             self.extensions.verify_loaded(process,s)
             if extensions and (extensions['skills'] or extensions['mcp']):self.event(sid,'extensions','已加载本次固定版本的工程技能与 MCP 工具',skills=[x['name'] for x in s['extensions']['skills']],mcp=[x['name'] for x in s['extensions']['mcp']])
@@ -655,12 +658,12 @@ class Engineering:
             context=('用户允许调查的配置目录：'+json.dumps(connection['read_roots'],ensure_ascii=False)+
                      '\n产品已在本机工作目录创建 DEVICE_CONTEXT.json，请直接用本地命令 cat ./DEVICE_CONTEXT.json 读取。它不在机器人端，不需要搜索或调用 device_config。'+
                      '\n工具缺失、权限不足或命令退出非零不等于文件不存在，检查错误并使用可用的标准工具重试。') if connection else ''
-            instructions=ENGINEERING_INSTRUCTIONS if engineering else INSTRUCTIONS
+            instructions=ENGINEERING_INSTRUCTIONS if engineering else hardware_init.instructions(s,INSTRUCTIONS)
             if resume:
                 result=process.request('thread/resume',{'threadId':s['thread_id'],'model':profile['model'],'modelProvider':'neuxmind','permissions':'robot-discovery','approvalPolicy':'on-request','developerInstructions':instructions+'\n'+context})
             else:
                 result=process.request('thread/start',{'model':profile['model'],'modelProvider':'neuxmind','cwd':str((root/'workspace').resolve()),
-                    'approvalPolicy':'on-request','permissions':'robot-discovery','developerInstructions':instructions+'\n'+context,'dynamicTools':tools_spec() if connection else []})
+                    'approvalPolicy':'on-request','permissions':'robot-discovery','developerInstructions':instructions+'\n'+context,'dynamicTools':hardware_init.session_tools(s,tools_spec()) if connection else []})
             thread_id=result['thread']['id'];self.update(sid,thread_id=thread_id,status='running')
             inputs=[{'type':'text','text':message}]+[{'type':'skill','name':x['name'],'path':x['path']} for x in process.loaded_skills]
             turn=process.request('turn/start',{'threadId':thread_id,'input':inputs})['turn']
@@ -700,15 +703,17 @@ class Engineering:
                 if 'id' in event:
                     if method=='item/tool/call':
                         name,args=p.get('tool'),p.get('arguments')
-                        if name in ('device_exec','device_request_scope') and connection:
+                        if name in ('device_exec','device_request_scope','device_fix') and connection:
                             try:
                                 if not isinstance(args,dict):raise ValueError('工具参数必须为对象')
-                                if name=='device_exec':request=device_access.command_request(args)
+                                if name=='device_exec':request=hardware_init.exec_request(s,args)
+                                elif name=='device_fix':request=self.platform.hardware.fix_request(s,args,connection)
                                 else:request={'path':device_access.validate_roots([args.get('path')])[0],'purpose':required_text(args.get('purpose'),'读取用途',1000)}
                                 pending_tools[event['id']]=(name,request)
                                 self._queue_request(sid,'approval',{'id':event['id'],'method':name+'/requestApproval',
                                     'request':{**request,'host':connection['host'],'port':connection['port'],'username':connection['username'],'fingerprint':connection['fingerprint']}})
                             except ValueError as exc:
+                                self.event(sid,'tool_error',str(exc))   # e.g. a fix command the product refused (issue #2)
                                 process.respond(event['id'],{'success':False,'contentItems':[{'type':'inputText','text':str(exc)}]})
                         else:respond_tool(event['id'],name,args)
                     elif method=='mcpServer/elicitation/request':
@@ -758,7 +763,8 @@ class Engineering:
                     completed=p['turn'];final={'completed':'completed','interrupted':'interrupted','failed':'failed'}.get(completed['status'],'failed')
                     if final=='failed':failure=device_access.redact(str(completed.get('error','模型调用失败')))[:1000]
                     break
-            if final=='completed' and not engineering and not self.store.get('agent_sessions',sid).get('inventory_id'):
+            if final=='completed' and s.get('mode')=='repair':final=self.platform.hardware.finish(sid)
+            if final=='completed' and not engineering and s.get('mode')!='repair' and not self.store.get('agent_sessions',sid).get('inventory_id'):
                 final='needs_followup';self.event(sid,'incomplete','本轮未保存新档案，可继续追问或补充可读配置目录')
         except Exception as exc:
             if handle['stop'].is_set() and (isinstance(exc,agent_runtime.StopRequested) or handle.get('forced') or 'runtime' in str(exc) or '运行时' in str(exc)):

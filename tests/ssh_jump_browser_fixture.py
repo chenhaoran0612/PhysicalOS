@@ -10,18 +10,20 @@ import sys
 import tempfile
 import time
 
-from brainos import device_status
+from brainos import device_status, hardware_scan
 from brainos.server import Application, make_handler
 from ssh_fixture import SSHFixture
 from test_product import Server
 from test_ssh_jump import JUMP_PASSWORD, JUMP_USER, SERVICES, STATUS_OUTPUT
+from hardware_fixture import jetson
 
 if __name__ == '__main__':
     tmp = tempfile.TemporaryDirectory()
     app = Application(tmp.name)
     api = Server(make_handler(app))
     watched = (SERVICES, ['bridge'], [])        # every watch list the browser test sets
-    target = SSHFixture(command_outputs={device_status.status_command(names): STATUS_OUTPUT for names in watched})
+    target = SSHFixture(command_outputs={**{device_status.status_command(names): STATUS_OUTPUT for names in watched},
+                                         hardware_scan.SCAN_EXEC: jetson().encode()})      # issue #2: scan after connecting
     jump = SSHFixture(username=JUMP_USER, password=JUMP_PASSWORD, forward_to=[('127.0.0.1', target.port)])
     info = {'url': api.url, 'target_port': target.port, 'target_user': 'robot', 'target_password': 'fixture-password',
             'jump_port': jump.port, 'jump_user': JUMP_USER, 'jump_password': JUMP_PASSWORD, 'services': SERVICES}

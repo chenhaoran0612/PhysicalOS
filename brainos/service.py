@@ -81,6 +81,8 @@ class Platform:
         self.model_compute = ModelCompute(self)
         from .sim_robots import SimRobots
         self.sims = SimRobots(self, self.store.root)
+        from .hardware_init import HardwareInit
+        self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):
@@ -114,6 +116,7 @@ class Platform:
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
                       system={'version': '0.15.0', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
+        result.update(self.hardware.snapshot())
         result.update(self.workflows.snapshot())
         # The cloud session token stays in the credential file; only a summary is shown.
         result['cloud_account'] = self.cloud.summary()

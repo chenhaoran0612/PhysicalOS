@@ -1,0 +1,93 @@
+@@NX-HW:system@@
+hostname=650d44e1e3f3
+kernel=6.12.76-linuxkit
+arch=aarch64
+os=Debian GNU/Linux 13 (trixie)
+model=
+vendor=
+product=
+tegra=
+user=root
+uid=0
+groups=root
+ssh=
+@@NX-HW:cpu@@
+Architecture:                            aarch64
+CPU(s):                                  12
+Vendor ID:                               Apple
+Model name:                              -
+nproc=12
+@@NX-HW:memory@@
+MemTotal:       73711760 kB
+MemAvailable:   70616612 kB
+SwapTotal:       1048572 kB
+@@NX-HW:disks@@
+NAME="nbd0" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd1" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd2" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd3" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd4" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd5" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd6" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd7" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="vda" TYPE="disk" SIZE="1.8T" MODEL="" TRAN="virtio"
+NAME="vdb" TYPE="disk" SIZE="622.8M" MODEL="" TRAN="virtio"
+NAME="nbd8" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd9" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd10" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd11" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd12" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd13" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd14" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+NAME="nbd15" TYPE="disk" SIZE="0B" MODEL="" TRAN=""
+@@NX-HW:rootfs@@
+overlay         1916753188 216228428 1603085684      12% /
+@@NX-HW:gpu@@
+exit=missing
+@@NX-HW:pci@@
+0000:00:00.0|0x060000|0x106b|0x1a05|
+0000:00:01.0|0x020000|0x1af4|0x1041|virtio-pci
+0000:00:05.0|0x078000|0x1af4|0x1043|virtio-pci
+0000:00:06.0|0x018000|0x1af4|0x1042|virtio-pci
+0000:00:07.0|0x018000|0x1af4|0x1042|virtio-pci
+0000:00:08.0|0x018000|0x1af4|0x105a|virtio-pci
+0000:00:09.0|0x018000|0x1af4|0x105a|virtio-pci
+0000:00:0a.0|0x018000|0x1af4|0x105a|virtio-pci
+0000:00:0b.0|0x018000|0x1af4|0x105a|virtio-pci
+0000:00:0c.0|0x018000|0x1af4|0x105a|virtio-pci
+0000:00:0d.0|0x018000|0x1af4|0x105a|virtio-pci
+0000:00:0e.0|0x078000|0x1af4|0x1053|virtio-pci
+0000:00:0f.0|0x100000|0x1af4|0x1044|virtio-pci
+0000:00:10.0|0x058000|0x1af4|0x1045|virtio-pci
+@@NX-HW:pci_names@@
+@@NX-HW:usb@@
+usb1|1d6b|0002|09|480|Linux 6.12.76-linuxkit vhci_hcd|USB/IP Virtual Host Controller|
+usb2|1d6b|0003|09|10000|Linux 6.12.76-linuxkit vhci_hcd|USB/IP Virtual Host Controller|
+@@NX-HW:usb_names@@
+@@NX-HW:net@@
+erspan0|down||0x1002|1|00:00:00:00:00:00||0||/sys/devices/virtual/net/erspan0/device
+eth0|up|1|0x1003|1|be:5a:22:df:b0:d5||0|10000|/sys/devices/virtual/net/eth0/device
+gre0|down||0x80|778|00:00:00:00||0||/sys/devices/virtual/net/gre0/device
+gretap0|down||0x1002|1|00:00:00:00:00:00||0||/sys/devices/virtual/net/gretap0/device
+ip6_vti0|down||0x80|769|00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00||0||/sys/devices/virtual/net/ip6_vti0/device
+ip6gre0|down||0x80|823|00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00||0||/sys/devices/virtual/net/ip6gre0/device
+ip6tnl0|down||0x80|769|00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00||0||/sys/devices/virtual/net/ip6tnl0/device
+ip_vti0|down||0x80|768|00:00:00:00||0||/sys/devices/virtual/net/ip_vti0/device
+sit0|down||0x80|776|00:00:00:00||0||/sys/devices/virtual/net/sit0/device
+tunl0|down||0x80|768|00:00:00:00||0||/sys/devices/virtual/net/tunl0/device
+@@NX-HW:addr@@
+@@NX-HW:route@@
+@@NX-HW:dns@@
+nameserver 192.168.65.7
+@@NX-HW:video@@
+@@NX-HW:serial@@
+@@NX-HW:serial_ids@@
+@@NX-HW:buses@@
+@@NX-HW:iio@@
+@@NX-HW:input@@
+@@NX-HW:audio@@
+@@NX-HW:power@@
+@@NX-HW:kernel@@
+source=unavailable
+@@NX-HW:failed_units@@
+@@NX-HW:end@@

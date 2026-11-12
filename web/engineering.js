@@ -79,7 +79,7 @@ async function engineSubmit(kind,p,f){
   sshDraft={...draft,host_check_id:scan.id,trust_fingerprint:scan.fingerprint};
   return sshFingerprintForm(scan);
  }
- if(kind==='engine-ssh-confirm'){if(!sshDraft)throw Error('连接草稿已失效，请重新填写');result=await api('engineering/ssh/connect',sshDraft);sshDraft=null;await refresh(true);return engineAction('engine-discover',result.robot_id);}
+ if(kind==='engine-ssh-confirm'){if(!sshDraft)throw Error('连接草稿已失效，请重新填写');result=await api('engineering/ssh/connect',sshDraft);sshDraft=null;await refresh(true);return hardwareAfterConnect(result.robot_id);}
  if(kind==='engine-model')result=await api('engineering/models',p);
  if(kind==='engine-cloud-model')result=await api('engineering/models/cloud',{project_id:projectId,model:p.cloud_model});
  if(kind==='engine-platform-model'){const at=p.offer_model.indexOf(':');result=await api('engineering/models/use',{project_id:projectId,offer_id:p.offer_model.slice(0,at),model:p.offer_model.slice(at+1)});}
