@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for round 03 (contract §5.3): engineering assistant on cloud-platform models.
 // Covers: choosing a cloud model after cloud login, an engineering task and an SSH discovery run on
 // cloud models, the cloud metering panel, and user-facing errors (wallet too small, overage lock,
@@ -60,12 +61,7 @@ const SMALL = {width: 900, height: 640};
 
   // ------------------------------------------------------------ workspace + project
   await page.goto(cfg.url);
-  await click('account');
-  await fill('name', '第 03 轮云端工程验收');
-  await fill('email', `cloud03-${Date.now()}@example.test`);
-  await fill('password', 'fixture-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
+  await gateSignIn(page, {name: '第 03 轮云端工程验收', email: `cloud03-${Date.now()}@example.test`, password: 'fixture-password-123'});
   await click('journey-start');
   await fill('name', '云平台工程助手');
   await fill('objective', '用云平台模型调查本体并开发适配器');

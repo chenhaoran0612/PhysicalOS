@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for ux03 (round 05): the ux02 audit leftovers, for a brand-new user with one
 // simulated quadruped.
 //   (a) 任务工作台 recommends the path that works with a simulated robot (运行技能 / 仿真试运行),
@@ -46,6 +47,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
 
   // ---------------------------------------------------------------- (e) sidebar at 1440x900
   await go('overview');
+  await gateSignIn(page, {name: 'ux03 新用户', email: 'ux03@example.test', password: 'ux03-password-123'});
   const nav = await page.evaluate(() => {
     const n = document.querySelector('#navigation'), links = [...n.querySelectorAll('a')];
     const last = links.at(-1).getBoundingClientRect(), bottom = document.querySelector('.sidebar-bottom').getBoundingClientRect();
@@ -60,13 +62,6 @@ const shots = process.argv[3] || 'artifacts/ux03';
 
   // ---------------------------------------------------------------- fresh workspace + one simulated quadruped
   await go('robots');
-  await click('sim-add');
-  await page.locator('form[data-form=register]').waitFor();
-  await fill('name', 'ux03 新用户');
-  await fill('email', 'ux03@example.test');
-  await fill('password', 'ux03-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
   await click('sim-add');
   await page.locator('#dialog input[name=kind][value=quadruped]').check();
   await submit();

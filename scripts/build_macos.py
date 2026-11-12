@@ -95,6 +95,7 @@ def smoke(backend,state_dir):
     """Drive a frozen backend the way the app does: a simulated robot, an example skill, a run."""
     import http.cookiejar
     env={k:v for k,v in os.environ.items() if k not in ('PYTHONPATH','PYTHONHOME')}
+    env['NEUXMIND_MAIL_DEV_ECHO']='1'  # freeze check registers without a mail server
     process=subprocess.Popen([str(backend),'--port','0','--state-dir',str(state_dir)],stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE,text=True,env=env,cwd=str(state_dir))
     try:
@@ -102,7 +103,8 @@ def smoke(backend,state_dir):
         opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),
                                            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         api=lambda path,p=None:_http('POST' if p is not None else 'GET',base+'/api/'+path,p,opener)
-        api('register',{'name':'freeze','email':'freeze@example.test','password':'freeze-check-1234'})
+        form={'name':'freeze','email':'freeze@example.test','password':'freeze-check-1234'}
+        api('register',{**form,'code':api('register/start',form)['dev_code']})
         robot=api('sims',{'kind':'quadruped'})
         assert robot['status']=='connected' and robot['sim']['state']=='running',robot
         gallery=api('skills/examples',{'project_id':robot['project_id'],'robot_id':robot['id']})

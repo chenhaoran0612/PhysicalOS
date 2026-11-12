@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
 (async()=>{
@@ -6,7 +7,7 @@ const fs=require('fs');
  const click=async a=>{const dialog=page.locator(`#dialog[open] [data-action="${a}"]`);await (await dialog.count()?dialog:page.locator(`[data-action="${a}"]`)).first().click();};
  const fill=async(k,v)=>page.locator(`#dialog [name="${k}"]`).fill(String(v));
  const submit=async()=>page.locator('#dialog button[type=submit]').click();
- await page.goto(cfg.url);await click('journey-start');await fill('name','任务配置验收');await fill('email','planner@example.test');await fill('password','fixture-password-123');await submit();await page.locator('form[data-form=project]').waitFor();await fill('name','仓库机器人能力改进');await fill('objective','改善机器人识别异常的效果，并在仿真中验证。');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
+ await page.goto(cfg.url);await gateSignIn(page,{name:'任务配置验收',email:'planner@example.test',password:'fixture-password-123'});await click('journey-start');await page.locator('form[data-form=project]').waitFor();await fill('name','仓库机器人能力改进');await fill('objective','改善机器人识别异常的效果，并在仿真中验证。');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await page.goto(cfg.url+'/#training');await click('plan-choose');await page.getByText('还没有可用的训练服务',{exact:true}).waitFor();await page.screenshot({path:'artifacts/task-service-empty.png'});await click('close');
  const data=await page.evaluate(async cfg=>{const pid=projectId;const resource=await api('operator/resources',{name:'平台训练（协议验收）',description:'本地测试，无真实费用或训练',kind:'training',endpoint:cfg.training,unit:'minute',credits_per_unit:3});await api('operator/grant',{user_id:state.user.id,credits:100,reason:'测试额度'});const svc=await api('services',{project_id:pid,name:'自有仿真（协议验收）',kind:'simulation',endpoint:cfg.simulation});await api('services/connect',{service_id:svc.id});await refresh(true);return {resource,svc};},cfg);
  await click('plan-choose');await click('plan-provider');await click('plan-recipe');await page.locator('form[data-form=plan-preview]').waitFor();if(!await page.locator('#dialog [type=submit]').isDisabled())throw Error('Missing assets not explained');await page.getByText(/还需要准备：训练数据/).waitFor();await click('close');

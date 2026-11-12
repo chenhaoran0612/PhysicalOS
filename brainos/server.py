@@ -8,7 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .auth import Identity
+from .auth import CODE_RESEND_S, CODE_TTL_S, Identity
+from .mailer import Mailer
 from .errors import error_payload
 from .service import Platform
 from .commerce import Commerce
@@ -20,6 +21,9 @@ class Application:
     def __init__(self, root, operator_email=''):
         self.root=Path(root)
         self.identity=Identity(self.root)
+        self.mailer=Mailer(self.root)
+        # Built-in test account (see auth.TEST_EMAIL) while no mail server is configured; NEUXMIND_TEST_ACCOUNT=0 turns it off.
+        self.identity.enable_test_account(self.mailer.mode=='outbox' and os.environ.get('NEUXMIND_TEST_ACCOUNT','1')!='0')
         self.commerce=Commerce(self.root/'platform-catalog')
         self.operator_email=operator_email.strip().lower()
         self.workspaces={}
@@ -30,6 +34,30 @@ class Application:
             if user['id'] not in self.workspaces:
                 self.workspaces[user['id']]=Platform(self.root/'workspaces'/user['id'],self.commerce,user['id'])
             return self.workspaces[user['id']]
+
+    def send_code(self,email,purpose,code):
+        """Mails a verification code. code=None (unknown address on password reset) answers exactly like a sent code."""
+        result={'sent':True,'email':email,'resend_after':CODE_RESEND_S,'expires_in':CODE_TTL_S,'delivery':self.mailer.mode}
+        if self.mailer.mode=='outbox':
+            outbox=self.mailer.outbox
+            try:
+                outbox='~/'+str(outbox.resolve().relative_to(Path.home().resolve()))
+            except ValueError:
+                pass
+            result['outbox']=str(outbox)
+        if code is None:
+            return result
+        title='注册验证码' if purpose=='register' else '重置密码验证码'
+        body=(f'你的 NeuxMind {title}是：{code}\n\n{CODE_TTL_S//60} 分钟内有效。'
+              +('如果不是你本人操作，请忽略这封邮件。' if purpose=='register' else '如果不是你本人申请重置密码，请忽略这封邮件，你的密码不会改变。'))
+        try:
+            self.mailer.send(email,f'NeuxMind {title}：{code}',body)
+        except Exception:
+            self.identity.discard_code(email,purpose)
+            raise
+        if self.mailer.dev_echo():
+            result['dev_code']=code
+        return result
 
     def close(self):
         for workspace in self.workspaces.values():
@@ -86,12 +114,17 @@ def make_handler(application):
             if not self.trusted():
                 return
             path=urlparse(self.path).path
-            files={'/':('index.html','text/html; charset=utf-8'),'/app.js':('app.js','text/javascript; charset=utf-8'),'/inventory.js':('inventory.js','text/javascript; charset=utf-8'),'/engineering.js':('engineering.js','text/javascript; charset=utf-8'),'/extensions.js':('extensions.js','text/javascript; charset=utf-8'),'/workflows.js':('workflows.js','text/javascript; charset=utf-8'),'/adaptation.js':('adaptation.js','text/javascript; charset=utf-8'),'/journey.js':('journey.js','text/javascript; charset=utf-8'),'/planner.js':('planner.js','text/javascript; charset=utf-8'),'/results.js':('results.js','text/javascript; charset=utf-8'),'/delivery.js':('delivery.js','text/javascript; charset=utf-8'),'/revisions.js':('revisions.js','text/javascript; charset=utf-8'),'/robot_detail.js':('robot_detail.js','text/javascript; charset=utf-8'),'/cloud.js':('cloud.js','text/javascript; charset=utf-8'),'/onsite.js':('onsite.js','text/javascript; charset=utf-8'),'/sim.js':('sim.js','text/javascript; charset=utf-8'),'/ux02.js':('ux02.js','text/javascript; charset=utf-8'),'/ux03.js':('ux03.js','text/javascript; charset=utf-8'),'/ux04_errors.js':('ux04_errors.js','text/javascript; charset=utf-8'),'/ux04.js':('ux04.js','text/javascript; charset=utf-8'),'/ux05.js':('ux05.js','text/javascript; charset=utf-8'),'/safety.js':('safety.js','text/javascript; charset=utf-8'),'/style.css':('style.css','text/css; charset=utf-8')}
+            files={'/':('index.html','text/html; charset=utf-8'),'/app.js':('app.js','text/javascript; charset=utf-8'),'/inventory.js':('inventory.js','text/javascript; charset=utf-8'),'/engineering.js':('engineering.js','text/javascript; charset=utf-8'),'/extensions.js':('extensions.js','text/javascript; charset=utf-8'),'/workflows.js':('workflows.js','text/javascript; charset=utf-8'),'/adaptation.js':('adaptation.js','text/javascript; charset=utf-8'),'/journey.js':('journey.js','text/javascript; charset=utf-8'),'/planner.js':('planner.js','text/javascript; charset=utf-8'),'/results.js':('results.js','text/javascript; charset=utf-8'),'/delivery.js':('delivery.js','text/javascript; charset=utf-8'),'/revisions.js':('revisions.js','text/javascript; charset=utf-8'),'/robot_detail.js':('robot_detail.js','text/javascript; charset=utf-8'),'/cloud.js':('cloud.js','text/javascript; charset=utf-8'),'/onsite.js':('onsite.js','text/javascript; charset=utf-8'),'/sim.js':('sim.js','text/javascript; charset=utf-8'),'/ux02.js':('ux02.js','text/javascript; charset=utf-8'),'/ux03.js':('ux03.js','text/javascript; charset=utf-8'),'/ux04_errors.js':('ux04_errors.js','text/javascript; charset=utf-8'),'/ux04.js':('ux04.js','text/javascript; charset=utf-8'),'/ux05.js':('ux05.js','text/javascript; charset=utf-8'),'/safety.js':('safety.js','text/javascript; charset=utf-8'),'/account.js':('account.js','text/javascript; charset=utf-8'),'/boot.js':('boot.js','text/javascript; charset=utf-8'),'/style.css':('style.css','text/css; charset=utf-8')}
             if path in files:
                 filename,mime=files[path]
                 return self.respond((ROOT/'web'/filename).read_bytes(),mime=mime)
             if path=='/api/health':
                 return self.respond({'status':'ok','version':'0.14.0'})
+            if path=='/api/me':
+                me=application.identity.user(self.token())
+                if not me:
+                    return self.respond({'user':None})
+                return self.respond({'user':{**me,'sessions':application.identity.sessions(me['id'])}})
             user=self.user()
             if not user:
                 return
@@ -119,15 +152,28 @@ def make_handler(application):
                 if not isinstance(payload,dict):
                     raise ValueError('请求必须为 JSON 对象')
                 path=urlparse(self.path).path
+                if path=='/api/register/start':
+                    email,code=application.identity.start_registration(payload)
+                    return self.respond(application.send_code(email,'register',code))
+                if path=='/api/password/forgot':
+                    email,code=application.identity.request_reset(payload)
+                    return self.respond(application.send_code(email,'reset',code))
+                if path=='/api/password/reset':
+                    token,user,lifetime=application.identity.reset_password(payload)
+                    return self.respond({'user':user,'session_seconds':lifetime},cookie=f'brain_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={lifetime}')
                 if path in ('/api/register','/api/login'):
-                    token,user=application.identity.authenticate(payload,register=path=='/api/register')
-                    return self.respond({'user':user},cookie=f'brain_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200')
+                    token,user,lifetime=application.identity.sign_in(payload,register=path=='/api/register',require_code=True)
+                    return self.respond({'user':user,'session_seconds':lifetime},cookie=f'brain_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={lifetime}')
                 if path=='/api/logout':
                     application.identity.logout(self.token())
                     return self.respond({'ok':True},cookie='brain_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
                 user=self.user()
                 if not user:
                     return
+                if path=='/api/account/profile':
+                    return self.respond({'user':application.identity.update_profile(user['id'],payload)})
+                if path=='/api/account/password':
+                    return self.respond(application.identity.change_password(user['id'],self.token(),payload))
                 service=application.workspace(user)
                 if path.startswith('/api/operator/'):
                     if not application.operator_email or user['email']!=application.operator_email:

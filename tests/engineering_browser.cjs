@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
 (async()=>{
@@ -7,7 +8,7 @@ const fs=require('fs');
  const click=async action=>{const dialog=page.locator(`#dialog[open] [data-action="${action}"]`);await (await dialog.count()?dialog:page.locator(`[data-action="${action}"]`)).first().click();};
  const fill=async(name,value)=>page.locator(`#dialog [name="${name}"]`).fill(String(value));
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(250);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
- await page.goto(cfg.url);await click('account');await fill('name','工程验收工作空间');await fill('email',`engine-${Date.now()}@example.test`);await fill('password','fixture-password-123');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
+ await page.goto(cfg.url);await gateSignIn(page,{name:'工程验收工作空间',email:`engine-${Date.now()}@example.test`,password:'fixture-password-123'});
  await click('journey-start');await fill('name','通用本体接入验收');await fill('objective','SSH 调查、档案、工程开发闭环');await submit();
  await page.goto(cfg.url+'/#agents');await click('engine-models');await click('engine-own-model');await fill('name','调查模型（协议测试）');await fill('base_url',cfg.model);await fill('model','fixture-agent');await fill('api_key','fixture-only-secret');await submit();
  await page.goto(cfg.url+'/#robots');await click('engine-ssh');await fill('name','SSH 协议验收设备');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();

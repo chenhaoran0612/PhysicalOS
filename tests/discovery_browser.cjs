@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
 (async()=>{
@@ -7,7 +8,7 @@ const fs=require('fs');
  const click=async a=>{const d=page.locator(`#dialog[open] [data-action="${a}"]`);await (await d.count()?d:page.locator(`[data-action="${a}"]`)).first().click();};
  const fill=async(n,v)=>page.locator(`#dialog [name="${n}"]`).fill(String(v));
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(150);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
- await page.goto(cfg.url);await click('account');await fill('name','本体接入验收');await fill('email','discovery@example.test');await fill('password','fixture-password-123');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
+ await page.goto(cfg.url);await gateSignIn(page,{name:'本体接入验收',email:'discovery@example.test',password:'fixture-password-123'});
  await click('journey-start');await fill('name','未知厂商机器人');await fill('objective','调查现有本体的硬件、服务与源码配置');await submit();
  await page.goto(cfg.url+'/#robots');await click('engine-ssh');await fill('name','厂商协议验收本体');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();
  await page.locator('#dialog').getByText('确认 SSH 主机指纹',{exact:true}).waitFor();await page.locator('#dialog input[type=checkbox]').check();await submit();

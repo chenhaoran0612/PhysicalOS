@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for round 02: capability table, skill package install (compatible and
 // incompatible), cloud login and wallet, asynchronous on-site test in progress, start disabled
 // while the e-stop is latched. Start tests/desktop02_browser_fixture.py first.
@@ -49,11 +50,8 @@ const SMALL = {width: 900, height: 640};
 
   // ---------------------------------------------------------------- account and project
   await page.goto(cfg.url);
+  await gateSignIn(page, {name: '第 02 轮验收', email: 'desktop02@example.test', password: 'fixture-password-123'});
   await click('journey-start');
-  await fill('name', '第 02 轮验收');
-  await fill('email', 'desktop02@example.test');
-  await fill('password', 'fixture-password-123');
-  await submit();
   await page.locator('form[data-form=project]').waitFor();
   await fill('name', '园区巡检');
   await fill('objective', '四足机器人每天巡检园区，发现异常时停止并报告');

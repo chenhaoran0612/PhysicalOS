@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const path=require('path');
 (async()=>{
@@ -11,7 +12,7 @@ const path=require('path');
  const click=async action=>page.locator(`[data-action="${action}"]`).first().click();
  const fill=async(name,value)=>page.locator(`#dialog [name="${name}"]`).fill(value);
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(300);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
- await click('account');await fill('name','安装包验收工作空间');await fill('email',`qa-${Date.now()}@example.test`);await fill('password','test-only-password-123');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
+ await gateSignIn(page,{name:'安装包验收工作空间',email:`qa-${Date.now()}@example.test`,password:'test-only-password-123'});
  await click('journey-start');await fill('name','机器人交付流程验收');await fill('objective','验证本体接入、技能编排、工程检查和发布流程');await submit();
  await page.goto(base+'/#robots');await click('robot-add');await fill('name','协议测试设备');await page.locator('[name=family]').selectOption('mobile');await fill('endpoint',device);await fill('token','browser-fixture-token-12345678');await submit();await click('robot-connect');await page.waitForTimeout(300);
  await page.goto(base+'/#skills');await click('skill-add');await fill('name','导航技能');await fill('entrypoint','navigation.goto');await fill('requires','navigation.goal');await fill('success_condition','到达目标点');await fill('stop_condition','定位丢失或超时停止');await submit();

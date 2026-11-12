@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for ux01: a first-time user gets a working (simulated) robot and watches it
 // run a skill, entirely inside the app -- no terminal, no tokens, no typed paths.
 // Start tests/ux01_browser_fixture.py first.
@@ -35,13 +36,7 @@ const shots = process.argv[3] || 'artifacts';
 
   // ---------------------------------------------------------------- 0. fresh workspace
   await page.goto(cfg.url + '/#robots');
-  await click('sim-add');                          // not logged in yet: the app asks for a workspace first
-  await page.locator('form[data-form=register]').waitFor();
-  await fill('name', '第一次使用');
-  await fill('email', 'ux01@example.test');
-  await fill('password', 'ux01-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
+  await gateSignIn(page, {name: '第一次使用', email: 'ux01@example.test', password: 'ux01-password-123'});
   await page.locator('.robot-entry').waitFor();
   const entry = await page.locator('#main').innerText();
   for (const text of ['添加仿真机器人', '通过 SSH 调查真机', '连接已在运行的机器人', '没有真机，先试一试']) {

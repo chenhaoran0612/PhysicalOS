@@ -5,6 +5,8 @@ brainos.edge gateway; no robot is moved. One test also drives the runtime's
 simulated quadruped (runtime/neuxmind_runtime) when it can be imported.
 """
 import json
+import os
+os.environ.setdefault('NEUXMIND_MAIL_DEV_ECHO', '1')  # registration codes come back in the API response
 import sys
 import tempfile
 import time
@@ -290,7 +292,8 @@ class ResetTests(Base):
                         return r.status, json.loads(r.read()), r.headers.get('Set-Cookie', '')
                 except urllib.error.HTTPError as exc:
                     return exc.code, json.loads(exc.read()), ''
-            _, user, cookie = post('register', {'name': 'QA', 'email': 'qa@example.test', 'password': 'fixture-password-1'})
+            form = {'name': 'QA', 'email': 'qa@example.test', 'password': 'fixture-password-1'}
+            _, user, cookie = post('register', {**form, 'code': post('register/start', form)[1]['dev_code']})
             cookie = cookie.split(';')[0]
             workspace = application.workspace(user['user'])
             pid = workspace.add_project({'name': 'P', 'objective': 'O'})['id']
