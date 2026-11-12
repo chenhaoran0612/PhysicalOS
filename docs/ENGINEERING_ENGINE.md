@@ -19,7 +19,7 @@ Agent 将发现分类到系统、计算硬件、传感器、执行器、接口�
 | 工具执行 | 批量基础体检、单项复查、完整证据分页、SFTP 读文件；单次审批的 SSH 命令与会话目录扩展；本地原生命令、文件修改与分析 |
 | 交互 | 流式事件、任务计划、差异、提问和单次权限审批；并发请求排队 |
 | 多 Agent | 产品级串行角色编排、阶段验收与交付快照已实现；运行时子 Agent 功能保留，但尚未做真实模型协作验收；并行与分支流程未实现 |
-| 工程模型 | 自有 Responses 工具调用 API；平台网关模型目录、预算预留、会话令牌、关停计量结算 |
+| 工程模型 | TokenFans 默认模型（工作空间级，见下文）；自有 Responses 工具调用 API；平台网关模型目录、预算预留、会话令牌、关停计量结算 |
 | SSH 接入 | 密码、私钥、本机 SSH Agent；钉住主机指纹；只读调查和限定目录 SFTP |
 | 本体档案 | 按机器人保存版本、原始证据、未知项、适配建议 |
 | Skills | 项目内创建、导入 SKILL.md/文本技能包、导出、停用与不可变版本；任务明确选择并原生加载 |
@@ -40,6 +40,20 @@ Agent 将发现分类到系统、计算硬件、传感器、执行器、接口�
 ## 模型与费用
 
 自有 API 必须支持 Responses 流式工具调用；并非任意模型名称都保证兼容。非回环地址要求 HTTPS。Token 上限是观察限额，收到用量事件后中止，单次请求可能超额；展示运行时报告的可见主/子会话用量，以供应商账单为准。
+
+### TokenFans：工作空间默认模型（issue #4）
+
+“平台模型与算力”页顶部可以连接 [TokenFans](https://tokenfans.ai/integrations/api)（OpenAI 兼容网关）。连接后，本体调查、工程任务、协作流程阶段与本体适配**没有单独选择模型时**默认使用这里选定的模型；所有模型选择框也默认选中它。已在项目里单独配置的模型不受影响。
+
+- **两种连接方式**：粘贴 `sk-tkf-` API Key；或用 TokenFans 账号的邮箱 + 密码登录一次——桌面端调用 TokenFans 控制台接口 `POST /auth/login` → `GET /auth/my-key`（读取账户 Key）→ `GET /v1/me/billing/balance`（余额，仅展示）→ `POST /auth/logout`。这些控制台接口不在 TokenFans 公开 API 文档中，可能变化；失败时改用 API Key。密码与控制台令牌只用于这一次交换，**不保存**。
+- **校验与模型列表**：用 Key 调用 `GET {origin}/codex/v1/models`（Codex 路由，面向编码 Agent）；工程引擎的 `base_url` 为 `{origin}/codex/v1`，以 Responses 协议调用。
+- **凭据**：Key 只写入 `<workspace>/credentials/tokenfans.json`（目录 0700、文件 0600），并绑定校验时的 TokenFans 地址（地址变化即视为未连接，Key 不会发往其他地址）；不进入注册表、状态快照、审计事件或接口响应，运行时经环境变量交给引擎。请求拒绝重定向，避免 Bearer 凭据被转发。
+- **默认模型配置**：每个项目自动维护一条 `billing=tokenfans` 的托管模型配置（`agent-model-tokenfans-<project_id>`），跟随默认模型变化；新建项目时自动创建。断开连接或默认模型下架时，该配置保留（供已有会话引用）但标记不可用、不再出现在选择框，任务启动前给出明确提示。已开始的会话保持其启动时的模型；协作流程的每个阶段固定使用定义流程时记录的模型（之后改默认模型不影响已建流程；该模型下架时阶段启动前给出提示）。
+- **计费**：费用由 TokenFans 账户按用量扣除（不经过本机额度账本）；Token 观察限额与自有 API 相同。
+- **地址覆盖**：`NEUXMIND_TOKENFANS_URL`（测试或自建兼容服务）；须为 HTTPS，仅本机地址允许 HTTP。
+- **给其他模块的入口**：直接调用大模型的桌面端模块（如 #2 硬件扫描）用 `platform.model_compute.default_llm()`，得到 `model`、`base_url`（OpenAI 兼容根 `{origin}/v1`：chat/completions、responses、messages）、`engine_base_url`（Codex 路由）与 `api_key`；未连接或没有默认模型时抛出中文 `ValueError`。Key 只用于当次请求，不得保存、记录或返回给界面。经工程引擎运行的任务不需要它：调用 `Engineering.start_work` / `resolve_model` 时不传 `model_id` 即用默认模型。注意：默认模型取自 Codex 模型目录，在 `/v1` 路由上可用性需用真实 Key 验证。
+- **接口**：`/api/model-compute/key`、`/login`、`/models`（刷新列表）、`/default`、`/disconnect`；状态快照中的 `model_compute` 只含摘要（`key_hint` 为脱敏 Key）。
+- **测试**：`tests/test_model_compute.py`（本机 TokenFans 替身 `tests/tokenfans_fixture.py`，不调用付费服务）；界面验收 `tests/tokenfans_browser_fixture.py`。真实 TokenFans 与 Codex 的兼容性需用户的 Key 单独验收。
 
 平台资源 kind=reasoning，unit=1k_tokens。服务清单需声明 schema=platform.service.v1、protocol=responses、models 数组和 metered_sessions=true。运营凭据只供后端调用：
 

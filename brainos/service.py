@@ -77,6 +77,8 @@ class Platform:
         self.workflows = Workflows(self)
         from .cloud_account import CloudAccount
         self.cloud = CloudAccount(self)
+        from .model_compute import ModelCompute
+        self.model_compute = ModelCompute(self)
         from .sim_robots import SimRobots
         self.sims = SimRobots(self, self.store.root)
         # Do not replay physical or remote operations after a process interruption.
@@ -115,6 +117,8 @@ class Platform:
         result.update(self.workflows.snapshot())
         # The cloud session token stays in the credential file; only a summary is shown.
         result['cloud_account'] = self.cloud.summary()
+        # Issue #4: the TokenFans connection that tasks without a chosen model use (key never included).
+        result['model_compute'] = self.model_compute.summary()
         return result
 
     def add_project(self, p):
@@ -122,6 +126,7 @@ class Platform:
                'objective': required_text(p.get('objective'), '交付目标', 2000), 'created_at': now()}
         self.store.put('projects', obj)
         self.audit('project.created', {'name': obj['name']}, obj['id'])
+        self.model_compute.ensure_profile(obj['id'])
         return obj
 
     def add_robot(self, p):

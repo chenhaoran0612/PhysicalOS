@@ -124,7 +124,10 @@ class Engineering:
                 self.store.put('agent_sessions',s)
 
     def snapshot(self):
-        return {kind:self.store.list(kind) for kind in ('agent_models','device_connections','agent_sessions','robot_inventories')} | {'agent_engine':agent_runtime.available()} | self.extensions.snapshot()
+        result={kind:self.store.list(kind) for kind in ('agent_models','device_connections','agent_sessions','robot_inventories')}
+        # A TokenFans profile without a connection or default model is kept for its sessions, not offered.
+        result['agent_models']=[m for m in result['agent_models'] if m.get('available') is not False]
+        return result | {'agent_engine':agent_runtime.available()} | self.extensions.snapshot()
 
     def coverage(self,sid):
         evidence=[e for e in self.store.list('device_evidence') if e['session_id']==sid]
@@ -135,6 +138,12 @@ class Engineering:
             state='not_checked' if not matches else ('limited' if result.get('timed_out') or result.get('truncated') or result.get('exit_code')!=0 else 'collected')
             probes.append({'id':name,'label':label,'state':state,'evidence_id':matches[0]['id'] if matches else None})
         return {'probes':probes,'checked':sum(p['state']!='not_checked' for p in probes),'total':len(probes),'evidence_count':len(evidence)}
+
+    def resolve_model(self,project_id,model_id):
+        """The model a run uses: the one chosen, else the workspace default (TokenFans, issue #4)."""
+        model=self.platform.same_project('agent_models',model_id,project_id) if model_id else self.platform.model_compute.default_profile(project_id)
+        self.platform.model_compute.check(model)
+        return model
 
     def model_add(self,p):
         self.platform.project(p.get('project_id'))
@@ -274,7 +283,7 @@ class Engineering:
             if len(self.live)>=4:raise ValueError('当前工作空间最多并发 4 个工程会话')
             robot=self.store.get('robots',p.get('robot_id'));project_id=robot['project_id']
             connection=self.platform.same_project('device_connections',robot.get('connection_id'),project_id)
-            model=self.platform.same_project('agent_models',p.get('model_id'),project_id)
+            model=self.resolve_model(project_id,p.get('model_id'))
             if p.get('data_authorized') is not True:raise ValueError('请授权读取设备信息并交给所选模型分析')
             if not agent_runtime.available()['available']:raise ValueError('工程引擎未包含在当前安装版本中')
             if any(s['robot_id']==robot['id'] and s['status'] in ACTIVE for s in self.store.list('agent_sessions')):
@@ -298,7 +307,8 @@ class Engineering:
             if p.get('data_authorized') is not True:raise ValueError('请确认继续将设备信息交给所选模型分析')
             if s.get('robot_id') and any(x['robot_id']==s['robot_id'] and x['status'] in ACTIVE for x in self.store.list('agent_sessions')):raise ValueError('该本体已有另一个调查会话运行')
             message=required_text(p.get('message'),'继续调查的内容',5000)
-            self._cloud_ready(self.store.get('agent_models',s['model_id']),s['max_tokens'])
+            resumed=self.store.get('agent_models',s['model_id'])
+            self.platform.model_compute.check(resumed);self._cloud_ready(resumed,s['max_tokens'])
             if self.closing or len(self.live)>=4:raise ValueError('应用正在退出或并发会话已满')
             self.extensions.runtime_selection(s)
             # Dynamic tool sets belong to a native thread. Upgrade older sessions
@@ -309,16 +319,17 @@ class Engineering:
             s.update(status='starting',pending_question=None,pending_approval=None,pending_requests=[],error=None,usage={},turn_id=None,stream_text='')
             self.store.put('agent_sessions',s);self._launch(s,message,bool(s.get('thread_id')));return s
 
-    def start_work(self,p,*,workflow=None,prepare=None,created=None,extensions=None):
+    def start_work(self,p,*,workflow=None,prepare=None,created=None,extensions=None,pinned_model=None):
         with self.lock:
             self.platform.project(p.get('project_id'))
-            model=self.platform.same_project('agent_models',p.get('model_id'),p['project_id'])
+            model=self.resolve_model(p['project_id'],p.get('model_id'))
+            model_name=self.platform.model_compute.session_model(model,pinned_model)
             if p.get('data_authorized') is not True:raise ValueError('请授权工程助手使用项目上下文、执行本地工程工具并调用所选模型')
             self._cloud_ready(model,integer(p.get('max_tokens',30000),'Token 观察限额',1000,1000000))
             if not agent_runtime.available()['available']:raise ValueError('工程引擎未安装')
             if len(self.live)>=4:raise ValueError('当前工作空间最多并发 4 个工程会话')
             s={'id':uid('agent-session'),'project_id':p['project_id'],'robot_id':None,'connection_id':None,'mode':'engineering',
-               'model_id':model['id'],'model':model['model'],'billing':model['billing'],'name':required_text(p.get('name'),'任务名称',150),
+               'model_id':model['id'],'model':model_name,'billing':model['billing'],'name':required_text(p.get('name'),'任务名称',150),
                'extensions':extensions if extensions is not None else self.extensions.selection(p),
                'status':'starting','objective':required_text(p.get('objective'),'工程目标',5000),
                'max_tokens':integer(p.get('max_tokens',30000),'Token 观察限额',1000,1000000),
@@ -533,6 +544,8 @@ class Engineering:
     def _model(self,s,box=None):
         model=self.store.get('agent_models',s['model_id'])
         if model['billing']=='provider':return {**model,**self.store.get('agent_secrets',model['id'])},None
+        # TokenFans (issue #4): billed to the TokenFans account; the key comes from the workspace credential file.
+        if model['billing']=='tokenfans':return self.platform.model_compute.engine_profile(model,s),None
         if model['billing']=='cloud':
             # §5.3: cloud gateway session. No local reserve/settle on this path.
             account=self.platform.cloud
@@ -682,7 +695,7 @@ class Engineering:
                     thread_usage[usage_key]={k:max(0,v-baseline.get(k,0)) for k,v in total.items() if isinstance(v,int)}
                     usage={k:sum(u.get(k,0) for u in thread_usage.values()) for k in total if isinstance(total[k],int)}
                     self.update(sid,usage=usage)
-                    if usage.get('totalTokens',0)>=s['max_tokens']:handle['stop'].set();self.event(sid,'budget','已达到 Token 观察限额，正在停止；'+('费用以云平台计量为准' if s.get('billing')=='cloud' else '自有模型以供应商账单为准'))
+                    if usage.get('totalTokens',0)>=s['max_tokens']:handle['stop'].set();self.event(sid,'budget','已达到 Token 观察限额，正在停止；'+({'cloud':'费用以云平台计量为准','tokenfans':'费用以 TokenFans 账单为准'}.get(s.get('billing'),'自有模型以供应商账单为准')))
                 elif method=='item/agentMessage/delta':
                     with self.lock:
                         current=self.store.get('agent_sessions',sid)

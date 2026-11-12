@@ -419,9 +419,10 @@ function engineModelsDialog(reason) {
     offers.length ? '' : '<p class="inline-note">当前还没有可选的平台工程模型。</p>');
   const own = option('自己的模型 API', '模型服务的 API 地址、模型 ID 和密钥。服务需支持 OpenAI Responses 接口与工具调用（OpenAI 或兼容网关均可）。',
     '由该模型服务商直接收取；密钥只保存在这台电脑上。', button('配置自己的模型', 'engine-own-model', 'secondary small'));
+  const tokenfans = typeof modelComputeOption === 'function' ? modelComputeOption(option) : '';
   const skip = models.length ? '' : notice('暂时不想配置？添加仿真机器人、安装示例技能、运行并观看它动起来，都不需要助手模型。 ' + button('去我的机器人', 'go-robots', 'secondary small'));
   return dialog('选择工程模型', '工程助手需要一个大模型才能工作',
-    `<div class="dialog-body">${why}${models.length ? engineModelsSummary() : ''}<div class="cards model-options">${cloud}${platform}${own}</div>${skip}</div>`);
+    `<div class="dialog-body">${why}${models.length ? engineModelsSummary() : ''}<div class="cards model-options">${tokenfans}${cloud}${platform}${own}</div>${skip}</div>`);
 }
 
 // ---------------------------------------------------------------- 5. installed skills -> project skills

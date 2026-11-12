@@ -251,3 +251,20 @@ dialog.wide{width:min(920px,calc(100% - 32px))}
 .stop-not-obeyed .button{background:#fff;color:var(--red);border-color:#fff;margin-top:8px}
 .stop-not-obeyed .button.secondary{background:transparent;color:#fff;border-color:#ffffffa0}
 @media(max-width:600px){.safety-banner{padding:10px 16px}}
+
+/* Issue #4: TokenFans models & compute panel (平台模型与算力). */
+.tkf-panel .panel-body{display:flex;flex-direction:column;gap:4px}
+.tkf-lead{margin:0 0 14px;font-size:12px;color:#5d7353;max-width:760px}
+.tkf-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.tkf-choice{border:1px solid #e3ebd8;border-radius:8px;padding:16px 18px;background:#fafcf7;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.tkf-choice:first-child{border-color:#cfe2c3;background:#f5faef}
+.tkf-choice b{font-size:13px;color:#3f5a37}
+.tkf-choice p{margin:0 0 10px;font-size:11px;color:#7b8f6e;line-height:1.8}
+.tkf-meta{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tkf-meta small{display:block;margin-top:4px;font-size:9px}
+.tkf-default{max-width:520px;margin-bottom:6px}
+.tkf-default .field{margin-bottom:12px}
+.tkf-foot{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;border-top:1px solid #edf0e9;padding-top:14px;margin-top:10px}
+.tkf-foot .inline-note{margin:0;max-width:520px}
+@media(max-width:850px){.tkf-meta{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.tkf-choices,.tkf-meta{grid-template-columns:1fr}}
