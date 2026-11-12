@@ -95,7 +95,7 @@ python3.12 -m venv .build/packaging-venv
 | --- | --- |
 | 工作空间 | 注册、登录、密码哈希、会话、账号数据隔离、项目隔离、持久化 |
 | 本体 | SSH 自主调查、带证据的软硬件档案、多形态登记、适配器连接与能力发现；SSH 可直连或经一台跳板机（两跳指纹都确认并固定），可粘贴一条 ssh 命令自动填表；真机只读实时状态（主机、负载、内存、磁盘、温度、失败的服务、关注的服务），见 [工程引擎说明](docs/ENGINEERING_ENGINE.md#跳板机与真机实时状态) |
-| 模型 | 自有推理服务接入、平台模型目录、来源分类、契约、调用、端侧模型包部署接口 |
+| 模型 | 自有推理服务接入、平台模型目录、来源分类、契约、调用、端侧模型包部署接口；“平台模型与算力”页可连接 TokenFans（粘贴 API Key，或用账号登录一次自动读取 Key）作为工作空间默认大模型：没有单独选模型的本体调查、工程任务、协作流程和本体适配都用它，费用从 TokenFans 余额扣除，见 [工程引擎说明](docs/ENGINEERING_ENGINE.md#tokenfans工作空间默认模型issue-4) |
 | 技能与应用 | 技能定义、模型绑定、参数化顺序编排、超时、成功 / 停止条件、不可变应用版本 |
 | Agent | 内置工程运行时、持续会话、文件修改、命令与测试、审批、产物；仍可接入远程执行器 |
 | 协作流程 | 自定义角色和阶段、独立模型与扩展、串行执行、交付快照、逐阶段验收、重试与总预算 |
@@ -117,6 +117,13 @@ python3.12 -m venv .build/packaging-venv
 - 端侧模型“一键部署”需要兼容设备提供 `model.install` 能力、运行时声明并校验实际包摘要。安装模型不等于已经通过任务验收。
 - 当前额度以平台点计量；未设定人民币 / 美元汇率，未接入真实支付渠道、支付回调、发票或自动采购。额度申请不会伪造支付成功。
 - 本地账号 / 运营存储是可运行框架；多节点 SaaS、团队 RBAC、数据库迁移体系、强隔离、云端 IAM、支付安全审计和生产服务 SLA 仍需要建设。
+
+## TokenFans 默认模型
+
+- 在“平台模型与算力”页连接。API Key 只保存在 `<工作空间>/credentials/tokenfans.json`（文件权限 0600），绑定校验时的 TokenFans 地址；账号登录用的密码不保存。页面、状态快照和接口返回里都没有完整 Key。
+- 环境变量 `NEUXMIND_TOKENFANS_URL` 可把地址指向测试替身或自建的兼容服务（必须是 HTTPS，只有本机地址允许 HTTP）。
+- 接口：`/api/model-compute/{key,login,models,default,disconnect}`；状态快照里的 `model_compute` 只有摘要。其他模块直接调用大模型时用 `platform.model_compute.default_llm()`，走工程引擎时不传 `model_id` 即可。
+- 目前只在本机 TokenFans 替身上验证过（`tests/test_model_compute.py`、`tests/tokenfans_browser_fixture.py`），没有调用过真实的 TokenFans 服务。
 
 ## 运营配置
 
@@ -151,6 +158,7 @@ brainos/
   connector.py    显式接入地址的 HTTP 调用
   service.py      项目、资产、任务、测试与部署
   commerce.py     平台目录、模型目录、预算与账本
+  model_compute.py TokenFans 连接、凭据文件与工作空间默认模型
   engineering.py  自主调查、档案、工程会话和模型计量
   extensions.py   工程 Skill 版本与 MCP 工具管理
   workflows.py    多角色阶段执行、交接快照与验收
