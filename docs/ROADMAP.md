@@ -26,7 +26,7 @@
 - ⬜ 现场测试报告接入运行时真实遥测
 
 ## 阶段 3：模型与商业上线
-- 🟡 TokenFans 作为工作空间默认大模型：粘贴 API Key 或账号登录取 Key、选默认模型，所有未指定模型的任务默认使用（issue #4，已合入 integration；替身级，真实 TokenFans 服务未验证）
+- 🟡 工程助手的大模型只对接 TokenFans：在“云平台账户”页粘贴 API Key 或账号登录取 Key、选默认模型，所有调查、工程任务、流程、适配和硬件修复都使用它（issue #4，已合入 integration；替身级，真实 TokenFans 服务未验证）
 - ⬜ 首个端侧模型包
 - ⬜ VLA 策略接入 `policy.action_chunk`
 - ⬜ 真实支付渠道（支付宝/微信/Stripe 三选一先接）、发票、对账

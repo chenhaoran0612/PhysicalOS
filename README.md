@@ -95,7 +95,7 @@ python3.12 -m venv .build/packaging-venv
 | --- | --- |
 | 工作空间 | 注册、登录、密码哈希、会话、账号数据隔离、项目隔离、持久化 |
 | 本体 | SSH 自主调查、带证据的软硬件档案、多形态登记、适配器连接与能力发现；SSH 可直连或经一台跳板机（两跳指纹都确认并固定），可粘贴一条 ssh 命令自动填表；真机只读实时状态（主机、负载、内存、磁盘、温度、失败的服务、关注的服务），见 [工程引擎说明](docs/ENGINEERING_ENGINE.md#跳板机与真机实时状态)；连接后自动做只读硬件扫描（设备表与问题列表），内置 Skill `hardware-init` 在逐条审批下修复问题并重新扫描验证，见 [硬件初始化](docs/HARDWARE_INIT.md) |
-| 模型 | 自有推理服务接入、平台模型目录、来源分类、契约、调用、端侧模型包部署接口；“平台模型与算力”页可连接 TokenFans（粘贴 API Key，或用账号登录一次自动读取 Key）作为工作空间默认大模型：没有单独选模型的本体调查、工程任务、协作流程和本体适配都用它，费用从 TokenFans 余额扣除，见 [工程引擎说明](docs/ENGINEERING_ENGINE.md#tokenfans工作空间默认模型issue-4) |
+| 模型 | 自有推理服务接入、平台模型目录、来源分类、契约、调用、端侧模型包部署接口。工程助手的大模型只对接 TokenFans，在“云平台账户”页配置（粘贴 API Key，或用账号登录一次自动读取 Key）：本体调查、工程任务、协作流程、本体适配和硬件修复都用那里选定的默认模型，费用从 TokenFans 余额扣除，见 [工程引擎说明](docs/ENGINEERING_ENGINE.md#tokenfans工作空间默认模型issue-4) |
 | 技能与应用 | 技能定义、模型绑定、参数化顺序编排、超时、成功 / 停止条件、不可变应用版本 |
 | Agent | 内置工程运行时、持续会话、文件修改、命令与测试、审批、产物；仍可接入远程执行器 |
 | 协作流程 | 自定义角色和阶段、独立模型与扩展、串行执行、交付快照、逐阶段验收、重试与总预算 |
@@ -120,7 +120,8 @@ python3.12 -m venv .build/packaging-venv
 
 ## TokenFans 默认模型
 
-- 在“平台模型与算力”页连接。API Key 只保存在 `<工作空间>/credentials/tokenfans.json`（文件权限 0600），绑定校验时的 TokenFans 地址；账号登录用的密码不保存。页面、状态快照和接口返回里都没有完整 Key。
+- 在“云平台账户”页连接；“平台模型与算力”页不再提供工程模型，只留一条指向“云平台账户”的提示。以前配置的自有模型 API、平台付费模型和云平台模型在界面上不再提供，记录仍保留，历史会话和流程照常可读、可继续。
+- API Key 只保存在 `<工作空间>/credentials/tokenfans.json`（文件权限 0600），绑定校验时的 TokenFans 地址；账号登录用的密码不保存。页面、状态快照和接口返回里都没有完整 Key。
 - 环境变量 `NEUXMIND_TOKENFANS_URL` 可把地址指向测试替身或自建的兼容服务（必须是 HTTPS，只有本机地址允许 HTTP）。
 - 接口：`/api/model-compute/{key,login,models,default,disconnect}`；状态快照里的 `model_compute` 只有摘要。其他模块直接调用大模型时用 `platform.model_compute.default_llm()`，走工程引擎时不传 `model_id` 即可。
 - 目前只在本机 TokenFans 替身上验证过（`tests/test_model_compute.py`、`tests/tokenfans_browser_fixture.py`），没有调用过真实的 TokenFans 服务。
