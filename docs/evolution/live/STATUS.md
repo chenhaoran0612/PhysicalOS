@@ -5,27 +5,33 @@
 
 ## 现在的状态
 
-**0.15.0 已合并、打包并部署到本机，等用户测试。** 测试清单见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#交给用户测试0150)。
+**本机运行的是首次部署的 0.15.0；用户测试后的跟进正在合入，第二个测试包（0.15.1）还没有定稿。**
+
+`integration` @ d4a8fd6 上做过一次统一回归并打出了 0.15.1（build 24），包校验通过，但回归发现了需要改产品代码的问题，所以这个包不部署，等下面“待提交”的改动合入后重打。明细见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#用户测试后的跟进2026-11-12)。
 
 | 来源 | 内容 | 分支 @ 提交 | 状态 |
 |---|---|---|---|
-| 修复 | 回环绑定不做反向 DNS；本地 Docker 云平台 | `fix/loopback-bind-skip-reverse-dns` @ b0c92d9（已推送 origin） | ✅ 已合入 `integration` |
-| #3 | 跳板机接入、粘贴 ssh 命令、真机只读实时状态、慢链路超时 | `feat/ssh-jump-host-live-status` @ 2b57eb3 | ✅ 已合入；只读状态经公网跳板机在真机上验证 |
-| #4 | TokenFans 模型与算力，工作空间默认模型 | `feat/tokenfans-model-compute` @ 1f01e3a | ✅ 已合入；只在替身上验证，真实 TokenFans 未验证 |
-| #2 | 连接后硬件扫描与逐条审批修复（内置 Skill `hardware-init`） | `feat/hardware-scan` @ 0aead87 | ✅ 已合入；只读扫描在一台 Jetson 真机上验证，修复会话只在替身上验证 |
-| 总指挥 | 文档、版本号统一与测试、0.15.0、打包、部署 | `integration` | ✅ |
+| 修复 | 回环绑定不做反向 DNS；本地 Docker 云平台 | `fix/loopback-bind-skip-reverse-dns` @ b0c92d9（已推送 origin） | ✅ 已合入 |
+| #3 | 跳板机接入、粘贴 ssh 命令、真机只读实时状态、慢链路超时 | `feat/ssh-jump-host-live-status` @ 2b57eb3 | ✅ 已合入（0.15.0 里有） |
+| #3 跟进 | 嵌套 ssh 命令，目标名称按跳板机上的 SSH 配置解析 | 同上 @ 4434176 | ✅ 已合入（0.15.0 里没有） |
+| #3 加固 | 独立审查提出的几条：执行请求加时限、超长输出不采用、里层选项的说明、测试补齐 | 同上，未提交 | ⏳ 等用户在 #3 会话确认提交 |
+| #4 | TokenFans 模型与算力，工作空间默认模型 | `feat/tokenfans-model-compute` @ 1f01e3a | ✅ 已合入（0.15.0 里有） |
+| #4 跟进 | 面板移到“云平台账户”页，工程模型只对接 TokenFans；浏览器验收迁移 | 同上 @ 7b6d2c1、3064d82 | ✅ 已合入（0.15.0 里没有） |
+| #4 待提交 | 迁移 `adaptation_browser`、`journey_browser`；密码框关闭时清空；冷启动在“云平台账户”页时自动刷新不启动的旧缺陷 | 同上，未提交 | ⏳ 等 #4 改完、用户在 #4 会话确认提交 |
+| #2 | 连接后硬件扫描与逐条审批修复（内置 Skill `hardware-init`） | `feat/hardware-scan` @ 0aead87 | ✅ 已合入（0.15.0 里有） |
+| 总指挥 | 文档、版本工具、0.15.0 打包部署；0.15.1（build 24） | `integration` | ✅ / 0.15.1 待重打 |
 
 ## 分支与部署
 
-- `integration`（工作区 `PhysicalOS-integration/`）：main + 以上全部。**只在本地，未推送，未合并 main。**
+- `integration`（工作区 `PhysicalOS-integration/`）：main + 以上已合入的全部。**只在本地，未推送，未合并 main。**
 - 部署：`/Applications/NeuxMind Robot OS.app`（0.15.0）；云平台在本地 Docker（`http://127.0.0.1:8800`）。
-- 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.15.0-arm64.dmg`、`.pkg`。
-- 预览分支 `integration-preview` 和快照引用已删除。
+- 安装包：`PhysicalOS-integration/dist/` 下的 0.15.0 是已部署的那个；同目录的 0.15.1 是 d4a8fd6 的试打包，会被重打，不要安装。
 
 ## 待办
 
-1. 用户测试 0.15.0，问题记在对应 issue（#2 / #3 / #4）或告诉总指挥。
-2. 各 issue 会话的后续修复以新提交的形式发给总指挥，合入 `integration` 后重新测试、打包、部署。
-3. 用户确认后：合并 `integration` 到 main 并推送，关闭 issue。
-4. 另一会话在 `fix/preexisting-test-failures` 上排查 main 上原有的两处测试失败（`test_adaptation` 一项、Linux 容器里的 `test_sandbox`），尚未提交。
-5. 真实服务上的验证：用真实 TokenFans Key 跑一次工程任务；在真机上走一遍界面流程和修复会话。
+1. 用户在 #3、#4 两个会话里确认提交（转达不算数，必须在各自会话里说）。
+2. 总指挥：合入两边的提交 → 统一回归（含 20 个早期浏览器验收脚本和 `tokenfans_browser.cjs`）→ 重打 0.15.1 → 征得同意后替换 `/Applications` 里正在运行的 App。
+3. #2 的两处后续（不阻塞这次的包）：`hardware_init.py` 的执行请求没有时限（等 #3 的加固合入后改用同一个函数）；手动检查用的 `tests/hardware_browser_fixture.py` 还在输出自有 API 模型地址，界面上已经配不进去。
+4. `fix/preexisting-test-failures`（main 上原有的两处测试失败）已改好但未提交，其中改了运行时沙箱的产品代码；是否并入这一轮由用户决定。
+5. 用户确认后：合并 `integration` 到 main 并推送，关闭 issue。
+6. 真实服务上的验证仍然没有：用真实 TokenFans Key 跑一次工程任务；在真机上走一遍界面流程和修复会话。
