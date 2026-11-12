@@ -15,7 +15,8 @@ It must only use the standard library and must not import the runtime.
 
 Start-up order (before any skill code runs):
 1. resource limits (``RLIMIT_AS``/``CPU``/``NOFILE``/``NPROC``/``FSIZE``/``CORE``,
-   soft = hard, so skill code cannot raise them again), ``PR_SET_NO_NEW_PRIVS``,
+   soft = hard, so skill code cannot raise them again; ``NPROC`` is first re-counted
+   against the kernel, see :func:`_kernel_task_count`), ``PR_SET_NO_NEW_PRIVS``,
    ``PR_SET_PDEATHSIG=SIGKILL`` (the skill dies with the runtime);
 2. an import guard that refuses ``neuxmind_runtime.*`` -- except two small
    stand-in modules (``neuxmind_runtime`` and ``neuxmind_runtime.skills``)
@@ -67,6 +68,10 @@ _BUILTIN_ERRORS = {"TypeError": TypeError, "ValueError": ValueError, "KeyError":
 
 PR_SET_PDEATHSIG = 1
 PR_SET_NO_NEW_PRIVS = 38
+
+# Limits entry (not an rlimit): tasks the skill may add on top of its uid's other tasks.
+NPROC_HEADROOM = "nproc_headroom"
+NPROC_PROBE_CEILING = 1 << 22        # PID_MAX_LIMIT on 64-bit Linux: no uid can have more tasks
 
 
 # ---------------------------------------------------------------- stand-ins
@@ -145,6 +150,84 @@ def _prctl(option: int, value: int) -> bool:
         return False
 
 
+def _fork_fits(resource, limit: int, hard: int) -> bool | None:
+    """Whether one more task of our uid can start under a soft ``RLIMIT_NPROC`` of ``limit``
+    (the kernel refuses fork/clone with EAGAIN once the uid's task count reaches it).
+    ``None``: the probe failed for another reason."""
+    try:
+        resource.setrlimit(resource.RLIMIT_NPROC, (limit, hard))
+    except (ValueError, OSError):
+        return None
+    try:
+        pid = os.fork()                      # still single-threaded: no skill code has run
+    except BlockingIOError:
+        return False
+    except OSError:
+        return None
+    if pid == 0:
+        os._exit(0)
+    try:
+        os.waitpid(pid, 0)                   # reaped: the uid's count is back to what it was
+    except ChildProcessError:
+        pass
+    return True
+
+
+def _kernel_task_count(resource, hint: int) -> int | None:
+    """Tasks of our real uid as the kernel counts them for ``RLIMIT_NPROC``, this process included.
+
+    The parent counts the uid's tasks in ``/proc``. In a PID namespace (a runtime in a
+    container) that shows only the namespace's tasks, while the kernel counts every task
+    of the uid -- other containers', the host's -- so "visible + headroom" could be below
+    the real count and the skill could not start a single thread. With soft limit ``L`` a
+    fork succeeds exactly when count < ``L``: one fork confirms count <= ``hint + 1`` (the
+    usual case, ``hint`` being the parent's count without us); otherwise an exponential and
+    then a binary search, about 2*log2(hidden tasks) forks. ``None`` when undetermined."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
+    ceiling = NPROC_PROBE_CEILING if hard == resource.RLIM_INFINITY else min(hard, NPROC_PROBE_CEILING)
+    try:
+        lo = min(hint + 2, ceiling)
+        fits = _fork_fits(resource, lo, hard)
+        if fits is None:
+            return None
+        if fits:
+            return lo - 1                    # an upper bound; the caller never lowers the limit
+        step = 1
+        while True:                          # invariant: fork refused at lo
+            hi = min(lo + step, ceiling)
+            fits = _fork_fits(resource, hi, hard)
+            if fits is None or (not fits and hi == ceiling):
+                return None
+            if fits:
+                break
+            lo, step = hi, step * 2
+        while hi - lo > 1:                   # refused at lo, fits at hi
+            mid = (lo + hi) // 2
+            fits = _fork_fits(resource, mid, hard)
+            if fits is None:
+                return None
+            lo, hi = (lo, mid) if fits else (mid, hi)
+        return hi - 1
+    finally:
+        try:
+            resource.setrlimit(resource.RLIMIT_NPROC, (soft, hard))
+        except (ValueError, OSError):
+            pass
+
+
+def _calibrated(resource, limits: dict) -> dict:
+    """``limits`` without the headroom entry; ``RLIMIT_NPROC`` raised to the kernel's count
+    of the uid's other tasks + headroom when ``/proc`` did not show them all. Never lowered."""
+    out = {name: value for name, value in limits.items() if name != NPROC_HEADROOM}
+    headroom, value = limits.get(NPROC_HEADROOM), out.get("RLIMIT_NPROC")
+    if not all(isinstance(x, int) and not isinstance(x, bool) and x >= 0 for x in (headroom, value)):
+        return out
+    counted = _kernel_task_count(resource, max(0, value - headroom))
+    if counted is not None:
+        out["RLIMIT_NPROC"] = max(value, counted - 1 + headroom)     # -1: this process itself
+    return out
+
+
 def _apply_limits(limits: dict) -> dict:
     """Lower our own resource limits (soft = hard). Returns what was applied."""
     applied = {}
@@ -152,7 +235,7 @@ def _apply_limits(limits: dict) -> dict:
         import resource
     except ImportError:          # not Linux/Unix
         return applied
-    for name, value in limits.items():
+    for name, value in _calibrated(resource, limits).items():
         res = getattr(resource, name, None)
         if res is None or not isinstance(value, int) or value < 0:
             continue

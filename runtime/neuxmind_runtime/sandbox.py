@@ -960,6 +960,9 @@ class SandboxHost:
             current = count_tasks(uid)
             if current is not None:
                 limits["RLIMIT_NPROC"] = current + c.extra_tasks
+                # /proc misses the uid's tasks outside our PID namespace (a runtime in a
+                # container); the child re-counts against the kernel and keeps this headroom.
+                limits[child_proto.NPROC_HEADROOM] = c.extra_tasks
         return limits
 
     def _spawn(self) -> socket.socket:

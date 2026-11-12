@@ -9,6 +9,14 @@ import time
 from test_engineering import ResponsesFixture
 
 DOUBLE=Path(__file__).resolve().with_name('runtime_double.py')
+# Stage-2 command that breaks the system.health payload. Codex runs it in the
+# host shell, so it must work with BSD sed (macOS) as well as GNU sed: BSD
+# ``sed -i`` takes the backup suffix as a required argument (``sed -i -e …``
+# reads ``-e`` as the suffix and fails before HANDOFF.json is written), and an
+# attached suffix is the one spelling both accept. The backup is removed so
+# the adapter package stays exactly what the scaffold plus this edit produce.
+BREAK_HEALTH=("sed -i.orig -e 's/\"ok\": not errors/\"ok\": \"yes\"/' -e \"s/'ok': True/'ok': 'yes'/\" adapter/*/adapter.py && "
+              'rm adapter/*/adapter.py.orig && ')
 CATEGORIES=['system','compute','sensors','actuators','interfaces','software','middleware','services','models','configuration']
 
 
@@ -74,7 +82,7 @@ class AdaptationModel(ResponsesFixture):
                          'printf %s '+shlex.quote(json.dumps(handoff(['mapping.json','mapping.md'],'映射表已按档案证据生成；无证据项标为需确认。'),ensure_ascii=False))+' > HANDOFF.json')
             else:
                 command=('ls adapter/*/adapter.py adapter/*/adapter.json adapter/README.md && grep -q NotImplementedError adapter/*/adapter.py && '
-                         +("sed -i -e 's/\"ok\": not errors/\"ok\": \"yes\"/' -e \"s/'ok': True/'ok': 'yes'/\" adapter/*/adapter.py && " if type(self).break_health else '')+
+                         +(BREAK_HEALTH if type(self).break_health else '')+
                          ("printf '\\nfrom neuxmind_runtime import conformance as _c\\n' >> adapter/*/adapter.py && " if type(self).tamper else '')+
                          "printf '# 实现说明\\n替身后端：NEUXMIND_ADAPTER_BACKEND=double。真机路径未连接验证。\\n' > adapter/IMPLEMENTATION.md && "
                          'printf %s '+shlex.quote(json.dumps(handoff(['adapter/README.md','adapter/IMPLEMENTATION.md'],'已基于脚手架补充实现说明；真机路径未验证。'),ensure_ascii=False))+' > HANDOFF.json')

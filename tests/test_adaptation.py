@@ -477,7 +477,10 @@ class AdaptationWorkflowTests(unittest.TestCase):
         system.health: dry must fail and the report must say so."""
         AdaptationModel.break_health=True
         try:
-            rid=self.start()['id'];self.wait(rid);self.approve(rid);self.wait(rid);self.approve(rid);run=self.wait(rid)
+            rid=self.start()['id'];self.wait(rid);self.approve(rid);run=self.wait(rid)
+            # Stage 2 must reach review: a blocked stage here means the native command itself failed.
+            self.assertEqual(run['status'],'awaiting_review',run.get('error'))
+            self.approve(rid);run=self.wait(rid)
         finally:AdaptationModel.break_health=False
         conf=run['stages'][2]['adaptation']['conformance']
         self.assertEqual(conf['verdict']['dry'],'failed');self.assertEqual(conf['verdict']['static'],'passed');self.assertEqual(conf['exit_codes'],{'static':0,'dry':1})
