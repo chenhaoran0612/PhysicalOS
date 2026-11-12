@@ -95,7 +95,7 @@ function hardwareRepairForm(robotId){
  if(!chosen.length)return toast('请至少勾选一个要处理的问题');
  const issues=scan.issues.filter(i=>chosen.includes(i.id)),models=rows('agent_models');
  const tokenfans=state.model_compute;
- const modelField=models.length?picker('agent_models','model_id','使用的模型')+(tokenfans?.connected?`<p class="inline-note">默认使用“平台模型与算力”中设置的 TokenFans 默认模型${tokenfans.default_model?'（'+h(tokenfans.default_model)+'）':''}。</p>`:''):notice('还没有可用的模型。请先在“平台模型与算力”连接 TokenFans，或配置自己的模型。 '+button('配置 / 选择模型','engine-models','secondary small'),true);
+ const modelField=models.length?picker('agent_models','model_id','使用的模型')+(tokenfans?.connected?`<p class="inline-note hw-model-note">默认使用“云平台账户”中设置的 TokenFans 默认模型${tokenfans.default_model?'（'+h(tokenfans.default_model)+'）':''}。</p>`:''):notice('还没有可用的模型。工程助手的大模型只对接 TokenFans：先在“云平台账户”连接，再回到这里勾选问题开始修复。 '+button('配置模型','engine-models','secondary small','needed'),true);
  form('让助手修复硬件问题',`${issues.length} 个问题 · 内置 Skill hardware-init`,`<div class="hw-repair-issues">${issues.map(i=>`<label class="extension-choice"><input type="checkbox" name="issue_ids" value="${h(i.id)}" checked><span><b>${h(i.title)}</b><small>${h(i.hint||i.detail)}</small></span></label>`).join('')}</div>
  ${modelField}
  <div class="field-row">${field('Token 观察限额','<input name="max_tokens" type="number" min="1000" max="1000000" value="200000" required>')}${field('最长运行时间（分钟）','<input name="max_minutes" type="number" min="1" max="120" value="30" required>')}</div>

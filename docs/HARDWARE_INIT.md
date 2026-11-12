@@ -6,7 +6,7 @@
 
 1. **连接后自动扫描**：SSH 指纹确认、连接成功后，界面立即打开“硬件初始化”并执行扫描（`POST /api/engineering/hardware/scan`，`source=connect`）。之后可在机器人卡片的“硬件初始化”入口查看或重新扫描。
 2. **查看结果**：系统信息、指标、问题列表（默认勾选可远程处理的问题）、按类别筛选的硬件清单、修复记录。
-3. **修复**：勾选问题 → “让助手修复所选问题” → 选择模型（默认选中“平台模型与算力”里的 TokenFans 默认模型，见 issue #4）→ 两项授权 → 启动修复会话（`POST /api/engineering/hardware/repair`）。
+3. **修复**：勾选问题 → “让助手修复所选问题” → 选择模型（只列 TokenFans 模型，默认选中“云平台账户”里设置的 TokenFans 默认模型，见 issue #4）→ 两项授权 → 启动修复会话（`POST /api/engineering/hardware/repair`）。
 4. **逐条批准**：助手通过 `device_fix` 提出命令；界面显示原命令、对应问题、风险、管理员权限方式、回退方法、产品识别出的附加风险，用户批准一次执行一次。
 5. **验证与报告**：助手调用 `hardware_rescan`（重新登录后扫描），再调用 `save_repair_report`。报告保存到 `hardware_repairs`，在硬件初始化页和会话页显示每个问题的处理结果。
 

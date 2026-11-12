@@ -91,4 +91,6 @@
  .hw-issues .section-head,.hw-devices .section-head{flex-direction:column;align-items:stretch}
  .hw-devices td:first-child{min-width:200px}
 }
+/* The default-model note belongs to the picker above it, not to the next field. */
+.hw-model-note{margin:-8px 0 18px}
 @media(prefers-reduced-motion:reduce){.hw-spinner{animation:none}.hw-issue,.hw-chip{transition:none}}
