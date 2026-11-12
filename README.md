@@ -40,7 +40,7 @@ python3 -m unittest discover -s sdk/tests
 python3 -m unittest discover -s tests      # 桌面端（含 tests/test_version.py：各处版本号一致）
 ```
 
-- `runtime/` 与 `sdk/` 的技能进程沙箱只支持 Linux（`os.waitid`、降权用户），在 macOS 上这两套测试会失败或超时，**不能用 Mac 上的结果判断它们**。在 Linux 容器里跑：仓库只读挂载进 `python:3.13-slim`，复制到容器内，`pip install -r requirements-runtime.txt -r cloud/requirements.txt && pip install -e spec -e runtime -e sdk`，再以非 root 用户运行上面的命令。
+- `runtime/` 与 `sdk/` 的技能进程沙箱只支持 Linux（`os.waitid`、降权用户），在 macOS 上这两套测试会失败或超时，**不能用 Mac 上的结果判断它们**。在 Linux 容器里跑：仓库只读挂载进 `python:3.13-slim`，复制到容器内，`pip install -r requirements-runtime.txt -r cloud/requirements.txt && pip install -e spec -e runtime -e sdk`，再以非 root 用户运行上面的命令。Mac 上的 Docker Desktop 容器里 `runtime/tests/test_sandbox.py` 有几项会因进程数上限或计时而不稳定（main 上同样如此），判断沙箱改动请以真 Linux 主机或 Jetson 上的结果为准。
 - 桌面端有 39 项测试需要内置工程引擎（`.build/agent-runtime/bin/codex`，由 `scripts/prepare_agent_runtime.py` 准备，或设置 `NEUXMIND_TEST_AGENT_BINARY`），缺少时自动跳过；发布前的全量测试必须带上它。
 - 浏览器验收脚本是 `tests/*_browser.cjs` + 对应的 `*_browser_fixture.py`，用法写在各脚本开头。
 
