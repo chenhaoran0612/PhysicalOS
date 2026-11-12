@@ -64,7 +64,7 @@ class Workflows:
                     'model_id':None,'model':'产品执行（不调用模型）','billing':None,'max_tokens':0,'max_minutes':0,
                     'required_outputs':[relative_path(x) for x in stage['required_outputs']],'require_command':False,'extensions':{'skills':[],'mcp':[]}})
                 continue
-            model=self.platform.same_project('agent_models',stage.get('model_id'),p['project_id'])
+            model=self.engine.resolve_model(p['project_id'],stage.get('model_id'))
             outputs=stage.get('required_outputs',[])
             if not isinstance(outputs,list) or not 1<=len(outputs)<=20:raise ValueError('每个阶段须指定 1–20 个交付文件')
             outputs=[relative_path(x) for x in outputs]
@@ -209,7 +209,8 @@ class Workflows:
                 def created(s):
                     current=self.store.get('workflow_runs',rid);current['stages'][index]['session_id']=s['id'];current['stages'][index]['attempts'][-1]['session_id']=s['id'];self._save(current)
                 session=self.engine.start_work(p,workflow={'run_id':rid,'stage_index':index,'attempt':attempt},
-                    prepare=lambda s:self._prepare(run,step,index,attempt,s,scaffolded),created=created,extensions=step['extensions'])
+                    prepare=lambda s:self._prepare(run,step,index,attempt,s,scaffolded),created=created,extensions=step['extensions'],
+                    pinned_model=step.get('model'))     # the model recorded when the workflow was defined
             while True:
                 if handle['stop'].is_set():
                     with self.engine.lock:
