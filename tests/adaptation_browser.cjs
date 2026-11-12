@@ -23,7 +23,10 @@ const fs=require('fs'),path=require('path');
  // 1. the inventory page offers the one-click template
  await click('engine-inventory',cfg.robot_id);await page.locator('#dialog [data-action="engine-flow-adapt"]').waitFor();
  await page.locator('#dialog [data-action="engine-flow-adapt"]').scrollIntoViewIfNeeded();await shot('01-inventory-adapt-entry');
- await click('engine-flow-adapt',cfg.robot_id);await expectText('#dialog .adapt-steps','一致性测试');await shot('02-adapt-start-form',true);
+ await click('engine-flow-adapt',cfg.robot_id);await expectText('#dialog .adapt-steps','一致性测试');
+ // issue #4: stages 1 and 2 run on the TokenFans model connected for this workspace
+ const adaptModel=await page.locator('#dialog [name=model_id]').inputValue();if(!adaptModel.startsWith('agent-model-tokenfans-'))throw Error('adaptation model is not TokenFans: '+adaptModel);
+ await shot('02-adapt-start-form',true);
  await page.locator('#dialog [name=data_authorized]').check();await submit();
  // 2. stage 1: mapping table with evidence, downgraded "需确认"
  await page.locator('#workflow-live').waitFor();await page.locator('#adapt-mapping').waitFor({timeout:60000});
