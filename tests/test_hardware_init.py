@@ -96,6 +96,16 @@ class ScanTests(Base):
         self.assertEqual(self.store.list('hardware_scans'), [])
         self.assertEqual(self.hw.scanning, set(), 'the robot is free for the next scan')
 
+    def test_a_robot_that_never_answers_the_request_to_run_the_scan_is_not_waited_for(self):
+        self.ssh.exec_answer_delay = 8              # the session opens; the request to run the scan is ignored
+        started = time.monotonic()
+        with mock.patch.object(hardware_scan, 'SCAN_TIMEOUT_SECONDS', 1):
+            result = self.scan()
+        self.assertLess(time.monotonic() - started, 5, 'gave up at the scan time limit')
+        self.assertFalse(result['complete'])
+        self.assertIn('扫描命令超时或输出过长，结果可能不完整。', result['notes'])
+        self.assertEqual(self.hw.scanning, set(), 'the robot is free for the next scan')
+
     def test_one_scan_per_robot_at_a_time_and_old_scans_are_pruned(self):
         self.hw.scanning.add(self.robot)
         with self.assertRaisesRegex(ValueError, '正在扫描'):
@@ -224,6 +234,18 @@ class FixRequestTests(Base):
         done = subprocess.run(script, shell=True, input=b'secret-password\n', capture_output=True, timeout=20)
         self.assertEqual(done.stdout, b'ran')
         self.assertIn(done.returncode, (124, 137), 'stopped by the remote time limit')
+
+    def test_run_command_gives_up_on_a_robot_that_never_answers_the_request(self):
+        self.ssh.exec_answer_delay = 8              # paramiko alone would wait for this answer without any limit
+        device = device_access.SSHDevice(self.connection, {'password': 'fixture-password'})
+        started = time.monotonic()
+        try:
+            result = hardware_init.run_command(device, 'lsmod', 1, 'fixture-password\n')
+        finally:
+            device.close()
+        self.assertLess(time.monotonic() - started, 4, 'gave up at the time limit')
+        self.assertEqual((result['timed_out'], result['exit_code'], result['stdout']), (True, None, ''),
+                         'reported like a command that did not finish: its outcome is unknown')
 
     def test_run_command_sends_stdin_and_keeps_the_output_tail(self):
         self.ssh.command_outputs['long'] = b'head\n' + b'x' * 60000 + b'\ntail-line\n'

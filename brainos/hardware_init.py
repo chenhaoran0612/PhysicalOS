@@ -234,7 +234,14 @@ def run_command(device, command, timeout, stdin=None, keep='tail', limit=FIX_OUT
     channel = device.client.get_transport().open_session(timeout=8)
     try:
         channel.settimeout(2)
-        channel.exec_command(command)
+        deadline = min(time.monotonic() + timeout, getattr(device, 'deadline', float('inf')))
+        try:
+            device_access.request_command(channel, command, deadline - time.monotonic())
+        except TimeoutError:
+            # The robot never answered the request (issue #3's watchdog closed the channel). It may
+            # still have started the command, so this reads like one that did not finish in time.
+            return {'stdout': '', 'stderr': '', 'exit_code': None, 'timed_out': True, 'output_head_dropped': False,
+                    'cancelled': bool(device.stop_event and device.stop_event.is_set())}
         if stdin is not None:
             try:
                 channel.sendall(stdin.encode())
@@ -244,7 +251,6 @@ def run_command(device, command, timeout, stdin=None, keep='tail', limit=FIX_OUT
             channel.shutdown_write()
         except OSError:
             pass
-        deadline = min(time.monotonic() + timeout, getattr(device, 'deadline', float('inf')))
         output, error, dropped = bytearray(), bytearray(), 0
         while time.monotonic() < deadline:
             if device.stop_event and device.stop_event.is_set():
