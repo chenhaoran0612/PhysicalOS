@@ -129,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     @objc func openBrowser() { if let url = serviceURL { NSWorkspace.shared.open(url) } }
     @objc func openData() { NSWorkspace.shared.open(dataDirectory) }
     @objc func showAbout() {
-        let alert = NSAlert(); alert.messageText = "NeuxMind Robot OS 0.15.0"
+        let alert = NSAlert(); alert.messageText = "NeuxMind Robot OS 0.15.1"
         alert.informativeText = "机器人开发与交付平台\n模型 · Agent · 训练 · 仿真 · 部署 · 用量\n\nmacOS Apple Silicon 开发预览版\n平台资源和生产模型由运营端配置。"
         alert.runModal()
     }
