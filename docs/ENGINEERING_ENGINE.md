@@ -45,17 +45,18 @@ Agent 将发现分类到系统、计算硬件、传感器、执行器、接口�
 
 “云平台账户”页顶部连接 [TokenFans](https://tokenfans.ai/integrations/api)（OpenAI 兼容网关）。**桌面端的大模型只对接 TokenFans**：本体调查、工程任务、协作流程阶段与本体适配都使用这里选定的默认模型，工程模型对话框和所有模型选择框只提供 TokenFans；“平台模型与算力”页只保留一条指向“云平台账户”的提示。云平台本身（网关上游）不变。
 
-其他来源（自有 API、平台付费模型、云平台网关模型）不再在界面中提供：状态快照的 `agent_models` 只列出可用的 TokenFans 配置；已有的其他配置仍保留在本机注册表中，旧会话与旧流程可以继续读取和运行，后端接口（`/api/engineering/models` 等）也保留，供测试与历史数据使用。浏览器验收脚本（`tests/engineering_browser.cjs`、`discovery_browser.cjs`、`workflows_browser.cjs`、`extensions_browser.cjs`、`ux02_browser.cjs`、`cloud03_browser.cjs`）已迁移：夹具启动带路由的 TokenFans 替身（`TokenFansFixture(routes={模型 ID: 该流程的 Responses 夹具})`，按请求的 `model` 转发 `/codex/v1/responses`），脚本经 `tests/tokenfans_browser.cjs` 在“云平台账户”页粘贴替身 Key 并按流程切换默认模型；`cloud03` 断言对话框只提供 TokenFans，云平台模型改经后端接口添加和启动，再在界面核对云端计量、错误提示与本机账本。SSH 接入后先出现硬件初始化（#2），脚本从其中进入本体调查。
+其他来源（自有 API、平台付费模型、云平台网关模型）不再在界面中提供：状态快照的 `agent_models` 只列出可用的 TokenFans 配置；已有的其他配置仍保留在本机注册表中，旧会话与旧流程可以继续读取和运行，后端接口（`/api/engineering/models` 等）也保留，供测试与历史数据使用。浏览器验收脚本（`tests/engineering_browser.cjs`、`discovery_browser.cjs`、`workflows_browser.cjs`、`extensions_browser.cjs`、`ux02_browser.cjs`、`cloud03_browser.cjs`、`journey_browser.cjs`、`adaptation_browser.cjs`）已迁移：夹具启动带路由的 TokenFans 替身（`TokenFansFixture(routes={模型 ID: 该流程的 Responses 夹具})`，按请求的 `model` 转发 `/codex/v1/responses`），脚本经 `tests/tokenfans_browser.cjs` 在“云平台账户”页粘贴替身 Key 并按流程切换默认模型；`cloud03` 断言对话框只提供 TokenFans，云平台模型改经后端接口添加和启动，再在界面核对云端计量、错误提示与本机账本。`adaptation_browser_fixture.py` 让工作空间开局即已连接（与粘贴 Key 同一后端路径），脚本断言本体适配用的是 TokenFans 模型。SSH 接入后先出现硬件初始化（#2），脚本从其中进入本体调查。
 
 - **两种连接方式**：粘贴 `sk-tkf-` API Key；或用 TokenFans 账号的邮箱 + 密码登录一次——桌面端调用 TokenFans 控制台接口 `POST /auth/login` → `GET /auth/my-key`（读取账户 Key）→ `GET /v1/me/billing/balance`（余额，仅展示）→ `POST /auth/logout`。这些控制台接口不在 TokenFans 公开 API 文档中，可能变化；失败时改用 API Key。密码与控制台令牌只用于这一次交换，**不保存**。
 - **校验与模型列表**：用 Key 调用 `GET {origin}/codex/v1/models`（Codex 路由，面向编码 Agent）；工程引擎的 `base_url` 为 `{origin}/codex/v1`，以 Responses 协议调用。
+- **页面不留凭据**：粘贴 Key 与账号登录的对话框关闭后立即清空其中的密码框，完整 Key 和密码不会留在页面的输入框、状态或浏览器存储中。
 - **凭据**：Key 只写入 `<workspace>/credentials/tokenfans.json`（目录 0700、文件 0600），并绑定校验时的 TokenFans 地址（地址变化即视为未连接，Key 不会发往其他地址）；不进入注册表、状态快照、审计事件或接口响应，运行时经环境变量交给引擎。请求拒绝重定向，避免 Bearer 凭据被转发。
 - **默认模型配置**：每个项目自动维护一条 `billing=tokenfans` 的托管模型配置（`agent-model-tokenfans-<project_id>`），跟随默认模型变化；新建项目时自动创建。断开连接或默认模型下架时，该配置保留（供已有会话引用）但标记不可用、不再出现在选择框，任务启动前给出明确提示。已开始的会话保持其启动时的模型；协作流程的每个阶段固定使用定义流程时记录的模型（之后改默认模型不影响已建流程；该模型下架时阶段启动前给出提示）。
 - **计费**：费用由 TokenFans 账户按用量扣除（不经过本机额度账本）；Token 观察限额与自有 API 相同。
 - **地址覆盖**：`NEUXMIND_TOKENFANS_URL`（测试或自建兼容服务）；须为 HTTPS，仅本机地址允许 HTTP。
 - **给其他模块的入口**：直接调用大模型的桌面端模块（如 #2 硬件扫描）用 `platform.model_compute.default_llm()`，得到 `model`、`base_url`（OpenAI 兼容根 `{origin}/v1`：chat/completions、responses、messages）、`engine_base_url`（Codex 路由）与 `api_key`；未连接或没有默认模型时抛出中文 `ValueError`。Key 只用于当次请求，不得保存、记录或返回给界面。经工程引擎运行的任务不需要它：调用 `Engineering.start_work` / `resolve_model` 时不传 `model_id` 即用默认模型。注意：默认模型取自 Codex 模型目录，在 `/v1` 路由上可用性需用真实 Key 验证。
 - **接口**：`/api/model-compute/key`、`/login`、`/models`（刷新列表）、`/default`、`/disconnect`；状态快照中的 `model_compute` 只含摘要（`key_hint` 为脱敏 Key）。
-- **测试**：`tests/test_model_compute.py`（本机 TokenFans 替身 `tests/tokenfans_fixture.py`，不调用付费服务）；界面验收 `tests/tokenfans_browser_fixture.py`。真实 TokenFans 与 Codex 的兼容性需用户的 Key 单独验收。
+- **测试**：`tests/test_model_compute.py`（本机 TokenFans 替身 `tests/tokenfans_fixture.py`，不调用付费服务）；界面验收 `node tests/tokenfans_browser.cjs CONFIG.json [截图目录]`（夹具 `tests/tokenfans_browser_fixture.py`）：直接冷启动在“云平台账户”页（桌面端“刷新”即如此）时无页面错误且自动刷新照常运行、所有页面作为首个页面打开时无页面错误、未连接状态与“平台模型与算力”指引、格式错误与被拒的 Key、Key 连接、切换默认模型与刷新、账号登录（错误密码、余额）、900 px 布局、断开连接，每一步检查页面中没有完整 Key 和密码；同一文件被其他脚本 `require` 时只提供 `connectTokenFans` / `useTokenFansModel`。真实 TokenFans 与 Codex 的兼容性需用户的 Key 单独验收。
 
 平台资源 kind=reasoning，unit=1k_tokens。服务清单需声明 schema=platform.service.v1、protocol=responses、models 数组和 metered_sessions=true。运营凭据只供后端调用：
 
