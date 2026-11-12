@@ -193,6 +193,23 @@ class JumpHostTests(SshCase):
         self.assert_refused('device', 'no_ssh', 'SSH', lambda: self.engine.scan(
             self.request(jump=False, port=self.plain_listener().port)))
 
+    def test_a_slow_hop_is_reported_as_a_timeout_not_as_a_wrong_address(self):
+        # Found on a real jump host: each round trip took seconds, a phase ran past its
+        # limit and the user was told to check the address.
+        connection = self.connect_through_jump()
+        secret = self.secret(connection)
+        with mock.patch.multiple(device_access, HANDSHAKE_TIMEOUT=1, AUTH_TIMEOUT=1):
+            self.jump.auth_delay = 2
+            self.assert_refused('jump', 'timeout', '超时', lambda: device_access.SSHDevice(connection, secret))
+            self.jump.auth_delay = 0
+            self.target.banner_delay = 2
+            self.assert_refused('device', 'timeout', '超时', lambda: device_access.SSHDevice(connection, secret))
+
+    def test_a_slow_scan_is_reported_as_a_timeout(self):
+        with mock.patch.object(device_access, 'HANDSHAKE_TIMEOUT', 1):
+            self.jump.banner_delay = 2
+            self.assert_refused('jump', 'timeout', '超时', lambda: self.engine.scan(self.request()))
+
     def test_malformed_host_names_are_refused_before_any_lookup(self):
         for host in ('a..b', 'x' * 64 + '.example.com', '.example.com'):
             with self.subTest(host=host):

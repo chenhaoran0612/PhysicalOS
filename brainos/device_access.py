@@ -22,6 +22,10 @@ PROBES={
  'containers':('已有容器',"command -v docker >/dev/null && docker ps -a --format '{{.Names}} | {{.Image}} | {{.Status}}' 2>/dev/null"),
 }
 DEFAULT_ROOTS=['/opt/ros','/etc/ros','/etc/robot','/usr/local/share']
+# Seconds allowed per phase of an SSH connection. Through a public jump host one round trip
+# takes over a second and the agent may offer several keys: measured on a real one, the key
+# exchange took 3-5 s and the login 6 s, which the earlier 8 s limits did not always cover.
+TCP_TIMEOUT=10;HANDSHAKE_TIMEOUT=20;AUTH_TIMEOUT=20;CHANNEL_TIMEOUT=15
 SENSITIVE=re.compile(r'(?:^|/)(?:\.ssh|\.aws|\.config|\.env[^/]*|\.git|credentials?[^/]*|secrets?[^/]*|[^/]*(?:private[._-]?key|id_rsa|id_ed25519)[^/]*)(?:/|$)',re.I)
 
 
@@ -54,15 +58,19 @@ def inspect_host(p,sock=None,hop='device',via_jump=False):
     A failure says which hop it was (``hop``) and whether nothing answered or something other than SSH did."""
     import paramiko
     host,port,user=target(p)
-    transport=None
+    transport=None;started=time.monotonic()
     try:
         if sock is None:
-            try:sock=socket.create_connection((host,port),timeout=8)
+            try:sock=socket.create_connection((host,port),timeout=TCP_TIMEOUT)
+            except TimeoutError:raise ConnectError(hop,'timeout',via_jump) from None
             except OSError:raise ConnectError(hop,'unreachable',via_jump) from None
-        transport=paramiko.Transport(sock)
-        transport.start_client(timeout=8);key=transport.get_remote_server_key()
+        started=time.monotonic();transport=paramiko.Transport(sock);transport.banner_timeout=HANDSHAKE_TIMEOUT
+        transport.start_client(timeout=HANDSHAKE_TIMEOUT);key=transport.get_remote_server_key()
         return {'host':host,'port':port,'username':user,'fingerprint':fingerprint(key),'key_type':key.get_name()}
-    except (OSError,EOFError,paramiko.SSHException):raise ConnectError(hop,'no_ssh',via_jump) from None
+    except (OSError,EOFError,paramiko.SSHException) as exc:
+        # paramiko gives up on a silent host without saying "timeout": the clock tells the two apart.
+        slow=_timed_out(exc) or time.monotonic()-started>=HANDSHAKE_TIMEOUT
+        raise ConnectError(hop,'timeout' if slow else 'no_ssh',via_jump) from None
     finally:
         if transport:transport.close()
 
@@ -81,10 +89,12 @@ def jump_secret(secret):return {k:secret.get('jump_'+k,'') for k in ('password',
 
 
 class ConnectError(ValueError):
-    """An SSH hop did not let us in. ``hop``: 'jump' or 'device'; ``reason``: 'unreachable', 'no_ssh',
-    'auth', 'key', 'fingerprint' or 'forbidden'."""
+    """An SSH hop did not let us in. ``hop``: 'jump' or 'device'; ``reason``: 'unreachable', 'timeout',
+    'no_ssh', 'auth', 'key', 'fingerprint' or 'forbidden'."""
     MESSAGES={('jump','unreachable'):'连不上跳板机；请核对跳板机的地址、端口和网络',
               ('jump','no_ssh'):'跳板机的这个地址和端口没有应答 SSH；请核对跳板机的地址和端口',
+              ('jump','timeout'):'跳板机应答超时：可能是地址或端口不通，也可能只是网络慢；请核对后重试',
+              ('device','timeout'):'设备应答超时：可能是地址或端口不通，也可能只是网络慢；请核对后重试',
               ('device','no_ssh'):'这个地址和端口没有应答 SSH；请核对设备的地址和端口',
               ('jump','auth'):'跳板机拒绝登录：SSH 认证失败；请核对跳板机的用户名和密码或密钥',
               ('jump','fingerprint'):'跳板机的主机指纹与已确认的不一致；请重新读取并核对指纹',
@@ -96,7 +106,8 @@ class ConnectError(ValueError):
               ('device','fingerprint'):'设备的主机指纹与已确认的不一致；设备可能重装过系统，或这个地址现在是另一台机器，请重新读取并核对指纹'}
     # Through a jump host the same failure of the device hop needs different advice.
     VIA_JUMP={('device','unreachable'):'跳板机连不上目标机；请核对目标地址，并确认目标机已开机、和跳板机在同一网络',
-              ('device','no_ssh'):'跳板机能连到目标地址，但那里没有应答 SSH；请核对目标机的地址和端口'}
+              ('device','no_ssh'):'跳板机能连到目标地址，但那里没有应答 SSH；请核对目标机的地址和端口',
+              ('device','timeout'):'目标机经跳板机应答超时：可能是目标地址不通，也可能只是网络慢；请核对后重试'}
     FORWARDING_PROHIBITED=1     # SSH channel-open failure code: "administratively prohibited"
     def __init__(self,hop,reason,via_jump=False):
         self.hop,self.reason=hop,reason
@@ -104,6 +115,11 @@ class ConnectError(ValueError):
 
 
 class _KeyMismatch(Exception):pass
+
+
+def _timed_out(exc):
+    text=str(exc).lower()
+    return isinstance(exc,TimeoutError) or 'timeout' in text or 'timed out' in text
 
 
 def private_key(secret):
@@ -122,18 +138,23 @@ def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False):
         def missing_host_key(self,client,hostname,key):
             if fingerprint(key)!=pinned:raise _KeyMismatch()
     client=paramiko.SSHClient();client.set_missing_host_key_policy(PinnedKey())
-    kwargs=dict(hostname=host,port=port,username=user,timeout=8,banner_timeout=8,auth_timeout=8,
-                allow_agent=auth=='agent',look_for_keys=False,sock=sock)
+    kwargs=dict(hostname=host,port=port,username=user,timeout=TCP_TIMEOUT if sock is None else HANDSHAKE_TIMEOUT,
+                banner_timeout=HANDSHAKE_TIMEOUT,auth_timeout=AUTH_TIMEOUT,allow_agent=auth=='agent',look_for_keys=False,sock=sock)
     if auth=='password':kwargs['password']=secret.get('password','')
     elif auth=='key':
         try:kwargs['pkey']=private_key(secret)
         except ValueError:raise ConnectError(hop,'key') from None
+    started=time.monotonic()
     try:client.connect(**kwargs);return client
     except _KeyMismatch:reason='fingerprint'
     except (OSError,EOFError,paramiko.SSHException) as exc:
-        # "Authentication timeout" is a host that stopped answering, not a wrong password.
-        text=str(exc).lower();failed=isinstance(exc,paramiko.AuthenticationException) or 'authentication' in text
-        reason='auth' if failed and 'timeout' not in text else 'unreachable'
+        # A host that answers too slowly is neither a wrong password nor a wrong address. paramiko does not
+        # always say "timeout" when it gives up waiting (which of its timers fires first varies), so
+        # anything short of an explicit refusal that took the whole handshake limit counts as one.
+        refused=(isinstance(exc,paramiko.AuthenticationException) or 'authentication' in str(exc).lower()) and not _timed_out(exc)
+        if refused:reason='auth'
+        elif _timed_out(exc) or time.monotonic()-started>=HANDSHAKE_TIMEOUT:reason='timeout'
+        else:reason='unreachable'
     client.close();raise ConnectError(hop,reason,via_jump) from None
 
 
@@ -141,11 +162,12 @@ def open_tunnel(jump,endpoint):
     """A channel from the jump host to the device: what ``ssh -J`` does. Closes the jump client on failure."""
     import paramiko
     host,port,_=target(endpoint)
-    try:return jump.get_transport().open_channel('direct-tcpip',(host,port),('127.0.0.1',0),timeout=8)
+    try:return jump.get_transport().open_channel('direct-tcpip',(host,port),('127.0.0.1',0),timeout=CHANNEL_TIMEOUT)
     except (OSError,EOFError,AttributeError,paramiko.SSHException) as exc:
         jump.close()
         prohibited=isinstance(exc,paramiko.ChannelException) and exc.code==ConnectError.FORWARDING_PROHIBITED
-        raise ConnectError('device','forbidden' if prohibited else 'unreachable',True) from None
+        reason='forbidden' if prohibited else 'timeout' if _timed_out(exc) else 'unreachable'
+        raise ConnectError('device',reason,True) from None
 
 
 def credentials(p,prefix='',label=''):
@@ -215,7 +237,7 @@ class SSHDevice:
     def execute(self,command,timeout=20,redact=True):
         """Only product probes or an individually approved command may call this."""
         clean=self.clean if redact else str
-        channel=self.client.get_transport().open_session(timeout=8)
+        channel=self.client.get_transport().open_session(timeout=CHANNEL_TIMEOUT)
         try:
             channel.settimeout(2);channel.exec_command(command);deadline=min(time.monotonic()+timeout,getattr(self,'deadline',float('inf')))
             output=bytearray();error=bytearray();limited=False
