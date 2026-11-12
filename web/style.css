@@ -251,3 +251,7 @@ dialog.wide{width:min(920px,calc(100% - 32px))}
 .stop-not-obeyed .button{background:#fff;color:var(--red);border-color:#fff;margin-top:8px}
 .stop-not-obeyed .button.secondary{background:transparent;color:#fff;border-color:#ffffffa0}
 @media(max-width:600px){.safety-banner{padding:10px 16px}}
+#ssh-status>*+*{margin-top:14px}
+#ssh-status h3{font-size:14px;margin-bottom:-4px}
+#ssh-status .contract-line{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#ssh-status .contract-line+.contract-line{margin-top:8px}

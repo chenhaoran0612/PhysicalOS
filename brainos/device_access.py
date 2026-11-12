@@ -38,6 +38,9 @@ def target(p):
     host=p.get('host','').strip();user=p.get('username','').strip();port=p.get('port',22)
     if not host or len(host)>253 or not re.fullmatch(r'[A-Za-z0-9._:%-]+',host) or host.startswith('-'):
         raise ValueError('请输入主机名或 IP 地址，不包含命令或 URL')
+    # DNS labels are 1-63 characters; anything else fails deep inside name resolution with a codec error.
+    if ':' not in host and any(not 1<=len(label)<=63 for label in host.removesuffix('.').split('.')):
+        raise ValueError('主机名无效：每一段要有 1–63 个字符，例如 robot.example.com')
     if not re.fullmatch(r'[A-Za-z0-9_.@-]{1,80}',user) or user.startswith('-'):raise ValueError('SSH 用户名无效')
     if isinstance(port,bool) or not isinstance(port,int) or not 1<=port<=65535:raise ValueError('SSH 端口无效')
     return host,port,user
@@ -46,17 +49,121 @@ def target(p):
 def fingerprint(key):return 'SHA256:'+base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip('=')
 
 
-def inspect_host(p):
+def inspect_host(p,sock=None,hop='device',via_jump=False):
+    """Read a host key. ``sock`` is a channel through a jump host; without it the host is dialled directly.
+    A failure says which hop it was (``hop``) and whether nothing answered or something other than SSH did."""
     import paramiko
     host,port,user=target(p)
     transport=None
     try:
-        transport=paramiko.Transport(socket.create_connection((host,port),timeout=8))
+        if sock is None:
+            try:sock=socket.create_connection((host,port),timeout=8)
+            except OSError:raise ConnectError(hop,'unreachable',via_jump) from None
+        transport=paramiko.Transport(sock)
         transport.start_client(timeout=8);key=transport.get_remote_server_key()
         return {'host':host,'port':port,'username':user,'fingerprint':fingerprint(key),'key_type':key.get_name()}
-    except (OSError,paramiko.SSHException):raise ValueError('无法读取 SSH 主机密钥，请检查地址和端口') from None
+    except (OSError,EOFError,paramiko.SSHException):raise ConnectError(hop,'no_ssh',via_jump) from None
     finally:
         if transport:transport.close()
+
+
+def jump_target(p):
+    """The optional jump host of a connection request: one hop, like ``ssh -J``. None means direct."""
+    jump=p.get('jump')
+    if not jump:return None
+    if not isinstance(jump,dict):raise ValueError('跳板机配置无效')
+    try:host,port,user=target(jump)
+    except ValueError as exc:raise ValueError('跳板机：'+str(exc)) from None
+    return {'host':host,'port':port,'username':user}
+
+
+def jump_secret(secret):return {k:secret.get('jump_'+k,'') for k in ('password','private_key','passphrase')}
+
+
+class ConnectError(ValueError):
+    """An SSH hop did not let us in. ``hop``: 'jump' or 'device'; ``reason``: 'unreachable', 'no_ssh',
+    'auth', 'key', 'fingerprint' or 'forbidden'."""
+    MESSAGES={('jump','unreachable'):'连不上跳板机；请核对跳板机的地址、端口和网络',
+              ('jump','no_ssh'):'跳板机的这个地址和端口没有应答 SSH；请核对跳板机的地址和端口',
+              ('device','no_ssh'):'这个地址和端口没有应答 SSH；请核对设备的地址和端口',
+              ('jump','auth'):'跳板机拒绝登录：SSH 认证失败；请核对跳板机的用户名和密码或密钥',
+              ('jump','fingerprint'):'跳板机的主机指纹与已确认的不一致；请重新读取并核对指纹',
+              ('jump','key'):'跳板机：无法解析 SSH 私钥或解密口令不正确',
+              ('device','unreachable'):'SSH 连接超时或设备不可达；请核对地址、端口和网络',
+              ('device','key'):'无法解析 SSH 私钥或解密口令不正确',
+              ('device','forbidden'):'跳板机不允许转发连接（它的 SSH 服务关闭了 TCP 转发）；请让管理员允许转发，或换一台跳板机',
+              ('device','auth'):'设备拒绝登录：SSH 认证失败；请核对用户名和密码或密钥',
+              ('device','fingerprint'):'设备的主机指纹与已确认的不一致；设备可能重装过系统，或这个地址现在是另一台机器，请重新读取并核对指纹'}
+    # Through a jump host the same failure of the device hop needs different advice.
+    VIA_JUMP={('device','unreachable'):'跳板机连不上目标机；请核对目标地址，并确认目标机已开机、和跳板机在同一网络',
+              ('device','no_ssh'):'跳板机能连到目标地址，但那里没有应答 SSH；请核对目标机的地址和端口'}
+    FORWARDING_PROHIBITED=1     # SSH channel-open failure code: "administratively prohibited"
+    def __init__(self,hop,reason,via_jump=False):
+        self.hop,self.reason=hop,reason
+        super().__init__((self.VIA_JUMP if via_jump else {}).get((hop,reason)) or self.MESSAGES[(hop,reason)])
+
+
+class _KeyMismatch(Exception):pass
+
+
+def private_key(secret):
+    import paramiko
+    for cls in (paramiko.Ed25519Key,paramiko.ECDSAKey,paramiko.RSAKey):
+        try:return cls.from_private_key(io.StringIO(secret.get('private_key','')),password=secret.get('passphrase') or None)
+        except (ValueError,paramiko.SSHException):continue
+    raise ValueError('无法解析 SSH 私钥或解密口令不正确')
+
+
+def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False):
+    """Authenticated client for one hop. The host key must equal the fingerprint the user confirmed."""
+    import paramiko
+    host,port,user=target(endpoint)
+    class PinnedKey(paramiko.MissingHostKeyPolicy):
+        def missing_host_key(self,client,hostname,key):
+            if fingerprint(key)!=pinned:raise _KeyMismatch()
+    client=paramiko.SSHClient();client.set_missing_host_key_policy(PinnedKey())
+    kwargs=dict(hostname=host,port=port,username=user,timeout=8,banner_timeout=8,auth_timeout=8,
+                allow_agent=auth=='agent',look_for_keys=False,sock=sock)
+    if auth=='password':kwargs['password']=secret.get('password','')
+    elif auth=='key':
+        try:kwargs['pkey']=private_key(secret)
+        except ValueError:raise ConnectError(hop,'key') from None
+    try:client.connect(**kwargs);return client
+    except _KeyMismatch:reason='fingerprint'
+    except (OSError,EOFError,paramiko.SSHException) as exc:
+        # "Authentication timeout" is a host that stopped answering, not a wrong password.
+        text=str(exc).lower();failed=isinstance(exc,paramiko.AuthenticationException) or 'authentication' in text
+        reason='auth' if failed and 'timeout' not in text else 'unreachable'
+    client.close();raise ConnectError(hop,reason,via_jump) from None
+
+
+def open_tunnel(jump,endpoint):
+    """A channel from the jump host to the device: what ``ssh -J`` does. Closes the jump client on failure."""
+    import paramiko
+    host,port,_=target(endpoint)
+    try:return jump.get_transport().open_channel('direct-tcpip',(host,port),('127.0.0.1',0),timeout=8)
+    except (OSError,EOFError,AttributeError,paramiko.SSHException) as exc:
+        jump.close()
+        prohibited=isinstance(exc,paramiko.ChannelException) and exc.code==ConnectError.FORWARDING_PROHIBITED
+        raise ConnectError('device','forbidden' if prohibited else 'unreachable',True) from None
+
+
+def credentials(p,prefix='',label=''):
+    """The SSH login of a request: (auth, secret). ``prefix`` selects the jump host's fields."""
+    auth=p.get(prefix+'auth')
+    if auth not in ('password','key','agent'):raise ValueError(label+'SSH 认证方式无效')
+    secret={k:p.get(prefix+k,'') for k in ('password','private_key','passphrase')}
+    if any(not isinstance(v,str) or len(v)>30000 for v in secret.values()):raise ValueError(label+'SSH 凭据格式无效')
+    if auth=='password' and not secret['password']:raise ValueError('请输入'+label+'SSH 密码')
+    if auth=='key' and not secret['private_key']:raise ValueError('请输入'+label+'SSH 私钥')
+    return auth,secret
+
+
+def inspect_through_jump(p,jump,secret):
+    """Read the device's host key through a jump host whose own fingerprint is already confirmed."""
+    client=open_client(jump,jump['auth'],secret,jump['fingerprint'],'jump')
+    try:return inspect_host(p,open_tunnel(client,p),'device',True)
+    finally:client.close()
 
 
 def validate_roots(roots):
@@ -85,28 +192,17 @@ def command_request(args):
 
 class SSHDevice:
     def __init__(self,connection,secret):
-        import paramiko
-        host,port,user=target(connection)
-        pinned=connection['fingerprint']
-        class PinnedKey(paramiko.MissingHostKeyPolicy):
-            def missing_host_key(self,client,hostname,key):
-                if fingerprint(key)!=pinned:raise paramiko.SSHException('设备密钥与已确认指纹不一致')
-        self.client=paramiko.SSHClient();self.client.set_missing_host_key_policy(PinnedKey())
         self.roots=list(connection['read_roots']);self.stop_event=None
         self.secrets=[v for v in secret.values() if isinstance(v,str) and v]
-        kwargs=dict(hostname=host,port=port,username=user,timeout=8,banner_timeout=8,auth_timeout=8,
-                    allow_agent=connection['auth']=='agent',look_for_keys=False)
-        if connection['auth']=='password':kwargs['password']=secret.get('password','')
-        elif connection['auth']=='key':
-            key=None
-            for cls in (paramiko.Ed25519Key,paramiko.ECDSAKey,paramiko.RSAKey):
-                try:key=cls.from_private_key(io.StringIO(secret.get('private_key','')),password=secret.get('passphrase') or None);break
-                except (ValueError,paramiko.SSHException):continue
-            if not key:raise ValueError('无法解析 SSH 私钥或解密口令不正确')
-            kwargs['pkey']=key
-        try:self.client.connect(**kwargs)
-        except (OSError,paramiko.SSHException):
-            self.client.close();raise ValueError('SSH 认证失败、连接超时或主机指纹改变；请核对连接') from None
+        jump=connection.get('jump');self.jump=None;sock=None
+        if jump:
+            # Both hops are pinned to the fingerprints the user confirmed; the device session runs inside the tunnel.
+            self.jump=open_client(jump,jump['auth'],jump_secret(secret),jump['fingerprint'],'jump')
+            sock=open_tunnel(self.jump,connection)
+        try:self.client=open_client(connection,connection['auth'],secret,connection['fingerprint'],'device',sock,bool(jump))
+        except Exception:
+            if self.jump:self.jump.close()
+            raise
 
     def probe(self,name):
         if name not in PROBES:raise ValueError('不允许的调查项')
@@ -116,8 +212,9 @@ class SSHDevice:
         for value in self.secrets:text=text.replace(value,'[已隐藏连接凭据]')
         return redact(text)
 
-    def execute(self,command,timeout=20):
+    def execute(self,command,timeout=20,redact=True):
         """Only product probes or an individually approved command may call this."""
+        clean=self.clean if redact else str
         channel=self.client.get_transport().open_session(timeout=8)
         try:
             channel.settimeout(2);channel.exec_command(command);deadline=min(time.monotonic()+timeout,getattr(self,'deadline',float('inf')))
@@ -134,8 +231,8 @@ class SSHDevice:
                 time.sleep(.02)
             timed_out=not channel.exit_status_ready()
             code=channel.recv_exit_status() if not timed_out else None
-            return {'stdout':self.clean(output.decode('utf-8','replace')),
-                    'stderr':self.clean(error.decode('utf-8','replace')),'exit_code':code,'truncated':limited,'timed_out':timed_out,
+            return {'stdout':clean(output.decode('utf-8','replace')),
+                    'stderr':clean(error.decode('utf-8','replace')),'exit_code':code,'truncated':limited,'timed_out':timed_out,
                     'cancelled':bool(self.stop_event and self.stop_event.is_set())}
         finally:channel.close()
 
@@ -177,4 +274,6 @@ class SSHDevice:
         if root not in self.roots:self.roots.append(root)
         return root
 
-    def close(self):self.client.close()
+    def close(self):
+        self.client.close()
+        if self.jump:self.jump.close()

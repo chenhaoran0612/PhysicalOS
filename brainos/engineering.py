@@ -8,7 +8,7 @@ import threading
 import time
 from urllib.parse import urlparse
 
-from . import agent_runtime, connector, device_access
+from . import agent_runtime, connector, device_access, device_status
 from .contracts import required_text
 from .service import now, uid
 
@@ -114,6 +114,7 @@ class Engineering:
         from .extensions import Extensions
         self.extensions=Extensions(platform)
         self.platform=platform;self.store=platform.store;self.lock=threading.RLock();self.live={};self.closing=False
+        self.status_sessions=device_status.StatusSessions()
         for s in self.store.list('agent_sessions'):
             if s['status'] in ACTIVE:
                 s.update(status='interrupted',error='应用退出中断了调查；可继续会话，原始证据已保留。',pending_question=None,pending_approval=None,pending_requests=[])
@@ -223,23 +224,41 @@ class Engineering:
         return result
 
     def scan(self,p):
+        """Read a host key for the user to confirm. Through a jump host this takes two calls:
+        the jump host's key first (no credentials sent anywhere), then, once that fingerprint is
+        confirmed and the jump login supplied, the device's key through the jump host."""
         self.platform.project(p.get('project_id'))
-        scan=device_access.inspect_host(p)
+        jump=device_access.jump_target(p)
+        if jump and not p.get('jump_check_id'):
+            device_access.target(p)
+            scan={**device_access.inspect_host(jump,hop='jump'),'stage':'jump'}
+        elif jump:
+            first=self._host_check(p.get('jump_check_id'),p.get('project_id'))
+            if first.get('stage')!='jump' or any(first[k]!=jump[k] for k in jump):raise ValueError('跳板机信息已改变，请重新读取指纹')
+            if p.get('trust_jump_fingerprint')!=first['fingerprint']:raise ValueError('请核对并确认跳板机主机指纹')
+            auth,secret=device_access.credentials(p,'jump_','跳板机 ')
+            jump.update(auth=auth,fingerprint=first['fingerprint'])
+            scan={**device_access.inspect_through_jump(p,jump,secret),'jump':jump}
+        else:scan=device_access.inspect_host(p)
         scan.update(id=uid('ssh-key'),project_id=p['project_id'],scanned_at=time.time())
         self.store.put('host_key_checks',scan);return scan
 
-    def connect(self,p):
-        scan=self.platform.same_project('host_key_checks',p.get('host_check_id'),p.get('project_id'))
+    def _host_check(self,check_id,project_id):
+        scan=self.platform.same_project('host_key_checks',check_id,project_id)
         if time.time()-scan['scanned_at']>600:raise ValueError('主机检查已过期，请重新读取指纹')
+        return scan
+
+    def connect(self,p):
+        scan=self._host_check(p.get('host_check_id'),p.get('project_id'))
+        if scan.get('stage')=='jump':raise ValueError('这一步只确认了跳板机；请继续读取并确认目标机的指纹')
         if p.get('trust_fingerprint')!=scan['fingerprint']:raise ValueError('请核对并确认设备主机指纹')
-        auth=p.get('auth')
-        if auth not in ('password','key','agent'):raise ValueError('SSH 认证方式无效')
-        secret={k:p.get(k,'') for k in ('password','private_key','passphrase')}
-        if any(not isinstance(v,str) or len(v)>30000 for v in secret.values()):raise ValueError('SSH 凭据格式无效')
-        if auth=='password' and not secret['password']:raise ValueError('请输入 SSH 密码')
-        if auth=='key' and not secret['private_key']:raise ValueError('请输入 SSH 私钥')
+        auth,secret=device_access.credentials(p)
         connection={k:scan[k] for k in ('host','port','username','fingerprint','project_id')}
-        connection.update(id=uid('connection'),kind='ssh',auth=auth,read_roots=device_access.validate_roots(p.get('read_roots',device_access.DEFAULT_ROOTS)),created_at=now())
+        connection.update(id=uid('connection'),kind='ssh',auth=auth,read_roots=device_access.validate_roots(p.get('read_roots',device_access.DEFAULT_ROOTS)),
+                          watch_services=device_status.validate_services(p.get('watch_services',[])),created_at=now())
+        if scan.get('jump'):
+            _,jump_secret=device_access.credentials({**p,'jump_auth':scan['jump']['auth']},'jump_','跳板机 ')
+            connection['jump']=scan['jump'];secret.update({'jump_'+k:v for k,v in jump_secret.items()})
         # Test authentication before creating a robot asset. No commands here.
         device=device_access.SSHDevice(connection,secret);device.close()
         if p.get('robot_id'):
@@ -248,8 +267,28 @@ class Engineering:
             robot=self.platform.add_robot({'project_id':p['project_id'],'name':p.get('name'),'family':p.get('family','custom')})
             robot=self.store.get('robots',robot['id'])
         connection['robot_id']=robot['id'];self.store.put('agent_secrets',{'id':connection['id'],**secret});self.store.put('device_connections',connection)
+        replaced=robot.get('connection_id')
         robot.update(connection_id=connection['id'],onboarding_status='connected_for_discovery');self.store.put('robots',robot)
+        if replaced:self.status_sessions.forget(replaced)
         self.platform.audit('device.ssh_connected',{'robot_id':robot['id'],'connection_id':connection['id']},p['project_id'])
+        return connection
+
+    def _ssh_connection(self,p):
+        robot=self.platform.same_project('robots',p.get('robot_id'),p.get('project_id'))
+        if not robot.get('connection_id'):raise ValueError('这台机器人没有 SSH 连接；请先通过 SSH 接入')
+        return robot,self.platform.same_project('device_connections',robot['connection_id'],robot['project_id'])
+
+    def status(self,p):
+        """Live status of a real machine over its SSH connection: one fixed read-only command (device_status)."""
+        robot,connection=self._ssh_connection(p)
+        view=self.status_sessions.read(connection,self.store.get('agent_secrets',connection['id']))
+        return {'robot_id':robot['id'],'name':robot['name'],**view}
+
+    def watch_services(self,p):
+        services=device_status.validate_services(p.get('services'))
+        with self.store.atomic():
+            _,connection=self._ssh_connection(p)
+            connection['watch_services']=services;self.store.put('device_connections',connection)
         return connection
 
     def evidence(self,p):
@@ -751,6 +790,7 @@ class Engineering:
                 if self.live.get(sid) is handle:self.live.pop(sid,None)
 
     def close(self):
+        self.status_sessions.close()
         with self.lock:self.closing=True;handles=list(self.live.values())
         for handle in handles:
             handle['stop'].set()
