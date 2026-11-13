@@ -18,7 +18,10 @@ const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  
  await click('go-cloud');await connectTokenFans(page,cfg,{navigate:false});
  await page.locator('#dialog').getByText('让 Agent 调查本体',{exact:true}).waitFor();
  if(!(await page.locator('[name=robot_id] option:checked').innerText()).includes('厂商协议'))throw Error('Lost robot after model configuration');
- await page.locator('[name=data_authorized]').check();await fill('max_tokens',10000);await submit();
+ // Issue #5: the investigation form asks for no Token limit or run time and shows no limit hint.
+ if(await page.locator('#dialog [name=max_tokens], #dialog [name=max_minutes]').count())throw Error('Investigation form still asks for limits');
+ for(const t of ['Token 观察限额','最长运行时间','硬限额'])if(await page.locator('#dialog').getByText(t).count())throw Error('Investigation form still shows: '+t);
+ await page.locator('[name=data_authorized]').check();await submit();
  await page.locator('[data-action=engine-approval]').waitFor({timeout:25000});await click('engine-approval');
  await page.locator('#dialog').getByText('在机器人上执行 SSH 命令',{exact:true}).waitFor();
  if(!(await page.locator('#dialog pre').innerText()).includes('systemctl show robot-stack'))throw Error('Missing exact command');

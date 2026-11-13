@@ -63,6 +63,34 @@ def integer(value,label,minimum,maximum):
     return value
 
 
+# Issue #5: an investigation has no Token or time limit unless an API caller sets
+# one; the user stops it. Gateways that reserve credits per session (cloud,
+# platform) cannot open one without a budget, so they keep the old defaults.
+RESERVED_BUDGET_BILLING=('cloud','platform')
+GATEWAY_DEFAULT_TOKENS=200000
+GATEWAY_DEFAULT_MINUTES=15
+
+
+def discovery_limits(p,billing):
+    """(max_tokens, max_minutes) of a new investigation; None means no limit."""
+    tokens,minutes=p.get('max_tokens'),p.get('max_minutes')
+    if billing in RESERVED_BUDGET_BILLING:
+        tokens=GATEWAY_DEFAULT_TOKENS if tokens is None else tokens
+        minutes=GATEWAY_DEFAULT_MINUTES if minutes is None else minutes
+    return (None if tokens is None else integer(tokens,'Token 观察限额',1000,1000000),
+            None if minutes is None else integer(minutes,'运行时间上限',1,120))
+
+
+def run_deadline(start,minutes):
+    """Monotonic time at which a run is stopped: never, without a time limit."""
+    return float('inf') if minutes is None else start+minutes*60
+
+
+def over_token_limit(usage,max_tokens):
+    """True once reported usage reaches the run's Token limit: never, without one."""
+    return max_tokens is not None and usage.get('totalTokens',0)>=max_tokens
+
+
 def model_url(value):
     value=connector.endpoint_url(value);p=urlparse(value)
     if p.scheme!='https' and p.hostname not in ('localhost','127.0.0.1','::1'):
@@ -328,8 +356,7 @@ class Engineering:
             if not agent_runtime.available()['available']:raise ValueError('工程引擎未包含在当前安装版本中')
             if any(s['robot_id']==robot['id'] and s['status'] in ACTIVE for s in self.store.list('agent_sessions')):
                 raise ValueError('该本体已有调查正在执行，请等待或停止后继续')
-            tokens=integer(p.get('max_tokens',200000),'Token 观察限额',1000,1000000)
-            minutes=integer(p.get('max_minutes',15),'运行时间上限',1,120)
+            tokens,minutes=discovery_limits(p,model['billing'])
             self._cloud_ready(model,tokens)
             objective=required_text(p.get('objective','调查本体全部可见硬件、软件、中间件与配置，保存本体档案并给出适配建议。'),'调查目标',5000)
             s={'id':uid('agent-session'),'project_id':project_id,'robot_id':robot['id'],'connection_id':connection['id'],'mode':'discovery',
@@ -627,7 +654,7 @@ class Engineering:
     def _run(self,sid,message,resume,handle):
         process=device=None;meter=None;final='failed';failure=None;root=None;cloud_box={}
         try:
-            s=self.store.get('agent_sessions',sid);deadline=time.monotonic()+s['max_minutes']*60
+            s=self.store.get('agent_sessions',sid);deadline=run_deadline(time.monotonic(),s['max_minutes'])
             connection=self.store.get('device_connections',s['connection_id']) if s.get('connection_id') else None
             if connection:
                 connection={**connection,'read_roots':list(dict.fromkeys(connection['read_roots']+s.get('approved_read_roots',[])))}
@@ -739,7 +766,7 @@ class Engineering:
                     thread_usage[usage_key]={k:max(0,v-baseline.get(k,0)) for k,v in total.items() if isinstance(v,int)}
                     usage={k:sum(u.get(k,0) for u in thread_usage.values()) for k in total if isinstance(total[k],int)}
                     self.update(sid,usage=usage)
-                    if usage.get('totalTokens',0)>=s['max_tokens']:handle['stop'].set();self.event(sid,'budget','已达到 Token 观察限额，正在停止；'+({'cloud':'费用以云平台计量为准','tokenfans':'费用以 TokenFans 账单为准'}.get(s.get('billing'),'自有模型以供应商账单为准')))
+                    if over_token_limit(usage,s['max_tokens']):handle['stop'].set();self.event(sid,'budget','已达到 Token 观察限额，正在停止；'+({'cloud':'费用以云平台计量为准','tokenfans':'费用以 TokenFans 账单为准'}.get(s.get('billing'),'自有模型以供应商账单为准')))
                 elif method=='item/agentMessage/delta':
                     with self.lock:
                         current=self.store.get('agent_sessions',sid)
