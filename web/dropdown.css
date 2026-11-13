@@ -1,0 +1,59 @@
+/* Issue #7: the console's own dropdown (web/dropdown.js). The native <select> stays in the
+   form but is visually hidden; .nx-select is the trigger, .nx-select-list the open list. */
+:root{
+  --nx-field-border:#dbe4d1;
+  --nx-field-border-hover:#bccbb8;
+  --nx-field-text:#405c32;
+  --nx-field-placeholder:#98a38c;
+  --nx-option-hover:#f1f6ec;
+  --nx-option-selected:#e8f1e1;
+  --nx-ring:#28674f1f;
+  --nx-ease:cubic-bezier(.16,1,.3,1);
+  --nx-fast:.15s;
+}
+
+.nx-native{position:absolute!important;width:1px!important;height:1px!important;min-height:0!important;min-width:0!important;margin:-1px!important;padding:0!important;border:0!important;overflow:hidden!important;clip-path:inset(50%)!important;white-space:nowrap!important;opacity:0!important;pointer-events:none!important}
+
+/* Base look matches .field select; :where() keeps it overridable by contextual classes. */
+:where(.nx-select){display:flex;align-items:center;gap:10px;width:100%;min-height:39px;padding:0 11px 0 12px;border:1px solid var(--nx-field-border);border-radius:5px;background:#fff;color:var(--nx-field-text);font-size:12px;line-height:1.4;text-align:left;font-weight:400}
+.nx-select{cursor:pointer;transition:border-color var(--nx-fast) ease,box-shadow var(--nx-fast) ease,background-color var(--nx-fast) ease}
+.nx-select[hidden]{display:none}
+.nx-select-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nx-select.is-placeholder .nx-select-value{color:var(--nx-field-placeholder)}
+.nx-select-chevron{flex:0 0 14px;width:14px;height:14px;fill:none;stroke:#7f9478;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s var(--nx-ease),stroke var(--nx-fast) ease}
+.nx-select:hover:not(:disabled){border-color:var(--nx-field-border-hover);background:#fcfdfb}
+.nx-select:hover:not(:disabled) .nx-select-chevron{stroke:#55704c}
+.nx-select:focus-visible{outline:none;border-color:var(--green);box-shadow:0 0 0 3px var(--nx-ring)}
+.nx-select.is-open{border-color:var(--green);box-shadow:0 0 0 3px var(--nx-ring);background:#fff}
+.nx-select.is-open .nx-select-chevron{transform:rotate(180deg);stroke:var(--green)}
+.nx-select:disabled{opacity:1;cursor:not-allowed;background:#f4f6f2;color:#9aa69a;border-color:#e3e9e0}
+.nx-select:disabled .nx-select-chevron{stroke:#b9c3b6}
+.nx-select.is-invalid{border-color:var(--red);box-shadow:0 0 0 3px #b44a421a}
+.nx-select-error{display:block;margin-top:-2px;color:var(--red);font-size:11px;line-height:1.6}
+
+/* Contexts that sized the native select. */
+.param-input>.nx-select{flex:1;min-width:0}
+.param-field.invalid .nx-select{border-color:var(--red);box-shadow:0 0 0 2px #f6dcd8}
+.cloud-robot.nx-select{width:auto;min-width:180px}
+
+.nx-select-list{position:fixed;z-index:10000;top:0;left:0;box-sizing:border-box;min-width:160px;max-height:300px;overflow-y:auto;overscroll-behavior:contain;padding:5px;background:#fff;border:1px solid #d9e3d4;border-radius:9px;box-shadow:0 16px 40px #18311b21,0 2px 6px #18311b12;color:var(--ink);font-size:12px;line-height:1.5;opacity:0;scrollbar-width:thin;scrollbar-color:#c7d3c2 transparent}
+.nx-select-list.is-shown{opacity:1;animation:nx-select-in .16s var(--nx-ease)}
+.nx-select-list.is-up.is-shown{animation-name:nx-select-in-up}
+@keyframes nx-select-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@keyframes nx-select-in-up{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.nx-option{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:#3d5233;cursor:pointer;transition:background-color .12s ease,color .12s ease}
+.nx-option+.nx-option{margin-top:1px}
+.nx-option-label{flex:1;min-width:0;overflow-wrap:anywhere}
+.nx-option-check{flex:0 0 14px;width:14px;height:14px;fill:none;stroke:var(--green);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:0;transform:scale(.8);transition:opacity .12s ease,transform .12s ease}
+.nx-option.is-active{background:var(--nx-option-hover)}
+.nx-option[aria-selected="true"]{background:var(--nx-option-selected);color:var(--green);font-weight:550}
+.nx-option[aria-selected="true"].is-active{background:#e1ecd8}
+.nx-option[aria-selected="true"] .nx-option-check{opacity:1;transform:none}
+.nx-option.is-placeholder{color:var(--nx-field-placeholder)}
+.nx-option[aria-disabled="true"]{color:#b6c0b3;cursor:not-allowed;background:none}
+/* Multiple choice: a checkbox square instead of a bare tick. */
+.nx-select-list[aria-multiselectable="true"] .nx-option-check{order:-1;opacity:1;transform:none;padding:1px;border:1px solid #c4d1bf;border-radius:4px;stroke:transparent;transition:background-color .12s ease,border-color .12s ease}
+.nx-select-list[aria-multiselectable="true"] .nx-option[aria-selected="true"] .nx-option-check{background:var(--green);border-color:var(--green);stroke:#fff}
+.nx-group{padding:9px 10px 4px;font-size:10px;letter-spacing:.06em;color:#8a9a80}
+.nx-group:first-child{padding-top:4px}
+.nx-select-empty{padding:10px;color:var(--nx-field-placeholder)}

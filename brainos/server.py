@@ -116,6 +116,8 @@ def make_handler(application):
                 return
             # Issue #2: its own static files, kept apart from the shared table below.
             extra={'/hardware.js':('hardware.js','text/javascript; charset=utf-8'),'/hardware.css':('hardware.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #7: shared look (dropdowns, hover states, readable data views), also kept apart.
+            extra=extra or {'/dropdown.js':('dropdown.js','text/javascript; charset=utf-8'),'/dropdown.css':('dropdown.css','text/css; charset=utf-8'),'/hover.css':('hover.css','text/css; charset=utf-8'),'/readable.css':('readable.css','text/css; charset=utf-8'),'/readable.js':('readable.js','text/javascript; charset=utf-8'),'/readable_dom.js':('readable_dom.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
