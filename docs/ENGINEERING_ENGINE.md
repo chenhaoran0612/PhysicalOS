@@ -230,3 +230,40 @@ Mac 包增加同一已固定上游归档中的 ripgrep 15.2.0（e89fff89ac），
 测试：`tests/test_ssh_jump.py`（两端都是本机 SSH 协议替身；密码、私钥和真实 `ssh-agent` 三种登录；慢链路超时）；`tests/test_ssh_jump_alias.py`（跳板机上的名称解析）；命令解析 `node tests/ssh_command_logic.cjs`；浏览器验收 `tests/ssh_jump_browser_fixture.py` + `tests/ssh_jump_browser.cjs`。
 
 真机验证（2026-11-12）：经一台公网跳板机连接一台四足机器人的机载电脑，两跳都用本机 SSH Agent 登录，两跳指纹都与本机 `known_hosts` 的记录一致；只执行了上面那条只读状态命令。首次读取（新建两跳会话）约 13 秒，之后复用会话每次约 1 秒，读到的主机名、负载、内存、磁盘、温度、失败的服务和关注的服务状态与人工排查一致。嵌套写法（目标机名称由跳板机的 SSH 配置解析）也按同样的方式验证过：解析出的地址和用户名正确，指纹一致，状态读取正常。页面上的操作流程（粘贴命令、两步确认指纹）没有在真机上走过，只在协议替身上验收过。
+
+## 工程助手调研：三种状态、重新调研与对话修复（issue #6）
+
+**问题。** 以前“让 Agent 调查本体”的入口总是打开开始表单；调查正在进行时，用户填完整张表单，提交才看到“该本体已有调查正在执行”。现在每台 SSH 机器人有一个调研状态，入口按状态打开对应的界面，调研进行中不会再给出第二张表单。
+
+**三种状态**（`brainos/investigation.py` 的 `robot_state`，状态快照 `investigations`，每台有 SSH 连接的机器人一条）：
+
+| 状态 | 判断 | 入口打开 |
+| --- | --- | --- |
+| 未调研 `not_started` | 没有调研会话 | 开始表单（原表单，顶部多了三步指示和阶段说明） |
+| 调研中 `running` | 有进行中的调研会话 | 这次调研的会话页，顶部是进展：连接本体 / 硬件扫描 → 基础体检 x / 9 → 深入调查 → 生成档案，以及“等你批准 / 等你回答” |
+| 调研完成 `finished` | 已有档案 | 调研报告（本体档案），顶部多了“重新调研”，中部多了“问题与修复” |
+| 调研未完成 `unfinished` | 没有档案，最近一次调研出错、停止或没保存档案 | 那次调研的会话页，标出停在哪一步，可以“继续会话”或“重新调研” |
+
+已有档案、但最近一次重新调研没有成功时，状态仍是“调研完成”，报告顶部说明那次调研出错或被停止（`last_run`）。机器人上有修复对话在进行时，`busy_session_id` 指向它，“重新调研”暂不可用（后端本来就拒绝同一台机器人上同时运行两个会话）。所有走到开始表单的入口都改为按状态打开：机器人卡片（按钮按状态显示“开始调研 / 调研进展 / 调研报告 / 调研未完成”，卡片标签显示当前阶段）、工程助手页“调查机器人”（有多台机器人时先选机器人，并列出各自的状态）、硬件初始化里的“下一步”、配好模型后的返回。提交开始表单时目标机器人正在调研，就直接打开它的进展。进展的阶段由后端从会话记录算出（`Investigation.progress`），不读取证据内容；“深入调查”的条数是会话证据数减去基础体检项数，是近似值。
+
+**重新调研。** `POST /api/engineering/investigation/restart`（`project_id`、`robot_id`、`model_id`、`objective`、`data_authorized`）新建一次调研会话，`investigation = {full_flow: true, rerun_of: 上一次调研}`，会话名“重新调研”，完整走一遍流程：
+
+1. 先在设备上执行一次只读硬件扫描（#2 的扫描命令，`source='investigation'`，结果记在会话的 `investigation.scan_id`，清理旧扫描时保留）。扫描或保存扫描结果出错都不会中止调研，原因写在 `scan_error` 并显示在进展里；这台机器人正在进行另一次扫描（例如硬件初始化页的“重新扫描”）时先等它结束，最长约 1 分钟。用户在扫描中停止不算扫描失败，之后继续这次调研会重新扫描；扫描完成后继续不会重复扫描。
+2. `DEVICE_CONTEXT.json` 不再提供旧档案（`inventories` 为空），只列出旧档案的编号 `previous_inventory_ids` 和本次扫描结果 `hardware_scan`，让助手重新读取设备、以本次证据为准。
+3. 助手照常调研并保存新档案；旧档案保留为历史版本，可以在报告里切换和对比。
+
+调研不限 Token 和时间（issue #5）；`Engineering.start` 的 `investigation` 参数会校验（`rerun_of` 必须是这台机器人以前的调研）。
+
+**对话修复。** 调研报告的“问题与修复”列出最近一次硬件扫描发现的问题，按硬件驱动、网络连通性、设备权限、存储、系统服务、内核日志分组（问题和规则来自 #2 的扫描）。用户可以勾选问题，也可以直接写要修什么，然后开始对话：
+
+- `POST /api/engineering/investigation/fix`（`project_id`、`robot_id`、`issue_ids`（可为空）、`message`、`model_id`、`data_authorized`、`modify_authorized`）新建修复会话。它就是 #2 的修复会话（`mode='repair'`、内置 `hardware-init` Skill、`device_fix` 逐条批准、产品拒绝的危险命令、重新扫描验证、修复报告），多了 `hardware.chat = true`；基于这台机器人最近一次扫描，没有扫描时先提示扫描（报告里有“扫描硬件”按钮）。
+- `POST /api/engineering/investigation/fix/message`（`project_id`、`session_id`、`message`）在同一会话里继续下一轮。用户的每条消息记为会话事件 `user`，与助手的回复（`message`）、执行的修复命令（`fix`）、读取与扫描一起组成对话记录。授权在开始对话时给出一次（会话的 `chat` 记录时间），之后的消息不再重复勾选；助手处理中时不能发送。消息里形如 `password: …`、`api_key = …`、`access_token=…`、`Bearer …`、`sk-…` 的凭据，在保存和发给模型之前按设备输出的同一套规则隐藏（`device_access.redact`）；其他写法不保证识别，不要在对话里粘贴密码。
+- 用户提出的、不在扫描问题列表里的要求，`device_fix` 的 `issue_ids` 写 `user-request`（只在对话修复会话中允许），修复报告也可以用它记录结果；标为 `fixed` 仍然要求修复命令成功并在之后重新扫描。
+- 每轮结束会话状态为“已完成”（等用户下一条消息），不要求每轮都保存修复报告；模型收到的规则是 `REPAIR_INSTRUCTIONS` 加上 `hardware_init.CHAT_INSTRUCTIONS`。和 #2 一样不限 Token 和时间（按会话预留点数的网关模型除外）。
+- 界面像 Codex 的对话框：上方是所选问题和已执行的修复命令数，中间是对话记录（你的消息、助手的回复、读取 / 扫描 / 修复命令的执行记录和依据、本机分析命令），需要批准的命令以卡片显示完整命令、对应问题、提权方式、回退方法和风险，直接在卡片上“批准执行”或“拒绝”（绑定在显示的那一条请求上，换了请求就不生效）；底部输入框 Enter 发送、Shift+Enter 换行，助手处理中可以停止。
+
+**界面实现。** `web/investigation.js`、`web/investigation.css`（由 `brainos/server.py` 的单独静态表提供，`web/index.html` 末尾引入），和 #2 一样包装 `engineAction`、`engineSubmit`、`engineSessionBody`、`engineRobotCard`、`engineRefresh`、`dialog`、`inventoryOpen`、`inventoryAction`，不改动这些共享函数本身。档案“补齐未知项”在档案缺少来源会话时仍然打开开始表单。
+
+**测试。** `tests/test_investigation_states.py` 43 项：状态与进展、重新调研（参数校验、忙时拒绝、扫描、扫描与保存出错、扫描中停止、等待另一次扫描、旧扫描清理、上下文）、对话修复（输入校验、最近一次扫描、继续消息、被拒的消息不留记录、凭据隐藏、`user-request` 规则、每轮结束状态、模型规则），以及经工程运行时（随包 Codex 或确定性替身）跑通的一次重新调研和一次两轮的对话修复。浏览器验收 `tests/investigation_browser_fixture.py` + `tests/investigation_browser.cjs`：开始表单、调研中从机器人卡片和工程助手页再次进入只看到进展、批准后看到报告、从报告开始对话修复并在卡片上批准命令、第二条消息、从命令依据返回对话、重新调研先扫描再调研并生成第二个档案版本、900 px 与 375 px 布局。
+
+**验证范围。** 只在本机替身上验证：SSH 协议替身、脚本模型经 TokenFans 替身、随包 Codex 0.146.1 运行时。没有在真机上跑过重新调研和对话修复，也没有用真实 TokenFans 模型跑过；真实模型能否按对话规则逐轮停下、等待用户，需要用真实 Key 验收。

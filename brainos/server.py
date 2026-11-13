@@ -118,6 +118,8 @@ def make_handler(application):
             extra={'/hardware.js':('hardware.js','text/javascript; charset=utf-8'),'/hardware.css':('hardware.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #7: shared look (dropdowns, hover states, readable data views), also kept apart.
             extra=extra or {'/dropdown.js':('dropdown.js','text/javascript; charset=utf-8'),'/dropdown.css':('dropdown.css','text/css; charset=utf-8'),'/hover.css':('hover.css','text/css; charset=utf-8'),'/readable.css':('readable.css','text/css; charset=utf-8'),'/readable.js':('readable.js','text/javascript; charset=utf-8'),'/readable_dom.js':('readable_dom.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #6: its own static files, likewise.
+            extra=extra or {'/investigation.js':('investigation.js','text/javascript; charset=utf-8'),'/investigation.css':('investigation.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
@@ -218,6 +220,10 @@ def make_handler(application):
                         # Issue #2: hardware initialisation (read-only scan, repair sessions with the built-in Skill)
                         'engineering/hardware/scan':service.hardware.scan,'engineering/hardware/detail':service.hardware.scan_detail,
                         'engineering/hardware/repair':service.hardware.start_repair,'engineering/hardware/skill':service.hardware.skill,
+                        # Issue #6: investigation states, full re-investigation, fix chats from the report
+                        'engineering/investigation/restart':service.investigation.restart,
+                        'engineering/investigation/fix':service.investigation.start_fix,
+                        'engineering/investigation/fix/message':service.investigation.fix_message,
                         'connections/configure':service.configure_connection,'services':service.add_service,'services/connect':service.connect_service,
                         'models':service.add_model,'models/infer':service.infer,'datasets':service.add_dataset,
                         'models/use':service.use_catalog_model,'models/deploy':service.deploy_model,

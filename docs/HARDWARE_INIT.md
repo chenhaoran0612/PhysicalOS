@@ -88,3 +88,11 @@
 - 不做重启、刷机、BIOS/安全启动设置；需要重启才能生效的改动由用户安排后再扫描。
 - 没有串口/CAN 总线上的设备级探测（只看到串口设备节点与 CAN 网卡）；ROS 层的传感器话题与底盘状态不在扫描范围内。
 - 内核日志需要权限（`dmesg` 受限且账号不在 systemd-journal 组时读不到），这时会在说明中提示。
+
+## 对话修复（issue #6）
+
+调研报告里的“问题与修复”可以开始一个对话修复：它是同一种修复会话（`mode='repair'`），多了 `hardware.chat = true`，基于这台机器人最近一次扫描，可以不勾选问题、只写用户自己的要求。与上面的修复会话的区别：
+
+- 用户的要求不在扫描问题里时，`device_fix` 与修复报告用 issue id `user-request`（`hardware_init.USER_REQUEST`，只在对话修复会话中允许）；其余产品限制和报告规则不变，`fixed` 仍要求成功的修复命令和之后的重新扫描。
+- 每轮结束状态为“已完成”，等用户下一条消息（`finish` 不要求每轮保存报告），模型规则多了 `CHAT_INSTRUCTIONS`。
+- 接口、界面和测试见 [ENGINEERING_ENGINE.md](ENGINEERING_ENGINE.md#工程助手调研三种状态重新调研与对话修复issue-6)。重新调研的硬件扫描记为 `source='investigation'`，硬件初始化页显示为“重新调研时扫描”。
