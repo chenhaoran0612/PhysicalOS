@@ -5,7 +5,7 @@
 
 ## 现在的状态
 
-**0.16.0（build 26）已合并、回归、打包，并在用户确认后部署到本机（2026-11-12 20:14），等用户查看。`integration` 已在用户确认后合并到 main（快进）并推送。** 它是用户验证过的 0.15.1（build 25）加上 main 的账号管理（212da95）。用户对 0.15.1 的结论是“基础功能基本都OK，细节还需要调整”，细节另提 issue。记录和要看的项目见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#并入-main-的账号管理212da95-0160-build-26)。
+**0.16.0（build 26）已部署在本机，`integration` 与它对应的代码已合并到 main。之后合入的 #5 还没有打包：等 #6 提交后统一回归、打包、部署。** 记录见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#验证后的新-issue)。
 
 | 来源 | 内容 | 分支 @ 提交 | 状态 |
 |---|---|---|---|
@@ -21,10 +21,12 @@
 | main | 账号管理与邮箱验证（其他成员提交）：打开即登录 / 注册页、邮箱验证码、账户菜单 | `origin/main` @ 212da95（合并提交 a561ee2） | ✅ 已并入 |
 | 总指挥 | 并入后的修正：两个验收脚本改走登录页、`browser_smoke` 的等待条件、版本工具不再检查侧栏 | `integration` @ fec6c7b | ✅ |
 | 总指挥 | 账号相关文档、版本 0.16.0（build 26）、统一回归、打包 | `integration` @ 5ac48d0 及之后的文档提交 | ✅ |
+| #5 | 调查本体不再限制 Token 和运行时间；对话框去掉限额字段和说明 | `feat/investigation-no-limits` @ 2224a49（合并提交 3488405） | ✅ 已合入，回归通过；**未打包、未进 main** |
+| #6 | 进行中 | — | ⏳ 待提交 |
 
 ## 分支与部署
 
-- `integration`（工作区 `PhysicalOS-integration/`）：包含以上全部。**已在用户确认后合并到 main（快进，2026-11-12）并推送**，`origin/main` 与 `origin/integration` 指向同一个提交。之后的 issue 仍然先合到 `integration`，统一回归后由用户确认再合并到 main。
+- `integration`（工作区 `PhysicalOS-integration/`）：main（a59bc49，0.16.0 的代码）+ #5，已推送到 `origin/integration`。**#5 还没有合并到 main**：打包部署、用户看过并确认后再合并。新的 issue 分支请基于现在的 `integration`。
 - 部署：`/Applications/NeuxMind Robot OS.app` 是 0.16.0（build 26），2026-11-12 20:14 替换并启动；后端报告版本 0.16.0，只监听回环地址。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261112-201433`。原有的 2 个账号都在；本机没有配置邮件服务，所以启动时多了内置测试账号。云平台在本地 Docker（`http://127.0.0.1:8800`），健康。
 - 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.16.0-arm64.dmg`（SHA-256 `1ffecde91b2142c9c84655ccecdc951fa49718660f07e395285676f5c4c7e7be`）和同名 `.pkg`（`979a96a14711194f6ae17ee520aebc5c209ef42cfa9949ac46b02b34b499218c`）；0.15.1、0.15.0 的安装包也还在同一目录。
 - #2、#3、#4 的分支都已提交并合入；它们的下一批改动要基于现在的 `integration`（含登录页）。
@@ -38,8 +40,8 @@
 
 ## 待办
 
-1. 用户查看 0.16.0（要看的项目在轮次记录的“0.16.0 要看的”）。
-2. 用户新提的 issue（细节调整；目前打开的是 #5）交给对应的 issue 会话，基于现在的 `integration`（与 main 相同）。#2、#3、#4 已在 GitHub 上关闭。
+1. 等 #6 提交 → 合入、统一回归、打包（下一个版本号）、经用户确认后部署 → 用户查看 #5、#6（要看的项目在轮次记录的“验证后的新 issue”）。用户也可以要求先单独打包部署 #5。
+2. 用户确认后把 `integration` 合并到 main 并推送。#2、#3、#4 已在 GitHub 上关闭；#5、#6 打开。
 3. 请用户和提交者决定：没有配置邮件服务时，内置测试账号默认是开启的，它的密码写在公开的源码里（`NEUXMIND_TEST_ACCOUNT=0` 可以关掉）。
 4. `fix/preexisting-test-failures` 的独立审查留下 5 条低级别意见，在那个会话里，尚未处理。
 5. Linux 容器里 `test_conformance_rereview04` 的一项计时类用例对宿主机负载敏感，留意是否再现。
