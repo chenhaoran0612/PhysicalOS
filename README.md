@@ -93,7 +93,7 @@ python3.12 -m venv .build/packaging-venv
 
 | 领域 | 实际实现 |
 | --- | --- |
-| 工作空间 | 注册、登录、密码哈希、会话、账号数据隔离、项目隔离、持久化 |
+| 工作空间 | 打开即登录 / 注册页；注册和找回密码要邮箱验证码；密码哈希、会话（可保持登录）、账户面板（改名、改密码、退出）、账号数据隔离、项目隔离、持久化，见[账号与邮箱验证](#账号与邮箱验证) |
 | 本体 | SSH 自主调查、带证据的软硬件档案、多形态登记、适配器连接与能力发现；SSH 可直连或经一台跳板机（两跳指纹都确认并固定），可粘贴一条 ssh 命令自动填表（`-J` 写法和嵌套写法 `ssh 用户@跳板机 'ssh 名称'` 都认，后者的目标名称由跳板机上的 SSH 配置解析）；真机只读实时状态（主机、负载、内存、磁盘、温度、失败的服务、关注的服务），见 [工程引擎说明](docs/ENGINEERING_ENGINE.md#跳板机与真机实时状态)；连接后自动做只读硬件扫描（设备表与问题列表），内置 Skill `hardware-init` 在逐条审批下修复问题并重新扫描验证，见 [硬件初始化](docs/HARDWARE_INIT.md) |
 | 模型 | 自有推理服务接入、平台模型目录、来源分类、契约、调用、端侧模型包部署接口。工程助手的大模型只对接 TokenFans，在“云平台账户”页配置（粘贴 API Key，或用账号登录一次自动读取 Key）：本体调查、工程任务、协作流程、本体适配和硬件修复都用那里选定的默认模型，费用从 TokenFans 余额扣除，见 [工程引擎说明](docs/ENGINEERING_ENGINE.md#tokenfans工作空间默认模型issue-4) |
 | 技能与应用 | 技能定义、模型绑定、参数化顺序编排、超时、成功 / 停止条件、不可变应用版本 |
@@ -125,6 +125,16 @@ python3.12 -m venv .build/packaging-venv
 - 环境变量 `NEUXMIND_TOKENFANS_URL` 可把地址指向测试替身或自建的兼容服务（必须是 HTTPS，只有本机地址允许 HTTP）。
 - 接口：`/api/model-compute/{key,login,models,default,disconnect}`；状态快照里的 `model_compute` 只有摘要。其他模块直接调用大模型时用 `platform.model_compute.default_llm()`，走工程引擎时不传 `model_id` 即可。
 - 目前只在本机 TokenFans 替身上验证过（`tests/test_model_compute.py`、`tests/tokenfans_browser_fixture.py`），没有调用过真实的 TokenFans 服务。
+
+## 账号与邮箱验证
+
+应用打开后先显示登录 / 注册页，登录后才进入工作空间。会话记在 HttpOnly cookie 里，勾选“保持登录”时会话保留 30 天，否则 12 小时。侧栏底部是账户菜单：账户信息（改名、改密码）、云平台账户、助手工具设置、服务连接、用量与账单、使用指南、退出登录。
+
+- 注册和找回密码都要填邮件里的 6 位验证码：10 分钟内有效，60 秒后才能重发，同一邮箱每小时最多发 5 次，输错 5 次作废。新密码至少 10 个字符，同时包含字母和数字。
+- 邮件服务按顺序读取：环境变量 `NEUXMIND_SMTP_HOST`、`NEUXMIND_SMTP_PORT`、`NEUXMIND_SMTP_USER`、`NEUXMIND_SMTP_PASSWORD`、`NEUXMIND_SMTP_FROM`、`NEUXMIND_SMTP_SSL`；或 `<状态目录>/mail.json`（同名小写键，不带前缀）。
+- 没有配置邮件服务时邮件不会发出，验证码写到 `<状态目录>/mail-outbox.txt`（权限 0600），注册页会显示这个路径。
+- 没有配置邮件服务时还会启用一个内置测试账号（`brainos/auth.py` 的 `TEST_EMAIL`），用来在配置邮件之前试用。它的密码写在公开的源码里，不要在它名下放真实资料；环境变量 `NEUXMIND_TEST_ACCOUNT=0` 可以关掉它，配置了邮件服务后它自动停用。
+- `NEUXMIND_MAIL_DEV_ECHO=1` 只给自动化测试用：没有配置邮件服务时，验证码随接口返回。浏览器验收脚本经 `tests/gate_helper.cjs` 走登录页。
 
 ## 运营配置
 
@@ -191,7 +201,7 @@ node --check web/workflows.js
 node --check web/journey.js
 node --check web/planner.js
 for f in web/*.js tests/*.cjs; do node --check "$f" || echo "FAIL $f"; done   # 全部前端文件
-# 发版时先统一改写版本号（构建脚本、后端、引擎客户端、关于窗口、Info.plist、侧栏、安装说明、冒烟测试）：
+# 发版时先统一改写版本号（构建脚本、后端、引擎客户端、关于窗口、Info.plist、安装说明、冒烟测试）：
 python3 scripts/set_version.py 0.15.0        # 不带参数则列出各处当前版本
 # 在独立构建环境安装 PyInstaller 和 requirements-runtime.txt 后：
 .build/packaging-venv/bin/python scripts/prepare_agent_runtime.py
