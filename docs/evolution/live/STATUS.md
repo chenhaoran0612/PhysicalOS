@@ -5,7 +5,7 @@
 
 ## 现在的状态
 
-**0.15.1（build 25）已合并、打包并部署到本机，等用户验证。** 要看的项目见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#交给用户验证0151-build-25)。
+**0.16.0（build 26）已合并、回归、打包，还没有部署。** 它是用户验证过的 0.15.1（build 25）加上 main 的账号管理（212da95）。用户对 0.15.1 的结论是“基础功能基本都OK，细节还需要调整”，细节另提 issue。本机 `/Applications` 里运行的仍是 0.15.1（build 25），换成 0.16.0 等用户确认。记录见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#并入-main-的账号管理212da95-0160-build-26)。
 
 | 来源 | 内容 | 分支 @ 提交 | 状态 |
 |---|---|---|---|
@@ -18,27 +18,30 @@
 | #2 后续 | 硬件扫描的执行请求加时限 | 同上 @ 4196529（与快照 ad2e1a6 内容相同） | ✅ 已合入 |
 | 测试修复 | main 上原有的两处失败（运行时沙箱在容器里的进程数限制；桌面测试替身的 sed 写法） | `fix/preexisting-test-failures` @ 2731808 | ✅ 已合入 |
 | 总指挥 | 文档、版本工具、统一回归、0.15.1 打包部署 | `integration` @ b0dccdf 及之后的文档提交 | ✅ |
+| main | 账号管理与邮箱验证（其他成员提交）：打开即登录 / 注册页、邮箱验证码、账户菜单 | `origin/main` @ 212da95（合并提交 a561ee2） | ✅ 已并入 |
+| 总指挥 | 并入后的修正：两个验收脚本改走登录页、`browser_smoke` 的等待条件、版本工具不再检查侧栏 | `integration` @ fec6c7b | ✅ |
+| 总指挥 | 账号相关文档、版本 0.16.0（build 26）、统一回归、打包 | `integration` @ 5ac48d0 及之后的文档提交 | ✅ |
 
 ## 分支与部署
 
-- `integration`（工作区 `PhysicalOS-integration/`）：旧 main（b0b6793）+ 以上全部。**已按用户要求推送到 `origin/integration`（2026-11-12）；未合并 main。** 推送前对要发布的 49 个提交（全部补丁和提交说明）扫描过真实环境信息和密钥，没有发现。
-- 部署：`/Applications/NeuxMind Robot OS.app`（0.15.1 build 25）；云平台在本地 Docker（`http://127.0.0.1:8800`）。
-- 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.15.1-arm64.dmg`、`.pkg`（同目录还留着 0.15.0 的）。
-- #2、#3、#4 的分支都已提交，内容与此前按快照合入的相同；快照引用 `refs/integration/snapshots/*` 已全部删除。自打包的提交（b0dccdf）以来，代码目录没有变化。
+- `integration`（工作区 `PhysicalOS-integration/`）：main（212da95）+ 以上全部，已推送到 `origin/integration`。**未合并 main**；因为它已经包含 main 的最新提交，合并到 main 时是快进。
+- 部署：`/Applications/NeuxMind Robot OS.app` 仍是 0.15.1（build 25）；云平台在本地 Docker（`http://127.0.0.1:8800`）。
+- 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.16.0-arm64.dmg`（SHA-256 `1ffecde91b2142c9c84655ccecdc951fa49718660f07e395285676f5c4c7e7be`）和同名 `.pkg`（`979a96a14711194f6ae17ee520aebc5c209ef42cfa9949ac46b02b34b499218c`）；0.15.1、0.15.0 的安装包也还在同一目录。
+- #2、#3、#4 的分支都已提交并合入；它们的下一批改动要基于现在的 `integration`（含登录页）。
 
-## main 上的新提交（未并入）
+## 0.16.0 相对 0.15.1，用户会看到的变化
 
-`origin/main` 在 2026-11-12 多了一个提交 212da95（其他成员提交的“账号管理与邮箱验证”：应用启动时先显示整页的登录 / 注册界面，注册要填邮件里的 6 位验证码；没有配置 SMTP 时邮件不发出，写到 `<状态目录>/mail-outbox.txt`）。
-
-- `integration` 和已部署的 0.15.1（build 25）**不含**这个提交。
-- 试合并（没有写入任何分支）：4 个共用文件有 7 处冲突（`brainos/server.py` 2、`web/app.js` 3、`web/index.html` 1、`web/style.css` 1），另外 10 个重叠文件可以自动合并。
-- 这个提交把 main 上原有的 20 个浏览器验收脚本改成经 `tests/gate_helper.cjs` 登录；本轮各 issue 新增的脚本没有改，至少 `tests/ssh_jump_browser.cjs` 还在用旧的账号对话框，其余要逐个核对。
-- 并入之后要重新做统一回归并打新包；`integration` 合并到 main 之前必须先做这一步。
+- 打开应用先是登录 / 注册页。以前注册的账号直接用原密码登录，项目和数据都在（用 0.15.1 建的账号和项目在 0.16.0 上实测过）。
+- 新注册和找回密码要 6 位邮箱验证码。本机没有配置邮件服务，验证码不会发出，写在 `~/Library/Application Support/NeuxMind Robot OS/mail-outbox.txt`，页面上会显示这个位置。
+- 侧栏底部换成账户菜单（账户信息、云平台账户、助手工具设置、服务连接、用量与账单、使用指南、退出登录）；侧栏不再显示版本号和连接状态，版本在“关于”窗口里看。
+- #2、#3、#4 的功能与 0.15.1 相同。
 
 ## 待办
 
-1. 用户验证 0.15.1，问题记在对应 issue（#2 / #3 / #4）或告诉总指挥。
-2. 把 `origin/main` 的 212da95 并入 `integration`（见上一节），回归、打新包。之后用户确认，再把 `integration` 合并到 main 并推送，关闭 issue。
-3. `fix/preexisting-test-failures` 的独立审查留下 5 条低级别意见（一处过时注释、对 fork 被拒原因的判断偏宽、README 措辞、两处测试缺口），在那个会话里，尚未处理。
-4. Linux 容器里 `test_conformance_rereview04` 的一项计时类用例对宿主机负载敏感（见轮次记录的“已知问题”），留意是否再现。
-5. 真实服务上的验证仍然没有：用真实 TokenFans Key 跑一次工程任务；在真机上走一遍界面流程和修复会话。
+1. 用户确认后把 0.16.0 部署到本机（要退出正在运行的 0.15.1；部署前照例备份数据目录）。
+2. 用户新提的 issue（细节调整）交给对应的 issue 会话，基于现在的 `integration`。
+3. 用户确认后：把 `integration` 合并到 main（快进）并推送，关闭 issue。
+4. 请用户和提交者决定：没有配置邮件服务时，内置测试账号默认是开启的，它的密码写在公开的源码里（`NEUXMIND_TEST_ACCOUNT=0` 可以关掉）。
+5. `fix/preexisting-test-failures` 的独立审查留下 5 条低级别意见，在那个会话里，尚未处理。
+6. Linux 容器里 `test_conformance_rereview04` 的一项计时类用例对宿主机负载敏感，留意是否再现。
+7. 真实服务上的验证仍然没有：真实 TokenFans Key 跑工程任务；真机上的界面流程和修复会话；真实邮件服务（SMTP）发验证码。
