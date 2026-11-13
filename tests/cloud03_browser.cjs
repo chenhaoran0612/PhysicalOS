@@ -136,7 +136,8 @@ const SMALL = {width: 900, height: 640};
   assert(/云平台扣除\s*\d+ 点/.test(text), '未显示扣除点数');
   await shot('07-work-session-cloud-metering', true);
   await click('engine-artifact');
-  assert((await page.locator('#dialog pre').innerText()).includes('cloud adapter'), '工程产物缺失');
+  await page.locator('#dialog h2',{hasText:'工程产物'}).waitFor();const art=page.locator('#dialog .dialog-body > .nx-from-pre');await art.waitFor();for(const s of await art.locator('details.nx-fold:not([open])>summary').all())await s.click();
+  assert((await art.innerText()).includes('cloud adapter'), '工程产物缺失');
   await click('close');
 
   // ------------------------------------------------------------ 5. discovery on a cloud model

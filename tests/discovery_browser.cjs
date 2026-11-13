@@ -24,7 +24,7 @@ const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  
  await page.locator('[name=data_authorized]').check();await submit();
  await page.locator('[data-action=engine-approval]').waitFor({timeout:25000});await click('engine-approval');
  await page.locator('#dialog').getByText('在机器人上执行 SSH 命令',{exact:true}).waitFor();
- if(!(await page.locator('#dialog pre').innerText()).includes('systemctl show robot-stack'))throw Error('Missing exact command');
+ await page.locator('#dialog details.nx-fold',{hasText:'完整命令'}).first().waitFor();for(let i=0;i<20&&await page.locator('#dialog details.nx-fold:not([open])>summary').filter({visible:true}).count();i++)await page.locator('#dialog details.nx-fold:not([open])>summary').filter({visible:true}).first().click();if(!(await page.locator('#dialog .nx-raw').first().innerText()).includes('systemctl show robot-stack'))throw Error('Missing exact command');
  await page.screenshot({path:'artifacts/discovery-ssh-approval.png'});
  await page.locator('[name=decision]').selectOption('accept');await submit();
  await page.locator('[data-action=engine-approval]').waitFor({timeout:25000});await click('engine-approval');await page.locator('#dialog').getByText('读取新发现的本体目录',{exact:true}).waitFor();

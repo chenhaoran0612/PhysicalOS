@@ -1,0 +1,53 @@
+/* Issue #7: readable views for machine data (web/readable.js, web/readable_dom.js).
+   Labelled rows instead of JSON; code and raw output only inside a "展开查看…" fold. */
+:root{
+  --nx-data-bg:#fafcf8;
+  --nx-data-line:#e7ede3;
+  --nx-data-key:#7b8a76;
+  --nx-data-val:#2f4337;
+}
+
+.nx-readable{font-size:12px;line-height:1.7;color:var(--nx-data-val);min-width:0;max-width:100%}
+.nx-readable+.nx-readable{margin-top:8px}
+.nx-from-pre{margin:6px 0 12px}
+.nx-data{display:grid;border:1px solid var(--nx-data-line);border-radius:8px;background:var(--nx-data-bg);overflow:hidden}
+.nx-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;background:#f1f6ec;border-bottom:1px solid var(--nx-data-line);color:#2f4a3a;font-size:12px}
+.nx-row{display:grid;grid-template-columns:minmax(84px,28%) minmax(0,1fr);gap:14px;padding:7px 12px;border-top:1px solid var(--nx-data-line)}
+.nx-head+.nx-row,.nx-row:first-child{border-top:0}
+.nx-key{color:var(--nx-data-key);font-size:11px;line-height:1.8;overflow-wrap:anywhere}
+.nx-val{min-width:0;overflow-wrap:anywhere}
+.nx-val>.nx-data{background:#fff}
+.nx-list{display:grid;gap:6px}
+.nx-lines{display:grid;gap:4px}
+.nx-chips{display:flex;flex-wrap:wrap;gap:5px}
+.nx-chip{display:inline-block;padding:1px 9px;border-radius:999px;background:#eef4e8;color:#3f5a3d;font-size:11px;line-height:1.8;overflow-wrap:anywhere}
+.nx-tag{display:inline-block;padding:0 8px;border-radius:999px;background:#e5efdc;color:#35583f;font-size:11px;line-height:1.8}
+.nx-yes{color:var(--green);font-weight:550}
+.nx-no{color:#8c6f5f}
+.nx-empty{color:#a3ad9f}
+.nx-more{display:inline-block;color:var(--nx-data-key);font-size:11px;padding:2px 0}
+.nx-note{margin-top:6px;color:var(--amber);font-size:11px}
+.nx-prose{white-space:pre-wrap;overflow-wrap:anywhere}
+.nx-prose b{font-weight:600}
+.nx-h{display:block;margin:10px 0 4px;font-size:13px;font-weight:600;color:#2a4234}
+.nx-prose>.nx-h:first-child{margin-top:0}
+.nx-table{width:100%;margin:8px 0;border-collapse:collapse;white-space:normal;font-size:12px}
+.nx-table th,.nx-table td{padding:6px 10px;border:1px solid var(--nx-data-line);text-align:left;vertical-align:top;overflow-wrap:anywhere}
+.nx-table th{background:#f1f6ec;color:#3f5a3d;font-weight:550}
+.nx-term{padding:0 5px;border-radius:4px;background:#eef3ea;color:#3f5a3d}
+.nx-error{padding:9px 12px;border:1px solid #f0d6d2;border-radius:8px;background:#fbf1ef;color:#8e3f38}
+.nx-error b{font-weight:600}
+.nx-fold{margin:4px 0}
+.nx-fold>summary{display:inline-flex;align-items:center;gap:6px;cursor:pointer;color:#5f7656;font-size:11px;list-style:none;padding:3px 0;transition:color .15s ease}
+.nx-fold>summary::-webkit-details-marker{display:none}
+.nx-fold>summary::before{content:"";width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(-45deg);transition:transform .2s ease}
+.nx-fold[open]>summary::before{transform:rotate(45deg)}
+.nx-fold>summary:hover{color:#3f5a3d}
+.nx-raw{margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.7;background:#f5f8f2;border:1px solid var(--nx-data-line);border-radius:6px;padding:10px 12px;max-height:320px;overflow:auto;color:#4c6145}
+
+/* Identifiers and terms the pages wrap in <code> / .mono read as text, not as code. */
+/* :where() keeps this at zero specificity: page rules that size or colour <code> still apply. */
+:where(code:not(.nx-raw code)){font-family:inherit;padding:0 5px;border-radius:4px;background:#eef3ea;color:#3f5a3d;overflow-wrap:anywhere}
+:not(textarea):not(input).mono{font-family:inherit;letter-spacing:0}
+
+@media(max-width:600px){.nx-row{grid-template-columns:1fr;gap:2px}}

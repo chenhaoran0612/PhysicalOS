@@ -48,12 +48,12 @@ const fs=require('fs'),path=require('path');
  if(await page.locator('[data-flow-stage="2"] #adapt-aborted').count())throw Error('unexpected aborted notice');
  await expectText('[data-flow-stage="2"] #adapt-conformance [data-fact="conformance_id"]','cf-');
  await page.locator('[data-flow-stage="2"] #adapt-conformance').scrollIntoViewIfNeeded();await shot('05-conformance-stage',true);
- await page.locator('[data-action=engine-flow-artifact][data-id$=":2:conformance/dry.report.json"]').click();await expectText('#dialog pre','conformance.report.v1');await expectText('#dialog pre','"field_acceptance": false');await click('engine-flow-run');
+ await page.locator('[data-action=engine-flow-artifact][data-id$=":2:conformance/dry.report.json"]').click();await expectText('#dialog .nx-readable','conformance.report.v1');await page.locator('#dialog .nx-row').filter({has:page.locator('.nx-key',{hasText:'现场验收'})}).filter({hasText:'否'}).first().waitFor({timeout:20000});await click('engine-flow-run');
  await approve(2,'已核对 static/dry 报告；motion 未运行');
  // 5. stage 4: adaptation report
  await page.locator('[data-flow-stage="3"] [data-action=engine-flow-review]').waitFor({timeout:60000});
  await page.locator('[data-action=engine-flow-artifact][data-id$=":3:ADAPTATION_REPORT.md"]').click();
- for(const t of ['可用能力','未实现','需现场验证','风险'])await expectText('#dialog pre',t);await shot('06-adaptation-report');await click('engine-flow-run');
+ for(const t of ['可用能力','未实现','需现场验证','风险'])await expectText('#dialog .nx-readable',t);await shot('06-adaptation-report');await click('engine-flow-run');
  await approve(3,'报告已阅');await page.locator('#workflow-live').getByText('流程已完成',{exact:true}).waitFor();await shot('07-flow-completed');
  await click('close');
  // 6. robot detail: latest conformance summary next to the capability table

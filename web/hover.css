@@ -1,0 +1,57 @@
+/* Issue #7: hover states stay in the colour family of the element they belong to.
+   style.css gives every .button the dark-green primary hover, so red, white, outline and
+   link-style buttons turned dark green (or invisible) under the pointer. Each variant gets
+   its own gentle hover here, disabled buttons keep their resting colour, and the change
+   fades in instead of snapping. Loaded after style.css; nothing in style.css is rewritten. */
+:root{
+  --hover-fade:.16s ease;
+  --green-hover:#235c47;
+  --green-press:#1f533f;
+  --secondary-hover:#f3f7f0;
+  --secondary-hover-border:#c9d7c5;
+  --danger-hover:#f8e6e3;
+  --danger-hover-border:#ebc5bf;
+}
+
+.button,.text-link,.icon-button,.quiet-button,.tab,.close-dialog,nav a,.journey-step,.extension-choice,.sim-kind,.flow-editor>summary,.flow-stage>summary,.page-purpose summary,.inventory-diff>summary,.extension-file summary,.tech-detail summary,.af-eye,.auth-submit,.sidebar-user,.user-menu button{transition:background-color var(--hover-fade),border-color var(--hover-fade),color var(--hover-fade),box-shadow var(--hover-fade)}
+
+/* Buttons: one hover per variant. */
+.button:hover{background:var(--green-hover)}
+.button:active:not(:disabled){background:var(--green-press)}
+.button.secondary:hover{background:var(--secondary-hover);border-color:var(--secondary-hover-border);color:#3f5a3d}
+.button.secondary:active:not(:disabled){background:#eaf1e5}
+.button.danger:hover{background:var(--danger-hover);border-color:var(--danger-hover-border);color:var(--red)}
+.button.danger:active:not(:disabled){background:#f4dcd8}
+.button.danger-outline:hover{background:#fdf4f2;border-color:#dcb0aa;color:var(--red)}
+.button.danger-outline:active:not(:disabled){background:#fae9e6}
+.button.text-link:hover,.button.text-link:active{background:none;border-color:transparent;color:#46683a;text-decoration:underline}
+.hero .button:hover{background:#f4f8f0;border-color:#c3d4b6;color:#3b5934}
+.hero .button:active:not(:disabled){background:#ecf3e6}
+.safety-banner .button:hover,.robot-safety .safety-alert .button:hover,.stop-not-obeyed .button:hover{background:#fff5f3;border-color:#fff;color:var(--red)}
+.safety-banner .button.secondary:hover,.stop-not-obeyed .button.secondary:hover{background:#ffffff1f;border-color:#fff;color:#fff}
+.safety-banner .button:active:not(:disabled),.robot-safety .safety-alert .button:active:not(:disabled),.stop-not-obeyed .button:active:not(:disabled){background:#fdebe8}
+.safety-banner .button.secondary:active:not(:disabled),.stop-not-obeyed .button.secondary:active:not(:disabled){background:#ffffff2e}
+
+/* Disabled buttons do not react to the pointer: restore each variant's resting colour. */
+.button:disabled:hover,.button:disabled:active{background:var(--green)}
+.button.secondary:disabled:hover,.button.secondary:disabled:active{background:#fff;border-color:#dbe4da;color:#51654f}
+.button.danger:disabled:hover,.button.danger:disabled:active{background:#fbefed;border-color:#f2d6d2}
+.button.danger-outline:disabled:hover,.button.danger-outline:disabled:active{background:#fff;border-color:#e6c4c0}
+.button.text-link:disabled:hover{background:none;text-decoration:none;color:#5f8251}
+.hero .button:disabled:hover,.safety-banner .button:disabled:hover,.robot-safety .safety-alert .button:disabled:hover,.stop-not-obeyed .button:disabled:hover{background:#fff;border-color:#fff}
+.hero .button:disabled:hover{border-color:#d7e2cd;color:#45643d}
+.safety-banner .button.secondary:disabled:hover,.stop-not-obeyed .button.secondary:disabled:hover{background:transparent;border-color:#ffffffa0;color:#fff}
+.auth-submit:hover{background:var(--green-hover)}
+.auth-submit:disabled:hover{background:var(--green)}
+
+/* Controls that gave no feedback at all. */
+.text-link:hover:not(:disabled){color:#46683a}
+.icon-button:hover:not(:disabled){background:#eef3ec;color:var(--ink)}
+.quiet-button:hover:not(:disabled){color:#3f5a3d}
+.tab:hover:not(.active){color:#5f7656}
+.close-dialog:hover{color:#4f6447}
+.extension-choice:hover{border-color:#cbd8c6;background:#f6faf3}
+.sim-kind:hover{border-color:#c9d8c2;background:#fbfdf9}
+.flow-editor>summary:hover,.flow-stage>summary:hover{background:#f4f8f1}
+.page-purpose summary:hover,.inventory-diff>summary:hover,.extension-file summary:hover{color:#3f5a3d}
+.tech-detail summary:hover{color:#7d5f4a}
