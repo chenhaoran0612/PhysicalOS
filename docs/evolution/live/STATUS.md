@@ -5,44 +5,30 @@
 
 ## 现在的状态
 
-**0.16.0（build 26）已部署在本机，`integration` 与它对应的代码已合并到 main。之后合入的 #5 还没有打包：等 #6 提交后统一回归、打包、部署。** 记录见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#验证后的新-issue)。
+**0.17.0（build 27）已合并、回归、打包并部署到本机（2026-11-13 04:14），等用户做最终检查。** 它是 0.16.0（已在 main）加上 #5、#6、#7 和一处集成修正。记录和要看的项目见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#验证后的新-issue567-0170-build-27)。
 
 | 来源 | 内容 | 分支 @ 提交 | 状态 |
 |---|---|---|---|
-| 修复 | 回环绑定不做反向 DNS；本地 Docker 云平台 | `fix/loopback-bind-skip-reverse-dns` @ b0c92d9（已推送 origin） | ✅ 已合入 |
-| #3 | 跳板机接入、粘贴 ssh 命令（含嵌套写法）、真机只读实时状态 | `feat/ssh-jump-host-live-status` @ 4434176 | ✅ 已合入 |
-| #3 加固 | 执行请求加时限、超长输出不采用、里层选项的说明 | 同上 @ c6b41bd（与快照 110daf3 内容相同） | ✅ 已合入 |
-| #4 | TokenFans 作为唯一的工程模型来源，在“云平台账户”页配置 | `feat/tokenfans-model-compute` @ 3064d82 | ✅ 已合入 |
-| #4 后续 | 冷启动在“云平台账户”页时自动刷新不启动（旧缺陷）、密码框关闭时清空、验收脚本迁移 | 同上 @ 00d07c1（与快照 ecb570b 内容相同） | ✅ 已合入 |
-| #2 | 连接后硬件扫描与逐条审批修复；修复表单指向 TokenFans | `feat/hardware-scan` @ 7293784 | ✅ 已合入 |
-| #2 后续 | 硬件扫描的执行请求加时限 | 同上 @ 4196529（与快照 ad2e1a6 内容相同） | ✅ 已合入 |
-| 测试修复 | main 上原有的两处失败（运行时沙箱在容器里的进程数限制；桌面测试替身的 sed 写法） | `fix/preexisting-test-failures` @ 2731808 | ✅ 已合入 |
-| 总指挥 | 文档、版本工具、统一回归、0.15.1 打包部署 | `integration` @ b0dccdf 及之后的文档提交 | ✅ |
-| main | 账号管理与邮箱验证（其他成员提交）：打开即登录 / 注册页、邮箱验证码、账户菜单 | `origin/main` @ 212da95（合并提交 a561ee2） | ✅ 已并入 |
-| 总指挥 | 并入后的修正：两个验收脚本改走登录页、`browser_smoke` 的等待条件、版本工具不再检查侧栏 | `integration` @ fec6c7b | ✅ |
-| 总指挥 | 账号相关文档、版本 0.16.0（build 26）、统一回归、打包 | `integration` @ 5ac48d0 及之后的文档提交 | ✅ |
-| #5 | 调查本体不再限制 Token 和运行时间；对话框去掉限额字段和说明 | `feat/investigation-no-limits` @ 2224a49（合并提交 3488405） | ✅ 已合入，回归通过；**未打包、未进 main** |
-| #6 | 进行中 | — | ⏳ 待提交 |
+| main | 0.16.0：第 08 轮的 #2、#3、#4、账号管理等 | `origin/main` @ a59bc49 | ✅ 已在 main |
+| #5 | 调查本体不再限制 Token 和运行时间 | `feat/investigation-no-limits` @ 2224a49（合并提交 3488405） | ✅ 已合入 `integration` |
+| #7 | 控制台下拉框、同色系悬停状态、运行中不显示代码和 JSON | `feat/style-polish` @ f308172（合并提交 e6d75b4） | ✅ 已合入 `integration` |
+| #6 | 调研状态、重新调研、对话修复 | `feat/investigation-states` @ 01cfa7e（合并提交 ae05219） | ✅ 已合入 `integration` |
+| 总指挥 | 审批里的命令保持可见（#7 与 #2 / #6 的冲突） | `integration` @ c0904c6 | ✅ |
+| 总指挥 | 文档、版本 0.17.0（build 27）、统一回归、打包、部署 | `integration` @ 0719f8f 及之后的文档提交 | ✅ |
 
 ## 分支与部署
 
-- `integration`（工作区 `PhysicalOS-integration/`）：main（a59bc49，0.16.0 的代码）+ #5，已推送到 `origin/integration`。**#5 还没有合并到 main**：打包部署、用户看过并确认后再合并。新的 issue 分支请基于现在的 `integration`。
-- 部署：`/Applications/NeuxMind Robot OS.app` 是 0.16.0（build 26），2026-11-12 20:14 替换并启动；后端报告版本 0.16.0，只监听回环地址。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261112-201433`。原有的 2 个账号都在；本机没有配置邮件服务，所以启动时多了内置测试账号。云平台在本地 Docker（`http://127.0.0.1:8800`），健康。
-- 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.16.0-arm64.dmg`（SHA-256 `1ffecde91b2142c9c84655ccecdc951fa49718660f07e395285676f5c4c7e7be`）和同名 `.pkg`（`979a96a14711194f6ae17ee520aebc5c209ef42cfa9949ac46b02b34b499218c`）；0.15.1、0.15.0 的安装包也还在同一目录。
-- #2、#3、#4 的分支都已提交并合入；它们的下一批改动要基于现在的 `integration`（含登录页）。
-
-## 0.16.0 相对 0.15.1，用户会看到的变化
-
-- 打开应用先是登录 / 注册页。以前注册的账号直接用原密码登录，项目和数据都在（用 0.15.1 建的账号和项目在 0.16.0 上实测过）。
-- 新注册和找回密码要 6 位邮箱验证码。本机没有配置邮件服务，验证码不会发出，写在 `~/Library/Application Support/NeuxMind Robot OS/mail-outbox.txt`，页面上会显示这个位置。
-- 侧栏底部换成账户菜单（账户信息、云平台账户、助手工具设置、服务连接、用量与账单、使用指南、退出登录）；侧栏不再显示版本号和连接状态，版本在“关于”窗口里看。
-- #2、#3、#4 的功能与 0.15.1 相同。
+- `integration`（工作区 `PhysicalOS-integration/`）：main（a59bc49）+ 以上全部，已推送到 `origin/integration`。**#5、#6、#7 还没有合并到 main**：用户最终检查并确认后再合并（快进）。
+- 部署：`/Applications/NeuxMind Robot OS.app` 是 0.17.0（build 27），2026-11-13 04:14 替换并启动；后端报告版本 0.17.0，只监听回环地址。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261113-041426`。云平台在本地 Docker（`http://127.0.0.1:8800`）。
+- 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.17.0-arm64.dmg`（SHA-256 `db68de38df070ad09aba843abc935a3c6f6ee4ad646b8de4f9b0754844c542d0`）和同名 `.pkg`（`b74ef4b6df027751d089603b446e26bf24f2247e74dd99e5c4251744a6b673df`）；0.16.0、0.15.1、0.15.0 的也还在同一目录。
+- 新的 issue 分支请基于现在的 `integration`。浏览器验收经 `tests/gate_helper.cjs` 登录，测试服务端带 `NEUXMIND_MAIL_DEV_ECHO=1`；界面改动也要在 WebKit 上跑一遍（桌面应用是 WKWebView）。
 
 ## 待办
 
-1. 等 #6 提交 → 合入、统一回归、打包（下一个版本号）、经用户确认后部署 → 用户查看 #5、#6（要看的项目在轮次记录的“验证后的新 issue”）。用户也可以要求先单独打包部署 #5。
-2. 用户确认后把 `integration` 合并到 main 并推送。#2、#3、#4 已在 GitHub 上关闭；#5、#6 打开。
-3. 请用户和提交者决定：没有配置邮件服务时，内置测试账号默认是开启的，它的密码写在公开的源码里（`NEUXMIND_TEST_ACCOUNT=0` 可以关掉）。
-4. `fix/preexisting-test-failures` 的独立审查留下 5 条低级别意见，在那个会话里，尚未处理。
-5. Linux 容器里 `test_conformance_rereview04` 的一项计时类用例对宿主机负载敏感，留意是否再现。
-6. 真实服务上的验证仍然没有：真实 TokenFans Key 跑工程任务；真机上的界面流程和修复会话；真实邮件服务（SMTP）发验证码。
+1. 用户做最终检查（要看的项目在轮次记录的“最终检查要看的”）。
+2. 用户确认后：把 `integration` 合并到 main 并推送，关闭 #5、#6、#7。
+3. 请用户确认集成时定的一点：审批框里要批准的命令默认可见（其余代码按 #7 折叠）。
+4. 请用户和提交者决定：没有配置邮件服务时，内置测试账号默认是开启的，它的密码写在公开的源码里（`NEUXMIND_TEST_ACCOUNT=0` 可以关掉）。
+5. `fix/preexisting-test-failures` 的独立审查留下 5 条低级别意见，尚未处理。
+6. Linux 容器里 `test_conformance_rereview04` 的一项计时类用例对宿主机负载敏感，留意是否再现。
+7. 真实服务上的验证仍然没有：真实 TokenFans Key 跑调查和对话修复；真机上的调研、重新调研、修复；真实邮件服务（SMTP）发验证码。
