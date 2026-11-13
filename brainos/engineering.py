@@ -363,6 +363,7 @@ class Engineering:
                'model_id':model['id'],'model':model['model'],'billing':model['billing'],'name':robot['name']+' · 本体调查',
                'status':'starting','objective':objective,'max_tokens':tokens,'max_minutes':minutes,'usage':{},'events':[],
                'created_at':now(),'updated_at':now(),'thread_id':None,'turn_id':None,'pending_question':None,'runtime_contract':3}
+            if 'investigation' in p:s.update(self.platform.investigation.session_fields(p['investigation'],robot))   # issue #6: full re-investigation
             self.store.put('agent_sessions',s);self._launch(s,objective,False)
             return self.store.get('agent_sessions',s['id'])
 
@@ -670,9 +671,12 @@ class Engineering:
                          'inventories':[r for r in self.store.list('robot_inventories') if r['project_id']==s['project_id']]}
                 (work/'PROJECT.json').write_text(json.dumps(context,ensure_ascii=False,indent=2))
             else:
+                if (s.get('investigation') or {}).get('full_flow'):self.platform.investigation.flow_scan(sid,handle)   # issue #6: a full run scans the hardware first
+                if handle['stop'].is_set():final='interrupted';return
                 context={'robot':{k:v for k,v in self.store.get('robots',s['robot_id']).items() if k!='token'},
                          'inventories':[r for r in self.store.list('robot_inventories') if r['robot_id']==s['robot_id']],
                          'evidence':[e for e in self.store.list('device_evidence') if e['session_id']==sid]}
+                context=self.platform.investigation.device_context(self.store.get('agent_sessions',sid),context)   # issue #6
                 if (work/'DEVICE_CONTEXT.json').is_symlink():raise ValueError('本体上下文文件不能为符号链接')
                 (work/'DEVICE_CONTEXT.json').write_text(json.dumps(context,ensure_ascii=False,indent=2))
                 if s.get('mode')=='repair':self.platform.hardware.prepare_workspace(s,work)

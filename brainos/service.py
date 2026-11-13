@@ -83,6 +83,8 @@ class Platform:
         self.sims = SimRobots(self, self.store.root)
         from .hardware_init import HardwareInit
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
+        from .investigation import Investigation
+        self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):
@@ -117,6 +119,7 @@ class Platform:
                       system={'version': '0.16.0', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
         result.update(self.hardware.snapshot())
+        result.update(self.investigation.snapshot())
         result.update(self.workflows.snapshot())
         # The cloud session token stays in the credential file; only a summary is shown.
         result['cloud_account'] = self.cloud.summary()
