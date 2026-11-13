@@ -4,6 +4,8 @@
 // connect a third one by pasting an ssh command.
 // Fixture: tests/ssh_jump_browser_fixture.py (local SSH protocol fixtures, no real machine).
 const {chromium} = require(process.env.BRAIN_PLAYWRIGHT_MODULE || 'playwright');
+const {gateSignIn} = require('./gate_helper.cjs');
+const crypto = require('crypto');
 const fs = require('fs');
 
 (async () => {
@@ -51,10 +53,9 @@ const fs = require('fs');
   };
 
   await page.goto(cfg.url);
-  await click('account');
-  await fill('name', '跳板机验收'); await fill('email', 'jump@example.test'); await fill('password', 'fixture-password-123');
-  await submit();
-  await dialog.waitFor({state: 'hidden'});
+  // the app opens on the sign-in screen; registration takes the e-mailed code (see gate_helper.cjs)
+  // a throwaway account on the local fixture; the password is made up on every run (a letter and a digit are required)
+  await gateSignIn(page, {name: '跳板机验收', email: 'jump@example.test', password: 'jump1-' + crypto.randomBytes(8).toString('hex')});
   await click('journey-start');
   await fill('name', '内网机器人'); await fill('objective', '经跳板机接入真机并查看实时状态');
   await submit();

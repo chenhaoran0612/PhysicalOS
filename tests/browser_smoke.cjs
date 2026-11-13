@@ -7,7 +7,8 @@ const path=require('path');
  page.on('pageerror',e=>errors.push(e.message));
  const base=process.env.BRAIN_QA_URL||'http://127.0.0.1:8789';
  const device=process.env.BRAIN_QA_DEVICE;if(!device)throw Error('Set BRAIN_QA_DEVICE to the test-only browser_fixture.py endpoint');
- await page.goto(base);await page.locator('#navigation a').first().waitFor();
+ // The app opens on the sign-in screen (the sidebar is hidden until signed in); gateSignIn below waits for the navigation.
+ await page.goto(base);await page.locator('#auth-gate form[data-acct-form]').waitFor();
  await page.screenshot({path:'artifacts/mac-workbench.png',fullPage:true});
  const click=async action=>page.locator(`[data-action="${action}"]`).first().click();
  const fill=async(name,value)=>page.locator(`#dialog [name="${name}"]`).fill(value);

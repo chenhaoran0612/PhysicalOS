@@ -25,7 +25,6 @@ LOCATIONS = [
     ('desktop/main.swift', [rf'messageText = "NeuxMind Robot OS {V}"']),
     ('desktop/Info.plist', [rf'<key>CFBundleShortVersionString</key><string>{V}</string>']),
     ('desktop/INSTALL.txt', [rf'^NeuxMind Robot OS {V} —']),
-    ('web/index.html', [rf'ROBOT OS <b>{V} / PLATFORM</b>']),
     ('tests/frozen_engine_smoke.py', [rf"\['version'\]=='{V}'", rf"'version':'{V}'\}}"]),
 ]
 EXPECTED_COUNTS = {path: len(patterns) for path, patterns in LOCATIONS}

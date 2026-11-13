@@ -78,7 +78,14 @@ async function panelAcceptance(cfgPath, shots) {
   const tokenfansProfiles = () => page.evaluate(() => rows('agent_models').filter(m => m.billing === 'tokenfans').map(m => m.model));
 
   // a test-only app account with one project (the managed TokenFans profile is per project)
-  const reg = await page.request.post(cfg.url + '/api/register', {data: {email: 'tokenfans-ui@example.test', password: 'ui-' + crypto.randomBytes(8).toString('hex'), name: 'TokenFans 验收'}});
+  // Registration needs the e-mailed code: the test server runs with NEUXMIND_MAIL_DEV_ECHO=1 and no
+  // SMTP server, so the code comes back in the answer and nothing is mailed. The password needs a letter and a digit.
+  const account = {email: 'tokenfans-ui@example.test', password: 'ui1-' + crypto.randomBytes(8).toString('hex'), name: 'TokenFans 验收'};
+  const started = await page.request.post(cfg.url + '/api/register/start', {data: account});
+  if (!started.ok()) fail('register/start ' + started.status());
+  const {dev_code} = await started.json();
+  if (!dev_code) fail('register/start returned no dev_code: start the fixture with NEUXMIND_MAIL_DEV_ECHO=1');
+  const reg = await page.request.post(cfg.url + '/api/register', {data: {...account, code: dev_code}});
   if (!reg.ok()) fail('register ' + reg.status());
   // 0. cold start straight at /#cloud, as the desktop's 刷新 (Cmd+R) does on this page: the panel
   //    renders without page errors and the 4 s auto-refresh runs -- a change made outside the page

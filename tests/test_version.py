@@ -1,7 +1,7 @@
 """Every place that shows or reports the product version agrees with the build script.
 
 The version is written by hand in several files (backend health, engine client info,
-native About box, Info.plist, sidebar, installer notes, frozen smoke test). A release
+native About box, Info.plist, installer notes, frozen smoke test). A release
 that bumps some of them and not others ships an app that names two versions;
 ``scripts/set_version.py`` rewrites them all and this test keeps them in step.
 """
