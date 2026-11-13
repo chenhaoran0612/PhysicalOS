@@ -33,10 +33,17 @@
     return '内容';
   }
 
-  function build(html) {
+  // Approvals: what the user is asked to approve (the command of a device change, an SSH command) must be
+  // readable without a click, so folds inside an approval form start open; the user can still close them.
+  // They get an empty key: their state is not remembered and cannot open a fold elsewhere.
+  // (The fix chat of web/investigation.js keeps its approval card as rendered, with data-keep-code.)
+  const APPROVAL = 'form[data-form="engine-approval"]';
+
+  function build(html, context) {
     const box = document.createElement('div');
     box.className = 'nx-readable';
     box.innerHTML = html;
+    if (context?.closest(APPROVAL)) box.querySelectorAll('details.nx-fold').forEach(d => { d.open = true; d.dataset.foldKey = ''; });
     return box;
   }
 
@@ -48,7 +55,7 @@
     let html;
     if (kind === 'code' && insideDetails) html = `<pre class="nx-raw">${R.esc(text)}</pre>`; // the page already folds it
     else html = R.renderText(text, {what: contextWord(pre)});
-    const box = build(html);
+    const box = build(html, pre);
     box.classList.add('nx-from-pre');
     if (pre.className) box.dataset.was = pre.className;
     pre.replaceWith(box);
@@ -72,7 +79,7 @@
     const tag = inLog(parent) ? parent.parentElement.querySelector('.tag')?.textContent.trim() || '' : '';
     const machine = MACHINE_TAGS.has(tag) && (kind === 'prose' || kind === 'code');
     if (!machine && (kind === 'empty' || (kind === 'prose' && !/```/.test(text) && !(inLog(parent) && MARKDOWN.test(text))))) return;
-    const box = build(machine ? R.foldCode(text, tag) : R.renderText(text, {what: '内容'}));
+    const box = build(machine ? R.foldCode(text, tag) : R.renderText(text, {what: '内容'}), parent);
     if (parent.tagName === 'CODE') parent.replaceWith(box);
     else node.replaceWith(box);
   }

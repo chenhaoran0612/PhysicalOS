@@ -53,6 +53,8 @@
 
 用户展开过的折叠，在页面轮询刷新后保持展开（按折叠所在的位置记忆，不按内容；实时输出每次刷新内容都在变）。确实需要原样显示代码的元素，加 `data-keep-code`。
 
+**审批是例外。** 要用户批准的内容（修改设备的命令、调查时的 SSH 命令）必须不用点击就能看全：审批表单（`form[data-form="engine-approval"]`）里的折叠默认展开，仍然可以收起，数据照样显示成“名称—值”的行；对话修复里的审批卡片用 `data-keep-code` 保持原样。这与 [HARDWARE_INIT.md](HARDWARE_INIT.md) 的“审批框完整展开命令”一致，由 `tests/style_browser.cjs` 的 `approvalsShowTheCommand` 检查。
+
 没有改动的地方：
 
 - 输入框里的 JSON（任务的“高级配置”、参数的“直接编辑 JSON”等）是用户自己填写的内容，保持原样。

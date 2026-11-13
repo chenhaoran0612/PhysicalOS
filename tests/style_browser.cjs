@@ -194,6 +194,30 @@ async function codeOnScreen(page) {
   });
 }
 
+// What the user is asked to approve must be readable without a click: inside an approval the folds start
+// open (the command of a device change, an SSH command), and stay open when the dialog re-renders.
+async function approvalsShowTheCommand(page, shots) {
+  const command = 'sudo modprobe uvcvideo\nsudo systemctl restart camera';
+  const fill = () => page.evaluate(c => form('确认具体操作', '仅批准本次请求。请核对命令、路径和所申请权限。',
+    '<div class="contract-line"><b>在机器人上执行 SSH 命令</b><p>检查相机驱动</p><pre class="json-view">systemctl show robot-stack</pre></div>'
+    + hwCommand(c) + json({type: 'commandExecution', command: 'ls /dev', cwd: '/work'}), 'engine-approval', '提交决定', 'data-id="style-check"'), command);
+  await fill();
+  const approval = page.locator('#dialog form[data-form="engine-approval"]');
+  await approval.locator('.nx-readable').first().waitFor();
+  for (let round = 0; round < 2; round += 1) {
+    check(await approval.locator('details.nx-fold').count() >= 3, 'approval: expected the SSH command, the fix command and the command in the data');
+    check(await approval.locator('details.nx-fold:not([open])').count() === 0, 'approval: a fold is closed, so what is approved is hidden');
+    const shown = await approval.innerText();
+    for (const text of ['systemctl show robot-stack', 'sudo modprobe uvcvideo', 'sudo systemctl restart camera', 'ls /dev']) {
+      check(shown.includes(text), 'approval does not show: ' + text);
+    }
+    check(!/"type"\s*:/.test(shown), 'approval shows raw JSON');
+    if (round === 0 && shots) await page.screenshot({path: path.join(shots, 'approval-command-visible.png')});
+    await fill(); // re-render while polling
+  }
+  await page.locator('#dialog [data-action=close]').first().click();
+}
+
 async function readableViews(page, shots) {
   const fill = () => page.evaluate(() => dialog('数据展示检查', '用页面自己的展示函数渲染', '<div class="dialog-body">'
     + json({exit_code: 0, ok: true, host: 'robot.local', tags: ['camera', 'lidar'], created_at: '2026-11-12T10:20:30Z', detail: {speed: 0.5, unit: 'm/s'}})
@@ -263,6 +287,7 @@ async function pagesHaveNoCode(page, base) {
   await requiredAndMultiple(page);
   await hoverMatrix(page);
   await readableViews(page, shots);
+  await approvalsShowTheCommand(page, shots);
   await pagesHaveNoCode(page, info.url);
   check(!errors.length, 'page errors: ' + errors.join(' | '));
   console.log(`style browser check passed (${onWebkit ? 'webkit' : 'chromium'})`);
