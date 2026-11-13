@@ -9,6 +9,8 @@
 * The classifier and field texts are checked in tests/ux04_errors.cjs (run by tests/test_ux04.py).
 """
 import json
+import os
+os.environ.setdefault('NEUXMIND_MAIL_DEV_ECHO', '1')  # registration codes come back in the API response
 import sys
 import tempfile
 import unittest
@@ -153,7 +155,8 @@ class DesktopErrorTests(unittest.TestCase):
         self.application = Application(self.tmp.name + '/server')
         self.server = Server(make_handler(self.application))
         self.port = self.server.http.server_port
-        _, _, cookie = self.post('register', {'name': 'QA', 'email': 'qa5@example.test', 'password': 'fixture-password-1'})
+        form = {'name': 'QA', 'email': 'qa5@example.test', 'password': 'fixture-password-1'}
+        _, _, cookie = self.post('register', {**form, 'code': self.post('register/start', form)[1]['dev_code']})
         self.cookie = cookie.split(';')[0]
 
     def tearDown(self):

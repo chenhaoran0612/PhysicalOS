@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for round 03 (contract §5.3): engineering assistant on cloud-platform models.
 // Issue #4: the UI offers only TokenFans models, before and after cloud login (checked here). The
 // cloud gateway path stays in the backend for older sessions and the engineering API, so cloud
@@ -84,12 +85,7 @@ const SMALL = {width: 900, height: 640};
 
   // ------------------------------------------------------------ workspace + project
   await page.goto(cfg.url);
-  await click('account');
-  await fill('name', '第 03 轮云端工程验收');
-  await fill('email', `cloud03-${Date.now()}@example.test`);
-  await fill('password', 'fixture-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
+  await gateSignIn(page, {name: '第 03 轮云端工程验收', email: `cloud03-${Date.now()}@example.test`, password: 'fixture-password-123'});
   await click('journey-start');
   await fill('name', '云平台工程助手');
   await fill('objective', '用云平台模型调查本体并开发适配器');

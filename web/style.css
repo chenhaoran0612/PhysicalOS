@@ -273,3 +273,129 @@ dialog.wide{width:min(920px,calc(100% - 32px))}
 @media(max-width:850px){.tkf-meta{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.tkf-choices,.tkf-meta{grid-template-columns:1fr}}
 .model-options .model-option:only-child{grid-column:1/-1}
+
+/* ---------- 账号：登录 / 注册页、顶栏用户信息、账号面板 ---------- */
+body.auth-pending .sidebar,body.auth-pending .shell,body.auth-required .sidebar,body.auth-required .shell{display:none}
+body.auth-pending::before{content:"正在连接 Robot OS…";position:fixed;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px}
+.auth-gate{min-height:100vh;background:var(--surface)}
+.auth-gate[hidden]{display:none}
+.auth-layout{display:grid;grid-template-columns:minmax(360px,44%) 1fr;min-height:100vh}
+.auth-aside{background:var(--side);color:#c9d7cf;padding:44px 48px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.auth-aside::after{content:"";position:absolute;inset:auto -120px -160px auto;width:460px;height:460px;border-radius:50%;border:1px solid #2c463c;box-shadow:0 0 0 70px #1b322c,0 0 0 71px #2a4339,0 0 0 150px #1a302a,0 0 0 151px #263f35;pointer-events:none}
+.auth-logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:650;letter-spacing:-.6px;color:#fff}
+.auth-logo small{display:block;font-size:8px;letter-spacing:1.8px;font-weight:500;color:#8fa79a;margin-top:4px}
+.auth-logo .brand-mark{color:var(--lime)}
+.auth-pitch{margin:auto 0;position:relative;z-index:1}
+.auth-pitch h2{font-size:clamp(30px,3.2vw,44px);line-height:1.25;letter-spacing:-1.4px;font-weight:600;color:#f1f6ee;margin:0 0 30px}
+.auth-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;counter-reset:s}
+.auth-steps li{counter-increment:s;font-size:12px;color:#b9cbbf;border:1px solid #33503f;border-radius:999px;padding:7px 13px 7px 9px;display:flex;align-items:center;gap:8px}
+.auth-steps li::before{content:counter(s,decimal-leading-zero);font-size:10px;color:var(--lime);font-variant-numeric:tabular-nums}
+.auth-legal{font-size:11px;color:#6f877a;position:relative;z-index:1}
+.auth-main{display:flex;align-items:center;justify-content:center;padding:48px 24px}
+.auth-card{width:100%;max-width:380px}
+.auth-logo-compact{display:none;color:var(--side);margin-bottom:28px}
+.auth-logo-compact .brand-mark{color:var(--green)}
+.auth-card h1{font-size:26px;letter-spacing:-.8px;font-weight:650;margin:0 0 28px;color:var(--ink)}
+.auth-card h1:has(+.auth-sub){margin-bottom:10px}
+.auth-sub{font-size:13px;color:#66756c;line-height:1.7;margin:0 0 24px;overflow-wrap:anywhere}
+.auth-sub b{color:var(--ink);font-weight:600}
+.auth-devnote{font-size:12px;line-height:1.7;color:#7a5d1c;background:#fbf6e8;border:1px solid #efe2bf;border-radius:8px;padding:10px 12px;margin:-8px 0 22px;overflow-wrap:anywhere}
+.auth-devnote b{display:block;font-weight:600}
+.auth-devnote code{font-size:11px}
+/* 输入项 */
+.af{margin-bottom:18px}
+.af-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px}
+.af-label{font-size:13px;font-weight:550;color:#33433b}
+.af-top .text-link{font-size:12px}
+.af-box{position:relative}
+.af-box input{width:100%;height:44px;border:1px solid #d3dcd5;border-radius:8px;padding:0 14px;font-size:14px;color:var(--ink);background:#fff;transition:border-color .15s,box-shadow .15s}
+.af[data-kind=password] .af-box input,.af[data-kind=new-password] .af-box input,.af[data-kind=confirm] .af-box input{padding-right:46px}
+.af-box input:hover{border-color:#b9c7bd}
+.af-box input:focus,.otp input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px #28674f1f}
+.af.is-invalid .af-box input,.af.is-invalid .otp input{border-color:var(--red)}
+.af.is-invalid .af-box input:focus,.af.is-invalid .otp input:focus{box-shadow:0 0 0 3px #b44a421f}
+.af-eye{position:absolute;right:4px;top:4px;width:36px;height:36px;border-radius:6px;background:transparent;color:#7d8b83;display:grid;place-items:center}
+.af-eye:hover{color:var(--ink);background:#f1f4f1}
+.af-eye svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.af-msg{margin:6px 0 0;font-size:12px;line-height:1.5;color:#5d6d63;min-height:0}
+.af-msg:empty{display:none}
+.af.is-invalid .af-msg{color:var(--red)}
+.af-msg .text-link{font-size:12px}
+.af-caps{margin:6px 0 0;font-size:12px;color:var(--amber)}
+.af-caps[hidden]{display:none}
+.af.is-valid[data-kind=confirm] .af-box::after,.af.is-valid[data-kind=email] .af-box::after{content:"";position:absolute;right:16px;top:17px;width:10px;height:5px;border-left:2px solid var(--green);border-bottom:2px solid var(--green);transform:rotate(-45deg)}
+.af.is-valid[data-kind=confirm] .af-box::after{right:52px}
+/* 密码强度与规则 */
+.pw-meter{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:5px;align-items:center;margin-top:9px}
+.pw-meter i{height:4px;border-radius:2px;background:#e5eae6;transition:background .2s}
+.pw-meter em{font-style:normal;font-size:12px;color:var(--muted);min-width:64px;text-align:right}
+.pw-meter[data-level="0"]{display:none}
+.pw-meter[data-level="1"] i:nth-child(-n+1){background:var(--red)}
+.pw-meter[data-level="2"] i:nth-child(-n+2){background:#c89a3a}
+.pw-meter[data-level="3"] i:nth-child(-n+3){background:#5b9a6e}
+.pw-meter[data-level="4"] i{background:var(--green)}
+.pw-rules{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 16px}
+.pw-rules li{font-size:12px;color:#7d8b83;display:flex;align-items:center;gap:6px}
+.pw-rules li::before{content:"";width:6px;height:6px;border-radius:50%;border:1.5px solid #b7c3bb}
+.pw-rules li.ok{color:var(--green)}
+.pw-rules li.ok::before{width:8px;height:4px;border:0;border-left:2px solid var(--green);border-bottom:2px solid var(--green);border-radius:0;transform:rotate(-45deg) translate(1px,-1px)}
+/* 验证码 */
+.otp{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.otp input{height:52px;width:100%;min-width:0;text-align:center;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;border:1px solid #d3dcd5;border-radius:8px;color:var(--ink);background:#fff;padding:0;transition:border-color .15s,box-shadow .15s}
+/* 其他 */
+.auth-remember{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:#4d5d54;margin:2px 0 6px;cursor:pointer;user-select:none}
+.auth-remember input{width:16px;height:16px;margin:0;accent-color:var(--green)}
+.auth-submit{width:100%;margin-top:18px;font-size:14px;font-weight:600;height:46px;border-radius:8px;background:var(--green);color:#fff;border-color:transparent}
+.auth-submit:hover{background:#1f5641}
+.auth-submit.is-busy{opacity:.85;cursor:progress}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid #ffffff55;border-top-color:#fff;animation:acct-spin .7s linear infinite}
+.button.secondary .spin{border-color:#28674f33;border-top-color:var(--green)}
+@keyframes acct-spin{to{transform:rotate(360deg)}}
+.auth-switch{text-align:center;color:#66756c;font-size:13px;margin:22px 0 0}
+.auth-switch .text-link,.auth-card .text-link{font-size:13px;color:var(--green);font-weight:550}
+.auth-switch .text-link:disabled{color:var(--muted);font-weight:400;cursor:default;text-decoration:none;opacity:1}
+.auth-dot{margin:0 8px;color:#b4beb7}
+.auth-card .form-error{color:var(--red);background:#fcf0ee;border:1px solid #f1d5d1;border-radius:8px;font-size:13px;padding:10px 12px;margin-bottom:18px}
+.auth-card .form-error:empty,.acct-panel .form-error:empty{display:none}
+@media (max-width:900px){
+ .auth-layout{grid-template-columns:1fr}
+ .auth-aside{display:none}
+ .auth-logo-compact{display:flex}
+ .auth-main{align-items:flex-start;padding:56px 20px 40px}
+}
+/* 账号面板 */
+.acct-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.acct-head b{display:block;font-size:15px}
+.acct-head small{color:var(--muted)}
+.acct-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:#e9eee4;color:#526b49;font-weight:600;font-size:16px}
+.acct-facts{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0 0 6px;font-size:12px}
+.acct-facts dt{color:var(--muted)}
+.acct-facts dd{margin:0}
+.acct-section{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}
+.acct-section h3{font-size:13px;margin:0 0 14px}
+.acct-panel .af-box input{height:40px;font-size:13px}
+.acct-panel .form-error{color:var(--red);font-size:12px;margin-bottom:10px}
+.acct-foot{border-top:1px solid var(--line);padding-top:18px;margin-top:20px}
+.button.danger-outline{background:#fff;color:var(--red);border:1px solid #e6c4c0}
+/* Sidebar account control: fixed below the independently scrolling navigation. */
+.sidebar #navigation{margin-top:26px}
+.sidebar-bottom{position:relative;padding:12px 0 0;border-top:1px solid #ffffff12;margin-top:12px}
+.sidebar .nav-separator{margin:9px 12px;background:#ffffff10}
+.sidebar .brand{min-height:39px}
+.sidebar-user{display:flex;align-items:center;gap:11px;width:100%;min-height:52px;padding:10px;border-radius:9px;background:transparent;color:#ecf2e9;text-align:left}
+.sidebar-user:hover,.sidebar-user[aria-expanded="true"]{background:#ffffff0c}
+.sidebar-user .avatar{width:34px;height:34px;flex:0 0 34px;background:#d9edbe;border-color:#d9edbe;color:#294632;font-size:14px;font-weight:600}
+.sidebar-user-copy{min-width:0;flex:1}
+.sidebar-user-copy strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-user-copy strong{font-size:13px;font-weight:500;line-height:1.5}
+.sidebar-user .user-menu-chevron{width:16px;height:16px;flex:0 0 16px;stroke:#9caf9f;fill:none;stroke-width:1.5}
+.sidebar-user[aria-expanded="true"] .user-menu-chevron{transform:rotate(180deg)}
+.user-menu{position:absolute;bottom:calc(100% + 8px);left:0;right:0;max-height:calc(100dvh - 180px);overflow-y:auto;overscroll-behavior:contain;padding:7px;background:#fbfcfa;color:#344b3d;border:1px solid #dce5d9;border-radius:12px;box-shadow:0 12px 35px #071b2440;z-index:2}
+.user-menu[hidden],.user-menu button[hidden]{display:none}
+.user-menu-identity{padding:10px 10px 13px;margin-bottom:5px;border-bottom:1px solid #e3e9df;font-size:12px;line-height:1.5;color:#6c7d6c;overflow-wrap:anywhere}
+.user-menu button{display:block;width:100%;padding:10px;border-radius:6px;background:transparent;color:inherit;text-align:left;font-size:12px}
+.user-menu button:hover,.user-menu button:focus-visible{background:#eaf1e3}
+.user-menu button:focus-visible{outline:2px solid #8bbfa0;outline-offset:-2px}
+.user-menu-divider{height:1px;margin:5px 8px;background:#e3e9df}
+.user-menu #user-logout{color:#a3574d}
+@media(max-height:700px){.sidebar #navigation{margin-top:18px}}

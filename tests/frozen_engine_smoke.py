@@ -1,5 +1,6 @@
 """Smoke test the actual packaged backend, SSH library and embedded native runtime."""
 import http.cookiejar
+import os
 import json
 from pathlib import Path
 import subprocess
@@ -18,7 +19,7 @@ from test_discovery import DiscoveryModel,COMMAND,ROOT,FILE
 
 root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as tmp:
-    process=subprocess.Popen([str(root/'dist/NeuxMind Robot OS.app/Contents/Resources/backend/brainos-server'),'--port','0','--state-dir',tmp],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+    process=subprocess.Popen([str(root/'dist/NeuxMind Robot OS.app/Contents/Resources/backend/brainos-server'),'--port','0','--state-dir',tmp],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'NEUXMIND_MAIL_DEV_ECHO':'1'})
     ssh=SSHFixture();model=Server(ResponsesFixture);mcp=Server(MCPFixture);ext_model=Server(ExtensionModel);flow_model=Server(WorkflowModel);recipe_service=Server(RecipeFixture)
     deep_model=Server(DiscoveryModel);deep_ssh=SSHFixture(files={FILE:b'# fixture\n'+b'x'*48000+b'\nprotocol: fixture-bus\n'},command_outputs={COMMAND:b'ExecStart=/home/robot/vendor_ws/driver.py\n'})
     gateway=Gateway(DeviceFixture(),'frozen-edge-token-123456789',tmp+'/edge');edge=Server(edge_handler(gateway))
@@ -31,7 +32,8 @@ with tempfile.TemporaryDirectory() as tmp:
         assert api('health')['version']=='0.15.1'
         with opener.open(base+'/inventory.js',timeout=10) as response:
             assert b'function inventoryOpen(' in response.read()
-        api('register',{'name':'Frozen QA','email':'frozen@example.test','password':'test-password-123'})
+        form={'name':'Frozen QA','email':'frozen@example.test','password':'test-password-123'}
+        api('register',{**form,'code':api('register/start',form)['dev_code']})
         project=api('projects',{'name':'Frozen QA','objective':'Verify packaged discovery'})
         m=api('engineering/models',{'project_id':project['id'],'name':'Local fixture','model':'fixture-agent','base_url':model.url+'/v1','api_key':'fixture-key'})
         check=api('engineering/ssh/scan',{'project_id':project['id'],'host':'127.0.0.1','port':ssh.port,'username':'robot'})

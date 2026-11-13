@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
 const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  // issue #4: models run only through TokenFans
@@ -11,7 +12,7 @@ const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  
  const click=async action=>{const dialog=page.locator(`#dialog[open] [data-action="${action}"]`);await (await dialog.count()?dialog:page.locator(`[data-action="${action}"]`)).first().click();};
  const fill=async(name,value)=>page.locator(`#dialog [name="${name}"]`).fill(String(value));
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(300);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
- await page.goto(cfg.url);await click('account');await fill('name','工程扩展验收');await fill('email',`extensions-${Date.now()}@example.test`);await fill('password','fixture-password-123');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
+ await page.goto(cfg.url);await gateSignIn(page,{name:'工程扩展验收',email:`extensions-${Date.now()}@example.test`,password:'fixture-password-123'});
  await click('journey-start');await fill('name','工程工具接入');await fill('objective','验证 Skills 与 MCP 原生调用和审批');await submit();
  await page.goto(cfg.url+'/#extensions');await click('engine-ext-skill-add');await fill('name','robot-review');await fill('description','调查设备与检查工程接口时使用');await fill('instructions','SKILL_BROWSER_MARKER: use selected lookup_robot to review interfaces.');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await click('engine-ext-skill-detail');await page.getByText('SKILL_BROWSER_MARKER:',{exact:false}).waitFor();

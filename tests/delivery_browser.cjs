@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
 (async()=>{
@@ -8,7 +9,7 @@ const fs=require('fs');
  const fill=(k,v)=>page.locator(`#dialog [name="${k}"]`).fill(String(v));
  const submit=()=>page.locator('#dialog button[type=submit]').click();
  const calls=()=>page.evaluate(()=>fetch('/fixture/calls').then(r=>r.json()).then(r=>r.calls));
- await page.goto(cfg.url);await click('journey-start');await fill('name','交付流程验收');await fill('email','delivery@example.test');await fill('password','fixture-password-123');await submit();await page.locator('form[data-form=project]').waitFor();await fill('name','仓库通道巡检');await fill('objective','沿指定路线巡检并返回检查结果');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
+ await page.goto(cfg.url);await gateSignIn(page,{name:'交付流程验收',email:'delivery@example.test',password:'fixture-password-123'});await click('journey-start');await page.locator('form[data-form=project]').waitFor();await fill('name','仓库通道巡检');await fill('objective','沿指定路线巡检并返回检查结果');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await page.goto(cfg.url+'/#skills');await click('application-add');await page.getByRole('heading',{name:'先准备机器人和工作技能'}).waitFor();await click('close');
  await page.evaluate(async cfg=>{const r=await api('robots',{project_id:projectId,name:'移动底盘（协议验收）',family:'mobile',endpoint:cfg.device,token:cfg.token});await api('robots/connect',{robot_id:r.id});await api('skills',{project_id:projectId,name:'前往巡检点',version:'1',requires:['navigation.goal'],entrypoint:'navigate',success_condition:'到达巡检点并返回状态',stop_condition:'定位丢失、超时或现场停止',model_ids:[]});await refresh(true);},cfg);
  await click('application-add');await page.locator('#steps-container .step-editor').waitFor();await fill('parameters','{"goal":[1,2]}');await submit();await page.getByText('应用交付清单',{exact:true}).waitFor();await page.getByRole('heading',{name:'先检查应用配置',exact:true}).waitFor();if((await calls()).length)throw Error('Opening checklist triggered hardware');

@@ -12,6 +12,8 @@
 Device doubles are test-only protocol fixtures; the restart test uses a real simulated quadruped.
 """
 import json
+import os
+os.environ.setdefault('NEUXMIND_MAIL_DEV_ECHO', '1')  # registration codes come back in the API response
 import re
 import shutil
 import subprocess
@@ -242,7 +244,8 @@ class ResetWayOutTests(unittest.TestCase):
                         return r.status, json.loads(r.read()), r.headers.get('Set-Cookie', '')
                 except urllib.error.HTTPError as exc:
                     return exc.code, json.loads(exc.read()), ''
-            _, user, cookie = post('register', {'name': 'QA', 'email': 'qa4@example.test', 'password': 'fixture-password-1'})
+            form = {'name': 'QA', 'email': 'qa4@example.test', 'password': 'fixture-password-1'}
+            _, user, cookie = post('register', {**form, 'code': post('register/start', form)[1]['dev_code']})
             cookie = cookie.split(';')[0]
             workspace = application.workspace(user['user'])
             pid = workspace.add_project({'name': 'P', 'objective': 'O'})['id']

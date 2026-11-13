@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for R-08 (simulation labels, deploy refused) and R-07 (解除急停).
 // Start tests/sim_reset_browser_fixture.py first.
 // Usage: node tests/sim_reset_browser.cjs [config.json] [screenshot-dir]
@@ -34,11 +35,8 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
 
   // Account and project through the UI.
   await page.goto(cfg.url);
+  await gateSignIn(page, {name: '仿真与急停验收', email: 'sim-reset@example.test', password: 'fixture-password-123'});
   await click('journey-start');
-  await fill('name', '仿真与急停验收');
-  await fill('email', 'sim-reset@example.test');
-  await fill('password', 'fixture-password-123');
-  await submit();
   await page.locator('form[data-form=project]').waitFor();
   await fill('name', '仿真证据与急停');
   await fill('objective', '仿真本体不能作为现场证据；停止后需现场解除急停');

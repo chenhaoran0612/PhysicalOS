@@ -71,9 +71,40 @@ function resources(){const available=state.catalog.filter(r=>!resourceKind||r.ki
 function billing(){const bill=state.billing||{balance:{credits:0,reserved:0,available:0},ledger:[],orders:[],reservations:[]};return heading('USAGE & BILLING','用量与账单','查看模型调用、训练、仿真和 Agent 的额度预留与实际用量。',button('申请平台额度','purchase'))+`<div class="stats">${[[bill.balance.available,'可用额度'],[bill.balance.reserved,'任务预留'],[bill.balance.credits,'账户总额度'],[bill.ledger.filter(e=>e.kind==='usage').length,'已结算记录']].map(([n,t])=>`<div class="stat"><div class="stat-top">${t}</div><div class="stat-number">${n}</div><div class="stat-note">平台额度点 · 非货币金额</div></div>`).join('')}</div>${notice('当前尚未开通在线支付，可以查看额度和用量。申请额度只保存申请，不会立即扣款或充值。')}<div class="section-head"><h2>用量账本</h2><span>供应商计量证据与费用关联</span></div><section class="panel">${bill.ledger.length?table(['时间','类型','额度变化','计量依据'],bill.ledger.map(e=>`<tr><td>${date(e.created_at)}</td><td>${e.kind==='usage'?'资源使用':'运营额度调整'}</td><td>${e.delta>0?'+':''}${e.delta}</td><td>${h(e.evidence_ref||e.reason)}</td></tr>`)):empty('暂无用量','使用平台模型或算力后，每笔用量会记录在这里。',button('看看平台模型与算力','go-resources','secondary small'))}</section><div class="spacer"></div>${panel('额度申请',bill.orders.length?table(['订单','申请额度','状态'],bill.orders.map(o=>`<tr><td class="mono">${o.id}</td><td>${o.credits} 点</td><td>${badge('等待支付渠道','warn')}</td></tr>`)):empty('暂无额度申请','需要使用平台模型或算力时，可以先申请额度；申请不会扣款。',button('申请平台额度','purchase','secondary small')))}`;}
 const views={overview,robots,models,skills,agents,harness,deployment,training,datasets,services,simulation,resources,billing,
  cloud:(...args)=>typeof cloud==='function'?cloud(...args):''};  // cloud() is in cloud.js, loaded later: renders after it
-function render(){const navCurrent=current==='workflows'?'agents':current;const navScroll=$('#navigation').scrollTop;$('#breadcrumb').textContent=(current==='workflows'?'工程助手 / 协作流程':navigation.find(x=>x[0]===current)?.[1])||'项目工作台';$('#navigation').innerHTML=navigation.map(([k,t],i)=>`${({0:'从任务到上岗',7:'模型与数据',10:'工具与账户'}[i])?'<div class="nav-group-title">'+({0:'从任务到上岗',7:'模型与数据',10:'工具与账户'}[i])+'</div>':''}<a href="#${k}" class="${k===navCurrent?'active':''}" ${k===navCurrent?'aria-current="page"':''}><span class="nav-icon">${icon(k)}</span>${t}</a>`).join('');$('#navigation').scrollTop=navScroll;$('#main').innerHTML=views[current]();$('.avatar').textContent=state.user?state.user.name[0]:'↗';$('.avatar').setAttribute('data-action','account');$('.avatar').setAttribute('role','button');$('.avatar').setAttribute('tabindex','0');$('#connection-state').textContent=state.user?'已登录':'未登录';}
-function route(){current=location.hash.slice(1)||'overview';if(!views[current])current='overview';render();$('#sidebar').classList.remove('open');$('#content-scroll').scrollTo(0,0);}
-function dialog(title,sub,body){delete $('#dialog').dataset.engineSession;delete $('#dialog').dataset.sshStatus;delete $('#dialog').dataset.workflowRun;
+function render(){const navCurrent=current==='workflows'?'agents':current;const navScroll=$('#navigation').scrollTop;$('#breadcrumb').textContent=(current==='workflows'?'工程助手 / 协作流程':navigation.find(x=>x[0]===current)?.[1])||'项目工作台';$('#navigation').innerHTML=navigation.map(([k,t],i)=>`${[7,10].includes(i)?'<div class="nav-separator" aria-hidden="true"></div>':''}<a href="#${k}" class="${k===navCurrent?'active':''}" ${k===navCurrent?'aria-current="page"':''}><span class="nav-icon">${icon(k)}</span>${t}</a>`).join('');$('#navigation').scrollTop=navScroll;$('#main').innerHTML=views[current]();renderSidebarUser();}
+function renderSidebarUser(){
+ const user=state.user;
+ $('#user-avatar').textContent=user?Array.from(user.name||user.email)[0].toUpperCase():'↗';
+ $('#sidebar-user-name').textContent=user?user.name:'登录 / 注册';
+ $('#sidebar-user-email').textContent=user?user.email:'';
+ $('#sidebar-user-email').hidden=!user;
+ $('#sidebar-user-name').title=user?user.name:'';
+ $('#sidebar-user-email').title=user?user.email:'';
+ $('#user-account-action').textContent=user?'账户信息':'登录 / 注册';
+ $('#user-logout').hidden=!user;
+ $('#user-menu-toggle').title='账户与设置';
+}
+function setUserMenu(open,restoreFocus=false){
+ $('#user-menu').hidden=!open;
+ $('#user-menu-toggle').setAttribute('aria-expanded',String(open));
+ if(restoreFocus)$('#user-menu-toggle').focus();
+}
+$('#user-menu-toggle').addEventListener('click',()=>setUserMenu($('#user-menu').hidden));
+$('.sidebar-bottom').addEventListener('keydown',e=>{
+ const menu=$('#user-menu'),items=[...menu.querySelectorAll('[role="menuitem"]')].filter(el=>!el.hidden);
+ if(e.key==='Escape'&&!menu.hidden){e.preventDefault();e.stopPropagation();setUserMenu(false,true);return;}
+ if(!['ArrowDown','ArrowUp','Home','End'].includes(e.key))return;
+ e.preventDefault();setUserMenu(true);
+ const index=items.indexOf(document.activeElement);
+ const next=e.key==='Home'?0:e.key==='End'?items.length-1:index<0?(e.key==='ArrowUp'?items.length-1:0):(index+(e.key==='ArrowUp'?-1:1)+items.length)%items.length;
+ items[next]?.focus();
+});
+$('.sidebar-bottom').addEventListener('focusout',e=>{
+ if(e.relatedTarget&&!$('.sidebar-bottom').contains(e.relatedTarget))setUserMenu(false);
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.sidebar-bottom'))setUserMenu(false);});
+function route(){setUserMenu(false);current=location.hash.slice(1)||'overview';if(!views[current])current='overview';render();$('#sidebar').classList.remove('open');$('#content-scroll').scrollTo(0,0);}
+function dialog(title,sub,body){if(!$('#user-menu').hidden)setUserMenu(false,true);delete $('#dialog').dataset.engineSession;delete $('#dialog').dataset.sshStatus;delete $('#dialog').dataset.workflowRun;
  delete $('#dialog').dataset.robotDetail;delete $('#dialog').dataset.deliveryApp;delete $('#dialog').dataset.simLive;delete $('#dialog').dataset.simGallery;$('#dialog').classList.remove('wide');
  $('#dialog-content').innerHTML=`<div class="dialog-head"><div><h2>${title}</h2><p>${sub}</p></div><button type="button" class="close-dialog" aria-label="关闭" data-action="close">×</button></div>${body}`;if(!$('#dialog').open)$('#dialog').showModal();}
 function form(title,sub,fields,kind,submit='保存',attrs=''){dialog(title,sub,`<form data-form="${kind}" ${attrs}><div class="dialog-body"><div class="form-error" role="alert"></div>${fields}</div><div class="dialog-footer">${button('取消','close','secondary')}<button class="button" type="submit">${submit}</button></div></form>`);}
@@ -81,6 +112,7 @@ function auth(login=false){form(login?'登录工作空间':'创建你的工作�
 const split=v=>v.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);
 const parse=v=>{try{return JSON.parse(v);}catch{throw Error('JSON 格式无效，请检查引号、逗号和括号');}};
 async function action(type,id,el){
+ if(el?.closest('#user-menu'))setUserMenu(false,true);
  if(type.startsWith('hardware-'))return hardwareAction(type,id);   // issue #2
  if(type.startsWith('inventory-'))return inventoryAction(type,id);
  if(type==='detail-robot_inventories')return inventoryAction('inventory-report',id);
@@ -206,7 +238,7 @@ $('#menu-toggle').onclick=()=>$('#sidebar').classList.toggle('open');
 $('#system-info').onclick=()=>action('guide');
 window.addEventListener('hashchange',route);
 let refreshWaiters=[];
-async function refresh(force=false){if(polling){if(force){await new Promise(resolve=>refreshWaiters.push(resolve));return refresh(true);}return;}polling=true;try{const next=await api('state');state=next;if(!projectId||!state.projects.some(p=>p.id===projectId)){const saved=sessionStorage.getItem('brain-project');projectId=state.projects.some(p=>p.id===saved)?saved:state.projects[0]?.id||'';}const text=JSON.stringify(state);if(text!==last||force){last=text;render();if(typeof engineRefresh==='function')engineRefresh();if(typeof flowRefresh==='function')flowRefresh();}}catch(err){if(err.code===401){if(state.user){state={...blank(),user:null,families:familyNames};projectId='';render();}}else{ $('#connection-state').textContent='服务断开';if(force)toast(err.message);}}finally{polling=false;const waiting=refreshWaiters;refreshWaiters=[];waiting.forEach(resolve=>resolve());}}
+async function refresh(force=false){if(polling){if(force){await new Promise(resolve=>refreshWaiters.push(resolve));return refresh(true);}return;}polling=true;try{const next=await api('state');state=next;if(!projectId||!state.projects.some(p=>p.id===projectId)){const saved=sessionStorage.getItem('brain-project');projectId=state.projects.some(p=>p.id===saved)?saved:state.projects[0]?.id||'';}const text=JSON.stringify(state);if(text!==last||force){last=text;render();if(typeof engineRefresh==='function')engineRefresh();if(typeof flowRefresh==='function')flowRefresh();}}catch(err){if(err.code===401){if(state.user){state={...blank(),user:null,families:familyNames};projectId='';render();}}else{ $('#user-menu-toggle').title='服务连接已断开';if(force)toast(err.message);}}finally{polling=false;const waiting=refreshWaiters;refreshWaiters=[];waiting.forEach(resolve=>resolve());}}
 // Install the auto-refresh before the first render, so that a page failing to render cannot stop it.
 // The first state request waits until every deferred script has run, so a render with data never
 // reaches a page function defined in a later file (cloud.js, results.js).

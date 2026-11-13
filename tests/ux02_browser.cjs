@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for ux02 (round 05: "站在用户的需求来设计").
 // A brand-new user with one simulated quadruped:
 //   (c) every page's empty state offers a concrete next step; technical errors are explained plainly,
@@ -43,13 +44,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
 
   // ---------------------------------------------------------------- 0. fresh workspace + one simulated quadruped
   await go('robots');
-  await click('sim-add');
-  await page.locator('form[data-form=register]').waitFor();
-  await fill('name', 'ux02 新用户');
-  await fill('email', 'ux02@example.test');
-  await fill('password', 'ux02-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
+  await gateSignIn(page, {name: 'ux02 新用户', email: 'ux02@example.test', password: 'ux02-password-123'});
   await click('sim-add');
   await page.locator('#dialog input[name=kind][value=quadruped]').check();
   await submit();

@@ -1,0 +1,3 @@
+// 启动兜底：若 8 秒后账号脚本仍未就绪，显示出错原因，而不是一直停在"正在连接"。
+window.nxBootErrors=[];addEventListener('error',e=>{nxBootErrors.push((e.message||'脚本错误')+(e.filename?' @'+e.filename.split('/').pop()+':'+e.lineno:''));});
+setTimeout(function(){if(window.nxAccountReady)return;document.body.classList.remove('auth-pending');var g=document.getElementById('auth-gate');g.hidden=false;g.innerHTML='<div class="auth-card"><h1>界面没有正常启动</h1><p class="auth-sub">请把下面这段文字截图发给开发人员：</p><pre style="white-space:pre-wrap;font-size:11px;background:#f6f7f5;padding:10px;border-radius:6px">'+(window.nxBootErrors.join('\n')||'没有捕获到脚本错误（可能是本地服务没有回应）')+'\n'+navigator.userAgent+'</pre></div>';},8000);

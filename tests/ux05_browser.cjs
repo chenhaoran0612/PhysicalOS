@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for ux05 (round 07), for a brand-new user with one simulated quadruped.
 //   first run  任务工作台 shows a 3-step guide (添加仿真机器人 → 安装示例技能 → 运行并观看); each step is ticked
 //              from the workspace's records as it is done; the guide can be closed and stays closed;
@@ -72,6 +73,7 @@ function writeSkill() {
 
   // ---------------------------------------------------------------- first run: the guide, nothing done yet
   await go('overview');
+  await gateSignIn(page, {name: 'ux05 新用户', email: 'ux05@example.test', password: 'ux05-password-123'});
   await guide.waitFor();
   assert(await guide.locator('[data-first-run-step]').count() === 3, '引导应有 3 步');
   const guideText = await guide.innerText();
@@ -81,13 +83,6 @@ function writeSkill() {
   await shot('01-first-run-guide');
 
   // step 1 from the guide (a brand-new user registers first)
-  await guide.locator('[data-action="sim-add"]').click();
-  await page.locator('form[data-form=register]').waitFor();
-  await fill('name', 'ux05 新用户');
-  await fill('email', 'ux05@example.test');
-  await fill('password', 'ux05-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
   await overview();
   await guide.locator('[data-action="sim-add"]').click();
   await page.locator('#dialog input[name=kind][value=quadruped]').check();

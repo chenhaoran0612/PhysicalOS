@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for the round-07 re-review fixes on the desktop (ux05-fix2, ux05-fix3), real runtimes throughout.
 // The runtime reports `capabilities.reset_expire`, `reset_expected_s` and the one-shot drift notice itself; only the
 // "older runtime" wording is checked by stubbing `reset_expire` away on the desktop API (page.route).
@@ -73,11 +74,7 @@ function writeSkill() {
 
   // ---------------------------------------------------------------- setup: a user, project A with real robots
   await go('overview');
-  await page.locator('#main .first-run [data-action="sim-add"]').click();
-  await page.locator('form[data-form=register]').waitFor();
-  await fill('name', 'ux05-fix2 用户'); await fill('email', 'ux05fix2@example.test'); await fill('password', 'ux05fix2-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
+  await gateSignIn(page, {name: 'ux05-fix2 用户', email: 'ux05fix2@example.test', password: 'ux05fix2-password-123'});
   await go('overview');
   await page.evaluate(() => refresh(true));
   await page.locator('#main .first-run [data-action="sim-add"]').click();

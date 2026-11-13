@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for the round-07 review fixes on the desktop (real runtimes, nothing stubbed except §4):
 //   Q7-04  a float option whose value is whole (1.0, "快") is selectable and reaches the skill as a float;
 //   Q7-03  a robot that keeps moving after repeated stops ("safety.stop_not_obeyed", real latch guard) is
@@ -63,11 +64,7 @@ function writeSkill() {
 
   // ---------------------------------------------------------------- setup: a user, one simulated quadruped, two "real" robots
   await go('overview');
-  await page.locator('#main .first-run [data-action="sim-add"]').click();
-  await page.locator('form[data-form=register]').waitFor();
-  await fill('name', 'ux05-fix 用户'); await fill('email', 'ux05fix@example.test'); await fill('password', 'ux05fix-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
+  await gateSignIn(page, {name: 'ux05-fix 用户', email: 'ux05fix@example.test', password: 'ux05fix-password-123'});
   await go('overview');
   await page.evaluate(() => refresh(true));
   await page.locator('#main .first-run [data-action="sim-add"]').click();

@@ -44,7 +44,7 @@ if __name__=='__main__':
         agent_runtime.available=lambda:{**real_available(),'available':True}
     tmp=tempfile.TemporaryDirectory(prefix='neuxmind-adapt-qa-')
     app=Application(tmp.name);model=Server(AdaptationModel)
-    email,password='adapt@example.test','adaptation-test-only'
+    email,password='adapt@example.test','adaptation-test-only-1'
     _,user=app.identity.authenticate({'email':email,'password':password,'name':'本体适配验收'},register=True)
     p=app.workspace(user)
     pid=p.add_project({'name':'本体适配验收','objective':'从档案生成适配器初稿并做一致性测试。全部为测试资料。'})['id']

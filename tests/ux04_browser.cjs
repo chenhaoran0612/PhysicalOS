@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 // Browser acceptance for ux04 (round 06), for a new user with one simulated quadruped.
 //   Q5-05  the run form and the "高级 JSON" path refuse values outside the declared min/max/choices before
 //          sending, on the field; a device refusal (param_out_of_range, stubbed: the runtime may not send
@@ -67,13 +68,7 @@ function writeSkill() {
 
   // ---------------------------------------------------------------- fresh workspace + one simulated quadruped
   await go('robots');
-  await click('sim-add');
-  await page.locator('form[data-form=register]').waitFor();
-  await fill('name', 'ux04 新用户');
-  await fill('email', 'ux04@example.test');
-  await fill('password', 'ux04-password-123');
-  await submit();
-  await page.locator('#dialog').waitFor({state: 'hidden'});
+  await gateSignIn(page, {name: 'ux04 新用户', email: 'ux04@example.test', password: 'ux04-password-123'});
   await click('sim-add');
   await page.locator('#dialog input[name=kind][value=quadruped]').check();
   await submit();

@@ -1,3 +1,4 @@
+const {gateSignIn}=require('./gate_helper.cjs');
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');
 const fs=require('fs');
 const {connectTokenFans}=require('./tokenfans_browser.cjs');
@@ -9,8 +10,8 @@ const {connectTokenFans}=require('./tokenfans_browser.cjs');
  const click=async action=>{const inside=page.locator(`#dialog[open] [data-action="${action}"]`);await (await inside.count()?inside:page.locator(`[data-action="${action}"]`)).first().click();};
  const fill=async(name,value)=>page.locator(`#dialog [name="${name}"]`).fill(String(value));
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();};
- await page.goto(cfg.url);await page.getByRole('heading',{name:'你希望机器人完成什么工作？',exact:true}).waitFor();await page.screenshot({path:'artifacts/user-journey-welcome.png'});
- await click('journey-start');await fill('name','用户路径验收');await fill('email',`journey-${Date.now()}@example.test`);await fill('password','fixture-password-123');await submit();
+ await page.goto(cfg.url);await gateSignIn(page,{name:'用户路径验收',email:`journey-${Date.now()}@example.test`,password:'fixture-password-123'});await page.getByRole('heading',{name:'你希望机器人完成什么工作？',exact:true}).waitFor();await page.screenshot({path:'artifacts/user-journey-welcome.png'});
+ await click('journey-start');
  await page.locator('form[data-form=project]').waitFor();await fill('name','仓库异常巡检');await fill('objective','每天检查仓库通道，识别障碍并输出异常报告。');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await page.locator('.journey-next').getByText('连接你的机器人',{exact:true}).waitFor();await click('journey-connect');await page.getByText('有 SSH 地址、用户名和密码或密钥',{exact:true}).waitFor();await click('close');
  // Real HTTP persistence for task assets; no model invocation or device action.

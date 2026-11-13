@@ -2,6 +2,8 @@
 import copy
 import http.client
 import json
+import os
+os.environ.setdefault('NEUXMIND_MAIL_DEV_ECHO', '1')  # registration codes come back in the API response
 import tempfile
 import threading
 import unittest
@@ -248,7 +250,9 @@ class IdentityHttpTests(unittest.TestCase):
         conn.close();return result
 
     def register(self,email):
-        status,user,cookie=self.request('/api/register',{'name':'Workspace','email':email,'password':'test-password-123'})
+        form={'name':'Workspace','email':email,'password':'test-password-123'}
+        code=self.request('/api/register/start',form)[1]['dev_code']
+        status,user,cookie=self.request('/api/register',{**form,'code':code})
         self.assertEqual(status,200)
         self.assertIn('HttpOnly',cookie)
         return cookie.split(';')[0]

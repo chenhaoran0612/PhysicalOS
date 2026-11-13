@@ -4,7 +4,7 @@ from brainos.server import Application,make_handler
 from test_product import Server
 
 def seed(app):
-    _,user=app.identity.authenticate({'email':'inventory@example.test','password':'inventory-test-only','name':'本体档案验收'},register=True)
+    _,user=app.identity.authenticate({'email':'inventory@example.test','password':'inventory-test-only-1','name':'本体档案验收'},register=True)
     p=app.workspace(user);project=p.add_project({'name':'通用本体接入验收','objective':'查看多类硬件、软件、证据和档案版本。所有内容均为测试资料。'})
     pid=project['id'];robot=p.add_robot({'project_id':pid,'name':'复合机器人 · 测试资料','family':'composite'})
     rid=robot['id'];connection={'id':'connection-ui','project_id':pid,'robot_id':rid,'host':'fixture.invalid','port':22,'username':'robot','auth':'password','read_roots':['/etc/robot'],'created_at':'2026-11-04T08:00:00Z'}
