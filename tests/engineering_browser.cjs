@@ -15,7 +15,7 @@ const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  
  await page.goto(cfg.url+'/#robots');await click('engine-ssh');await fill('name','SSH 协议验收设备');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();
  await page.locator('#dialog').getByText('确认 SSH 主机指纹',{exact:true}).waitFor();await page.locator('#dialog input[type=checkbox]').check();await submit();
  await page.locator('#dialog [data-action="engine-discover"]').first().click({timeout:30000});await page.locator('#dialog').getByText('让 Agent 调查本体',{exact:true}).waitFor();
- await page.locator('[name=data_authorized]').check();await fill('max_tokens',1000);await fill('max_minutes',1);await submit();
+ await page.locator('[name=data_authorized]').check();await submit();
  await page.locator('#engine-live [data-action=inventory-report]').waitFor({timeout:25000});
  await page.screenshot({path:'artifacts/agent-discovery-session.png'});await page.locator('#engine-live [data-action=inventory-report]').click();await page.locator('#dialog').getByText('Linux fixture',{exact:true}).waitFor();await page.screenshot({path:'artifacts/robot-inventory.png'});
  await click('inventory-evidence');await page.locator('#dialog').getByText('设备调查依据',{exact:true}).waitFor();if(!(await page.locator('#dialog').innerText()).includes('evidence-'))throw Error('Missing evidence');await click('close');
