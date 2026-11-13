@@ -5,7 +5,7 @@
 
 ## 现在的状态
 
-**0.16.0（build 26）已合并、回归、打包，并在用户确认后部署到本机（2026-11-12 20:14），等用户查看。** 它是用户验证过的 0.15.1（build 25）加上 main 的账号管理（212da95）。用户对 0.15.1 的结论是“基础功能基本都OK，细节还需要调整”，细节另提 issue。记录和要看的项目见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#并入-main-的账号管理212da95-0160-build-26)。
+**0.16.0（build 26）已合并、回归、打包，并在用户确认后部署到本机（2026-11-12 20:14），等用户查看。`integration` 已在用户确认后合并到 main（快进）并推送。** 它是用户验证过的 0.15.1（build 25）加上 main 的账号管理（212da95）。用户对 0.15.1 的结论是“基础功能基本都OK，细节还需要调整”，细节另提 issue。记录和要看的项目见 [第 08 轮记录](../iterations/2026-11-12-iter08.md#并入-main-的账号管理212da95-0160-build-26)。
 
 | 来源 | 内容 | 分支 @ 提交 | 状态 |
 |---|---|---|---|
@@ -24,7 +24,7 @@
 
 ## 分支与部署
 
-- `integration`（工作区 `PhysicalOS-integration/`）：main（212da95）+ 以上全部，已推送到 `origin/integration`。**未合并 main**；因为它已经包含 main 的最新提交，合并到 main 时是快进。
+- `integration`（工作区 `PhysicalOS-integration/`）：包含以上全部。**已在用户确认后合并到 main（快进，2026-11-12）并推送**，`origin/main` 与 `origin/integration` 指向同一个提交。之后的 issue 仍然先合到 `integration`，统一回归后由用户确认再合并到 main。
 - 部署：`/Applications/NeuxMind Robot OS.app` 是 0.16.0（build 26），2026-11-12 20:14 替换并启动；后端报告版本 0.16.0，只监听回环地址。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261112-201433`。原有的 2 个账号都在；本机没有配置邮件服务，所以启动时多了内置测试账号。云平台在本地 Docker（`http://127.0.0.1:8800`），健康。
 - 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.16.0-arm64.dmg`（SHA-256 `1ffecde91b2142c9c84655ccecdc951fa49718660f07e395285676f5c4c7e7be`）和同名 `.pkg`（`979a96a14711194f6ae17ee520aebc5c209ef42cfa9949ac46b02b34b499218c`）；0.15.1、0.15.0 的安装包也还在同一目录。
 - #2、#3、#4 的分支都已提交并合入；它们的下一批改动要基于现在的 `integration`（含登录页）。
@@ -39,9 +39,8 @@
 ## 待办
 
 1. 用户查看 0.16.0（要看的项目在轮次记录的“0.16.0 要看的”）。
-2. 用户新提的 issue（细节调整）交给对应的 issue 会话，基于现在的 `integration`。
-3. 用户确认后：把 `integration` 合并到 main（快进）并推送，关闭 issue。
-4. 请用户和提交者决定：没有配置邮件服务时，内置测试账号默认是开启的，它的密码写在公开的源码里（`NEUXMIND_TEST_ACCOUNT=0` 可以关掉）。
-5. `fix/preexisting-test-failures` 的独立审查留下 5 条低级别意见，在那个会话里，尚未处理。
-6. Linux 容器里 `test_conformance_rereview04` 的一项计时类用例对宿主机负载敏感，留意是否再现。
-7. 真实服务上的验证仍然没有：真实 TokenFans Key 跑工程任务；真机上的界面流程和修复会话；真实邮件服务（SMTP）发验证码。
+2. 用户新提的 issue（细节调整；目前打开的是 #5）交给对应的 issue 会话，基于现在的 `integration`（与 main 相同）。#2、#3、#4 已在 GitHub 上关闭。
+3. 请用户和提交者决定：没有配置邮件服务时，内置测试账号默认是开启的，它的密码写在公开的源码里（`NEUXMIND_TEST_ACCOUNT=0` 可以关掉）。
+4. `fix/preexisting-test-failures` 的独立审查留下 5 条低级别意见，在那个会话里，尚未处理。
+5. Linux 容器里 `test_conformance_rereview04` 的一项计时类用例对宿主机负载敏感，留意是否再现。
+6. 真实服务上的验证仍然没有：真实 TokenFans Key 跑工程任务；真机上的界面流程和修复会话；真实邮件服务（SMTP）发验证码。
