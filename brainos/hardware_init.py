@@ -239,10 +239,12 @@ def ensure_connected(device, connection, secret):
             pass
 
 
-def run_command(device, command, timeout, stdin=None, keep='tail', limit=FIX_OUTPUT_BYTES):
+def run_command(device, command, timeout, stdin=None, keep='tail', limit=FIX_OUTPUT_BYTES, redact=True):
     """Run one command to completion: it is never cut off for output volume, so an install is not
     aborted half way. ``keep='tail'`` keeps the last ``limit`` bytes (fixes: errors come last),
-    ``keep='head'`` the first (the scan: sections in order)."""
+    ``keep='head'`` the first (the scan: sections in order). ``redact=False`` returns the output as it
+    came, for a caller that reads numbers from it and filters the text it shows itself (issue #8)."""
+    clean = device.clean if redact else str
     channel = device.client.get_transport().open_session(timeout=8)
     try:
         channel.settimeout(2)
@@ -283,11 +285,24 @@ def run_command(device, command, timeout, stdin=None, keep='tail', limit=FIX_OUT
                 break
             time.sleep(.05)
         timed_out = not channel.exit_status_ready()
-        return {'stdout': device.clean(output.decode('utf-8', 'replace')), 'stderr': device.clean(error.decode('utf-8', 'replace')),
+        return {'stdout': clean(output.decode('utf-8', 'replace')), 'stderr': clean(error.decode('utf-8', 'replace')),
                 'exit_code': None if timed_out else channel.recv_exit_status(), 'timed_out': timed_out,
                 'output_head_dropped': dropped > 0, 'cancelled': bool(device.stop_event and device.stop_event.is_set())}
     finally:
         channel.close()
+
+
+def parse_scan(result):
+    """(parsed scan, raw record) of a finished ``hardware_scan.SCAN_EXEC`` run. Also used by the live
+    status (issue #8), which shows the scan without storing it."""
+    parsed = hardware_scan.parse(result['stdout'])
+    truncated = result['output_head_dropped']
+    if result['timed_out'] or truncated:
+        parsed['notes'].append('扫描命令超时或输出过长，结果可能不完整。')
+    parsed['complete'] = parsed['complete'] and not result['timed_out'] and not truncated
+    raw = {'stdout': result['stdout'], 'stderr': result['stderr'][:20000], 'exit_code': result['exit_code'],
+           'truncated': truncated, 'timed_out': result['timed_out']}
+    return parsed, raw
 
 
 class HardwareInit:
@@ -343,13 +358,7 @@ class HardwareInit:
         finally:
             if opened and device is not None:
                 device.close()
-        parsed = hardware_scan.parse(result['stdout'])
-        truncated = result['output_head_dropped']
-        if result['timed_out'] or truncated:
-            parsed['notes'].append('扫描命令超时或输出过长，结果可能不完整。')
-        parsed['complete'] = parsed['complete'] and not result['timed_out'] and not truncated
-        raw = {'stdout': result['stdout'], 'stderr': result['stderr'][:20000], 'exit_code': result['exit_code'],
-               'truncated': truncated, 'timed_out': result['timed_out']}
+        parsed, raw = parse_scan(result)
         return parsed, raw, round((time.monotonic() - started) * 1000)
 
     def _save(self, robot, connection, parsed, raw, duration, source, session_id=None):

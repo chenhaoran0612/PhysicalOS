@@ -16,7 +16,7 @@ from unittest import mock
 
 import paramiko
 
-from brainos import device_access, device_status
+from brainos import device_access, device_software, device_status, hardware_scan
 from brainos.service import Platform
 from ssh_fixture import SSHFixture
 
@@ -475,7 +475,9 @@ class LiveStatusTests(SshCase):
         self.assertGreaterEqual(view['latency_ms'], 0)
         self.assertEqual(view['status']['hostname'], 'dog-fixture')
         self.assertEqual(view['status']['services'][1], {'name': 'nav-stack', 'state': 'failed'})
-        self.assertEqual(self.target.commands, [device_status.status_command(SERVICES)])   # one fixed command only
+        # Fixed commands only: the basic status, then (issue #8) the running software and the hardware scan.
+        self.assertEqual(self.target.commands, [device_status.status_command(SERVICES), device_software.SOFTWARE_EXEC,
+                                                hardware_scan.SCAN_EXEC])
         self.assertEqual(self.jump.commands, [])
 
     def test_status_of_a_directly_connected_robot(self):

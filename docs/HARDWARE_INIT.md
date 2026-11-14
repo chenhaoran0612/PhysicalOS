@@ -15,6 +15,7 @@
 - 命令是 `brainos/hardware_scan.py` 中的常量 `SCAN_COMMAND`，以 `sh -c` 执行（不依赖账号的登录 shell），模型和用户的文本都不会拼进去；内核日志在设备端先按关键字过滤，只取最近 80 行；只读 sysfs/procfs 与 `lscpu`、`lsblk`、`lspci`、`lsusb`、`ip`、`nvidia-smi`、`dmesg`/`journalctl`、`systemctl --failed` 等，缺少工具时跳过。输出按 `@@NX-HW:<段名>@@` 分段。
 - 与 SSH 调查一样经 `device_access.SSHDevice` 连接（包括跳板机），输出会隐藏连接凭据；完整读取输出（上限 256 KB），超时、输出超限或缺少结束标记时记为不完整（`complete=false`，重新扫描的工具结果也带这个字段，不完整时不报告“已消失”的问题）；原始输出与扫描记录分开存放（`hardware_scan_raw`），只通过 `engineering/hardware/detail` 按需读取，每 4 秒刷新的状态快照不会解析它。
 - 每台机器人保留最近 20 次扫描（被修复会话或报告引用的扫描不删除）；状态快照只带每台机器人最近 3 次扫描。
+- 真机状态页（issue #8，见 [ENGINEERING_ENGINE.md](ENGINEERING_ENGINE.md#跳板机与真机实时状态)）每分钟用同一条扫描命令和同一个解析器读一次硬件，只显示、不保存：不产生扫描记录，不写审计，也不占用“正在扫描”的标记（`HardwareInit.scanning`），所以不会挡住这里的手动扫描；这台机器人正在扫描，或它的修复会话正在进行时，状态页那一轮不扫描硬件。两处共用 `hardware_init.parse_scan(result)`（超时或输出超限时记为不完整）；`run_command(..., redact=False)` 是给状态页读取软件状态里的数字用的，扫描和修复命令仍然隐藏凭据。
 
 ### 识别的问题
 

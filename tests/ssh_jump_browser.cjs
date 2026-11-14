@@ -84,22 +84,33 @@ const fs = require('fs');
   await card('跳板机后的机器人').locator('[data-action="engine-status"]').click();
   const status = page.locator('#ssh-status');
   await status.getByText('在线', {exact: true}).waitFor({timeout: 15000});
-  await expectText(status, ['真机 · 只读', '经跳板机', 'dog-fixture', '6 分钟', '0.52 / 0.61 / 0.40', '61.3 °C', '75%',
-                            'idle-start.service', 'nav-stack', '失败', 'recorder', '未运行']);
+  await expectText(status, ['真机 · 只读', '经跳板机', 'dog-fixture', '6 分钟', '0.52 / 0.61 / 0.40', '61.3 °C', '75%']);
+  // Issue #8: the services are on the software tab, with the rest of the running software
+  // (tests/live_status_browser.cjs covers that page in full).
+  await status.locator('#ls-tab-software').click();
+  const services = status.locator('[data-block="services"]');
+  await services.waitFor({timeout: 30000});
+  await expectText(services, ['idle-start.service', 'nav-stack', '失败', 'recorder', '未运行']);
   fs.mkdirSync('artifacts', {recursive: true});
   await page.screenshot({path: 'artifacts/ssh-jump-live-status.png'});
-  const firstStamp = await status.locator('.tag', {hasText: '更新于'}).innerText();
-  await page.waitForTimeout(4200);                                      // at least one more poll
-  await status.getByText('在线', {exact: true}).waitFor();
-  if (await status.locator('.tag', {hasText: '更新于'}).innerText() === firstStamp) throw Error('Status did not refresh');
+  // The page reads once a minute by itself; here it is asked to read now.
+  const stamp = () => status.locator('.ls-updated').innerText();
+  const firstStamp = await stamp();
+  await page.waitForTimeout(1100);                                      // the stamp shows seconds
+  await status.locator('[data-action="engine-status-refresh"]').click();
+  for (let waited = 0; await stamp() === firstStamp; waited += 200) {
+    if (waited > 15000) throw Error('Status did not refresh');
+    await page.waitForTimeout(200);
+  }
 
   // 3. Watched services can be changed from the status dialog.
   await click('engine-status-services');
   await fill('watch_services', 'bridge');
   await submit();
   await status.getByText('在线', {exact: true}).waitFor({timeout: 15000});
-  await expectText(status, ['bridge', '运行中']);
-  if ((await status.innerText()).includes('recorder')) throw Error('Old watched service still shown');
+  await services.locator('tr', {hasText: 'bridge'}).first().waitFor({timeout: 15000});
+  await expectText(services.locator('tr', {hasText: 'bridge'}).first(), ['关注', '运行中']);
+  if ((await services.innerText()).includes('recorder')) throw Error('Old watched service still shown');
   await click('close');
 
   // 4. A direct connection is unchanged: one fingerprint step, no jump host anywhere.
