@@ -113,6 +113,7 @@ const sshRouteLabel = c => c?.jump ? `（经跳板机 ${sshEndpoint(c.jump)}${c.
 
 function sshScanRequest(draft) {
   const request = {project_id: projectId, host: draft.host, port: Number(draft.port), username: draft.username};
+  if (draft.edit_robot_id) request.edit_robot_id = draft.edit_robot_id;      // issue #9: an edit of that robot's connection
   if (draft.route === 'jump') {
     request.jump = {host: draft.jump_host, port: Number(draft.jump_port), username: draft.jump_username};
     if (draft.resolve_on_jump) {                        // user and port may be left to the jump host's config
