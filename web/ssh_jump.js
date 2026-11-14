@@ -1,13 +1,8 @@
-// SSH through a jump host (one hop, like `ssh -J`) and the read-only live status of a
-// real machine. Loaded after engineering.js and built from its helpers.
+// SSH through a jump host (one hop, like `ssh -J`): the connection form and its two fingerprint
+// steps. Loaded after engineering.js and built from its helpers. The status of a connected
+// machine is in live_status.js (issue #8).
 
 const SSH_AUTH_CHOICES = [['password', '密码'], ['key', '私钥'], ['agent', '本机 SSH Agent']];
-const SSH_STATUS_POLL_MS = 3000;
-const SSH_MAX_FAILED_UNITS = 20;          // the status command lists at most this many
-const SSH_SERVICE_STATES = {active: ['运行中', 'good'], failed: ['失败', 'bad'], inactive: ['未运行', ''],
-                            activating: ['启动中', ''], deactivating: ['停止中', ''], unknown: ['未知', '']};
-const SSH_HOPS = {jump: '跳板机', device: '目标机'};
-let sshStatusBusy = false;
 
 // ---------------------------------------------------------------- connection form
 
@@ -109,7 +104,7 @@ function sshSyncNamedTarget() {
 function sshWatchField(value = '') {
   return field('关注的系统服务（可选，每行一个）',
                `<textarea name="watch_services" spellcheck="false" placeholder="nav-stack.service">${h(value)}</textarea>`,
-               '实时状态里会显示这些 systemd 服务是否在运行，最多 12 个。');
+               '状态页里把这些 systemd 服务排在最前面，没有运行也会列出，最多 12 个。');
 }
 
 const sshServiceList = text => String(text || '').split('\n').map(x => x.trim()).filter(Boolean);
@@ -171,109 +166,3 @@ document.addEventListener('change', e => {
     $('#ssh-jump-key').hidden = e.target.value !== 'key';
   }
 });
-
-// ---------------------------------------------------------------- live status
-
-function sshDuration(seconds) {
-  if (typeof seconds !== 'number') return '—';
-  const d = Math.floor(seconds / 86400), hrs = Math.floor(seconds % 86400 / 3600), min = Math.floor(seconds % 3600 / 60);
-  return d ? `${d} 天 ${hrs} 小时` : hrs ? `${hrs} 小时 ${min} 分` : `${min} 分钟`;
-}
-
-const sshGb = kb => (kb / 1048576).toFixed(1) + ' GB';
-const sshCell = (label, value) => `<div><b>${label}</b>${value}</div>`;
-
-function sshUsage(part, usedKb) {
-  return part ? `${part.used_percent}%（${sshGb(usedKb)} / ${sshGb(part.total_kb)}）` : '—';
-}
-
-function sshMetrics(status) {
-  const memory = status.memory, disk = status.disk_root;
-  return '<div class="detail-meta sim-meta">' +
-    sshCell('主机名', h(status.hostname || '—')) +
-    sshCell('已开机', sshDuration(status.uptime_seconds)) +
-    sshCell('负载（1 / 5 / 15 分钟）', status.load ? status.load.map(x => x.toFixed(2)).join(' / ') : '—') +
-    sshCell('最高温度', typeof status.temperature_c === 'number' ? status.temperature_c.toFixed(1) + ' °C' : '—') +
-    sshCell('内存', sshUsage(memory, memory ? memory.total_kb - memory.available_kb : 0)) +
-    sshCell('根分区', sshUsage(disk, disk ? disk.used_kb : 0)) + '</div>';
-}
-
-function sshFailedUnits(units) {
-  // null: the device has no usable systemd, which is not the same as "nothing failed".
-  if (units === null) return '<p class="inline-note">这台设备没有可用的 systemd，读不到系统服务的状态。</p>';
-  if (!units.length) return '<p class="inline-note">没有失败的系统服务。</p>';
-  const more = units.length >= SSH_MAX_FAILED_UNITS ? `<p class="inline-note">只显示前 ${SSH_MAX_FAILED_UNITS} 个。</p>` : '';
-  return `<div class="tags">${units.map(name => badge(name, 'bad')).join('')}</div>${more}`;
-}
-
-function sshServices(status) {
-  const watched = status.services.length
-    ? status.services.map(s => {
-        // The state comes from the device: look it up as an own key only.
-        const [text, cls] = Object.hasOwn(SSH_SERVICE_STATES, s.state) ? SSH_SERVICE_STATES[s.state] : [s.state, ''];
-        return `<div class="contract-line"><b>${h(s.name)}</b>${badge(text, cls)}</div>`;
-      }).join('')
-    : '<p class="inline-note">还没有指定要关注的服务。</p>';
-  return `<h3>失败的系统服务</h3>${sshFailedUnits(status.failed_units)}<h3>关注的服务</h3>${watched}`;
-}
-
-function sshStatusBody(v) {
-  const route = h(v.target) + (v.jump ? ` · 经跳板机 ${h(v.jump)}` : ' · 直连');
-  // reachable is null while the first connection is still being made.
-  const state = v.reachable === null ? badge('正在连接…') : badge(v.reachable ? '在线' : '连不上', v.reachable ? 'good' : 'bad');
-  const head = `<div class="tags">${state}` +
-    `<span class="tag">真机 · 只读</span><span class="tag">${route}</span>` +
-    (v.reachable ? `<span class="tag">往返 ${v.latency_ms} ms</span>` : '') +
-    `<span class="tag">更新于 ${new Date(v.checked_at * 1000).toLocaleTimeString()}</span></div>`;
-  const problem = v.error ? notice(`<b>${SSH_HOPS[v.error.hop] || '连接'}：</b>${h(v.error.message)}`, true) : '';
-  const body = v.status ? sshMetrics(v.status) + sshServices(v.status) : '';
-  return head + problem + body +
-    `<div class="button-row">${button('修改关注的服务', 'engine-status-services', 'secondary small', v.robot_id)}</div>`;
-}
-
-async function sshStatusTick(force = false) {
-  const dialogEl = $('#dialog'), robotId = dialogEl.open ? dialogEl.dataset.sshStatus : '';
-  if (!robotId || (sshStatusBusy && !force)) return;
-  const el = $('#ssh-status');
-  if (!el) { delete dialogEl.dataset.sshStatus; return; }      // another dialog took over
-  sshStatusBusy = true;
-  try {
-    const view = await api('engineering/ssh/status', {project_id: projectId, robot_id: robotId});
-    if ($('#ssh-status') && dialogEl.dataset.sshStatus === robotId) $('#ssh-status').innerHTML = sshStatusBody(view);
-  } catch (err) {
-    if ($('#ssh-status') && dialogEl.dataset.sshStatus === robotId) {
-      $('#ssh-status').innerHTML = notice('暂时读不到状态：' + h(err.message), true);
-    }
-  } finally {
-    sshStatusBusy = false;
-  }
-}
-
-function sshStatusOpen(robotId) {
-  const robot = find('robots', robotId);
-  if (!robot) throw Error('找不到该机器人');
-  dialog(h(robot.name), '真机实时状态 · 每 3 秒通过 SSH 读取一次，只读，不会让机器人运动',
-         '<div class="dialog-body" id="ssh-status"><p class="subtitle">正在连接…</p></div>');
-  $('#dialog').classList.add('wide');
-  $('#dialog').dataset.sshStatus = robotId;
-  return sshStatusTick(true);
-}
-
-function sshStatusAction(type, id) {
-  if (type === 'engine-status') return sshStatusOpen(id);
-  if (type === 'engine-status-services') {
-    const connection = find('device_connections', find('robots', id)?.connection_id);
-    return form('关注的系统服务', '实时状态里显示这些 systemd 服务是否在运行',
-                sshWatchField((connection?.watch_services || []).join('\n')),
-                'engine-status-services', '保存', `data-id="${h(id)}"`);
-  }
-}
-
-async function sshServicesSubmit(p, f) {
-  const robotId = f.dataset.id;
-  await api('engineering/ssh/services', {project_id: projectId, robot_id: robotId, services: sshServiceList(p.watch_services)});
-  await refresh(true);
-  return sshStatusOpen(robotId);
-}
-
-setInterval(() => { if ($('#dialog').open && $('#dialog').dataset.sshStatus) sshStatusTick(); }, SSH_STATUS_POLL_MS);

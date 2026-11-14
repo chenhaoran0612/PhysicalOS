@@ -120,6 +120,8 @@ def make_handler(application):
             extra=extra or {'/dropdown.js':('dropdown.js','text/javascript; charset=utf-8'),'/dropdown.css':('dropdown.css','text/css; charset=utf-8'),'/hover.css':('hover.css','text/css; charset=utf-8'),'/readable.css':('readable.css','text/css; charset=utf-8'),'/readable.js':('readable.js','text/javascript; charset=utf-8'),'/readable_dom.js':('readable_dom.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #6: its own static files, likewise.
             extra=extra or {'/investigation.js':('investigation.js','text/javascript; charset=utf-8'),'/investigation.css':('investigation.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #8: the status page of a real machine, likewise.
+            extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path

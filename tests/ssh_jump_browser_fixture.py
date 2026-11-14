@@ -10,19 +10,26 @@ import sys
 import tempfile
 import time
 
-from brainos import device_access, device_status, hardware_scan
+from brainos import device_access, device_software, device_status, hardware_scan
 from brainos.server import Application, make_handler
 from ssh_fixture import SSHFixture
 from test_product import Server
 from test_ssh_jump import JUMP_PASSWORD, JUMP_USER, SERVICES, STATUS_OUTPUT
 from hardware_fixture import jetson
+from software_fixture import SERVICES as RUNNING_SERVICES, software
 
 if __name__ == '__main__':
     tmp = tempfile.TemporaryDirectory()
     app = Application(tmp.name)
     api = Server(make_handler(app))
     watched = (SERVICES, ['bridge'], [])        # every watch list the browser test sets
+    # Issue #8: the status page also lists the running software. Its services agree with STATUS_OUTPUT:
+    # "bridge" runs, "nav-stack" failed, "recorder" is not running (so it is not in this list at all).
+    running = RUNNING_SERVICES.replace('nav-stack.service              loaded active     running ',
+                                       'nav-stack.service              loaded failed     failed  ')
+    running += 'bridge.service                 loaded active     running      Chassis bridge\n'
     target = SSHFixture(command_outputs={**{device_status.status_command(names): STATUS_OUTPUT for names in watched},
+                                         device_software.SOFTWARE_EXEC: software(services=running).encode(),
                                          hardware_scan.SCAN_EXEC: jetson().encode()})      # issue #2: scan after connecting
     # What `ssh dog` would connect to from the jump host: the answer its `ssh -G dog` gives.
     alias = {device_access.resolve_command('dog'): f'user robot\nhostname 127.0.0.1\nport {target.port}\n'.encode()}

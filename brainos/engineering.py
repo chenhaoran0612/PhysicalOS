@@ -144,6 +144,7 @@ class Engineering:
         self.extensions=Extensions(platform)
         self.platform=platform;self.store=platform.store;self.lock=threading.RLock();self.live={};self.closing=False
         self.status_sessions=device_status.StatusSessions()
+        self.status_sessions.scan_hold=self._status_scan_hold    # issue #8: the status page stays out of the way of other scans and of repairs
         for s in self.store.list('agent_sessions'):
             if s['status'] in ACTIVE:
                 s.update(status='interrupted',error='应用退出中断了调查；可继续会话，原始证据已保留。',pending_question=None,pending_approval=None,pending_requests=[])
@@ -317,10 +318,18 @@ class Engineering:
         return robot,self.platform.same_project('device_connections',robot['connection_id'],robot['project_id'])
 
     def status(self,p):
-        """Live status of a real machine over its SSH connection: one fixed read-only command (device_status)."""
+        """Live status of a real machine over its SSH connection: fixed read-only commands (device_status).
+        A full read lists the hardware and the running software too (issue #8); ``quick`` leaves those two out."""
         robot,connection=self._ssh_connection(p)
-        view=self.status_sessions.read(connection,self.store.get('agent_secrets',connection['id']))
+        view=self.status_sessions.read(connection,self.store.get('agent_secrets',connection['id']),full=p.get('quick') is not True)
         return {'robot_id':robot['id'],'name':robot['name'],**view}
+
+    def _status_scan_hold(self,robot_id):
+        """Issue #8: why the status page must not scan this robot's hardware right now; '' when it may."""
+        if robot_id in self.platform.hardware.scanning:return device_status.SCAN_BUSY     # the hardware page or an investigation is scanning
+        # A repair session changes the device (drivers, kernel modules, services): the scan's probes stay out of its way.
+        repairing=any(s.get('robot_id')==robot_id and s.get('mode')=='repair' and s['status'] in ACTIVE for s in self.store.list('agent_sessions'))
+        return device_status.REPAIR_BUSY if repairing else ''
 
     def watch_services(self,p):
         services=device_status.validate_services(p.get('services'))
