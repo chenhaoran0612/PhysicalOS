@@ -300,6 +300,12 @@ class StatusSessions:
     def _read(self, entry, connection, secret, full):
         services = connection.get('watch_services') or []
         command = status_command(services)
+        # Issue #9: nothing from before the connection was changed (another route, login or machine) is reused:
+        # not the session, and not the hardware and software kept from earlier reads.
+        revision = connection.get('updated_at')
+        if entry.get('revision') != revision:
+            self._drop(entry)
+            entry.update(revision=revision, hardware=None, software=None, view=None)
         reused = entry['device'] is not None
         view = self._attempt(entry, connection, secret, command, services, full)
         if view is None and reused:                   # the cached session had died: once more with a fresh one

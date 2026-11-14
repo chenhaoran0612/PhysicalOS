@@ -268,6 +268,7 @@ class Engineering:
         the jump host's key first (no credentials sent anywhere), then, once that fingerprint is
         confirmed and the jump login supplied, the device's key through the jump host."""
         self.platform.project(p.get('project_id'))
+        p=self.platform.ssh_edit.prepare(p)   # issue #9: an edit of a robot's connection may keep its saved jump login
         jump=device_access.jump_target(p);resolve=device_access.check_target(p,jump)
         if jump and not p.get('jump_check_id'):
             scan={**device_access.inspect_host(jump,hop='jump'),'stage':'jump'}
@@ -288,6 +289,7 @@ class Engineering:
         return scan
 
     def connect(self,p):
+        p=self.platform.ssh_edit.prepare(p)   # issue #9: an edit of a robot's connection may keep its saved logins
         scan=self._host_check(p.get('host_check_id'),p.get('project_id'))
         if scan.get('stage')=='jump':raise ValueError('这一步只确认了跳板机；请继续读取并确认目标机的指纹')
         if p.get('trust_fingerprint')!=scan['fingerprint']:raise ValueError('请核对并确认设备主机指纹')
@@ -300,6 +302,7 @@ class Engineering:
             connection['jump']=scan['jump'];secret.update({'jump_'+k:v for k,v in jump_secret.items()})
         # Test authentication before creating a robot asset. No commands here.
         device=device_access.SSHDevice(connection,secret);device.close()
+        if p.get('edit_robot_id'):return self.platform.ssh_edit.apply(p,connection,secret)   # issue #9: change that robot's connection in place
         if p.get('robot_id'):
             robot=self.platform.same_project('robots',p['robot_id'],p['project_id'])
         else:

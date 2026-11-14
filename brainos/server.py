@@ -122,6 +122,8 @@ def make_handler(application):
             extra=extra or {'/investigation.js':('investigation.js','text/javascript; charset=utf-8'),'/investigation.css':('investigation.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #8: the status page of a real machine, likewise.
             extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #9: its own static file, likewise.
+            extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
@@ -214,6 +216,8 @@ def make_handler(application):
                         'engineering/models/cloud':service.engineering.use_cloud_model,'engineering/cloud/close':service.engineering.cloud_close,
                         'engineering/ssh/scan':service.engineering.scan,'engineering/ssh/connect':service.engineering.connect,
                         'engineering/ssh/status':service.engineering.status,'engineering/ssh/services':service.engineering.watch_services,
+                        # Issue #9: change the SSH connection of a robot that is already connected
+                        'engineering/ssh/update':service.ssh_edit.update,
                         'engineering/start':service.engineering.start,'engineering/resume':service.engineering.resume,
                         'engineering/work':service.engineering.start_work,'engineering/approve':service.engineering.approve,
                         'engineering/artifact':service.engineering.artifact,

@@ -85,6 +85,8 @@ class Platform:
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         from .investigation import Investigation
         self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
+        from .ssh_edit import ConnectionEdit
+        self.ssh_edit = ConnectionEdit(self)        # issue #9: change the SSH connection of a connected robot
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):

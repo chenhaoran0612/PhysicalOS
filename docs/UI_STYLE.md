@@ -62,6 +62,10 @@
 - 复位说明里需要用户自己执行的一条命令（`ux04.js`，`sudo systemctl restart neuxmind-runtime`）仍然显示，只是不再用代码字体。
 - 后端拼进句子里的 JSON 片段（例如能力参数说明中的 `[0.1, 0.5]`）：整段不是 JSON，不做转换。
 
+## 随输入变化的按钮文字
+
+表单里随输入变化的按钮文字（例如“配置连接”里的“保存”和“读取主机指纹”，`web/ssh_edit.js`）只在文字确实变化时修改，并且原地改文字节点的内容（`button.firstChild.nodeValue`），不要用 `textContent` 或 `innerHTML` 重写。原因：用户改完一个输入框直接点按钮时，输入框失焦的 `change` 事件发生在这次点击的按下和抬起之间；这时如果按钮里的文字节点被换掉，WebKit（桌面应用的 WKWebView）会丢掉这次点击，表现为“第一次点保存没有反应”，Chromium 不会。同样的道理，不要在失焦时显示或隐藏会让按钮移位的内容。这类问题只有在 WebKit 上跑浏览器验收才能发现。
+
 ## 测试
 
 - `node tests/readable_logic.cjs`：转换规则（截断 JSON、Python 字典、分类、标签、转义、折叠、Markdown、报错堆栈）。
