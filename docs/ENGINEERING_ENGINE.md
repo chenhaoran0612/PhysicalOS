@@ -148,7 +148,7 @@ DEVICE_CONTEXT.json 是产品写入的本地资料，排除本体控制令牌。
 
 覆盖数由后端按真实探针证据计算，区分未调查、已读取、读取有限制。它不是机器人能力分数；一个已结束的模型回合不等于设备被完全认识。无证据类别始终列为待确认，报告不能授予部署或动作资格。SSH 连接关闭不保证已发出的任意远端进程终止，现场操作仍应按实际控制状态核验。
 
-调查不限 Token 和运行时间（issue #5）：“让 Agent 调查本体”表单不再填写 Token 限额和最长运行时间，也不再显示限额说明；会话的 `max_tokens`、`max_minutes` 为空，运行不会因用量或时间被停止，由用户在会话中停止。接口调用方（测试、脚本）仍可传入观察限额（1000–1000000 Tokens、1–120 分钟），达到后照旧停止；本地协议测试使用较低限额。观察限额包含运行时报告的输入/输出与缓存用量，不等于费用金额。按会话预留点数的网关模型（云平台 `cloud`、平台付费 `platform`，界面已不提供）没有预算无法开启会话，未传限额时仍按 200000 Tokens、15 分钟。新建工程任务、硬件修复、本体适配和协作流程的限额不变。规则在 `brainos/engineering.py` 的 `discovery_limits`、`run_deadline`、`over_token_limit`，测试为 `tests/test_investigation_limits.py`。
+调查不限 Token 和运行时间（issue #5）：“让 Agent 调查本体”表单不再填写 Token 限额和最长运行时间，也不再显示限额说明；会话的 `max_tokens`、`max_minutes` 为空，运行不会因用量或时间被停止，由用户在会话中停止。接口调用方（测试、脚本）仍可传入观察限额（1000–1000000 Tokens、1–120 分钟），达到后照旧停止；本地协议测试使用较低限额。观察限额包含运行时报告的输入/输出与缓存用量，不等于费用金额。按会话预留点数的网关模型（云平台 `cloud`、平台付费 `platform`，界面已不提供）没有预算无法开启会话，未传限额时仍按 200000 Tokens、15 分钟。新建工程任务、本体适配和协作流程的限额不变；硬件修复自 issue #10 起同样不限，见 [HARDWARE_INIT.md](HARDWARE_INIT.md#修复会话)。规则在 `brainos/engineering.py` 的 `discovery_limits`、`run_deadline`、`over_token_limit`，测试为 `tests/test_investigation_limits.py`。
 
 Mac 包增加同一已固定上游归档中的 ripgrep 15.2.0（e89fff89ac），摘要写入 runtime-lock.json，独立保留 MIT 与 PCRE2 许可。命令工具获得固定的最小 PATH，包含随包搜索工具和系统命令，不依赖用户安装开发工具，不继承 API/SSH 密钥。回环模型和 MCP 地址绕过系统代理，外部模型保留正常代理路径。
 

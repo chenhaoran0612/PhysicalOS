@@ -98,7 +98,6 @@ function hardwareRepairForm(robotId){
  const modelField=models.length?picker('agent_models','model_id','使用的模型')+(tokenfans?.connected?`<p class="inline-note hw-model-note">默认使用“云平台账户”中设置的 TokenFans 默认模型${tokenfans.default_model?'（'+h(tokenfans.default_model)+'）':''}。</p>`:''):notice('还没有可用的模型。工程助手的大模型只对接 TokenFans：先在“云平台账户”连接，再回到这里勾选问题开始修复。 '+button('配置模型','engine-models','secondary small','needed'),true);
  form('让助手修复硬件问题',`${issues.length} 个问题 · 内置 Skill hardware-init`,`<div class="hw-repair-issues">${issues.map(i=>`<label class="extension-choice"><input type="checkbox" name="issue_ids" value="${h(i.id)}" checked><span><b>${h(i.title)}</b><small>${h(i.hint||i.detail)}</small></span></label>`).join('')}</div>
  ${modelField}
- <div class="field-row">${field('Token 观察限额','<input name="max_tokens" type="number" min="1000" max="1000000" value="200000" required>')}${field('最长运行时间（分钟）','<input name="max_minutes" type="number" min="1" max="120" value="30" required>')}</div>
  ${notice('产品会直接拒绝明显危险的命令（重启、刷写固件、格式化磁盘、修改 SSH 或账号、发布运动指令等）。这只是兜底规则，无法覆盖所有写法：每条命令执行前请以你的核对为准。需要重启才能生效的改动会在报告中写明，由你安排。')}
  ${engineConsent('授权读取本体信息并交给所选模型分析，费用由对应模型平台计量。')}
  <label class="hardware-confirm"><input type="checkbox" name="modify_authorized" required><span>允许助手提出修改设备的命令（加载驱动、安装驱动或固件包、调整网络和设备权限）。每条命令执行前会显示原命令、风险和回退方法，由我逐条批准。</span></label>`,
@@ -119,7 +118,7 @@ async function hardwareSubmit(kind,p,f){
  const issue_ids=[...f.querySelectorAll('[name=issue_ids]:checked')].map(x=>x.value);
  if(!issue_ids.length)throw Error('请至少保留一个要处理的问题');
  const result=await api('engineering/hardware/repair',{project_id:projectId,robot_id:f.dataset.id,scan_id:f.dataset.scan,issue_ids,model_id:p.model_id||undefined,
-  max_tokens:Number(p.max_tokens),max_minutes:Number(p.max_minutes),data_authorized:f.elements.data_authorized.checked,modify_authorized:f.elements.modify_authorized.checked});
+  data_authorized:f.elements.data_authorized.checked,modify_authorized:f.elements.modify_authorized.checked});
  await refresh(true);$('#dialog').close();return engineAction('engine-session',result.id);
 }
 // The whole command, never clipped, with its size: nothing can hide below a scroll edge.

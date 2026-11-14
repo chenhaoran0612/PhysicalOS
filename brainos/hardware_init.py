@@ -32,6 +32,8 @@ USER_REQUEST = 'user-request'
 KEEP_SCANS = 20
 SNAPSHOT_SCANS = 3
 FIX_OUTPUT_BYTES = 48000
+# Issue #10: on a gateway that reserves credits per session a repair keeps the run time it always had.
+GATEWAY_REPAIR_MINUTES = 30
 
 NOT_REPAIR = '只有硬件初始化会话可以使用修复工具'
 BLOCK_DEVICE = r'/dev/(?:sd[a-z]|nvme\d|mmcblk\d|hd[a-z]|vd[a-z]|xvd[a-z]|mtd|disk/)'
@@ -155,6 +157,20 @@ def instructions(s, default):
     if s.get('mode') == 'repair' and (s.get('hardware') or {}).get('chat'):
         return REPAIR_INSTRUCTIONS + CHAT_INSTRUCTIONS      # issue #6: fix chat
     return REPAIR_INSTRUCTIONS if s.get('mode') == 'repair' else default
+
+
+def repair_limits(p, billing):
+    """(max_tokens, max_minutes) of a new repair session; None means no limit.
+
+    Issue #10: the rule investigations follow since issue #5. A repair has no Token or time
+    limit unless an API caller sets one; the user stops it. Gateways that reserve credits per
+    session (cloud, platform) cannot open one without a budget, so they keep the old defaults.
+    """
+    from .engineering import RESERVED_BUDGET_BILLING, discovery_limits
+    minutes = p.get('max_minutes')
+    if minutes is None and billing in RESERVED_BUDGET_BILLING:
+        minutes = GATEWAY_REPAIR_MINUTES
+    return discovery_limits({'max_tokens': p.get('max_tokens'), 'max_minutes': minutes}, billing)
 
 
 def tools_spec():
@@ -405,7 +421,7 @@ class HardwareInit:
         return self.platform.engineering.resolve_model(project_id, model_id or None)
 
     def start_repair(self, p):
-        from .engineering import ACTIVE, integer
+        from .engineering import ACTIVE
         from . import agent_runtime
         engine = self.platform.engineering
         robot, connection = self._connection(p.get('robot_id'), p.get('project_id'))
@@ -421,9 +437,8 @@ class HardwareInit:
             raise ValueError('请授权读取设备信息并交给所选模型分析')
         if p.get('modify_authorized') is not True:
             raise ValueError('请确认允许助手提出修改设备的命令（每条命令执行前仍需你单独批准）')
-        tokens = integer(p.get('max_tokens', 200000), 'Token 观察限额', 1000, 1000000)
-        minutes = integer(p.get('max_minutes', 30), '运行时间上限', 1, 120)
         model = self._model(robot['project_id'], p.get('model_id'))
+        tokens, minutes = repair_limits(p, model['billing'])     # issue #10: no limits unless given, or the gateway needs a budget
         with engine.lock:
             if engine.closing:
                 raise ValueError('应用正在退出')

@@ -405,7 +405,7 @@ class StartRepairTests(Base):
         self.assertEqual(s['hardware']['issue_ids'], SERIAL)
         self.assertEqual(s['hardware']['ssh_interface'], 'eth0')
         self.assertEqual(s['hardware']['skill']['name'], 'hardware-init')
-        self.assertEqual(s['max_minutes'], 30)
+        self.assertIsNone(s['max_minutes'], 'issue #10: no limits unless the caller sets them (tests/test_repair_limits.py)')
         self.assertIn('- serial-perm:/dev/ttyUSB0', s['objective'])
         self.assertNotIn('当前用户无权', s['objective'], 'device-derived titles stay in HARDWARE_SCAN.json, not in the instruction')
         self.assertEqual(self.launched, [(s['id'], s['objective'])])
