@@ -6,7 +6,7 @@
 
 1. **连接后自动扫描**：SSH 指纹确认、连接成功后，界面立即打开“硬件初始化”并执行扫描（`POST /api/engineering/hardware/scan`，`source=connect`）。之后可在机器人卡片的“硬件初始化”入口查看或重新扫描。
 2. **查看结果**：系统信息、指标、问题列表（默认勾选可远程处理的问题）、按类别筛选的硬件清单、修复记录。
-3. **修复**：勾选问题 → “让助手修复所选问题” → 选择模型（只列 TokenFans 模型，默认选中“云平台账户”里设置的 TokenFans 默认模型，见 issue #4）→ 两项授权 → 启动修复会话（`POST /api/engineering/hardware/repair`）。
+3. **修复**：勾选问题 → “让助手修复所选问题” → 选择模型（只列 TokenFans 模型，默认选中“云平台账户”里设置的 TokenFans 默认模型，见 issue #4）→ 两项授权 → 启动修复会话（`POST /api/engineering/hardware/repair`）。表单不填写 Token 限额和最长运行时间（issue #10，见下文“不限 Token 和运行时间”）。
 4. **逐条批准**：助手通过 `device_fix` 提出命令；界面显示原命令、对应问题、风险、管理员权限方式、回退方法、产品识别出的附加风险，用户批准一次执行一次。
 5. **验证与报告**：助手调用 `hardware_rescan`（重新登录后扫描），再调用 `save_repair_report`。报告保存到 `hardware_repairs`，在硬件初始化页和会话页显示每个问题的处理结果。
 
@@ -43,6 +43,7 @@
 - 内置 Skill 位于 `brainos/skills/hardware-init/`（`SKILL.md` 与 `references/playbooks.md`），随应用版本发布，会话记录其名称、版本和摘要；调查会话仍不能加载项目 Skill 或 MCP，只放行产品内置 Skill（`agent_runtime.AgentProcess` 中的 `builtin` 标记）。
 - 工作目录中写入 `HARDWARE_SCAN.json`（基线扫描、待处理问题）与 `DEVICE_CONTEXT.json`。
 - 模型：选择的模型；不选时用工作空间默认模型 `Engineering.resolve_model(project_id, None)`（issue #4 TokenFans）。没有连接 TokenFans 或没有默认模型时，直接显示 #4 给出的提示。修复表单的模型选择框默认选中 TokenFans 默认模型。
+- **不限 Token 和运行时间（issue #10）**：“让助手修复硬件问题”表单不再有“Token 观察限额”“最长运行时间”两项，请求里也不带 `max_tokens`、`max_minutes`；会话的这两个字段为空，运行不会因用量或时间被停止，由用户在会话中停止，每条修改设备的命令仍然逐条批准。规则与调查（issue #5）相同：接口调用方（测试、脚本）仍可传入限额（1000–1000000 Tokens、1–120 分钟），照旧校验，达到后照旧停止；按会话预留点数的网关模型（云平台 `cloud`、平台付费 `platform`，界面已不提供）没有预算无法开启会话，未传限额时仍按修复一直使用的 200000 Tokens、30 分钟。规则在 `brainos/hardware_init.py` 的 `repair_limits`（复用 `brainos/engineering.py` 的 `discovery_limits`、`run_deadline`、`over_token_limit`），测试为 `tests/test_repair_limits.py`。
 
 ### `device_fix` 的产品限制
 
@@ -71,7 +72,7 @@
 | --- | --- |
 | `engineering/hardware/scan` | `{project_id, robot_id, source: connect|manual}` → 扫描记录（不含原始输出） |
 | `engineering/hardware/detail` | `{project_id, scan_id}` → 含原始输出的完整记录 |
-| `engineering/hardware/repair` | `{project_id, robot_id, scan_id, issue_ids, model_id?, max_tokens, max_minutes, data_authorized, modify_authorized}` → 修复会话 |
+| `engineering/hardware/repair` | `{project_id, robot_id, scan_id, issue_ids, model_id?, max_tokens?, max_minutes?, data_authorized, modify_authorized}` → 修复会话；不传或传 `null` 的限额即不设上限（issue #10） |
 | `engineering/hardware/skill` | `{project_id}` → 内置 Skill 的文件、版本、摘要 |
 
 状态快照新增 `hardware_scans`、`hardware_repairs`、`hardware_skill`。前端代码在 `web/hardware.js`、`web/hardware.css`，通过包装 `engineApproval`、`engineSessionBody`、`engineRobotCard`、`engineRefresh`、`dialog` 接入已有页面，不改动这些共享函数本身。
@@ -81,6 +82,7 @@
 - `tests/test_hardware_scan.py`：解析 Jetson 机器人、x86 + NVIDIA、Debian 容器真实输出等样例，扫描命令只读检查。
 - `tests/test_hardware_init.py`：经 SSH 协议替身执行扫描、凭据隐藏、并发与清理、修复命令校验与提权包装、报告规则，经跳板机（issue #3 替身）的扫描与修复命令，以及一次用随包工程运行时 + 本机脚本模型完成的修复会话（批准、拒绝重启、重新扫描、报告）。
 - `tests/ssh_jump_browser.cjs`（issue #3 的浏览器验收）：每次 SSH 接入后先经过硬件扫描再进入调查；经跳板机接入时，界面抬头显示跳板机路线，表格来自经跳板机执行的扫描。`tests/hardware_browser_fixture.py` 是本页面的手动检查替身。
+- issue #10：`tests/test_repair_limits.py`（限额规则；表单发起的修复不带限额；一次报告用量 2100 万 Tokens 的修复照常批准、重新扫描并保存报告；显式限额仍会停止）与 `tests/hardware_repair_browser.cjs`（浏览器验收，替身为 `tests/hardware_browser_fixture.py`，每次运行前重启替身）：修复表单没有限额字段、请求不带限额、会话无限额、修复命令仍需批准、修复完成并保存报告；在 Chromium 与 WebKit 上运行。只在本机替身上验证，没有在真机或真实模型上运行。
 - 扫描命令在 Debian 与 Alpine（BusyBox）容器中实际执行过；在一台真机（Jetson Orin NX，JetPack 6 / L4T R36.4.3，经跳板机）上以产品实际发送的 `sh -c` 形式执行过一次只读扫描：7 秒、约 9 KB，结果完整，未出现误报（据此修正了 Jetson GPU 重复、USB 设备模式网口、部分接口占用、失败服务默认勾选等问题，并加入回归测试）。
 - 修复会话只在本机替身上运行过（随包工程运行时 + 脚本模型 + SSH 协议替身）；没有在真机上执行过修复命令，也没有使用真实模型（TokenFans）跑过修复会话。
 
