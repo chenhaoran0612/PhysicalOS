@@ -105,7 +105,7 @@ class AgentProcess:
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,start_new_session=True)
         self.reader=threading.Thread(target=self._read,daemon=True);self.reader.start()
         try:
-            self.request('initialize',{'clientInfo':{'name':'neuxmind_robot_os','title':'NeuxMind Robot OS','version':'0.17.0'},
+            self.request('initialize',{'clientInfo':{'name':'neuxmind_robot_os','title':'NeuxMind Robot OS','version':'0.18.0'},
                                        'capabilities':{'experimentalApi':True}})
             self.send({'method':'initialized','params':{}})
             listing=self.request('skills/list',{'cwds':[str(work.resolve())],'forceReload':True})

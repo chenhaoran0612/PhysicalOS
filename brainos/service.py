@@ -118,7 +118,7 @@ class Platform:
                 obj['sim'] = self.sims.process_view(obj)
         result['sim_kinds'] = self.sims.kinds()
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
-                      system={'version': '0.17.0', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
+                      system={'version': '0.18.0', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
         result.update(self.hardware.snapshot())
         result.update(self.investigation.snapshot())
