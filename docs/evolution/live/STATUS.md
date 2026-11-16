@@ -19,9 +19,9 @@
 
 ## 分支与部署
 
-- `integration`（工作区 `PhysicalOS-integration/`）：包含以上全部。**已在用户验证并确认后合并到 main（快进，2026-11-14）并推送**。之后 `integration` 上只多了文档提交（issue 关闭的记录、真机部署的记录），已推送到 `origin/integration`（2026-11-15）；`origin/main` 还停在 0.18.0 合并时的提交，两边代码相同。之后的 issue 仍然先合到 `integration`，统一回归后由用户确认再合并到 main。
+- `integration`（工作区 `PhysicalOS-integration/`）：包含以上全部。**已在用户验证并确认后合并到 main（快进，2026-11-14）并推送**。之后 `integration` 上多了文档提交（issue 关闭的记录、真机部署的记录）和真机安装脚本（`runtime/deploy/device_install.sh` 及其测试；不改运行时包和桌面应用的行为，0.18.0 的安装包不需要重打），已推送到 `origin/integration`（2026-11-15）；`origin/main` 还停在 0.18.0 合并时的提交，要等用户说可以再合并。之后的 issue 仍然先合到 `integration`，统一回归后由用户确认再合并到 main。
 - 部署：`/Applications/NeuxMind Robot OS.app` 是 0.18.0（build 28），2026-11-14 05:32 替换并启动；后端报告版本 0.18.0，只监听回环地址。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261114-053212`。云平台在本地 Docker（`http://127.0.0.1:8800`）。
-- 真机：运行时装在机器人的 `~/neuxmind`（安装脚本在 `~/neuxmind-pkg`），普通用户进程，监听 `127.0.0.1:8790`，令牌在机器人上的 `~/neuxmind/edge-token`（0600）。没有开机自启；本机的隧道是一条手工的 `ssh -L` 进程。机器人重启或网络断开后，运行时和隧道都要重新启动。
+- 真机：运行时装在机器人的 `~/neuxmind`（安装脚本在 `~/neuxmind-pkg`，已换成仓库里 `runtime/deploy/device_install.sh` 的版本），普通用户进程，监听 `127.0.0.1:8790`，令牌在机器人上的 `~/neuxmind/edge-token`（0600）。没有开机自启；本机的隧道是一条手工的 `ssh -L` 进程。机器人重启或网络断开后，运行时和隧道都要重新启动。
 - 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.18.0-arm64.dmg`（SHA-256 `700e83de20b4eab9dbf6648b9a0ea25a68c74a4dec31ff2ea58c18bbedc0c4a6`）和同名 `.pkg`（`acf17702e510e6aba7270489940d19cd1683166ec105da73f3fd6ae140ec1de6`）；0.17.0、0.16.0、0.15.1、0.15.0 的也还在同一目录。
 - 新的 issue 分支请基于现在的 `integration`。浏览器验收经 `tests/gate_helper.cjs` 登录，测试服务端带 `NEUXMIND_MAIL_DEV_ECHO=1`；界面改动也要在 WebKit 上跑一遍（桌面应用是 WKWebView）。
 

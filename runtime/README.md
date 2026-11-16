@@ -58,26 +58,33 @@ python3.10 -m venv /opt/neuxmind/venv
 # 开发机：在导出的副本里打出两个纯 Python 包（直接在工作区里打包会留下构建目录）
 mkdir -p /tmp/nx-device/src && git archive HEAD spec runtime | tar -x -C /tmp/nx-device/src
 (cd /tmp/nx-device/src && python3 -m pip wheel --no-deps ./spec ./runtime -w ../wheels)
-# 把 wheels/ 里的两个文件拷到机器人，然后在机器人上：
-python3 -m venv ~/neuxmind/venv
-~/neuxmind/venv/bin/pip install --no-index --no-deps neuxmind_spec-*.whl neuxmind_runtime-*.whl
-( umask 077; python3 -c 'import secrets; print(secrets.token_urlsafe(36))' > ~/neuxmind/edge-token )
-BRAIN_EDGE_TOKEN="$(cat ~/neuxmind/edge-token)" nohup setsid ~/neuxmind/venv/bin/neuxmind-runtime serve \
-  --adapter sim_quadruped --host 127.0.0.1 --port 8790 --state-dir ~/neuxmind/state \
-  >> ~/neuxmind/runtime.log 2>&1 < /dev/null &
+cp runtime/deploy/device_install.sh /tmp/nx-device/wheels/
+# 把 /tmp/nx-device/wheels/ 整个目录拷到机器人（下面假定放在 ~/neuxmind-pkg），然后在机器人上：
+bash ~/neuxmind-pkg/device_install.sh install     # 建 ~/neuxmind：虚拟环境、状态目录、0600 的令牌文件
+bash ~/neuxmind-pkg/device_install.sh start       # 以 sim_quadruped 启动，只监听 127.0.0.1:8790，脱离当前会话
+bash ~/neuxmind-pkg/device_install.sh status      # 进程和 /v1/status 摘要；另有 manifest、stop、remove
 # 开发机：把机器人回环上的网关转发到本机（要过跳板机时加 -J 用户@跳板机）
 ssh -N -L 127.0.0.1:18790:127.0.0.1:8790 用户@机器人
 ```
 
-桌面端在这台机器人的“配置连接”里填服务地址 `http://127.0.0.1:18790` 和令牌文件里的令牌，再连接。
+桌面端在这台机器人的“配置连接”里填服务地址 `http://127.0.0.1:18790` 和令牌文件（`~/neuxmind/edge-token`）里的令牌，再连接。
+
+安装脚本是 [`deploy/device_install.sh`](deploy/device_install.sh)：只用它旁边的两个包，不联网、不用 sudo。机器人上同一个用户通常还跑着别的软件，所以它守这几条（都有测试，`tests/test_device_install.py`，43 项，只在 Linux 上运行，其余平台跳过）：
+
+- **只动安装目录。** 安装目录由 `NX_ROOT` 指定（默认 `~/neuxmind`），解析符号链接之后必须在用户目录之下，上一级目录必须已经存在；`$HOME//`、`$HOME/.`、带 `..` 或经符号链接绕出去的写法都被拒绝。脚本只把里面有它自己写的标记文件（`.neuxmind-device-install`）的目录当作自己建的：`remove` 只删这样的目录，别的目录即使在用户目录里、看起来像一份安装也不删，`stop` 也不碰里面的文件和从那里启动的进程。
+- **只给自己启动的运行时发信号。** 判断“在运行”看的是进程的命令行里有没有这份安装的运行时入口，不是只看 pid 文件：机器人重启后留下的 pid 文件、pid 被别的进程占用、pid 文件内容损坏（`0`、`-1` 等）时，`stop`、`remove` 不会发任何信号，`start` 不会误报“已在运行”。
+- **失败后可以直接重来。** 缺包、安装中途失败不留下半成品；被打断的安装（标记文件还停在 `state=installing`，或只留下一个空目录）下次 `install` 会清掉重装。端口已被别的程序占用时 `start` 拒绝启动；启动失败时打印日志末尾并清掉 pid 文件；`status` 在网关不应答时约 5 秒后报错退出。
+- `install`、`start`、`stop`、`remove` 同一时间只执行一个（锁加在脚本文件本身，不产生文件）。令牌只经环境变量传给运行时，不出现在输出和进程参数里。
+
+`NX_PORT`（默认 8790）、`NX_ADAPTER`（默认 `sim_quadruped`）、`NX_PYTHON`（默认 `python3`）可以改。脚本做的事等价于：建虚拟环境、`pip install --no-index --no-deps` 这两个包、生成令牌、以 `BRAIN_EDGE_TOKEN=… nohup setsid neuxmind-runtime serve --adapter … --host 127.0.0.1 --port … --state-dir …` 启动。它需要 bash、GNU coreutils（`realpath`、`stat`）和 util-linux（`setsid`、`flock`），Ubuntu 自带。
 
 - **这样装验证的是运行时本身，不是机器人。** `sim_quadruped` 是内存里的仿真本体，不打开任何设备、不引入 ROS、不起子进程、不联网；清单带 `simulated: true`，桌面端会标“仿真”，结果不算现场证据。要控制真实本体，换成这台机器人的适配器（[§3](#3-写适配器把本体接进来)），motion 级测试必须在现场、有人值守、硬件急停在手。
 - 网关只监听回环地址，没有令牌或令牌不对一律 401；令牌文件权限 0600。不要为了省掉隧道改成 `--host 0.0.0.0`：网关是明文 HTTP。
 - 普通用户运行是 [§0.2](#02-以普通用户运行尽力而为模式) 的尽力而为模式；从 SSH 会话启动时通常也没有可写的 pids cgroup，`/v1/status` 的 `sandbox.level` 为 `best-effort`。
 - 没有开机自启：机器人重启后要重新启动运行时，隧道断了要重开。桌面端还不能自己经跳板机转发这个 HTTP 服务（见路线图）。
-- 卸载：结束运行时进程，删除 `~/neuxmind`。
+- 卸载：`bash ~/neuxmind-pkg/device_install.sh remove`（结束运行时进程并删除 `~/neuxmind`）。
 
-那次在真机上确认过的（开发机经隧道访问）：令牌认证；v1 / v2 清单与状态；读取状态；安装并运行只读技能 `status_report`（独立进程，结果和事件都取回）；任何技能运行都要 `hardware_authorized=true`，只读技能也一样；停止后锁存，锁存期间只读技能照常运行，含运动能力的技能（`patrol`）和 `base.velocity` 指令被 409 `estop_latched` 拒绝，未授权的复位被拒，授权复位后解除；0.18.0 的桌面后端把它连成“已连接”，读到 9 项能力，并经桌面接口停止和解除。安装前后机器人上原有的服务状态一致。没有在真机上跑 `runtime/tests`：其中有 fork 炸弹类用例，不适合在跑着其他服务的机器人上执行。
+那次在真机上确认过的（开发机经隧道访问）：令牌认证；v1 / v2 清单与状态；读取状态；安装并运行只读技能 `status_report`（独立进程，结果和事件都取回）；任何技能运行都要 `hardware_authorized=true`，只读技能也一样；停止后锁存，锁存期间只读技能照常运行，含运动能力的技能（`patrol`）和 `base.velocity` 指令被 409 `estop_latched` 拒绝，未授权的复位被拒，授权复位后解除；0.18.0 的桌面后端把它连成“已连接”，读到 9 项能力，并经桌面接口停止和解除。安装前后机器人上原有的服务状态一致。没有在真机上跑 `runtime/tests`：其中有 fork 炸弹类用例，不适合在跑着其他服务的机器人上执行。那次安装和启动用的是安装脚本的第一版（命令和目录相同）；上面列的检查是进仓库时加的，在 Linux 容器里测过，机器人上的脚本随后也换成了这一版（只替换文件并补写标记文件，没有重启运行时；新脚本的 `status` 认得正在运行的那个进程）。
 
 ## 1. 架构
 
