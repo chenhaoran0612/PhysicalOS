@@ -2,12 +2,12 @@
 
 装在机器人（或旁边的 Linux/Jetson 计算机）上的运行时：把本体映射为标准能力，安全地执行可移植技能，并通过 HTTP 网关对桌面控制台（v1 兼容）和 SDK/云（v2）开放。
 
-> 状态：第 04 轮（能力一致性测试套件、适配器脚手架；第 03 轮：Python 3.10 与非 root 运行、端侧模型安装、遥测持久化；第 02 轮：技能进程隔离、异步现场测试、可安装包）。**全部验证均在仿真本体与协议替身上完成，未在任何真机上验证。** ROS 2 桥接只在 rclpy 测试替身上跑通过一致性测试，从未接触真实 ROS 2。
+> 状态：第 04 轮（能力一致性测试套件、适配器脚手架；第 03 轮：Python 3.10 与非 root 运行、端侧模型安装、遥测持久化；第 02 轮：技能进程隔离、异步现场测试、可安装包）。**全部验证均在仿真本体与协议替身上完成；接真实本体的适配器未在任何真机上验证。** 运行时进程本身已在一台真机（Jetson Orin NX，Ubuntu 22.04，Python 3.10.12）上以仿真本体运行过（2026-11-15，见 [§0.4](#04-装到真机用户目录离线)）。 ROS 2 桥接只在 rclpy 测试替身上跑通过一致性测试，从未接触真实 ROS 2。
 
 - 仅依赖 **Python 3.10+** 标准库（Jetson JetPack 6 / Ubuntu 22.04 自带 3.10）；数据结构以 `spec/neuxmind_spec/` 为唯一权威。
 - 测试：`python3 -m unittest discover -s runtime/tests`（仓库根目录）或在 `runtime/` 下 `python3 -m unittest discover -s tests`。
 - 新本体接入：[§3](#3-写适配器把本体接进来)（脚手架 → 实现 → 一致性测试）；一致性测试：[§3.1](#31-能力一致性测试conformance)；脚手架：[§3.2](#32-适配器脚手架scaffold)。
-- 安装：见 [§0](#0-安装)；非 root 部署：见 [§0.2](#02-以普通用户运行尽力而为模式)；技能沙箱：见 [§2.2](#22-技能进程隔离沙箱)；异步现场测试：见 [§5.1](#51-异步现场测试)；端侧模型安装：见 [§5.2](#52-端侧模型安装modelinstall)；遥测持久化：见 [§5.3](#53-遥测持久化与回放)。
+- 安装：见 [§0](#0-安装)；非 root 部署：见 [§0.2](#02-以普通用户运行尽力而为模式)；装到真机：见 [§0.4](#04-装到真机用户目录离线)；技能沙箱：见 [§2.2](#22-技能进程隔离沙箱)；异步现场测试：见 [§5.1](#51-异步现场测试)；端侧模型安装：见 [§5.2](#52-端侧模型安装modelinstall)；遥测持久化：见 [§5.3](#53-遥测持久化与回放)。
 
 ## 0. 安装
 
@@ -49,6 +49,35 @@ python3.10 -m venv /opt/neuxmind/venv
 ### 0.3 不安装直接运行
 
 不安装也能用：`python3 -m neuxmind_runtime ...`（在 `runtime/` 下）或 `python3 -m runtime.neuxmind_runtime ...`（仓库根目录）；`neuxmind_runtime/_paths.py` 会按相对路径（或 `NEUXMIND_SPEC_PATH`）找到 `spec/`。运行时仍只用标准库；唯一依赖 `neuxmind-spec` 也是纯标准库。
+
+### 0.4 装到真机（用户目录、离线）
+
+把运行时装到机器人上的最小做法：不用 sudo，不改系统文件，机器人不需要联网，删掉一个目录就恢复原状。2026-11-15 第一次在真机上这样做（Jetson Orin NX，Ubuntu 22.04，aarch64，Python 3.10.12；运行时 0.4.0、规范 1.1.0）。
+
+```bash
+# 开发机：在导出的副本里打出两个纯 Python 包（直接在工作区里打包会留下构建目录）
+mkdir -p /tmp/nx-device/src && git archive HEAD spec runtime | tar -x -C /tmp/nx-device/src
+(cd /tmp/nx-device/src && python3 -m pip wheel --no-deps ./spec ./runtime -w ../wheels)
+# 把 wheels/ 里的两个文件拷到机器人，然后在机器人上：
+python3 -m venv ~/neuxmind/venv
+~/neuxmind/venv/bin/pip install --no-index --no-deps neuxmind_spec-*.whl neuxmind_runtime-*.whl
+( umask 077; python3 -c 'import secrets; print(secrets.token_urlsafe(36))' > ~/neuxmind/edge-token )
+BRAIN_EDGE_TOKEN="$(cat ~/neuxmind/edge-token)" nohup setsid ~/neuxmind/venv/bin/neuxmind-runtime serve \
+  --adapter sim_quadruped --host 127.0.0.1 --port 8790 --state-dir ~/neuxmind/state \
+  >> ~/neuxmind/runtime.log 2>&1 < /dev/null &
+# 开发机：把机器人回环上的网关转发到本机（要过跳板机时加 -J 用户@跳板机）
+ssh -N -L 127.0.0.1:18790:127.0.0.1:8790 用户@机器人
+```
+
+桌面端在这台机器人的“配置连接”里填服务地址 `http://127.0.0.1:18790` 和令牌文件里的令牌，再连接。
+
+- **这样装验证的是运行时本身，不是机器人。** `sim_quadruped` 是内存里的仿真本体，不打开任何设备、不引入 ROS、不起子进程、不联网；清单带 `simulated: true`，桌面端会标“仿真”，结果不算现场证据。要控制真实本体，换成这台机器人的适配器（[§3](#3-写适配器把本体接进来)），motion 级测试必须在现场、有人值守、硬件急停在手。
+- 网关只监听回环地址，没有令牌或令牌不对一律 401；令牌文件权限 0600。不要为了省掉隧道改成 `--host 0.0.0.0`：网关是明文 HTTP。
+- 普通用户运行是 [§0.2](#02-以普通用户运行尽力而为模式) 的尽力而为模式；从 SSH 会话启动时通常也没有可写的 pids cgroup，`/v1/status` 的 `sandbox.level` 为 `best-effort`。
+- 没有开机自启：机器人重启后要重新启动运行时，隧道断了要重开。桌面端还不能自己经跳板机转发这个 HTTP 服务（见路线图）。
+- 卸载：结束运行时进程，删除 `~/neuxmind`。
+
+那次在真机上确认过的（开发机经隧道访问）：令牌认证；v1 / v2 清单与状态；读取状态；安装并运行只读技能 `status_report`（独立进程，结果和事件都取回）；任何技能运行都要 `hardware_authorized=true`，只读技能也一样；停止后锁存，锁存期间只读技能照常运行，含运动能力的技能（`patrol`）和 `base.velocity` 指令被 409 `estop_latched` 拒绝，未授权的复位被拒，授权复位后解除；0.18.0 的桌面后端把它连成“已连接”，读到 9 项能力，并经桌面接口停止和解除。安装前后机器人上原有的服务状态一致。没有在真机上跑 `runtime/tests`：其中有 fork 炸弹类用例，不适合在跑着其他服务的机器人上执行。
 
 ## 1. 架构
 
@@ -504,7 +533,7 @@ EOF
 
 ## 7. 已知限制
 
-- 未在任何真机上运行；ROS 2 桥接（含脚手架生成的 ROS 2 适配器）只在 rclpy 测试替身上运行过（内存话题图、同步投递、假机器人），真实 rclpy/DDS/QoS/Nav2 完全未运行。
+- 接真实本体的适配器未在任何真机上运行（运行时进程以仿真本体在一台 Jetson 真机上运行过，见 §0.4）；ROS 2 桥接（含脚手架生成的 ROS 2 适配器）只在 rclpy 测试替身上运行过（内存话题图、同步投递、假机器人），真实 rclpy/DDS/QoS/Nav2 完全未运行。
 - 一致性测试：报告自报、与适配器同进程可被篡改（见 §3.1 信任边界）；读数与动作同时伪造、识别测试模式、`hardware_estop` 声明无法发现；适配器仍可从调用栈等识别出正在被测（临时目录已改为通用前缀 `nx-rt-`）。机械臂关节对应只来自清单的 `arm.joint_position.params.joint_names`（v1.1 可选参数）；未声明的本体所有机械臂/joint_position 动作块动态用例 `blocked`。声明本身无法验证：dry 不发机械臂目标；motion 级按声明执行，声明错误时由运动包络在约 0.02 rad 内停下并中止（不是 0）。未声明 `joint_names` 时运行时拒绝 joint_position 动作块（旧适配器须补声明）。每次停止后都会自行恢复运动的驱动，软件停止停不住（报告给出警告）；中止后的观察窗为 5 s，窗外才恢复的驱动报告无法发现——但第 05 轮起运行时的锁存守护在整个锁存期间监视反馈并周期性再停（只能对声明了 `base.odometry`/`joint.state` 的本体生效，且反馈本身可能说谎；每次恢复仍会在被发现前运动约一个采样周期 0.1 s）。dry 通过不说明 `joint_names` 声明正确：机械臂映射只在 motion 级验证（R4c-03）。大幅姿态变化没有自动用例。黑盒 `--mode client` 没有 dry 守卫，依赖拒绝的探测与停止代数 `blocked`，dry 不会判为通过。若操作员的停止与套件自己的停止在同一瞬间发生，锁存原因可能显示为套件的原因（锁存本身与中止不受影响）。
 - 技能沙箱不隔离网络和本机设备，未做 seccomp；非 root 部署时技能与运行时同用户（见 §2.2 剩余信任边界）。每次技能运行多一次 Python 启动（实测约 40 ms）。
 - `base.navigate_to` 的速度由适配器的规划器决定，运行时无法限幅，只能检查目标与工作区；仿真导航忽略目标朝向。
