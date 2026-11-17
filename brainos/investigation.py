@@ -249,6 +249,7 @@ class Investigation:
         if (not isinstance(chosen, list) or len(chosen) > MAX_FIX_ISSUES or len(set(map(str, chosen))) != len(chosen)
                 or any(not isinstance(x, str) or x not in known for x in chosen)):
             raise ValueError('所选问题须来自最近一次硬件扫描，且不能重复')
+        policy = hw.policy.start_fields(robot['id'], scan, chosen, p)        # issue #13: no blocked problem; 默认允许执行 or not
         message = p.get('message') if p.get('message') is not None else ''
         if not isinstance(message, str):
             raise ValueError('修复要求必须为文本')
@@ -258,7 +259,7 @@ class Investigation:
         if p.get('data_authorized') is not True:
             raise ValueError('请授权读取设备信息并交给所选模型分析')
         if p.get('modify_authorized') is not True:
-            raise ValueError('请确认允许助手提出修改设备的命令（每条命令执行前仍需你单独批准）')
+            raise ValueError('请确认允许助手修改设备')
         model = engine.resolve_model(robot['project_id'], p.get('model_id') or None)
         tokens, minutes = discovery_limits({}, model['billing'])     # issue #5: no limits unless the gateway needs a budget
         with engine.lock:
@@ -281,7 +282,7 @@ class Investigation:
                           'first_message': device_access.redact(message or '处理所选问题：' + '、'.join(chosen))[:200]},
                  'hardware': {'scan_id': scan['id'], 'issue_ids': chosen, 'skill': hardware_init.skill_info(), 'fixes': 0, 'fixed_issue_ids': [],
                               'rescan_id': None, 'rescan_after_fixes': None, 'ssh_interface': scan.get('system', {}).get('ssh_interface', ''),
-                              'chat': True, 'extra_issue_ids': [USER_REQUEST]}}
+                              'chat': True, 'extra_issue_ids': [USER_REQUEST], **policy}}
             self.store.put('agent_sessions', s)
             engine.event(s['id'], 'user', message or '请处理我在报告中勾选的问题：\n' + '\n'.join('- ' + x for x in chosen))
             engine._launch(self.store.get('agent_sessions', s['id']), s['objective'], False)

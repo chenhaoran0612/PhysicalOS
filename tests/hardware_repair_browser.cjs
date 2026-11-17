@@ -85,6 +85,9 @@ let failed = async () => {};
   if (await form.evaluate(f => f.checkValidity())) throw Error('Repair form can be sent without allowing device changes');
   await form.locator('[name=modify_authorized]').check();
   if (!(await form.evaluate(f => f.checkValidity()))) throw Error('Repair form cannot be sent with every field filled');
+  // Issue #13 ticks "默认允许执行" by default (tests/repair_policy_browser.cjs). This script is about the
+  // repair that asks for each command, so it turns the choice off.
+  await form.locator('[name=auto_approve]').uncheck();
   await shot('1-form');
   await page.setViewportSize(SMALL);
   const overflow = await dlg.evaluate(d => d.scrollWidth - d.clientWidth);
@@ -108,7 +111,11 @@ let failed = async () => {};
   await click('engine-approval');
   await dlg.getByText('在机器人上执行修复命令', {exact: true}).waitFor();
   if (!(await dlg.innerText()).includes('usermod -aG dialout robot')) throw Error('Approval lacks the exact command');
+  // Issue #13: the approval offers "之后默认允许执行", unticked because this session chose to be asked.
+  const later = dlg.locator('form [name=auto_approve]');
+  if (await later.count() !== 1 || await later.isChecked()) throw Error('The approval does not offer the choice, or ticks it for a session that asks');
   await shot('2-approval');
+  await later.check();
   await dlg.locator('[name=decision]').selectOption('accept');
   await submit();
 
@@ -123,6 +130,9 @@ let failed = async () => {};
   if ((done.events || []).some(e => e.kind === 'budget')) throw Error('Repair was stopped by a Token limit');
   for (const k of LIMIT_FIELDS) if (done[k] !== null) throw Error(`Finished repair has ${k}=${JSON.stringify(done[k])}`);
   await page.locator('#engine-live').getByText('已修复').first().waitFor({timeout: 15000});
+  // Issue #13: approving with the box ticked switched the session to running without asking.
+  if (done.hardware.auto_approve !== true) throw Error('Approving with "之后默认允许执行" ticked did not switch the session');
+  await page.locator('#engine-live .rp-auto.is-on').waitFor({timeout: 15000});
   await shot('3-report');
 
   if (errors.length) throw Error(errors.join('\n'));

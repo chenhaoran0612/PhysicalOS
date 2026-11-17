@@ -437,6 +437,7 @@ class Engineering:
             handle['answers'].put((approval['id'],response))
             self.event(sid,'approval','用户批准了本次操作' if p['decision']=='accept' else '用户拒绝了本次操作')
             self._advance_request(sid)
+            self.platform.hardware.policy.answer_waiting(sid)   # issue #13: a device command that waited behind this one
         return {'accepted':True}
 
     @staticmethod
@@ -530,6 +531,7 @@ class Engineering:
             for item in q['questions']:
                 normalized[item['id']]={'answers':[required_text(answers.get(item['id']),'回答',5000)]}
             handle['answers'].put((q['id'],{'answers':normalized}));self._advance_request(sid)
+            self.platform.hardware.policy.answer_waiting(sid)   # issue #13: a device command that waited behind this question
         return {'accepted':True}
 
     def _queue_request(self,sid,kind,payload):
@@ -759,6 +761,7 @@ class Engineering:
                             except ValueError as exc:
                                 self.event(sid,'tool_error',str(exc))   # e.g. a fix command the product refused (issue #2)
                                 process.respond(event['id'],{'success':False,'contentItems':[{'type':'inputText','text':str(exc)}]})
+                            self.platform.hardware.policy.answer_waiting(sid)   # issue #13: with 默认允许执行 a repair's device command is answered at once
                         else:respond_tool(event['id'],name,args)
                     elif method=='mcpServer/elicitation/request':
                         # Native per-call MCP approval has an empty form schema. Other forms/OAuth are not silently accepted.

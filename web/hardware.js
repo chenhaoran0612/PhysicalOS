@@ -31,12 +31,17 @@ function hwMetrics(scan){
  const m=scan.summary,issues=hwActionable(scan).length;
  return `<div class="hw-metrics"><div><b>${m.devices}</b><span>已识别硬件</span></div><div><b>${m.ok}</b><span>状态正常</span></div><div class="${m.errors?'bad':issues?'warn':'good'}"><b>${issues}</b><span>需要处理的问题</span></div><div><b>${hwDuration(scan.duration_ms)}</b><span>只读扫描用时</span></div></div>`;
 }
+// Issue #13: a problem software cannot fix is annotated and cannot be ticked until a person marks it as handled.
+function hwIssueRow(i,robotId,locked){
+ const blocked=rpLocked(robotId,i.id);
+ return `<label class="hw-issue sev-${h(i.severity)}${blocked?' is-blocked':''}"><input type="checkbox" name="hw-issue" value="${h(i.id)}" ${hwPreselect(i)&&!blocked?'checked':''} ${locked||blocked?'disabled':''}><span class="hw-issue-body"><span class="hw-issue-head">${hwBadge(HW_SEVERITY,i.severity)}<b>${h(i.title)}</b><span class="tag">${i.fixable==='auto'?'可远程处理':i.severity==='info'?'由你判断':'需要现场处理'}</span></span><span class="hw-issue-detail">${h(i.detail)}</span>${i.hint?`<span class="hw-issue-hint">建议：${h(i.hint)}</span>`:''}</span></label>${rpStrip(robotId,i)}`;
+}
 function hwIssues(scan,robotId,locked){
  if(!scan.issues.length)return `<div class="hw-clear">${badge('未发现问题','good')}<p>扫描到的硬件都已加载驱动、网络与设备权限正常。没有问题不等于已通过功能验证，相机画面、底盘控制等仍需各自测试。</p></div>`;
  const auto=scan.issues.filter(hwPreselect).length,actionable=hwActionable(scan).length,notes=scan.issues.length-actionable;
- return `<section class="hw-issues" aria-labelledby="hw-issues-title"><div class="section-head"><h3 id="hw-issues-title">${actionable?'需要处理的问题':'提示'} <span>${actionable||notes}</span>${actionable&&notes?`<small>另有 ${notes} 条提示</small>`:''}</h3><div class="button-row">${button('重新扫描','hardware-scan','secondary small',robotId)}${button('让助手修复所选问题','hardware-repair','small',robotId,locked||!scan.issues.length)}</div></div>
- <p class="subtitle">已默认勾选可以远程处理的问题。助手按内置 Skill 诊断，每条修改设备的命令都会先给你看、由你批准后才执行。</p>
- <div class="hw-issue-list">${scan.issues.map(i=>`<label class="hw-issue sev-${h(i.severity)}"><input type="checkbox" name="hw-issue" value="${h(i.id)}" ${hwPreselect(i)?'checked':''} ${locked?'disabled':''}><span class="hw-issue-body"><span class="hw-issue-head">${hwBadge(HW_SEVERITY,i.severity)}<b>${h(i.title)}</b><span class="tag">${i.fixable==='auto'?'可远程处理':i.severity==='info'?'由你判断':'需要现场处理'}</span></span><span class="hw-issue-detail">${h(i.detail)}</span>${i.hint?`<span class="hw-issue-hint">建议：${h(i.hint)}</span>`:''}</span></label>`).join('')}</div></section>`;
+ return `<section class="hw-issues" aria-labelledby="hw-issues-title"><div class="section-head"><h3 id="hw-issues-title">${actionable?'需要处理的问题':'提示'} <span>${actionable||notes}</span>${actionable&&notes?`<small>另有 ${notes} 条提示</small>`:''}</h3><div class="button-row">${button('重新扫描','hardware-scan','secondary small',robotId)}${button('让助手修复所选问题','hardware-repair','small',robotId,locked||!rpSelectable(robotId,scan.issues))}</div></div>
+ <p class="subtitle">已默认勾选可以远程处理的问题。助手只做软件层面的修复；软件修不了的问题只做标注，现场处理并标注后才能勾选。</p>
+ <div class="hw-issue-list">${scan.issues.map(i=>hwIssueRow(i,robotId,locked)).join('')}</div></section>`;
 }
 function hwTable(scan){
  const category=hardwareView?.category||'',counts=scan.summary.categories||{};
@@ -98,15 +103,17 @@ function hardwareRepairForm(robotId){
  const modelField=models.length?picker('agent_models','model_id','使用的模型')+(tokenfans?.connected?`<p class="inline-note hw-model-note">默认使用“云平台账户”中设置的 TokenFans 默认模型${tokenfans.default_model?'（'+h(tokenfans.default_model)+'）':''}。</p>`:''):notice('还没有可用的模型。工程助手的大模型只对接 TokenFans：先在“云平台账户”连接，再回到这里勾选问题开始修复。 '+button('配置模型','engine-models','secondary small','needed'),true);
  form('让助手修复硬件问题',`${issues.length} 个问题 · 内置 Skill hardware-init`,`<div class="hw-repair-issues">${issues.map(i=>`<label class="extension-choice"><input type="checkbox" name="issue_ids" value="${h(i.id)}" checked><span><b>${h(i.title)}</b><small>${h(i.hint||i.detail)}</small></span></label>`).join('')}</div>
  ${modelField}
- ${notice('产品会直接拒绝明显危险的命令（重启、刷写固件、格式化磁盘、修改 SSH 或账号、发布运动指令等）。这只是兜底规则，无法覆盖所有写法：每条命令执行前请以你的核对为准。需要重启才能生效的改动会在报告中写明，由你安排。')}
+ ${notice('助手只做软件层面的修复；软件修不了的问题、需要重启才能生效的改动会在报告里写明并标注，等你现场处理。产品会直接拒绝明显危险的命令（重启、刷写固件、格式化磁盘、修改 SSH 或账号、发布运动指令等）。这些规则无法覆盖所有写法，开启“默认允许执行”后它们就是仅有的检查：想逐条核对命令，就取消下面的勾选。')}
  ${engineConsent('授权读取本体信息并交给所选模型分析，费用由对应模型平台计量。')}
- <label class="hardware-confirm"><input type="checkbox" name="modify_authorized" required><span>允许助手提出修改设备的命令（加载驱动、安装驱动或固件包、调整网络和设备权限）。每条命令执行前会显示原命令、风险和回退方法，由我逐条批准。</span></label>`,
+ <label class="hardware-confirm"><input type="checkbox" name="modify_authorized" required><span>允许助手修改设备（加载驱动、安装驱动或固件包、调整网络和设备权限）。每条命令的原命令、风险和回退方法都留在会话记录里。</span></label>
+ ${rpStartChoice()}`,
  'hardware-repair','开始修复',`data-id="${h(robotId)}" data-scan="${h(scan.id)}"`);
  if(!models.length)$('#dialog [type=submit]').disabled=true;
 }
 async function hardwareAction(type,id){
  if(!state.user)return auth();if(!project())return action('project-add');
  if(type==='hardware-open')return hardwareOpen(id);
+ if(['hardware-mark','hardware-unmark','hardware-auto'].includes(type))return rpAction(type,id);   // issue #13
  if(type==='hardware-scan'){const robot=find('robots',id);dialog('硬件初始化 · '+h(robot?.name||''),'重新扫描',`<div class="dialog-body hardware-init"><div class="hw-scanning" role="status"><span class="hw-spinner" aria-hidden="true"></span><div><b>正在扫描硬件…</b><p>只读命令，不修改设备。</p></div></div></div>`);$('#dialog').dataset.hardwareRobot=id;return hardwareScan(id);}
  if(type==='hardware-filter'){if(!hardwareView)return;hardwareView.category=id||'';const scan=hwLatest(hardwareView.robotId);if(scan&&$('#hw-table'))$('#hw-table').innerHTML=hwTable(scan);return;}
  if(type==='hardware-repair')return hardwareRepairForm(id);
@@ -118,7 +125,8 @@ async function hardwareSubmit(kind,p,f){
  const issue_ids=[...f.querySelectorAll('[name=issue_ids]:checked')].map(x=>x.value);
  if(!issue_ids.length)throw Error('请至少保留一个要处理的问题');
  const result=await api('engineering/hardware/repair',{project_id:projectId,robot_id:f.dataset.id,scan_id:f.dataset.scan,issue_ids,model_id:p.model_id||undefined,
-  data_authorized:f.elements.data_authorized.checked,modify_authorized:f.elements.modify_authorized.checked});
+  data_authorized:f.elements.data_authorized.checked,modify_authorized:f.elements.modify_authorized.checked,
+  auto_approve:!!f.elements.auto_approve?.checked});   // issue #13: 默认允许执行
  await refresh(true);$('#dialog').close();return engineAction('engine-session',result.id);
 }
 // The whole command, never clipped, with its size: nothing can hide below a scroll edge.
@@ -138,7 +146,7 @@ function hardwareExecApproval(s){
 function hardwareSessionPanel(s){
  const scan=hwFind('hardware_scans',s.hardware?.scan_id),report=hwFind('hardware_repairs',s.repair_report_id),ids=s.hardware?.issue_ids||[];
  const results=report?Object.fromEntries(report.results.map(r=>[r.issue_id,r])):{};
- return `<div class="contract-line hw-session"><div class="section-head"><b>硬件初始化 · ${ids.length} 个待处理问题</b>${button('查看硬件清单','hardware-open','secondary small',s.robot_id)}</div><ul>${ids.map(id=>{const issue=scan?.issues.find(i=>i.id===id),r=results[id];return `<li>${r?hwBadge(HW_OUTCOMES,r.outcome):badge('处理中')} ${h(issue?.title||id)}</li>`;}).join('')}</ul><p class="subtitle">已执行 ${s.hardware?.fixes||0} 条修复命令 · 内置 Skill ${h(s.hardware?.skill?.name||'hardware-init')} v${h(s.hardware?.skill?.version||'')}</p>${report?`<p>${h(report.summary)}</p>`:''}</div>`;
+ return `<div class="contract-line hw-session"><div class="section-head"><b>硬件初始化 · ${ids.length} 个待处理问题</b>${button('查看硬件清单','hardware-open','secondary small',s.robot_id)}</div><ul>${ids.map(id=>{const issue=scan?.issues.find(i=>i.id===id),r=results[id];return `<li>${r?hwBadge(HW_OUTCOMES,r.outcome):badge('处理中')} ${h(issue?.title||id)}</li>`;}).join('')}</ul><p class="subtitle">已执行 ${s.hardware?.fixes||0} 条修复命令 · 内置 Skill ${h(s.hardware?.skill?.name||'hardware-init')} v${h(s.hardware?.skill?.version||'')}</p>${report?`<p>${h(report.summary)}</p>`:''}${rpSessionLine(s)}</div>`;
 }
 function hardwareCardTag(r){
  const scan=hwLatest(r.id);if(!scan)return '<span class="tag">硬件待扫描</span>';
@@ -148,7 +156,8 @@ function hardwareCardTag(r){
 // Wrap the shared engine views instead of editing them (they are also changed by #3/#4).
 {
  const baseApproval=engineApproval,baseBody=engineSessionBody,baseCard=engineRobotCard,labels={fix:'修复操作',hardware_scan:'硬件扫描',repair_report:'修复报告',incomplete:'待继续'};
- engineApproval=s=>{const m=s.pending_approval?.method;return m==='device_fix/requestApproval'?hardwareFixApproval(s):s.mode==='repair'&&m==='device_exec/requestApproval'?hardwareExecApproval(s):baseApproval(s);};
+ // Issue #13: an approval in a repair session also offers "之后默认允许执行".
+ engineApproval=s=>{const m=s.pending_approval?.method;return (m==='device_fix/requestApproval'?hardwareFixApproval(s):s.mode==='repair'&&m==='device_exec/requestApproval'?hardwareExecApproval(s):baseApproval(s))+rpApprovalChoice(s);};
  engineSessionBody=s=>{let html=baseBody(s);if(s.mode!=='repair')return html;html=html.replace(/<span class="tag">(fix|hardware_scan|repair_report|incomplete)<\/span>/g,(m,k)=>`<span class="tag">${labels[k]}</span>`);const at=html.indexOf('</p>');return at<0?hardwareSessionPanel(s)+html:html.slice(0,at+4)+hardwareSessionPanel(s)+html.slice(at+4);};
  engineRobotCard=r=>{const html=baseCard(r);if(r.sim||!r.connection_id)return html;return html.replace('<div class="tags">','<div class="tags">'+hardwareCardTag(r)).replace('<div class="card-bottom"><div class="button-row">','<div class="card-bottom"><div class="button-row">'+button('硬件初始化','hardware-open','secondary small',r.id));};
 }
@@ -157,7 +166,7 @@ $('#dialog').addEventListener('close',()=>{delete $('#dialog').dataset.hardwareR
 {const baseDialog=dialog;dialog=(...args)=>{const d=$('#dialog');delete d.dataset.hardwareRobot;delete d.dataset.hardwareSig;delete d.dataset.hardwareScan;return baseDialog(...args);};}
 // Keep an open hardware dialog current while a repair runs (the 4-second state refresh):
 // re-render only when this robot's scan, reports or repair session changed, keeping the ticked issues.
-const hwSignature=robotId=>{const run=hwRunning(robotId);return JSON.stringify([hwLatest(robotId)?.id,hwRepairs(robotId).map(r=>r.id),run?.status,run?.pending_approval?.id]);};
+const hwSignature=robotId=>{const run=hwRunning(robotId);return JSON.stringify([hwLatest(robotId)?.id,hwRepairs(robotId).map(r=>r.id),run?.status,run?.pending_approval?.id,rpSignature(robotId)]);};
 const hardwareBaseRefresh=engineRefresh;
 engineRefresh=()=>{
  hardwareBaseRefresh();

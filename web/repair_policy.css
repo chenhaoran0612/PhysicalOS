@@ -1,0 +1,53 @@
+/* Issue #13 — problems waiting for on-site work, and the "默认允许执行" choice. Uses the shared tokens from style.css. */
+:root{--rp-wait:#9b702a;--rp-wait-soft:#fbf6ea;--rp-wait-line:#eadfc4;--rp-done-soft:#f2f8ec;--rp-done-line:#d5e6c8}
+
+/* The annotation hangs under its problem: one card, two parts. */
+.rp-strip{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin:-9px 0 0;padding:10px 14px 10px 42px;border:1px solid var(--rp-wait-line);border-top-style:dashed;border-left:3px solid #c9d3c6;border-radius:0 0 8px 8px;background:var(--rp-wait-soft);font-size:11px;line-height:1.7;color:#7a6a3f}
+.rp-strip.sev-error{border-left-color:var(--red)}
+.rp-strip.sev-warning{border-left-color:#d1a54c}
+.rp-strip-text{flex:1 1 320px;min-width:0;margin:0;display:grid;gap:1px}
+.rp-strip-text b{font-size:11px;color:var(--rp-wait)}
+.rp-note{display:block;margin-top:3px;padding-left:9px;border-left:2px solid var(--rp-wait-line);white-space:pre-wrap;overflow-wrap:anywhere;color:#8d7d55}
+.rp-strip .button{flex:0 0 auto;margin:0}
+.rp-strip.is-handled{border-color:var(--rp-done-line);border-top-style:dashed;background:var(--rp-done-soft);color:#5c7550}
+.rp-strip.is-handled.sev-error{border-left-color:var(--red)}
+.rp-strip.is-handled.sev-warning{border-left-color:#d1a54c}
+.rp-strip.is-handled .rp-strip-text b{color:var(--green)}
+.rp-error{flex:1 1 100%;margin:0;color:var(--red)}
+.hw-issue:has(+.rp-strip),.inv-issue:has(+.rp-strip){border-bottom-left-radius:0;border-bottom-right-radius:0}
+.inv-issue:has(+.rp-strip){margin-bottom:0}
+.inv-issue+.rp-strip{margin:-1px 0 6px;padding-left:38px}
+
+/* A blocked problem reads as set aside: no hover, no pointer, quieter text. */
+.hw-issue.is-blocked,.inv-issue.is-blocked{cursor:default;background:#fcfcfa}
+/* Only three sides: the left edge keeps the colour of the problem's severity. */
+.hw-issue.is-blocked:hover,.inv-issue.is-blocked:hover{border-top-color:var(--line);border-right-color:var(--line);border-bottom-color:var(--line);background:#fcfcfa}
+.hw-issue.is-blocked .hw-issue-head b,.inv-issue.is-blocked .inv-issue-head b{color:#6d7a70}
+.hw-issue.is-blocked input,.inv-issue.is-blocked input{cursor:not-allowed}
+
+/* The choice in the start forms and on an approval. */
+/* It is a choice, not a consent: set apart from the two required boxes above it. */
+.rp-choice{margin-top:10px;border-color:#d5e6c8;background:#f4f9ef;color:#56704c}
+.rp-choice b{color:#2f5a3d}
+.rp-choice:has(input:not(:checked)){border-color:#e8d9b4;background:#fcf8ed;color:#8d794c}
+.rp-choice:has(input:not(:checked)) b{color:#7a6230}
+.rp-choice:has(input:focus-visible){outline:3px solid #8bbfa0;outline-offset:2px}
+.rp-approval-choice{margin-top:12px}
+.rp-hold{margin:12px 0 0;padding:9px 12px;border:1px solid var(--rp-wait-line);border-left:3px solid #d1a54c;border-radius:6px;background:var(--rp-wait-soft);font-size:11px;line-height:1.7;color:#7a6a3f}
+.rp-hold b{display:block;color:var(--rp-wait)}
+
+/* How a repair session runs now, with its switch. */
+.rp-auto{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;flex-wrap:wrap;margin:10px 0 0;padding:9px 12px;border:1px solid var(--rp-wait-line);border-radius:8px;background:var(--rp-wait-soft);font-size:11px;color:#7a6a3f}
+.rp-auto-state{display:inline-flex;align-items:center;gap:8px;min-width:0}
+.rp-auto-state i{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#d1a54c}
+.rp-auto.is-on{border-color:var(--rp-done-line);background:var(--rp-done-soft);color:#4f6d47}
+.rp-auto.is-on .rp-auto-state i{background:var(--green);box-shadow:0 0 0 3px #28674f24}
+.rp-auto .button{margin:0}
+.inv-chat .rp-auto{margin:8px 0 0}
+
+@media(max-width:700px){
+ .rp-strip{padding-left:14px}
+ .inv-issue+.rp-strip{padding-left:12px}
+ .rp-strip .button,.rp-auto .button{width:100%}
+}
+@media(prefers-reduced-motion:reduce){.rp-strip,.rp-auto{transition:none}}

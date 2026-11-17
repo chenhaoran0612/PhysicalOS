@@ -120,6 +120,8 @@ def make_handler(application):
             extra=extra or {'/dropdown.js':('dropdown.js','text/javascript; charset=utf-8'),'/dropdown.css':('dropdown.css','text/css; charset=utf-8'),'/hover.css':('hover.css','text/css; charset=utf-8'),'/readable.css':('readable.css','text/css; charset=utf-8'),'/readable.js':('readable.js','text/javascript; charset=utf-8'),'/readable_dom.js':('readable_dom.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #6: its own static files, likewise.
             extra=extra or {'/investigation.js':('investigation.js','text/javascript; charset=utf-8'),'/investigation.css':('investigation.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #13: 默认允许执行 and problems waiting for on-site work, likewise.
+            extra=extra or {'/repair_policy.js':('repair_policy.js','text/javascript; charset=utf-8'),'/repair_policy.css':('repair_policy.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #8: the status page of a real machine, likewise.
             extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
@@ -228,6 +230,8 @@ def make_handler(application):
                         # Issue #2: hardware initialisation (read-only scan, repair sessions with the built-in Skill)
                         'engineering/hardware/scan':service.hardware.scan,'engineering/hardware/detail':service.hardware.scan_detail,
                         'engineering/hardware/repair':service.hardware.start_repair,'engineering/hardware/skill':service.hardware.skill,
+                        # Issue #13: mark a problem as handled on site; switch a repair between asking and running unasked
+                        'engineering/hardware/mark':service.hardware.policy.mark,'engineering/hardware/auto_approve':service.hardware.policy.set_auto,
                         # Issue #6: investigation states, full re-investigation, fix chats from the report
                         'engineering/investigation/restart':service.investigation.restart,
                         'engineering/investigation/fix':service.investigation.start_fix,
