@@ -1,6 +1,7 @@
 // Issue #9 browser acceptance: "配置连接" on a robot connected over SSH opens the SSH form filled
 // with its saved connection (no credentials), saves changes to that robot's connection, asks for the
-// fingerprints again when an address changes, and refuses while the robot is being investigated.
+// fingerprints again when an address changes, and (issue #12) opens and saves while the robot is being
+// investigated too: the form names the run instead of refusing.
 // Robots that are not connected over SSH, and "自有服务", keep the service-address form.
 // Fixture: tests/ssh_edit_browser_fixture.py (local SSH protocol fixtures, no real machine).
 // Usage: node tests/ssh_edit_browser.cjs CONFIG.json [screenshot dir]
@@ -233,33 +234,44 @@ let failed = async () => {};
   must(!(await card(SSH_ROBOT).innerText()).includes('跳板机'), 'Direct robot still shows a jump host');
   result.pastedCommand = true;
 
-  // 6 · While the robot is being investigated the connection cannot be changed, and the reason is given.
+  // 6 · Issue #12: while the robot is being investigated the form opens all the same, names the run, and saves.
+  const running = dialog.locator('#ssh-edit-running');
+  const savedConnection = () => page.evaluate(name => {
+    const robot = state.robots.find(r => r.name === name);
+    return state.device_connections.find(c => c.id === robot.connection_id);
+  }, SSH_ROBOT);
+  await openEdit();
+  must(await running.count() === 0, 'A run is named although the robot is idle');
+  await click('close');
   await busy(true);
   await robotsPage();
   await card(SSH_ROBOT).locator('[data-action="engine-session"]').first().waitFor();     // the page knows about the run
   await card(SSH_ROBOT).locator('[data-action="engine-ssh-edit"]').click();
-  await expectText(dialog, ['调查会话正在运行', '停止', '查看这次会话']);
-  must(await control('host').count() === 0, 'The form opened although an investigation is running');
+  await dialog.getByText('配置连接', {exact: true}).waitFor();
+  must(await control('host').count() === 1, 'The form did not open while an investigation is running');
+  await expectText(running, ['调查会话正在运行', '可以直接保存', '不会打断它']);
+  must(!(await dialog.innerText()).includes('再修改连接'), 'The form still asks to wait for the run');
+  await expectText(dialog.locator('button[type=submit]'), ['保存']);
   await shot('6-busy');
-  const refused = await page.evaluate(async name => {
-    const robot = state.robots.find(r => r.name === name);
-    const response = await fetch('/api/engineering/ssh/update', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                                                                 body: JSON.stringify({project_id: projectId, edit_robot_id: robot.id})});
-    return {status: response.status, body: await response.json()};
-  }, SSH_ROBOT);
-  must(refused.status === 400 && refused.body.error.includes('调查会话正在运行'), 'API did not refuse: ' + JSON.stringify(refused));
-  await click('close');
-  await busy(false);
-  await openEdit();                                                // a form that was open before the run started
-  await busy(true);
   await dialog.locator('details.page-purpose summary').click();
   await fill('watch_services', 'bridge');
-  await dialog.locator('button[type=submit]').click();
-  await page.locator('#dialog .form-error', {hasText: '调查会话正在运行'}).waitFor();
-  await busy(false);
   await submit();
   await savedToast();
-  result.refusedWhileRunning = true;
+  must(JSON.stringify((await savedConnection()).watch_services) === '["bridge"]', 'Not saved while an investigation is running');
+  result.savedWhileRunning = true;
+
+  // 6b · Pointing the busy robot at another machine is saved too; the page says what that means for the run.
+  await openEdit();
+  await fill('port', cfg.second_port);
+  await submit();
+  await confirmFingerprint('确认 SSH 主机指纹', {password: cfg.robot_login});
+  await dialog.getByText('SSH 连接已更新', {exact: true}).waitFor();
+  await expectText(dialog, ['另一台机器', '正在运行的调查会话', '原来那台机器', '查看这次会话']);
+  must((await savedConnection()).port === cfg.second_port, 'Not moved while an investigation is running');
+  await shot('6b-busy-other-machine');
+  await click('close');
+  await busy(false);
+  result.movedWhileRunning = true;
 
   // 7 · A robot without SSH, and a service, keep the service-address form. The SSH form links to it too.
   await robotsPage();

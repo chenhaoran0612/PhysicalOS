@@ -337,43 +337,7 @@ class FingerprintTests(EditCase):
         self.assertNotIn('alias', moved)
 
 
-class BusyRobotTests(EditCase):
-    def test_a_running_investigation_refuses_the_change_and_says_why(self):
-        old = self.connect_directly()
-        running = self.session(old)
-
-        for attempt in (lambda: self.save(old, watch_services=['bridge']), lambda: self.rescan(old)):
-            with self.assertRaises(ValueError) as caught:
-                attempt()
-            self.assertIn('调查', str(caught.exception))
-            self.assertIn('停止', str(caught.exception))
-        self.assertEqual(self.saved(old), old)
-
-        self.store.put('agent_sessions', {**running, 'status': 'completed'})
-        self.assertEqual(self.save(old, watch_services=['bridge'])['watch_services'], ['bridge'])
-
-    def test_a_running_repair_refuses_the_change_too(self):
-        old = self.connect_directly()
-        self.session(old, status='waiting_input', mode='repair')
-
-        with self.assertRaises(ValueError) as caught:
-            self.save(old, watch_services=['bridge'])
-        self.assertIn('修复', str(caught.exception))
-
-    def test_a_session_that_starts_while_the_new_login_is_tested_wins(self):
-        old = self.connect_directly()
-        real = device_access.SSHDevice
-
-        def test_login(connection, secret):
-            self.session(old)                                            # an investigation starts during the login test
-            return real(connection, secret)
-
-        with mock.patch.object(device_access, 'SSHDevice', test_login):
-            with self.assertRaises(ValueError) as caught:
-                self.save(old, watch_services=['bridge'])
-        self.assertIn('调查', str(caught.exception))
-        self.assertEqual(self.saved(old), old)
-
+class OverlappingEditTests(EditCase):
     def test_an_edit_that_was_overtaken_by_another_one_is_refused(self):
         old = self.connect_directly()
         real, logins = device_access.SSHDevice, []
@@ -389,20 +353,6 @@ class BusyRobotTests(EditCase):
                 self.save(old, watch_services=['bridge'])
         self.assertIn('刚刚被改过', str(caught.exception))
         self.assertEqual(self.saved(old)['watch_services'], ['nav-stack'])
-
-    def test_a_hardware_scan_in_progress_refuses_the_change(self):
-        old = self.connect_directly()
-        self.platform.hardware.scanning.add(old['robot_id'])
-
-        with self.assertRaises(ValueError) as caught:
-            self.save(old, watch_services=['bridge'])
-        self.assertIn('扫描', str(caught.exception))
-
-    def test_sessions_of_other_robots_do_not_matter(self):
-        old = self.connect_directly()
-        self.session({'robot_id': 'robot-other', 'id': 'connection-other'})
-
-        self.assertEqual(self.save(old, watch_services=['bridge'])['watch_services'], ['bridge'])
 
 
 class AfterTheChangeTests(EditCase):

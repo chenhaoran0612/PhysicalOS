@@ -4,11 +4,13 @@
 // Loaded last. It wraps engineRobotCard / engineAction / engineSubmit instead of editing them and
 // reuses the form, the fingerprint steps and the request builders of engineering.js and ssh_jump.js.
 // Passwords and keys are never sent to the page: an empty field keeps the saved login.
+// Issue #12: the form opens and saves whatever the robot is doing. A running investigation or repair
+// is named in the form, not a reason to refuse: it goes on over the SSH session it already has.
 
 const SSH_EDIT_SECRETS = {password: ['password', '密码'], key: ['private_key', '私钥']};
 const SSH_EDIT_SECRET_FIELDS = ['password', 'private_key', 'passphrase', 'jump_password', 'jump_private_key', 'jump_passphrase'];
 const SSH_EDIT_FORM = '#dialog form[data-form="engine-ssh"]';
-const SSH_EDIT_SESSION_NAMES = {discovery: '调查', repair: '修复'};      // as brainos/ssh_edit.py names them
+const SSH_EDIT_SESSION_NAMES = {discovery: '调查', repair: '修复'};
 let sshEditBaseAction = null, sshEditBaseSubmit = null;
 
 const sshEditSaved = robotId => find('device_connections', find('robots', robotId)?.connection_id);
@@ -40,11 +42,20 @@ function sshEditMissingSecret(p, saved) {
 
 // ---------------------------------------------------------------- the form
 
-function sshEditBusyDialog(robot, session) {
-  const kind = SSH_EDIT_SESSION_NAMES[session.mode] || '工程';
-  dialog('配置连接', h(robot.name),
-         `<div class="dialog-body">${notice(`这台机器人有${kind}会话正在运行，现在改连接会让它中途断开。请等它结束，或先停止它，再修改连接。`, true)}` +
-         `<div class="button-row">${button('查看这次会话', 'engine-session', 'small', session.id)}${button('关闭', 'close', 'secondary small')}</div></div>`);
+const sshEditSessionKind = session => SSH_EDIT_SESSION_NAMES[session.mode] || '工程';
+
+// What saving does to a session of this robot that is running right now; '' when none is.
+function sshEditRunningNote(robotId) {
+  const session = sshEditBusy(robotId);
+  if (!session) return '';
+  return `<div id="ssh-edit-running">${notice(`这台机器人有${sshEditSessionKind(session)}会话正在运行。可以直接保存，不会打断它：` +
+                                             '它继续用已经打开的 SSH 连接。')}</div>`;
+}
+
+// The robot now points at a machine with another host key: a session that is still running stays on the old one.
+function sshEditMovedNote(session) {
+  return notice(`正在运行的${sshEditSessionKind(session)}会话是在原来那台机器上开始的，不会换到现在这台机器上继续，` +
+                '它得到的结果说的也是原来那台机器。建议停止它，再重新开始。', true);
 }
 
 function sshEditKeepHint(prefix, auth) {
@@ -88,7 +99,7 @@ function sshEditFill(robot, saved) {
   sshEditKeepHint('', saved.auth);
   if (saved.jump) sshEditKeepHint('jump_', saved.jump.auth);
   const body = form.querySelector('.dialog-body');
-  body.querySelector('.form-error').insertAdjacentHTML('afterend',
+  body.querySelector('.form-error').insertAdjacentHTML('afterend', sshEditRunningNote(robot.id) +
     notice('密码和私钥不会显示在这里。留空就沿用已保存的；已保存的登录信息只会发给指纹和原来一致的那台机器。'));
   body.insertAdjacentHTML('beforeend', sshEditNotes(robot, saved) +
                           `<input type="hidden" name="edit_robot_id" value="${h(robot.id)}">`);
@@ -111,8 +122,6 @@ function sshEditSync() {
 function sshEditOpen(robotId) {
   const robot = find('robots', robotId), saved = sshEditSaved(robotId);
   if (!robot || !saved) return action('robot-config', robotId);        // not connected over SSH: service address and token
-  const busy = sshEditBusy(robotId);
-  if (busy) return sshEditBusyDialog(robot, busy);
   return Promise.resolve(sshEditBaseAction('engine-ssh', robotId)).then(() => sshEditFill(robot, saved));
 }
 
@@ -161,10 +170,13 @@ function sshEditDone(before, after) {
     toast('SSH 连接已更新');
     return;
   }
+  const running = sshEditBusy(robot.id);
   dialog('SSH 连接已更新', h(robot.name),
          `<div class="dialog-body">${notice('目标机的主机指纹和原来不同：现在连接的是另一台机器，或者它重装过系统。' +
            '这台机器人已有的调研档案、调查记录和硬件扫描都保留着，但它们描述的是原来那台机器。建议重新扫描硬件，再重新调研。', true)}` +
-         `<div class="button-row">${button('重新扫描硬件', 'hardware-scan', 'small', robot.id)}` +
+         (running ? sshEditMovedNote(running) : '') +
+         `<div class="button-row">${running ? button('查看这次会话', 'engine-session', 'small', running.id) : ''}` +
+         `${button('重新扫描硬件', 'hardware-scan', running ? 'secondary small' : 'small', robot.id)}` +
          `${button('打开调研', 'engine-discover', 'secondary small', robot.id)}` +
          `${button('实时状态', 'engine-status', 'secondary small', robot.id)}${button('关闭', 'close', 'secondary small')}</div></div>`);
 }

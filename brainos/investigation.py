@@ -168,7 +168,8 @@ class Investigation:
             return
         device, error = None, None
         try:
-            device = device_access.SSHDevice(connection, self.store.get('agent_secrets', connection['id']))
+            # issue #12: the connection as saved now, unless it leads to another machine than this run's own session
+            device = device_access.SSHDevice(*self.platform.ssh_edit.session_login(handle.get('device'), connection['id']))
             device.stop_event, device.deadline = handle['stop'], getattr(handle.get('device'), 'deadline', float('inf'))
             parsed, raw, duration = hw._execute_scan(connection, device)
         except ValueError as exc:

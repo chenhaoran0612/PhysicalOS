@@ -306,10 +306,16 @@ def command_request(args):
     return {'command':command,'purpose':purpose,'timeout_seconds':timeout}
 
 
+def secret_values(secret):
+    """The saved logins of a connection as plain values: what must never show in anything read from a device."""
+    return [v for v in secret.values() if isinstance(v,str) and v]
+
+
 class SSHDevice:
     def __init__(self,connection,secret):
         self.roots=list(connection['read_roots']);self.stop_event=None
-        self.secrets=[v for v in secret.values() if isinstance(v,str) and v]
+        self.secrets=secret_values(secret)
+        self.fingerprint=connection['fingerprint']     # issue #12: the machine this session was opened for
         jump=connection.get('jump');self.jump=None;sock=None
         if jump:
             # Both hops are pinned to the fingerprints the user confirmed; the device session runs inside the tunnel.
