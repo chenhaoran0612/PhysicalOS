@@ -18,7 +18,8 @@ from ssh_fixture import SSHFixture
 
 class Device:
     calls=[]
-    def __init__(self,*args):pass
+    def __init__(self,*args):   # like an SSHDevice (issue #12): the machine it was opened for, the logins it hides
+        self.fingerprint=args[0]['fingerprint'] if args else None;self.secrets=[]
     def probe(self,name):
         self.calls.append(name)
         return {'probe':name,'stdout':'Linux fixture; CPU: Test ARM processor; ROS test-only','stderr':'','exit_code':0}

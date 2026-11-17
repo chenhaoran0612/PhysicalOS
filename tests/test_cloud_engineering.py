@@ -184,8 +184,9 @@ class ReplayAppServer:
 
 
 class Device:
-    def __init__(self, *args):
-        pass
+    def __init__(self, connection, secret):
+        # like an SSHDevice (issue #12): the machine it was opened for, the logins it hides
+        self.fingerprint, self.secrets = connection['fingerprint'], []
 
     def probe(self, name):
         return {'probe': name, 'stdout': 'Linux fixture', 'stderr': '', 'exit_code': 0}

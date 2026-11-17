@@ -13,20 +13,22 @@ connection record in place: the robot, its investigations, inventories and hardw
 * Credentials never come back. A credential field left empty keeps the saved login, and a saved
   login is only ever sent to the machine it was saved for: the host key of that hop must be the
   one confirmed before. Any other machine gets a login only if it is typed again.
-* Nothing changes while an investigation, a repair or a hardware scan of the robot is running.
+* Saving never waits for the robot (issue #12): an investigation, a repair or a hardware scan that is
+  running does not stop it. A session that is already running keeps the SSH session it opened and ends
+  on the machine it started on; see ``ConnectionEdit.session_login``.
 """
 import time
 
 from . import device_access
-from .engineering import ACTIVE
 from .service import now, uid
 
 SECRET_FIELDS = ('password', 'private_key', 'passphrase')
 SECRET_OF_AUTH = {'password': ('password', '密码'), 'key': ('private_key', '私钥')}
-SESSION_NAMES = {'discovery': '调查', 'repair': '修复'}
 AUDITED_FIELDS = ('host', 'port', 'username', 'auth', 'fingerprint', 'alias', 'read_roots', 'watch_services')
 ADDRESS_CHANGED = '主机或跳板机的地址变了：要先重新读取并确认主机指纹，再保存'
 CHANGED_MEANWHILE = '这台机器人的连接刚刚被改过；请关闭后重新打开“配置连接”再改'
+MOVED_AWAY = ('这台机器人的 SSH 连接改过了，现在指向另一台机器（主机指纹和本次会话开始时不同）。'
+              '本次会话不会换到那台机器上继续，新保存的登录信息也不会发给原来那台机器。请结束本次会话，再重新开始')
 ROUTE_ONLY_FIELDS = ('jump', 'alias')      # present only on some routes: never carried over from the old record
 REVISION = '_edit_revision'        # set by prepare: the saved connection's last change, as this request saw it
 
@@ -48,6 +50,11 @@ def _used_fields(auth):
     return {'password': ('password',), 'key': ('private_key', 'passphrase')}.get(auth, ())
 
 
+def _hide_too(device, secret):
+    """From now on, nothing this SSH session reads may show these saved logins either."""
+    device.secrets = list(dict.fromkeys([*device.secrets, *device_access.secret_values(secret)]))
+
+
 def _secret_to_save(connection, secret):
     """The logins of a connection as they are stored: per hop, only what its login method uses."""
     kept = {key: secret.get(key, '') if key in _used_fields(connection['auth']) else '' for key in SECRET_FIELDS}
@@ -63,30 +70,23 @@ class ConnectionEdit:
         self.platform, self.store = platform, platform.store
 
     def _editable(self, p):
-        """(robot, saved connection) of an edit request, or the reason the connection cannot change now."""
+        """(robot, saved connection) of an edit request. What the robot is doing does not matter (issue #12)."""
         if not p.get('edit_robot_id'):
             raise ValueError('请指定要修改连接的机器人')
-        robot, saved = self.platform.engineering._ssh_connection(
+        return self.platform.engineering._ssh_connection(
             {'robot_id': p['edit_robot_id'], 'project_id': p.get('project_id')})
-        running = next((s for s in self.store.list('agent_sessions')
-                        if s.get('robot_id') == robot['id'] and s['status'] in ACTIVE), None)
-        if running:
-            kind = SESSION_NAMES.get(running.get('mode'), '工程')
-            raise ValueError(f'这台机器人有{kind}会话正在运行，现在改连接会让它中途断开；请等它结束，或先停止它，再修改连接')
-        if robot['id'] in self.platform.hardware.scanning:
-            raise ValueError('这台机器人正在扫描硬件；请等扫描结束，再修改连接')
-        return robot, saved
 
     def prepare(self, p):
         """Called first by ``Engineering.scan`` and ``Engineering.connect``.
 
-        A request that edits a robot (``edit_robot_id``) is refused while the robot is busy, and
-        each hop whose credential field was left empty gets its saved login. Any other request
-        passes through untouched."""
+        In a request that edits a robot (``edit_robot_id``), each hop whose credential field was
+        left empty gets its saved login. Any other request passes through untouched."""
         if not p.get('edit_robot_id'):
             return p
-        _, saved = self._editable(p)
-        engine, secret, p = self.platform.engineering, self.store.get('agent_secrets', saved['id']), dict(p)
+        with self.store.atomic():                         # the record and the logins of one and the same edit
+            _, saved = self._editable(p)
+            secret = self.store.get('agent_secrets', saved['id'])
+        engine, p = self.platform.engineering, dict(p)
         p[REVISION] = saved.get('updated_at')
         saved_jump = saved.get('jump') or {}
         if p.get('host_check_id'):                        # connect: the device login, and the jump login once more
@@ -131,6 +131,33 @@ class ConnectionEdit:
         finally:
             self.store.delete('host_key_checks', check['id'])     # it stood in for this one request only
 
+    def saved_login(self, connection_id):
+        """(connection, saved logins) as one edit left them. Read apart, an edit saved in between would pair
+        the address of one machine with the login of another: every SSH login from the store starts here."""
+        with self.store.atomic():
+            return self.store.get('device_connections', connection_id), self.store.get('agent_secrets', connection_id)
+
+    def session_login(self, device, connection_id):
+        """``saved_login`` for a session that is already running and logs in again, or needs the saved
+        password for ``sudo``. ``device`` is the SSH session it opened when it started.
+
+        The connection may have been edited since (issue #12). The newly saved one is used while it still
+        leads to the machine the session started on; a session never follows its robot to another machine,
+        and a login saved for another machine never reaches the one the session is connected to."""
+        connection, secret = self.saved_login(connection_id)
+        if device is None:
+            return connection, secret
+        if device.fingerprint != connection['fingerprint']:
+            raise ValueError(MOVED_AWAY)
+        _hide_too(device, secret)
+        return connection, secret
+
+    def _open_sessions(self, connection_id):
+        """The SSH sessions that running investigations and repairs opened over this connection."""
+        using = {s['id'] for s in self.store.list('agent_sessions') if s.get('connection_id') == connection_id}
+        handles = [handle for sid, handle in self.platform.engineering.live.items() if sid in using]
+        return [handle['device'] for handle in handles if handle.get('device') is not None]
+
     @staticmethod
     def _confirmed_before(p, saved):
         """A host check for a request that keeps every address: the fingerprints confirmed when these
@@ -154,7 +181,7 @@ class ConnectionEdit:
         """Called by ``Engineering.connect`` in place of creating a robot, once the new route and its
         logins have been tested: replaces the robot's connection record and its saved logins."""
         engine = self.platform.engineering
-        with engine.lock:                                 # no session of this robot can start before the write
+        with engine.lock:                                 # one edit at a time: the check below and the write belong together
             robot, saved = self._editable(p)
             if saved.get('updated_at') != p.get(REVISION):
                 raise ValueError(CHANGED_MEANWHILE)       # another edit was saved while this one was being tested
@@ -167,6 +194,8 @@ class ConnectionEdit:
             with self.store.atomic():
                 self.store.put('agent_secrets', {'id': saved['id'], **secret})
                 self.store.put('device_connections', updated)
+            for device in self._open_sessions(saved['id']):
+                _hide_too(device, secret)                 # issue #12: they go on reading the device after this edit
         engine.status_sessions.forget(saved['id'])        # the live-status session of the old route or login
         self.platform.audit('device.ssh_updated', self._audit(robot, saved, updated, old_secret, secret),
                             robot['project_id'])

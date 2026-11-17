@@ -363,7 +363,7 @@ class HardwareInit:
         opened = device is None
         try:
             if opened:
-                device = device_access.SSHDevice(connection, self.store.get('agent_secrets', connection['id']))
+                device = device_access.SSHDevice(*self.platform.ssh_edit.saved_login(connection['id']))    # issue #12
             result = run_command(device, hardware_scan.SCAN_EXEC, hardware_scan.SCAN_TIMEOUT_SECONDS, keep='head', limit=hardware_scan.SCAN_OUTPUT_LIMIT)
         except ValueError:
             raise
@@ -544,8 +544,8 @@ class HardwareInit:
     def _exec(self, sid, s, request, device):
         """An approved investigation command in a repair session. The remote shell can change the device,
         so it counts as a change: a fix is only verified by a rescan after it."""
-        connection = self.store.get('device_connections', s['connection_id'])
-        ensure_connected(device, connection, self.store.get('agent_secrets', connection['id']))
+        connection, secret = self.platform.ssh_edit.session_login(device, s['connection_id'])   # issue #12
+        ensure_connected(device, connection, secret)
         result = {**request, **device.execute(request['command'], request['timeout_seconds']), 'label': request['purpose']}
         evidence_id = self._evidence(sid, s, 'device_exec', request, result)
         self._count_change(sid)
@@ -560,12 +560,12 @@ class HardwareInit:
 
     def _fix(self, sid, s, request, device):
         engine = self.platform.engineering
-        connection = self.store.get('device_connections', s['connection_id'])
+        connection, secret = self.platform.ssh_edit.session_login(device, s['connection_id'])   # issue #12
         password = None
         if request['sudo'] == 'sudo_password':
-            password = self.store.get('agent_secrets', connection['id']).get('password') or ''
+            password = secret.get('password') or ''
         command = _quote_root(request['command'], request['sudo'], request['timeout_seconds'])
-        ensure_connected(device, connection, self.store.get('agent_secrets', connection['id']))
+        ensure_connected(device, connection, secret)
         # Wait a little longer than the remote limit so its exit status (124 on timeout) is collected.
         result = run_command(device, command, request['timeout_seconds'] + 8, None if password is None else password + '\n')
         result = {**request, **result, 'label': request['purpose']}
@@ -584,9 +584,9 @@ class HardwareInit:
     def _rescan(self, sid, s, device):
         engine = self.platform.engineering
         robot = self.store.get('robots', s['robot_id'])
-        connection = self.store.get('device_connections', s['connection_id'])
+        connection, secret = self.platform.ssh_edit.session_login(device, s['connection_id'])   # issue #12
         # A fresh login, so group membership and services are seen as a new session would see them.
-        fresh = device_access.SSHDevice(connection, self.store.get('agent_secrets', connection['id']))
+        fresh = device_access.SSHDevice(connection, secret)
         fresh.stop_event, fresh.deadline = getattr(device, 'stop_event', None), getattr(device, 'deadline', float('inf'))
         try:
             parsed, raw, duration = self._execute_scan(connection, fresh)

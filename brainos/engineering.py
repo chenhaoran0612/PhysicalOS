@@ -324,7 +324,7 @@ class Engineering:
         """Live status of a real machine over its SSH connection: fixed read-only commands (device_status).
         A full read lists the hardware and the running software too (issue #8); ``quick`` leaves those two out."""
         robot,connection=self._ssh_connection(p)
-        view=self.status_sessions.read(connection,self.store.get('agent_secrets',connection['id']),full=p.get('quick') is not True)
+        view=self.status_sessions.read(*self.platform.ssh_edit.saved_login(connection['id']),full=p.get('quick') is not True)   # issue #12
         return {'robot_id':robot['id'],'name':robot['name'],**view}
 
     def _status_scan_hold(self,robot_id):
@@ -668,10 +668,11 @@ class Engineering:
         process=device=None;meter=None;final='failed';failure=None;root=None;cloud_box={}
         try:
             s=self.store.get('agent_sessions',sid);deadline=run_deadline(time.monotonic(),s['max_minutes'])
-            connection=self.store.get('device_connections',s['connection_id']) if s.get('connection_id') else None
+            connection,secret=self.platform.ssh_edit.saved_login(s['connection_id']) if s.get('connection_id') else (None,None)   # issue #12
             if connection:
                 connection={**connection,'read_roots':list(dict.fromkeys(connection['read_roots']+s.get('approved_read_roots',[])))}
-                device=device_access.SSHDevice(connection,self.store.get('agent_secrets',connection['id']));device.stop_event=handle['stop'];device.deadline=deadline;handle['device']=device
+                device=device_access.SSHDevice(connection,secret);device.stop_event=handle['stop'];device.deadline=deadline;handle['device']=device
+                self.platform.ssh_edit.session_login(device,s['connection_id'])   # issue #12: an edit that was saved during this login
             if handle['stop'].is_set():final='interrupted';return
             profile,meter=self._model(s,cloud_box)
             if handle['stop'].is_set():final='interrupted';return
