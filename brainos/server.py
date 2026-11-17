@@ -124,6 +124,8 @@ def make_handler(application):
             extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #11: deleting a robot, likewise.
+            extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
@@ -243,6 +245,8 @@ def make_handler(application):
                         'jobs/model-preview':service.preview_training_model,'jobs/save-model':service.save_training_model,
                         'onsite':service.onsite_test,'deployments':service.deploy,'operations':service.operate,
                         'robots/reset':service.reset_robot,
+                        # Issue #11: delete a real robot with its SSH connection, saved logins and investigations
+                        'robots/remove':service.robot_remove.remove,
                         # Round 02 (INTERFACES 4.1, 4.5)
                         'robots/detail':service.robot_detail,
                         'robots/stop':service.stop_robot,
