@@ -3,6 +3,8 @@
 Every machine here is a local SSH protocol fixture: nothing reaches a real one.
 """
 import json
+import pathlib
+import re
 import secrets
 import shutil
 import threading
@@ -92,7 +94,8 @@ class WhatGoesTests(RemoveCase):
         for kind, key in [('agent_sessions', investigation['id']), ('agent_sessions', repair['id']), *made]:
             self.assertFalse(self.exists(kind, key), kind)
         self.assertEqual(result['deleted'], {'device_connections': 1, 'agent_sessions': 2, 'device_evidence': 1,
-                                             'robot_inventories': 1, 'hardware_scans': 1, 'hardware_repairs': 1})
+                                             'robot_inventories': 1, 'hardware_scans': 1, 'hardware_repairs': 1,
+                                             'hardware_issue_marks': 1})     # issue #13's marks
 
     def test_what_its_sessions_wrote_on_this_computer_is_deleted(self):
         connection = self.connect_directly()
@@ -421,10 +424,14 @@ class AllOrNothingTests(RemoveCase):
 
 
 class ModuleTests(unittest.TestCase):
-    def test_the_names_of_running_sessions_match_the_connection_editor(self):
-        """Both refusals name the session the same way."""
-        from brainos import ssh_edit
-        self.assertEqual(robot_remove.SESSION_NAMES, ssh_edit.SESSION_NAMES)
+    def test_the_names_of_running_sessions_match_the_pages(self):
+        """The refusal, its dialog and the connection editor's notice name a running session the same way.
+
+        Since issue #12 the connection editor no longer refuses on the server, so its names live in its page only."""
+        web = pathlib.Path(__file__).resolve().parent.parent / 'web'
+        for page in ('robot_remove.js', 'ssh_edit.js'):
+            names = re.search(r'SESSION_NAMES = \{([^}]*)\}', (web / page).read_text()).group(1)
+            self.assertEqual(dict(re.findall(r"(\w+): '([^']*)'", names)), robot_remove.SESSION_NAMES, page)
 
 
 if __name__ == '__main__':

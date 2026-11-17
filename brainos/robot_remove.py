@@ -29,12 +29,14 @@ import shutil
 
 from . import adaptation
 from .engineering import ACTIVE
+from .repair_policy import MARKS
 from .workflows import RUNNING
 
-SESSION_NAMES = {'discovery': '调查', 'repair': '修复'}      # as brainos/ssh_edit.py names them
+SESSION_NAMES = {'discovery': '调查', 'repair': '修复'}      # as web/robot_remove.js and web/ssh_edit.js name them
 # Kept per robot besides its connections (with their logins) and its sessions. The raw output of
-# a hardware scan is stored apart, under the scan's id.
-ROBOT_RECORDS = ('device_evidence', 'robot_inventories', 'hardware_scans', 'hardware_repairs')
+# a hardware scan is stored apart, under the scan's id. The marks (issue #13) say which hardware
+# problems a person handled on site or a repair left unresolved, with the assistant's note.
+ROBOT_RECORDS = ('device_evidence', 'robot_inventories', 'hardware_scans', 'hardware_repairs', MARKS)
 SIMULATED = '仿真机器人请用它卡片上的“删除”：那里会先关闭它的仿真进程'
 SCANNING = '这台机器人正在扫描硬件；请等扫描结束，再删除'
 ADAPTING = '这台机器人的本体适配流程正在运行；请等这一阶段结束，或先停止流程，再删除'
