@@ -87,6 +87,8 @@ class Platform:
         self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
         from .ssh_edit import ConnectionEdit
         self.ssh_edit = ConnectionEdit(self)        # issue #9: change the SSH connection of a connected robot
+        from .robot_remove import RobotRemoval
+        self.robot_remove = RobotRemoval(self)      # issue #11: delete a robot with its connection and investigations
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):
