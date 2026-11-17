@@ -68,13 +68,32 @@ let failed=async()=>{};
  await fix.locator('[name=issue_ids]').evaluateAll(xs=>xs.forEach(x=>{x.checked=false;}));
  await fix.locator('[name=issue_ids][value^="serial-perm"]').first().check();
  await fix.locator('[name=message]').fill('底盘串口打不开，帮我修好');
+ // Issue #13: the problem that needs on-site work cannot be ticked here either; a person marks it, and
+ // what was ticked and typed stays; taking the mark back blocks it again.
+ const onsite=fix.locator('[name=issue_ids][value="net-down:can0"]'),note=fix.locator('.rp-strip[data-rp-issue="net-down:can0"]');
+ if(!(await onsite.isDisabled())||!(await note.innerText()).includes('等待现场处理'))throw Error('On-site problem is not blocked in the report');
+ await note.locator('[data-action=hardware-mark]').click();await note.locator('[data-action=hardware-unmark]').waitFor();
+ if(await onsite.isDisabled()||await onsite.isChecked())throw Error('Marked problem is still disabled, or was ticked for the user');
+ if(await fix.locator('[name=message]').inputValue()!=='底盘串口打不开，帮我修好')throw Error('Marking wiped the typed request');
+ if(!(await fix.locator('[name=issue_ids][value^="serial-perm"]').first().isChecked()))throw Error('Marking changed what was ticked');
+ await note.locator('[data-action=hardware-unmark]').click();await note.locator('[data-action=hardware-mark]').waitFor();
+ if(!(await onsite.isDisabled()))throw Error('Taking the mark back did not block the problem again');
+ if(!(await fix.locator('[name=auto_approve]').isChecked()))throw Error('"默认允许执行" is not ticked by default in the fix form');
  await fix.locator('[name=data_authorized]').check();await fix.locator('[name=modify_authorized]').check();
+ await fix.locator('[name=auto_approve]').uncheck();   // issue #13 ticks 默认允许执行 by default; this script checks the chat that asks
  await submit('#dialog .inv-fix form');
  await dlg.locator('.inv-chat').waitFor();await dlg.locator('.inv-approval').waitFor({timeout:30000});
  if(!(await dlg.locator('.inv-approval').innerText()).includes('usermod -aG dialout robot'))throw Error('Approval card lacks the exact command');
  if(!(await dlg.locator('.inv-chat-compose [type=submit]').isDisabled()))throw Error('Send enabled while the assistant works');
  await shot('4-chat-approval');
+ // Issue #13: the card offers "之后默认允许执行", unticked because this chat chose to be asked; ticking it
+ // while approving switches the conversation to running device commands without asking.
+ const later=dlg.locator('.inv-approval [name=auto_approve]');
+ if(await later.count()!==1||await later.isChecked())throw Error('Approval card lacks the choice, or ticks it for a chat that asks');
+ if(!(await dlg.locator('#inv-chat-scope .rp-auto').innerText()).includes('逐条批准'))throw Error('Chat does not say it asks for each command');
+ await later.check();
  await dlg.locator('.inv-approval [data-action="engine-inv-approve"]',{hasText:'批准执行'}).click();
+ await dlg.locator('#inv-chat-scope .rp-auto.is-on').waitFor({timeout:15000});
  await dlg.locator('#inv-chat-log').getByText(cfg.answers[0]).waitFor({timeout:30000});
  await page.waitForFunction(()=>!document.querySelector('.inv-chat-compose [type=submit]').disabled,null,{timeout:15000});
  await page.locator('#inv-chat-input').fill('再看看 eth1 为什么没有网');await page.locator('#inv-chat-input').press('Enter');

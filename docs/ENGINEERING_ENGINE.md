@@ -279,6 +279,7 @@ Mac 包增加同一已固定上游归档中的 ripgrep 15.2.0（e89fff89ac），
 - `POST /api/engineering/investigation/fix`（`project_id`、`robot_id`、`issue_ids`（可为空）、`message`、`model_id`、`data_authorized`、`modify_authorized`）新建修复会话。它就是 #2 的修复会话（`mode='repair'`、内置 `hardware-init` Skill、`device_fix` 逐条批准、产品拒绝的危险命令、重新扫描验证、修复报告），多了 `hardware.chat = true`；基于这台机器人最近一次扫描，没有扫描时先提示扫描（报告里有“扫描硬件”按钮）。
 - `POST /api/engineering/investigation/fix/message`（`project_id`、`session_id`、`message`）在同一会话里继续下一轮。用户的每条消息记为会话事件 `user`，与助手的回复（`message`）、执行的修复命令（`fix`）、读取与扫描一起组成对话记录。授权在开始对话时给出一次（会话的 `chat` 记录时间），之后的消息不再重复勾选；助手处理中时不能发送。消息里形如 `password: …`、`api_key = …`、`access_token=…`、`Bearer …`、`sk-…` 的凭据，在保存和发给模型之前按设备输出的同一套规则隐藏（`device_access.redact`）；其他写法不保证识别，不要在对话里粘贴密码。
 - 用户提出的、不在扫描问题列表里的要求，`device_fix` 的 `issue_ids` 写 `user-request`（只在对话修复会话中允许），修复报告也可以用它记录结果；标为 `fixed` 仍然要求修复命令成功并在之后重新扫描。
+- issue #13：开始表单有“默认允许执行”（默认勾选，请求里是 `auto_approve`），开启后设备命令通过产品检查后直接执行、不再逐条批准，对话页可以随时切换；软件修不了、被标注为等待现场处理的问题不能勾选，要先在报告或硬件初始化页人工标注。规则见 [HARDWARE_INIT.md](HARDWARE_INIT.md#默认允许执行与等待现场处理的问题issue-13)。
 - 每轮结束会话状态为“已完成”（等用户下一条消息），不要求每轮都保存修复报告；模型收到的规则是 `REPAIR_INSTRUCTIONS` 加上 `hardware_init.CHAT_INSTRUCTIONS`。和 #2 一样不限 Token 和时间（按会话预留点数的网关模型除外）。
 - 界面像 Codex 的对话框：上方是所选问题和已执行的修复命令数，中间是对话记录（你的消息、助手的回复、读取 / 扫描 / 修复命令的执行记录和依据、本机分析命令），需要批准的命令以卡片显示完整命令、对应问题、提权方式、回退方法和风险，直接在卡片上“批准执行”或“拒绝”（绑定在显示的那一条请求上，换了请求就不生效）；底部输入框 Enter 发送、Shift+Enter 换行，助手处理中可以停止。
 

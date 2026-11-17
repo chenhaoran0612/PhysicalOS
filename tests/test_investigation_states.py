@@ -540,7 +540,9 @@ class ChatRuleTests(Base):
         self.assertTrue(text.startswith(hardware_init.REPAIR_INSTRUCTIONS))
         self.assertIn('对话', text[len(hardware_init.REPAIR_INSTRUCTIONS):])
         self.assertIn(investigation.USER_REQUEST, text)
-        self.assertEqual(hardware_init.instructions(self.repair(chat=False), 'default'), hardware_init.REPAIR_INSTRUCTIONS)
+        plain = hardware_init.instructions(self.repair(chat=False), 'default')
+        self.assertTrue(plain.startswith(hardware_init.REPAIR_INSTRUCTIONS))
+        self.assertNotIn(hardware_init.CHAT_INSTRUCTIONS, plain, 'issue #13 adds its own rules after these, never the chat rules')
 
 
 class RerunModel(ResponsesFixture):

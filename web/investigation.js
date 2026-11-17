@@ -73,10 +73,15 @@ function invReportHead(robotId,st){
  return `<section class="inv-head inv-report-head" aria-label="调研阶段">${invStepper('finished')}<div class="inv-row"><p class="subtitle">重新调研会从只读硬件扫描开始，完整走一遍调研，生成新的档案版本；现在的档案保留为历史版本，可以对比。</p>${button('重新调研','engine-inv-rerun','secondary small',robotId,busy)}</div>
  ${run?notice(`最近一次重新调研${lost}${run.error?'：'+h(run.error):''}；下面仍是之前的报告。 `+button('查看那次调研','engine-session','secondary small',run.session_id),true):''}${busy?`<p class="inline-note">${st.state==='running'?'正在调研，完成后会生成新的报告。':'这台机器人上有修复对话正在进行，结束后才能重新调研。'}</p>`:''}</section>`;
 }
+// Issue #13: a problem software cannot fix is annotated and cannot be ticked until a person marks it as handled.
+function invIssueRow(robotId,i){
+ const blocked=rpLocked(robotId,i.id);
+ return `<label class="inv-issue sev-${h(i.severity)}${blocked?' is-blocked':''}"><input type="checkbox" name="issue_ids" value="${h(i.id)}" ${!blocked&&typeof hwPreselect==='function'&&hwPreselect(i)?'checked':''} ${blocked?'disabled':''}><span><span class="inv-issue-head">${typeof hwBadge==='function'?hwBadge(HW_SEVERITY,i.severity):''}<b>${h(i.title)}</b></span><small>${h(i.detail)}</small></span></label>${rpStrip(robotId,i)}`;
+}
 function invIssues(scan){
  if(!scan.issues.length)return `<p class="inv-clear">${badge('最近一次扫描没有发现问题','good')} 仍可以直接描述要修复的内容。</p>`;
  const groups=[...INV_GROUPS.map(([t])=>t),'其他'].map(t=>[t,scan.issues.filter(i=>invGroupOf(i.id)===t)]).filter(([,list])=>list.length);
- return groups.map(([t,list])=>`<fieldset class="inv-fix-group"><legend>${t} <span>${list.length}</span></legend>${list.map(i=>`<label class="inv-issue sev-${h(i.severity)}"><input type="checkbox" name="issue_ids" value="${h(i.id)}" ${typeof hwPreselect==='function'&&hwPreselect(i)?'checked':''}><span><span class="inv-issue-head">${typeof hwBadge==='function'?hwBadge(HW_SEVERITY,i.severity):''}<b>${h(i.title)}</b></span><small>${h(i.detail)}</small></span></label>`).join('')}</fieldset>`).join('');
+ return groups.map(([t,list])=>`<fieldset class="inv-fix-group"><legend>${t} <span>${list.length}</span></legend>${list.map(i=>invIssueRow(scan.robot_id,i)).join('')}</fieldset>`).join('');
 }
 function invChatTitle(s){const first=s.chat?.first_message||(s.events||[]).find(e=>e.kind==='user')?.message||s.name;return first.length>48?first.slice(0,48)+'…':first;}
 function invFixSection(robotId,st){
@@ -86,13 +91,14 @@ function invFixSection(robotId,st){
  const history=chats.length?`<div class="inv-chats"><h4>修复对话</h4>${chats.map(s=>`<div class="check-row"><span>${date(s.created_at)} · ${h(invChatTitle(s))}</span><span class="button-row">${status(s.status)}${button('打开对话','engine-inv-chat','secondary small',s.id)}</span></div>`).join('')}</div>`:'';
  const head=`<div class="section-head"><h3 id="inv-fix-title">问题与修复</h3>${button('重新扫描硬件','engine-inv-scan','secondary small',robotId,!!blocked||!!live)}</div>`;
  if(!scan)return `<section class="inv-fix" aria-labelledby="inv-fix-title">${head}${empty('还没有硬件扫描结果','用只读命令列出驱动、网络、设备权限等问题，再在对话里让助手修复。',button('扫描硬件','engine-inv-scan','small',robotId,!!blocked))}${history}</section>`;
- const intro=`<p class="subtitle">来自 ${date(scan.created_at)} 的只读硬件扫描。勾选要修复的问题，或直接描述要修的内容（驱动、网络连通性、设备权限……）。助手在对话里排查，每条修改设备的命令都先给你看，你批准后才执行。</p>`;
+ const intro=`<p class="subtitle">来自 ${date(scan.created_at)} 的只读硬件扫描。勾选要修复的问题，或直接描述要修的内容（驱动、网络连通性、设备权限……）。助手在对话里排查，只做软件层面的修复；软件修不了的问题只做标注，现场处理并标注后才能勾选。</p>`;
  if(live)return `<section class="inv-fix" aria-labelledby="inv-fix-title">${head}${intro}<div class="inv-row">${notice('有一个修复对话正在进行。')}${button('回到对话','engine-inv-chat','small',live.id)}</div>${history}</section>`;
  const models=rows('agent_models').length?picker('agent_models','model_id','使用的模型'):notice('还没有可用的工程模型。 '+button('配置模型','engine-models','secondary small'),true);
  return `<section class="inv-fix" aria-labelledby="inv-fix-title">${head}${intro}<form data-form="engine-inv-fix" data-id="${h(robotId)}"><div class="form-error" role="alert"></div>${invIssues(scan)}
  <div class="inv-composer"><label class="field">想让助手修什么<textarea name="message" rows="3" maxlength="4000" placeholder="例如：相机驱动没有加载，帮我装好；机器人连不上外网，帮我看看网络。"></textarea><small>可以只勾选上面的问题，也可以只描述；之后在对话里继续补充。</small></label>${models}
  <label class="hardware-confirm"><input type="checkbox" name="data_authorized" required><span>授权读取本体信息并交给所选模型分析。</span></label>
- <label class="hardware-confirm"><input type="checkbox" name="modify_authorized" required><span>允许助手提出修改设备的命令。每条命令执行前都会先给我看，由我单独批准；被拒绝的命令不会执行。</span></label>
+ <label class="hardware-confirm"><input type="checkbox" name="modify_authorized" required><span>允许助手修改设备（驱动、网络、设备权限）。每条命令和它的结果都留在对话记录里。</span></label>
+ ${rpStartChoice()}
  ${blocked?`<p class="inline-note">${blocked}</p>`:''}<div class="button-row"><button class="button" type="submit" ${blocked||!rows('agent_models').length?'disabled':''}>开始对话修复</button></div></div></form>${history}</section>`;
 }
 function invDecorateReport(robotId){
@@ -148,7 +154,7 @@ function invChatLog(s){
 function invChatScope(s){
  const ids=s.hardware?.issue_ids||[],scan=invScan(s.hardware?.scan_id),report=invRepair(s.repair_report_id);
  const titles=ids.map(id=>scan?.issues.find(i=>i.id===id)?.title||id);
- return `<div class="inv-scope"><span class="inv-scope-label">${ids.length?'所选问题':'按你的描述修复'}</span>${titles.map(t=>`<span class="tag">${h(t)}</span>`).join('')}<span class="inv-scope-meta">已执行 ${s.hardware?.fixes||0} 条修复命令</span>${button('返回调研报告','engine-inv-report','secondary small',s.robot_id)}</div>${report?`<p class="inv-report-line">${badge('修复报告','good')} ${h(report.summary)}</p>`:''}`;
+ return `<div class="inv-scope"><span class="inv-scope-label">${ids.length?'所选问题':'按你的描述修复'}</span>${titles.map(t=>`<span class="tag">${h(t)}</span>`).join('')}<span class="inv-scope-meta">已执行 ${s.hardware?.fixes||0} 条修复命令</span>${button('返回调研报告','engine-inv-report','secondary small',s.robot_id)}</div>${report?`<p class="inv-report-line">${badge('修复报告','good')} ${h(report.summary)}</p>`:''}${rpSessionLine(s)}`;
 }
 function invChatActions(s){
  const active=INV_ACTIVE.includes(s.status);
@@ -157,17 +163,20 @@ function invChatActions(s){
 }
 function invChat(sid){
  const s=find('agent_sessions',sid);if(!s)return toast('找不到这个修复对话');
- dialog('对话修复 · '+h(find('robots',s.robot_id)?.name||'机器人'),h(s.model)+' · 修改设备的每条命令都要你批准',`<div class="dialog-body inv-chat"><div id="inv-chat-scope">${invChatScope(s)}</div><div class="inv-chat-log" id="inv-chat-log" role="log" aria-live="polite" aria-label="对话记录">${invChatLog(s)}</div>
+ dialog('对话修复 · '+h(find('robots',s.robot_id)?.name||'机器人'),h(s.model)+' · 只做软件层面的修复',`<div class="dialog-body inv-chat"><div id="inv-chat-scope">${invChatScope(s)}</div><div class="inv-chat-log" id="inv-chat-log" role="log" aria-live="polite" aria-label="对话记录">${invChatLog(s)}</div>
  <form class="inv-chat-compose" data-form="engine-inv-say" data-id="${h(sid)}"><div class="form-error" role="alert"></div><label class="inv-sr" for="inv-chat-input">发给工程助手</label><textarea id="inv-chat-input" name="message" rows="2" maxlength="4000" placeholder="继续描述要排查或修复的内容（Enter 发送，Shift+Enter 换行）"></textarea><div class="inv-chat-actions" id="inv-chat-actions">${invChatActions(s)}</div></form></div>`);
  const d=$('#dialog');d.classList.add('wide');d.dataset.invChat=sid;invChatSync(true);$('#inv-chat-input')?.focus();
 }
 function invChatSync(force=false){
  const d=$('#dialog'),sid=d.dataset.invChat;if(!d.open||!sid)return;
  const s=find('agent_sessions',sid),log=$('#inv-chat-log');if(!s||!log)return;
- const sig=JSON.stringify([(s.events||[]).length,s.events?.at(-1)?.id,s.status,s.pending_approval?.id,s.pending_question?.id,(s.stream_text||'').length,s.repair_report_id,s.hardware?.fixes]);
+ const sig=JSON.stringify([(s.events||[]).length,s.events?.at(-1)?.id,s.status,s.pending_approval?.id,s.pending_question?.id,(s.stream_text||'').length,s.repair_report_id,s.hardware?.fixes,s.hardware?.auto_approve,s.hardware?.auto_hold?.id]);
  if(!force&&d.dataset.invChatSig===sig)return;
  d.dataset.invChatSig=sig;const near=log.scrollHeight-log.scrollTop-log.clientHeight<80;
- log.innerHTML=invChatLog(s);$('#inv-chat-scope').innerHTML=invChatScope(s);$('#inv-chat-actions').innerHTML=invChatActions(s);
+ const choice=log.querySelector('.inv-approval [name=auto_approve]'),chosen=choice?.checked,asked=d.dataset.invChatAsked;   // issue #13
+ d.dataset.invChatAsked=String(s.pending_approval?.id??'');
+ log.innerHTML=invChatLog(s);
+ if(choice&&asked===d.dataset.invChatAsked){const again=log.querySelector('.inv-approval [name=auto_approve]');if(again)again.checked=chosen;}$('#inv-chat-scope').innerHTML=invChatScope(s);$('#inv-chat-actions').innerHTML=invChatActions(s);
  if(near||force)log.scrollTop=log.scrollHeight;
 }
 
@@ -180,7 +189,8 @@ async function invAction(type,id){
   // Bound to the approval that was shown: if another one replaced it, nothing is decided.
   const [sid,decision,...rest]=id.split('|'),pending=find('agent_sessions',sid)?.pending_approval;
   if(!pending||String(pending.id)!==rest.join('|')){toast('这项操作已经变化，请重新查看后再决定');await refresh(true);return invChatSync(true);}
-  await api('engineering/approve',{session_id:sid,approval_id:pending.id,decision});await refresh(true);return invChatSync(true);
+  const box=$('#dialog .inv-approval [name=auto_approve]'),decided=decision==='accept'&&!!box,auto=decided&&box.checked,wasOn=rpAutoOn(find('agent_sessions',sid));   // issue #13: read before the card is redrawn
+  await api('engineering/approve',{session_id:sid,approval_id:pending.id,decision});if(decided)await rpAfterApproval(sid,auto,wasOn);await refresh(true);return invChatSync(true);
  }
  if(type==='engine-inv-scan'){
   const section=$('#dialog .inv-fix');if(section)section.innerHTML=`<div class="hw-scanning" role="status"><span class="hw-spinner" aria-hidden="true"></span><div><b>正在扫描硬件…</b><p>只读命令，不修改设备。</p></div></div>`;
@@ -199,7 +209,8 @@ async function invSubmit(kind,p,f){
   const issue_ids=[...f.querySelectorAll('[name=issue_ids]:checked')].map(x=>x.value),message=(p.message||'').trim();
   if(!issue_ids.length&&!message)throw Error('请勾选要修复的问题，或描述要修复的内容');
   const s=await api('engineering/investigation/fix',{project_id:projectId,robot_id:f.dataset.id,issue_ids,message,model_id:p.model_id,
-   data_authorized:f.elements.data_authorized.checked,modify_authorized:f.elements.modify_authorized.checked});
+   data_authorized:f.elements.data_authorized.checked,modify_authorized:f.elements.modify_authorized.checked,
+   auto_approve:!!f.elements.auto_approve?.checked});   // issue #13: 默认允许执行
   await refresh(true);return invChat(s.id);
  }
  const message=(p.message||'').trim();if(!message)throw Error('先写下要告诉助手的内容');
@@ -242,7 +253,7 @@ async function invSubmit(kind,p,f){
   return tag?html.replace('<div class="tags">','<div class="tags">'+tag):html;
  };
  engineRefresh=()=>{baseRefresh();invChatSync();};
- dialog=(...args)=>{const d=$('#dialog');delete d.dataset.invChat;delete d.dataset.invChatSig;return baseDialog(...args);};
+ dialog=(...args)=>{const d=$('#dialog');delete d.dataset.invChat;delete d.dataset.invChatSig;delete d.dataset.invChatAsked;return baseDialog(...args);};
  inventoryOpen=(robotId,reportId,keep=false)=>{const result=baseInventory(robotId,reportId,keep);invDecorateReport(robotId);return result;};
  // "补齐未知项" on a report whose session is gone opens the start form on purpose.
  inventoryAction=async(type,id)=>{if(type!=='inventory-continue')return baseInventoryAction(type,id);invBypass=true;try{return await baseInventoryAction(type,id);}finally{invBypass=false;}};

@@ -19,11 +19,12 @@ import time
 from pathlib import Path
 
 from . import device_access, hardware_scan
+from . import repair_policy     # issue #13: 默认允许执行, problems software cannot fix
 from .contracts import required_text
 from .service import digest, now, uid
 
 SKILL_NAME = 'hardware-init'
-SKILL_VERSION = '1.0.0'
+SKILL_VERSION = '1.1.0'      # issue #13: software-level fixes only; what software cannot fix is reported, not retried
 SKILL_DIR = Path(__file__).resolve().parent / 'skills' / SKILL_NAME
 TOOL_NAMES = ('hardware_rescan', 'device_fix', 'save_repair_report')
 OUTCOMES = ('fixed', 'pending_reboot', 'not_reproduced', 'not_fixed', 'needs_user', 'skipped')
@@ -85,13 +86,14 @@ DYNAMIC = re.compile(r'\$\(|`|\bbase64\b|\bxxd\b')
 
 def check_command(s, command, label):
     """The product's hard limits for a command in a repair session (device_fix and device_exec).
-    They refuse common dangerous commands; shell has too many spellings for any filter to be complete,
-    so the user's approval of each command stays the real gate."""
+    They refuse common dangerous commands; shell has too many spellings for any filter to be complete.
+    In a session that asks, the user's approval of each command is the real gate. In one that runs
+    without asking (issue #13) these limits and ``repair_policy.ASK_FIRST`` are all there is."""
     if HIDDEN.search(command):
         raise ValueError(f'产品拒绝了这条{label}：含有控制字符、零宽或双向排版字符，请只用可见的普通文本')
     if command.count('\n') >= MAX_COMMAND_LINES:
         raise ValueError(f'产品拒绝了这条{label}：最多 {MAX_COMMAND_LINES} 行，请拆成多条命令分别申请')
-    plain = re.sub(r'["\'\\]', '', command)       # s""udo, \reboot, 'rm' -rf ...
+    plain = re.sub(r'["\'\\]', '', command.replace('\\\n', ''))       # s""udo, \reboot, 'rm' -rf ..., re\<newline>boot
     for pattern, reason in FORBIDDEN:
         if pattern.search(command) or pattern.search(plain):
             raise ValueError(f'产品拒绝了这条{label}：' + reason)
@@ -154,9 +156,10 @@ def session_tools(s, base):
 
 
 def instructions(s, default):
-    if s.get('mode') == 'repair' and (s.get('hardware') or {}).get('chat'):
-        return REPAIR_INSTRUCTIONS + CHAT_INSTRUCTIONS      # issue #6: fix chat
-    return REPAIR_INSTRUCTIONS if s.get('mode') == 'repair' else default
+    if s.get('mode') != 'repair':
+        return default
+    chat = CHAT_INSTRUCTIONS if (s.get('hardware') or {}).get('chat') else ''      # issue #6: fix chat
+    return REPAIR_INSTRUCTIONS + chat + repair_policy.instructions(s)               # issue #13: software only, 默认允许执行
 
 
 def repair_limits(p, billing):
@@ -326,6 +329,7 @@ class HardwareInit:
         self.platform, self.store = platform, platform.store
         self.lock = threading.Lock()
         self.scanning = set()
+        self.policy = repair_policy.RepairPolicy(platform)      # issue #13
 
     # ---- state --------------------------------------------------------------
     def snapshot(self):
@@ -335,7 +339,7 @@ class HardwareInit:
                 shown[scan['robot_id']] = shown.get(scan['robot_id'], 0) + 1
                 scans.append(_compact(scan))
         return {'hardware_scans': scans, 'hardware_repairs': self.store.list('hardware_repairs'),
-                'hardware_skill': skill_info()}
+                'hardware_skill': skill_info(), **self.policy.snapshot(scans)}      # issue #13: hardware_blocks
 
     def scan_detail(self, p):
         scan = self.platform.same_project('hardware_scans', p.get('scan_id'), p.get('project_id'))
@@ -394,6 +398,7 @@ class HardwareInit:
                 if old['id'] not in referenced:
                     self.store.delete('hardware_scans', old['id'])
                     self.store.delete('hardware_scan_raw', old['id'])
+            self.policy.scan_saved(record)      # issue #13: a problem that is gone loses its mark
         return record
 
     def scan(self, p):
@@ -433,10 +438,11 @@ class HardwareInit:
         if (not isinstance(chosen, list) or not 1 <= len(chosen) <= 40 or any(not isinstance(x, str) or x not in known for x in chosen)
                 or len(set(chosen)) != len(chosen)):
             raise ValueError('请选择本次扫描中要处理的问题')
+        policy = self.policy.start_fields(robot['id'], scan, chosen, p)      # issue #13: no blocked problem; 默认允许执行 or not
         if p.get('data_authorized') is not True:
             raise ValueError('请授权读取设备信息并交给所选模型分析')
         if p.get('modify_authorized') is not True:
-            raise ValueError('请确认允许助手提出修改设备的命令（每条命令执行前仍需你单独批准）')
+            raise ValueError('请确认允许助手修改设备')
         model = self._model(robot['project_id'], p.get('model_id'))
         tokens, minutes = repair_limits(p, model['billing'])     # issue #10: no limits unless given, or the gateway needs a budget
         with engine.lock:
@@ -459,7 +465,7 @@ class HardwareInit:
                  'max_tokens': tokens, 'max_minutes': minutes, 'usage': {}, 'events': [], 'created_at': now(), 'updated_at': now(),
                  'thread_id': None, 'turn_id': None, 'pending_question': None, 'runtime_contract': 3,
                  'hardware': {'scan_id': scan['id'], 'issue_ids': chosen, 'skill': skill_info(), 'fixes': 0, 'fixed_issue_ids': [],
-                              'rescan_id': None, 'rescan_after_fixes': None, 'ssh_interface': scan['system'].get('ssh_interface', '')}}
+                              'rescan_id': None, 'rescan_after_fixes': None, 'ssh_interface': scan['system'].get('ssh_interface', ''), **policy}}
             self.store.put('agent_sessions', s)
             engine._launch(s, objective, False)
         self.platform.audit('device.hardware_repair_started', {'robot_id': robot['id'], 'session_id': s['id'], 'issues': chosen}, robot['project_id'])
@@ -477,8 +483,8 @@ class HardwareInit:
         self.platform.engineering.event(s['id'], 'extensions', f"使用内置 Skill {info['name']} v{info['version']}", skills=[info['name']], mcp=[])
 
     def fix_request(self, s, args, connection):
-        """Validate a proposed change before it is shown to the user. Shape and the product's
-        hard limits only: the remote shell has no sandbox, the user's approval is the gate."""
+        """Validate a proposed change before it is shown to the user, or run unasked (issue #13).
+        Shape and the product's hard limits only: the remote shell has no sandbox."""
         if s.get('mode') != 'repair':
             raise ValueError(NOT_REPAIR)
         if not isinstance(args, dict):
@@ -492,6 +498,8 @@ class HardwareInit:
         issue_ids = args.get('issue_ids')
         if not isinstance(issue_ids, list) or not 1 <= len(issue_ids) <= 20 or any(not isinstance(x, str) or x not in scan_issues for x in issue_ids):
             raise ValueError('issue_ids 须引用 HARDWARE_SCAN.json 中的问题')
+        # Issue #13: a problem waiting for on-site work is not changed by the assistant, in any session.
+        self.policy.check_selectable(s['robot_id'], self.store.get('hardware_scans', s['hardware']['scan_id']), issue_ids)
         if args.get('risk') not in ('low', 'medium', 'high'):
             raise ValueError('请标明风险：low / medium / high')
         if not isinstance(args.get('needs_root'), bool):
@@ -665,6 +673,7 @@ class HardwareInit:
                   'results': normalized, 'followups': [required_text(x, '后续事项', 2000) for x in followups],
                   'fix_count': state['fixes'], 'skill': state['skill'], 'created_at': now()}
         self.store.put('hardware_repairs', report)
+        self.policy.report_saved(report)        # issue #13: what software could not fix is annotated and blocked
         engine.update(sid, repair_report_id=report['id'])
         counts = {o: sum(1 for r in normalized if r['outcome'] == o) for o in OUTCOMES}
         engine.event(sid, 'repair_report', f"已保存修复报告：已修复 {counts['fixed']} 项，待重启生效 {counts['pending_reboot']} 项，需现场处理 {counts['needs_user']} 项",
