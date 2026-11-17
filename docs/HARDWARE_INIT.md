@@ -43,7 +43,7 @@
 - 内置 Skill 位于 `brainos/skills/hardware-init/`（`SKILL.md` 与 `references/playbooks.md`），随应用版本发布，会话记录其名称、版本和摘要；调查会话仍不能加载项目 Skill 或 MCP，只放行产品内置 Skill（`agent_runtime.AgentProcess` 中的 `builtin` 标记）。
 - 工作目录中写入 `HARDWARE_SCAN.json`（基线扫描、待处理问题）与 `DEVICE_CONTEXT.json`。
 - 模型：选择的模型；不选时用工作空间默认模型 `Engineering.resolve_model(project_id, None)`（issue #4 TokenFans）。没有连接 TokenFans 或没有默认模型时，直接显示 #4 给出的提示。修复表单的模型选择框默认选中 TokenFans 默认模型。
-- **不限 Token 和运行时间（issue #10）**：“让助手修复硬件问题”表单不再有“Token 观察限额”“最长运行时间”两项，请求里也不带 `max_tokens`、`max_minutes`；会话的这两个字段为空，运行不会因用量或时间被停止，由用户在会话中停止，每条修改设备的命令仍然逐条批准。规则与调查（issue #5）相同：接口调用方（测试、脚本）仍可传入限额（1000–1000000 Tokens、1–120 分钟），照旧校验，达到后照旧停止；按会话预留点数的网关模型（云平台 `cloud`、平台付费 `platform`，界面已不提供）没有预算无法开启会话，未传限额时仍按修复一直使用的 200000 Tokens、30 分钟。规则在 `brainos/hardware_init.py` 的 `repair_limits`（复用 `brainos/engineering.py` 的 `discovery_limits`、`run_deadline`、`over_token_limit`），测试为 `tests/test_repair_limits.py`。
+- **不限 Token 和运行时间（issue #10）**：“让助手修复硬件问题”表单不再有“Token 观察限额”“最长运行时间”两项，请求里也不带 `max_tokens`、`max_minutes`；会话的这两个字段为空，运行不会因用量或时间被停止，由用户在会话中停止；是否逐条批准由“默认允许执行”决定（issue #13，见下）。规则与调查（issue #5）相同：接口调用方（测试、脚本）仍可传入限额（1000–1000000 Tokens、1–120 分钟），照旧校验，达到后照旧停止；按会话预留点数的网关模型（云平台 `cloud`、平台付费 `platform`，界面已不提供）没有预算无法开启会话，未传限额时仍按修复一直使用的 200000 Tokens、30 分钟。规则在 `brainos/hardware_init.py` 的 `repair_limits`（复用 `brainos/engineering.py` 的 `discovery_limits`、`run_deadline`、`over_token_limit`），测试为 `tests/test_repair_limits.py`。
 
 ### `device_fix` 的产品限制
 
