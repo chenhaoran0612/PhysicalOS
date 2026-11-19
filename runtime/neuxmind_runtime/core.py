@@ -19,13 +19,18 @@ from neuxmind_spec import manifest as spec_manifest
 from . import __version__
 from .bus import CapabilityBus
 from .conformance import ConformanceRuns
+from .diskguard import DiskGuard
 from .errors import BadRequest, Conflict, NotAuthorized, NotFound, RuntimeApiError, SafetyRejected
+from .events import RingBusy
 from .evaluations import STOP_CASE, Evaluations, new_id as new_evaluation_id
 from .events import EventBus
+from .events import FOREVER_TS
 from .hal import RobotAdapter
 from .latch_guard import DEFAULT_CONFIG as GUARD_DEFAULTS, GuardConfig, LatchedMotionGuard
 from .ledger import Ledger
 from .models import CAPABILITY as MODEL_INSTALL, ModelConfig, ModelStore
+from .records import CLASSES as RECORD_CLASSES, CLEANUP as CLEANUP_LOG, DeviceRecords, RecordsConfig
+from .records import classify_operation, clean_operator
 from .runner import ACTIVE, SUCCEEDED, Runner
 from .safety import is_motion
 from .sandbox import SandboxConfig, Sandboxes
@@ -40,6 +45,10 @@ LATCH_PERSIST_POLL_S = 0.2
 ABNORMAL_SHUTDOWN_REASON = "上次运行时未正常关闭（崩溃或断电）；默认锁存，请现场确认后解除急停"
 LATCH_CASE = "急停未锁存"          # name of the /v1/validate check for the e-stop latch
 TELEMETRY_CAPACITY = 100_000      # persistent telemetry ring (§5.2)
+TELEMETRY_RETENTION_S = 3600.0    # state and run data older than this is dropped (R1-09)
+HOUSEKEEPING_PERIOD_S = 30.0      # disk guard and log rotation (never on the stop path)
+RECORDS_DIR = "records"           # <state-dir>/records/<class>/ (records.py)
+MAX_WINDOW_LIMIT = 2_000          # events in one time-range answer
 
 
 RESET_EXPECTED_MAX_S = 25.0   # Q7c-07: SafetySupervisor.RESET_EXPIRE_S (30 s) - the desktop's 5 s margin (spec: (0, 25])
@@ -71,6 +80,7 @@ class EdgeRuntime:
     def __init__(self, adapter: RobotAdapter, state_dir: str | Path, *, start_monitor: bool = True,
                  sandbox: str | SandboxConfig = "process", models: ModelConfig | None = None,
                  telemetry_capacity: int | None = TELEMETRY_CAPACITY, latch_guard: GuardConfig | None = GUARD_DEFAULTS,
+                 records: RecordsConfig | None = None, telemetry_retention_s: float | None = TELEMETRY_RETENTION_S,
                  latch_guard_overrides: dict | None = None):
         """``sandbox``: ``"process"`` (default; every skill run in its own child
         process) or ``"inprocess"`` (debug only, must be chosen explicitly), or a
@@ -84,12 +94,29 @@ class EdgeRuntime:
         ``latch_guard_overrides``: field calibration of the guard (round 07, ``serve --latch-guard``),
         same keys and bounds as the manifest's ``safety.latch_guard`` (overrides it); invalid
         values raise ``ValueError``."""
+        # ``records``: settings of the device records (records.py; ``None`` = defaults).
+        # ``telemetry_retention_s``: age limit of state and run data; ``None`` = count limit only.
+        if telemetry_retention_s is not None and (
+                isinstance(telemetry_retention_s, bool) or not isinstance(telemetry_retention_s, (int, float))
+                or not math.isfinite(telemetry_retention_s) or telemetry_retention_s <= 0):
+            raise ValueError("telemetry_retention_s 须为正数（秒）")
         self.adapter = adapter
         self.state_dir = Path(state_dir)
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.events = EventBus()
+        self.events.retention_s = None if telemetry_retention_s is None else float(telemetry_retention_s)
         if telemetry_capacity is not None:
             self.events.persist(self.state_dir / "telemetry.sqlite3", telemetry_capacity)
+        # Device records (issue #25): logs of their own, fed by a lock-free tap on the event bus.
+        # Created before anything can emit a safety event; they never decide whether we start.
+        self.records = DeviceRecords(self.state_dir / RECORDS_DIR, records)
+        self.events.add_tap(self.records.offer_event)
+        self.records.start()
+        self.disk_guard = DiskGuard(self.records, self.events, self.state_dir,
+                                    full_ratio=self.records.config.disk_full_ratio)
+        self.housekeeping: list = []        # extra periodic jobs (e.g. log rotation), run after the disk guard
+        self._housekeeping_errors: dict = {}  # job name -> last error (one event per change, not per period)
+        self.log_file = None                # logrotate.LogFile when ``serve --log-file`` is used
         self.models = ModelStore(models, self.events) if models is not None else None
         native = {MODEL_INSTALL: self.models} if self.models is not None else None
         self.bus = CapabilityBus(adapter, self.events, native=native)
@@ -106,6 +133,7 @@ class EdgeRuntime:
         self.sandboxes = Sandboxes(config, self.state_dir)
         self.runner = Runner(self.bus, self.skills, self.store, self._skill_stop, self.sandboxes,
                              models=self.models)
+        self.runner.result_sink = self.records.task_result   # every finished run -> one task result
         if self.models is not None:
             self.models.in_use = self._model_users
         self.ledger = Ledger(self.store)
@@ -129,6 +157,13 @@ class EdgeRuntime:
         # after an abnormal shutdown, start latched.
         unknown_requests = self.ledger.recover()
         unknown_runs = self.runner.recover_after_restart()
+        for lost_run in unknown_runs:                 # their outcome is a task result too: "unknown"
+            try:
+                lost = self.runner.get(lost_run)      # ... unless its real result was recorded before the crash
+                if not self.records.has_task_result(lost_run, lost.get("created_at")):
+                    self.records.task_result(lost)
+            except Exception:
+                pass
         unknown_evaluations = self.evaluations.recover_after_restart()
         self.conformance.recover_after_restart()
         latch = self.store.get("safety", "latch")
@@ -148,6 +183,7 @@ class EdgeRuntime:
         self._threads: list[threading.Thread] = []
         # The latch persister always runs (the stop path only sets an Event).
         self._spawn(self._latch_persist_loop, "nx-latch-persist")
+        self._spawn(self._housekeeping_loop, "nx-housekeeping")
         if start_monitor:
             # Watchdog has its own thread and does no storage IO, so a slow
             # disk (run finalisation, ledger writes) can never delay it.
@@ -211,6 +247,25 @@ class EdgeRuntime:
             except Exception as exc:
                 self.events.emit("runtime.monitor_error", error=str(exc))
 
+    def _housekeeping_loop(self) -> None:
+        while not self._closing.wait(HOUSEKEEPING_PERIOD_S):
+            self.housekeeping_tick()
+
+    def housekeeping_tick(self) -> None:
+        """Disk guard, then the extra jobs (log rotation). Slow-disk work lives here and in the
+        records writer, never on the watchdog, monitor or stop path."""
+        jobs = [("disk guard", lambda: self.disk_guard.check()),
+                *[(getattr(job, "__name__", "job"), job) for job in list(self.housekeeping)]]
+        for name, job in jobs:
+            try:
+                job()
+                self._housekeeping_errors.pop(name, None)
+            except Exception as exc:     # must survive anything
+                message = f"housekeeping {name}: {type(exc).__name__}: {exc}"
+                if self._housekeeping_errors.get(name) != message:
+                    self.events.emit("runtime.monitor_error", error=message)
+                self._housekeeping_errors[name] = message
+
     def _latch_persist_loop(self) -> None:
         while not self._closing.is_set():
             if not self._latch_dirty.wait(LATCH_PERSIST_POLL_S):
@@ -265,9 +320,73 @@ class EdgeRuntime:
         try:
             self.adapter.close()
         finally:
+            self.records.close()             # never raises; writes what is pending if the disk answers
             self.store.close()
             self.sandboxes.close()
             self.events.close()              # flushes the telemetry ring (clean shutdown: no seq gap)
+
+    # ------------------------------------------------------------ device records (issue #25)
+    def record_operation(self, method: str, path: str, payload, *, status: int | None, body,
+                         operator: str | None = None) -> None:
+        """One operation record for a request that changed (or tried to change) something.
+
+        Called by the gateway after the request has been answered -- for a stop, after the body
+        was told to stop. It only queues the record (no lock, no IO). Reads and checks are not
+        operations, nor is a ``command`` capability (a velocity command is a control stream)."""
+        named = classify_operation(method, path)
+        if named is None or status is None:
+            return
+        operation, target = named
+        if operation == "capability.invoke":
+            cap_id = spec_caps.normalize(target)          # unknown ids raise: no record for a 404
+            if cap_id == "safety.stop":
+                operation, target = "stop", None
+            elif self.bus.kind(cap_id) == "command":
+                return
+        payload = payload if isinstance(payload, dict) else {}
+        body = body if isinstance(body, dict) else {}
+        ok = 200 <= status < 300
+        request_id = payload.get("request_id")
+        record = {"operation": operation, "target": target, "operator": clean_operator(operator),
+                  "request_id": request_id[:200] if isinstance(request_id, str) else None,
+                  "hardware_authorized": payload.get("hardware_authorized") is True,
+                  "outcome": "ok" if ok else ("rejected" if status < 500 else "error"), "http_status": status}
+        if not ok:
+            record = {**record, "code": body.get("code"), "error": str(body.get("error") or "")[:300]}
+        elif isinstance(body.get("run_id"), str):
+            record = {**record, "run_id": body["run_id"]}
+        if operation == "stop":
+            record = {**record, "stopped": body.get("stopped"), "stop_count": body.get("stop_count"),
+                      "reason": self.supervisor.latch_reason}
+        self.records.operation(record)
+
+    def records_query(self, name: str, since_ts: float | None, until_ts: float | None, after: int,
+                      limit: int) -> dict:
+        """GET /v2/records/{class}: one class by time range, oldest first (what is fetched after a
+        reconnect). ``class`` is ``safety``, ``task``, ``operation`` or ``cleanup``."""
+        if name not in (*RECORD_CLASSES, CLEANUP_LOG):
+            raise NotFound(f"没有这一类记录：{name[:40]}")
+        page = self.records.query(name, since_ts=since_ts, until_ts=until_ts, after=after, limit=limit)
+        if page.get("busy"):               # an empty answer would read as "nothing to fetch"
+            raise RuntimeApiError("记录正在写盘，请稍后重试", code="busy", status=503)
+        return page
+
+    def records_summary(self) -> dict:
+        """GET /v2/records: how much of each class is on the device, the clean-ups and the disk."""
+        return {**self.records.describe(), "cleanups": self.disk_guard.history(),
+                "storage": self.disk_guard.describe()}
+
+    def telemetry_window(self, since_ts: float | None, until_ts: float | None, after: int, limit: int) -> dict:
+        """GET /v2/telemetry?since_ts=&until_ts=: state and run data by time range. Only what is
+        younger than ``retention_s`` exists; ``oldest_ts`` says from when."""
+        limit = max(1, min(int(limit), MAX_WINDOW_LIMIT))
+        try:
+            events = self.events.window(0.0 if since_ts is None else since_ts,
+                                        FOREVER_TS if until_ts is None else until_ts, after, limit)
+        except RingBusy:                   # an answer from memory alone would read as "nothing more"
+            raise RuntimeApiError("遥测库正忙，请稍后重试", code="busy", status=503) from None
+        return {"events": events, "next_after": events[-1]["seq"] if events else after,
+                "more": len(events) >= limit, "retention_s": self.events.retention_s, **self.events.retention()}
 
     # ------------------------------------------------------------ manifests
     @property
@@ -323,6 +442,9 @@ class EdgeRuntime:
                "sandbox": self.sandboxes.describe(),
                "models": self._models_status(), "telemetry": telemetry,
                "telemetry_degraded": telemetry["degraded"]}
+        out["records"] = self.records.describe()        # memory only, like telemetry (Q3-08)
+        out["storage"] = self.disk_guard.describe()
+        out["log"] = self.log_file.describe() if self.log_file is not None else None
         try:
             extra = self.adapter.status() or {}
             out["adapter"] = extra

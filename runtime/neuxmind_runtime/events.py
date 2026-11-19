@@ -9,6 +9,14 @@ a long-lived writer thread drains a pending queue into a bounded SQLite ring
 (``telemetry.sqlite3``, default 100k events, oldest trimmed) every
 ``FLUSH_PERIOD_S``.
 
+Telemetry is state and run data: besides the count limit it has an age limit
+(``retention_s``, one hour in the runtime -- R1-09 / R7-12). An event older than that is
+removed by the writer (``PRUNE_PERIOD_S``) and is not served by any read even before it is
+removed; :meth:`EventBus.window` returns what is left by time range. Safety events, task
+results and operation records are *not* kept here: ``emit`` hands every event to its taps
+(``add_tap``; lock-free consumers such as ``records.DeviceRecords.offer_event``), and those
+records have logs of their own that are never trimmed by count or age.
+
 Telemetry never decides whether the robot can start (review Q3-01): any
 problem opening the ring -- a corrupt file, a directory of that name, an
 out-of-range reservation, a database locked by another process, a second
@@ -52,6 +60,8 @@ RESERVE_AHEAD = 10_000            # seqs reserved on disk beyond the last emitte
 PENDING_MAX = 200_000             # unflushed (incl. retried) events kept if the disk stalls
 BUSY_TIMEOUT_S = 0.5              # never wait longer than this for a SQLite lock
 OPEN_TIMEOUT_S = 0.1              # ... and at start-up even less: a locked ring degrades at once
+PRUNE_PERIOD_S = 5.0              # how often the writer removes events older than retention_s
+FOREVER_TS = 1e18                 # "no upper bound" for a time-range query
 MAX_SANE_SEQ = 1 << 62            # a stored seq/reservation above this is treated as corruption
 LOCK_NAME = "telemetry.lock"
 
@@ -64,8 +74,21 @@ class TelemetryUnavailable(Exception):
     """The ring cannot be used; telemetry stays in memory."""
 
 
+class RingBusy(Exception):
+    """A time-range read could not reach the ring right now; the caller must try again
+    (answering from memory alone would look like "there is nothing more")."""
+
+
 class EventBus:
-    def __init__(self, maxlen: int = 5000):
+    def __init__(self, maxlen: int = 5000, wall=None):
+        """``wall``: the wall clock events are stamped with (``time.time``; tests inject one)."""
+        self._wall = wall or time.time
+        self.retention_s: float | None = None    # age limit of state and run data; None = count limit only
+        self._taps: tuple = ()                   # lock-free consumers called by emit()
+        self._next_prune = 0.0                   # monotonic; writer thread only
+        self._oldest_ts_cache: float | None = None
+        self.evicted_by_age = 0
+        self.evicted_by_capacity = 0
         self._seq = itertools.count(1)
         self._events: deque[dict] = deque(maxlen=maxlen)
         self._pending: deque[dict] | None = None
@@ -91,14 +114,29 @@ class EventBus:
 
     # ------------------------------------------------------------ emit (stop-path safe)
     def emit(self, type_: str, **data: Any) -> dict:
-        event = {"seq": next(self._seq), "ts": time.time(), "type": type_, **data}
+        event = {"seq": next(self._seq), "ts": self._wall(), "type": type_, **data}
         self._events.append(event)
         pending = self._pending
         if pending is not None:
             if len(pending) >= PENDING_MAX:
                 self.dropped_unpersisted += 1      # the oldest unflushed event is pushed out
             pending.append(event)
+        for tap in self._taps:
+            try:
+                tap(event)
+            except Exception:                      # a consumer can never break emit (stop path)
+                pass
         return event
+
+    def add_tap(self, tap) -> None:
+        """Call ``tap(event)`` for every emitted event. A tap runs inside :meth:`emit`, so it
+        must take no lock and do no IO (e.g. append to a ``deque``); what it raises is ignored."""
+        self._taps = (*self._taps, tap)
+
+    def _cutoff(self) -> float | None:
+        """Events stamped before this are too old to keep or serve (``None``: no age limit)."""
+        retention = self.retention_s
+        return None if retention is None else self._wall() - retention
 
     # ------------------------------------------------------------ persistence
     def persist(self, path: str | Path, capacity: int = 100_000) -> bool:
@@ -217,6 +255,7 @@ class EventBus:
                            " payload TEXT NOT NULL)")
                 db.execute("CREATE INDEX IF NOT EXISTS events_run ON events (run_id, seq)")
                 db.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL)")
+                self._ensure_ts_column(db)
                 db.commit()
                 last = db.execute("SELECT MAX(seq) FROM events").fetchone()[0] or 0
                 meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
@@ -224,7 +263,7 @@ class EventBus:
                 for value in (last, reserved):
                     if not isinstance(value, int) or not 0 <= value <= MAX_SANE_SEQ:
                         raise sqlite3.DatabaseError(f"seq/预留值超出范围：{value!r}")
-                oldest = db.execute("SELECT MIN(seq) FROM events").fetchone()[0]
+                oldest, self._oldest_ts_cache = self._oldest(db)
             except sqlite3.OperationalError as exc:
                 if db is not None:
                     db.close()
@@ -266,6 +305,25 @@ class EventBus:
         db.execute(f"PRAGMA busy_timeout={int(BUSY_TIMEOUT_S * 1000)}")
         return start
 
+    @staticmethod
+    def _ensure_ts_column(db: sqlite3.Connection) -> None:
+        """Every row carries its event time (age limit, time-range reads). A ring written before
+        this column existed is upgraded in place: the time is read from each stored event; a row
+        that cannot be read gets 0 (it counts as expired)."""
+        if "ts" not in [row[1] for row in db.execute("PRAGMA table_info(events)")]:
+            db.execute("ALTER TABLE events ADD COLUMN ts REAL")
+        db.execute("CREATE INDEX IF NOT EXISTS events_ts ON events (ts)")
+        stamps = []
+        for seq, payload in db.execute("SELECT seq, payload FROM events WHERE ts IS NULL").fetchall():
+            try:
+                ts = json.loads(payload)["ts"]
+                ts = float(ts) if isinstance(ts, (int, float)) and not isinstance(ts, bool) else 0.0
+            except (ValueError, TypeError, KeyError):
+                ts = 0.0
+            stamps.append((ts if ts == ts and abs(ts) != float("inf") else 0.0, seq))
+        if stamps:
+            db.executemany("UPDATE events SET ts = ? WHERE seq = ?", stamps)
+
     def _reserve(self, upto: int) -> None:
         """Keep the on-disk reservation ``RESERVE_AHEAD`` beyond ``upto`` (writer thread / init)."""
         if upto + RESERVE_AHEAD // 2 <= self._reserved:
@@ -279,7 +337,47 @@ class EventBus:
     def _write_loop(self) -> None:
         while not self._closing.wait(FLUSH_PERIOD_S):
             self.flush()
+            self._prune_if_due()
         self.flush()
+
+    def _oldest(self, db: sqlite3.Connection) -> tuple:
+        """``(seq, ts)`` of the oldest event that is still young enough to be served."""
+        cutoff = self._cutoff()
+        return db.execute("SELECT MIN(seq), MIN(ts) FROM events WHERE ts >= ?",
+                          (-FOREVER_TS if cutoff is None else cutoff,)).fetchone()
+
+    def _prune_if_due(self) -> None:
+        if self.retention_s is None or time.monotonic() < self._next_prune:
+            return
+        self._next_prune = time.monotonic() + PRUNE_PERIOD_S
+        self.prune()
+
+    def prune(self) -> int:
+        """Remove events older than ``retention_s`` from the ring. Returns how many went.
+        Writer thread (and tests); a busy or failing disk is tried again next period."""
+        db, cutoff = self._db, self._cutoff()
+        if db is None or cutoff is None:
+            return 0
+        try:
+            with self._db_lock:
+                # The newest row is never removed: start-up compares it with the recorded last seq
+                # to recognise a clean shutdown (no seq gap). Reads filter by time, so it is not served.
+                removed = db.execute("DELETE FROM events WHERE ts < ? AND seq < (SELECT MAX(seq) FROM events)",
+                                     (cutoff,)).rowcount
+                db.commit()
+                oldest, oldest_ts = self._oldest(db)
+        except sqlite3.Error as exc:
+            try:
+                with self._db_lock:
+                    db.rollback()
+            except sqlite3.Error:
+                pass
+            self.write_errors += 1
+            self.last_write_error = f"{type(exc).__name__}: {exc}"
+            return 0
+        self._oldest_cache, self._oldest_ts_cache = oldest, oldest_ts
+        self.evicted_by_age += max(0, removed)
+        return max(0, removed)
 
     def flush(self) -> int:
         """Write pending (and previously failed) events to the ring now. Returns how many were written.
@@ -310,19 +408,22 @@ class EventBus:
                 payload = json.dumps(event, ensure_ascii=False, allow_nan=False, default=str)
             except ValueError:
                 payload = json.dumps({**event, "data_dropped": "non-finite"}, default=str, allow_nan=True)
-            rows.append((event["seq"], run_id if isinstance(run_id, str) else None, event["type"], payload))
+            ts = event.get("ts")
+            ts = float(ts) if isinstance(ts, (int, float)) and not isinstance(ts, bool) and ts == ts else 0.0
+            rows.append((event["seq"], run_id if isinstance(run_id, str) else None, event["type"], payload, ts))
         newest = max(r[0] for r in rows)
         try:
             # Reservation first: even if storing the rows fails afterwards, the next
             # process starts beyond everything handed out so far.
             self._reserve(newest)
             with self._db_lock:
-                db.executemany("INSERT OR REPLACE INTO events (seq, run_id, type, payload) VALUES (?, ?, ?, ?)",
-                               rows)
-                db.execute("DELETE FROM events WHERE seq <= ?", (newest - self._capacity,))
+                db.executemany("INSERT OR REPLACE INTO events (seq, run_id, type, payload, ts)"
+                               " VALUES (?, ?, ?, ?, ?)", rows)
+                trimmed = db.execute("DELETE FROM events WHERE seq <= ?", (newest - self._capacity,)).rowcount
                 db.commit()
-                oldest = db.execute("SELECT MIN(seq) FROM events").fetchone()[0]
-            self._oldest_cache = oldest
+                oldest, oldest_ts = self._oldest(db)
+            self._oldest_cache, self._oldest_ts_cache = oldest, oldest_ts
+            self.evicted_by_capacity += max(0, trimmed)
         except sqlite3.Error as exc:
             try:
                 with self._db_lock:
@@ -383,9 +484,13 @@ class EventBus:
     def since(self, seq: int, limit: int = 500) -> list[dict]:
         # Copy first: iterating a deque while another thread appends raises.
         snapshot = list(self._events)
+        cutoff = self._cutoff()
+        if cutoff is not None:
+            snapshot = [e for e in snapshot if e["ts"] >= cutoff]
         if self._read_db is None or (snapshot and seq >= snapshot[0]["seq"] - 1):
             return [e for e in snapshot if e["seq"] > seq][:limit]
-        out = self._db_rows("SELECT payload FROM events WHERE seq > ? ORDER BY seq LIMIT ?", (seq, limit))
+        out = self._db_rows("SELECT payload FROM events WHERE seq > ? AND ts >= ? ORDER BY seq LIMIT ?",
+                            (seq, -FOREVER_TS if cutoff is None else cutoff, limit))
         if out is None:                              # ring busy: what memory has
             return [e for e in snapshot if e["seq"] > seq][:limit]
         last = out[-1]["seq"] if out else seq
@@ -395,26 +500,53 @@ class EventBus:
 
     def run_events(self, run_id: str, since: int = 0, limit: int = 1000) -> list[dict]:
         """Every event of one run with ``seq > since`` (ring + not yet flushed)."""
-        out = self._db_rows("SELECT payload FROM events WHERE run_id = ? AND seq > ? ORDER BY seq LIMIT ?",
-                            (run_id, since, limit)) or []
+        cutoff = self._cutoff()
+        floor = -FOREVER_TS if cutoff is None else cutoff
+        out = self._db_rows("SELECT payload FROM events WHERE run_id = ? AND seq > ? AND ts >= ?"
+                            " ORDER BY seq LIMIT ?", (run_id, since, floor, limit)) or []
         last = out[-1]["seq"] if out else since
         if len(out) < limit:
             pending = list(self._retry) + list(self._pending or ()) + list(self._events)
             seen = set()
             extra = []
             for e in sorted(pending, key=lambda e: e["seq"]):
+                if e["ts"] < floor:
+                    continue
                 if e.get("run_id") == run_id and e["seq"] > last and e["seq"] not in seen:
                     seen.add(e["seq"])
                     extra.append(e)
             out += extra[:limit - len(out)]
         return out
 
+    def window(self, since_ts: float, until_ts: float, after: int = 0, limit: int = 500) -> list[dict]:
+        """Events with ``since_ts <= ts < until_ts`` and ``seq > after``, oldest first: what a
+        client fetches after a reconnect. Nothing older than ``retention_s`` is returned; fewer
+        than ``limit`` events means there are no more."""
+        cutoff = self._cutoff()
+        low = since_ts if cutoff is None else max(since_ts, cutoff)
+        out = self._db_rows("SELECT payload FROM events WHERE ts >= ? AND ts < ? AND seq > ? ORDER BY seq LIMIT ?",
+                            (low, until_ts, after, limit))
+        if out is None:
+            if self._read_db is not None:
+                raise RingBusy("telemetry ring busy")
+            out = []                                 # a memory-only bus: memory is all there is
+        last = out[-1]["seq"] if out else after
+        if len(out) < limit:                         # not flushed yet, or a memory-only bus
+            waiting = {}
+            for e in list(self._retry) + list(self._pending or ()) + list(self._events):
+                if e["seq"] > last and low <= e["ts"] < until_ts:
+                    waiting[e["seq"]] = e
+            out += [waiting[seq] for seq in sorted(waiting)][:limit - len(out)]
+        return out
+
     def retention(self) -> dict:
-        """Oldest seq still stored (cached by the writer; never touches the database)."""
+        """Oldest seq and time still stored (cached by the writer; never touches the database)."""
         if self._oldest_cache is not None:
-            return {"oldest_seq": self._oldest_cache}
-        snapshot = list(self._events)
-        return {"oldest_seq": snapshot[0]["seq"] if snapshot else None}
+            return {"oldest_seq": self._oldest_cache, "oldest_ts": self._oldest_ts_cache}
+        cutoff = self._cutoff()
+        snapshot = [e for e in list(self._events) if cutoff is None or e["ts"] >= cutoff]
+        return {"oldest_seq": snapshot[0]["seq"] if snapshot else None,
+                "oldest_ts": snapshot[0]["ts"] if snapshot else None}
 
     def describe(self) -> dict:
         """For ``/v1/status``: cached values only, no lock, no IO (Q3-08)."""
@@ -423,7 +555,9 @@ class EventBus:
                "first_seq_this_boot": self.first_seq, "start": self.start_kind,
                "unflushed": len(self._pending or ()) + len(self._retry),
                "write_errors": self.write_errors, "dropped_unpersisted": self.dropped_unpersisted,
-               "degraded": self.degraded_reason is not None, **self.retention()}
+               "degraded": self.degraded_reason is not None, **self.retention(),
+               "retention_s": self.retention_s, "evicted_by_age": self.evicted_by_age,
+               "evicted_by_capacity": self.evicted_by_capacity}
         if self.degraded_reason:
             out["degraded_reason"] = self.degraded_reason
         if self.quarantined:

@@ -14,6 +14,8 @@ from .adapters import load_adapter
 from .core import EdgeRuntime
 from .models import ModelConfig
 from .latch_guard import parse_overrides as parse_guard_overrides
+from .logrotate import DEFAULT_KEEP as LOG_KEEP, DEFAULT_MAX_BYTES as LOG_MAX_BYTES, LogFile, check_limits
+from .records import DEFAULT_FULL_RATIO, RecordsConfig
 from .gateway import MAX_CONNECTIONS, STOP_RESERVED, GatewayServer, check_token
 from .sandbox import INPROCESS, MODES, PROCESS, SandboxConfig
 from .skills import load_package_dir
@@ -49,9 +51,25 @@ def _serve(args) -> int:
     except ValueError as exc:
         print(f"错误：{exc}", file=sys.stderr)
         return 2
+    try:                                 # device records, state/run data retention, the log (issue #25)
+        records = RecordsConfig(disk_full_ratio=args.disk_full_percent / 100.0)
+        if not 0 < args.telemetry_retention_s < float("inf"):
+            raise ValueError("--telemetry-retention-s 须为正的有限数值（秒）")
+        check_limits(args.log_max_mb << 20 if args.log_max_mb > 0 else 0, args.log_keep)
+        log = None
+        if args.log_file is not None:
+            log = LogFile(args.log_file, max_bytes=args.log_max_mb << 20, keep=args.log_keep)
+            log.attach()                 # from here on stdout and stderr go to the rotating log file
+    except (ValueError, OSError) as exc:
+        print(f"错误：{exc}", file=sys.stderr)
+        return 2
     adapter = load_adapter(args.adapter, time_scale=args.time_scale)
     runtime = EdgeRuntime(adapter, args.state_dir, sandbox=sandbox, models=models,
+                          records=records, telemetry_retention_s=args.telemetry_retention_s,
                           telemetry_capacity=args.telemetry_capacity, latch_guard_overrides=guard_overrides or None)
+    if log is not None:
+        runtime.log_file = log
+        runtime.housekeeping.append(log.check)
     server = GatewayServer(runtime, token, args.host, args.port, max_connections=args.max_connections,
                            stop_reserved=args.stop_reserved)
 
@@ -233,6 +251,15 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--model-ca-file", default=None, help="https 下载额外信任的 CA 证书（私有镜像）")
     serve.add_argument("--telemetry-capacity", type=int, default=100_000,
                        help="持久化遥测环形存储保留的事件数（SQLite，跨重启 seq 连续）")
+    serve.add_argument("--telemetry-retention-s", type=float, default=3600.0,
+                       help="状态和运行数据在设备上保留多久（秒，默认 1 小时）；更早的丢弃，不再补传")
+    serve.add_argument("--disk-full-percent", type=float, default=DEFAULT_FULL_RATIO * 100,
+                       help="磁盘将满的线：状态目录所在文件系统的占用达到这个百分比（默认 90，可取 50–99）时，"
+                            "按操作记录、任务结果、安全事件记录的顺序清理设备上的记录")
+    serve.add_argument("--log-file", type=Path, default=None,
+                       help="运行日志文件：标准输出和标准错误写到这里，并按大小轮转（不指定则不轮转）")
+    serve.add_argument("--log-max-mb", type=int, default=LOG_MAX_BYTES >> 20, help="运行日志单个文件上限（MiB）")
+    serve.add_argument("--log-keep", type=int, default=LOG_KEEP, help="保留几个轮转出来的旧日志")
     serve.add_argument("--latch-guard", action="append", default=[], metavar="KEY=VALUE",
                        help="现场标定锁存守护（可重复，或一个 JSON 对象）：pos_m, yaw_rad, joint_rad, noise_m, noise_rad, "
                             "yaw_total_rad, yaw_drift_rad_s, stop_settle_s, escalate_after；覆盖清单 safety.latch_guard，"
