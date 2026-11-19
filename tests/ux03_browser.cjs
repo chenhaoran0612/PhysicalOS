@@ -51,12 +51,14 @@ const shots = process.argv[3] || 'artifacts/ux03';
   const nav = await page.evaluate(() => {
     const n = document.querySelector('#navigation'), links = [...n.querySelectorAll('a')];
     const last = links.at(-1).getBoundingClientRect(), bottom = document.querySelector('.sidebar-bottom').getBoundingClientRect();
-    return {count: links.length, lastText: links.at(-1).innerText.trim(), scrollable: n.scrollHeight > n.clientHeight + 1,
+    return {count: links.length, lastText: links.at(-1).innerText.trim(), texts: links.map(a => a.innerText.trim()),
+      scrollable: n.scrollHeight > n.clientHeight + 1,
       lastBottom: last.bottom, footerTop: bottom.top, height: innerHeight};
   });
-  assert(nav.count === 15 && nav.lastText === '云平台账户', '侧栏项目不对：' + JSON.stringify(nav));
+  // 0.20.0: issue #33 adds “资料库” after “云平台账户” (web/material_library.js).
+  assert(nav.count === 16 && nav.lastText === '资料库' && nav.texts.at(-2) === '云平台账户', '侧栏项目不对：' + JSON.stringify(nav));
   assert(!nav.scrollable, '1440×900 下侧栏不应需要滚动：' + JSON.stringify(nav));
-  assert(nav.lastBottom <= nav.footerTop && nav.lastBottom <= nav.height, '“云平台账户”应完整可见：' + JSON.stringify(nav));
+  assert(nav.lastBottom <= nav.footerTop && nav.lastBottom <= nav.height, '侧栏最后一项“资料库”应完整可见：' + JSON.stringify(nav));
   await page.locator('#navigation a[href="#cloud"]').click();
   await page.waitForFunction(() => location.hash === '#cloud');
 
