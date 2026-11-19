@@ -92,6 +92,26 @@ class Settings:
     # A client that reads nothing for this long is treated as disconnected.
     stream_idle_seconds: int = 30
 
+    # --- material library (issue #33) ------------------------------------
+    # Directory (a disk volume) that holds uploaded files. "" = next to the
+    # SQLite database file, or ./neuxmind_library for any other database.
+    library_dir: str = ""
+    # One chunk of an upload; also the body limit of the chunk route.
+    library_chunk_bytes: int = 4 * 1024 * 1024
+    library_max_document_bytes: int = 200 * 1024 * 1024
+    library_max_package_bytes: int = 2 * 1024 ** 3
+    # Stored files plus open uploads of one organisation.
+    library_org_quota_bytes: int = 20 * 1024 ** 3
+    # An upload nobody continues for this long is dropped with its bytes.
+    library_upload_ttl_seconds: int = 24 * 3600
+    library_max_open_uploads: int = 5            # per organisation
+    library_org_max_materials: int = 20_000      # stored materials per organisation
+    # Completing an upload reads the whole file: this many at a time per server process.
+    library_max_concurrent_completions: int = 2
+    library_uploads_per_hour: int = 120          # uploads started, per user
+    # New uploads are refused when the volume would be left with less than this.
+    library_min_free_bytes: int = 1024 ** 3
+
     # --- password hashing (C-07) ----------------------------------------
     scrypt_log_n: int = 17
 
@@ -108,6 +128,18 @@ class Settings:
             raise ValueError("NEUXMIND_EMAIL_SENDER 须为 log / smtp / none")
         if self.email_sender == "log" and not self.is_test_env:
             raise ValueError("记录型邮件发送器（log）只允许在 dev/test 环境使用")
+        if not 64 * 1024 <= self.library_chunk_bytes <= 64 * 1024 * 1024:
+            raise ValueError("NEUXMIND_LIBRARY_CHUNK_BYTES 须为 64 KiB–64 MiB")
+
+    @property
+    def effective_library_dir(self) -> str:
+        """Where library files live (issue #33): the configured directory, else beside the SQLite file."""
+        if self.library_dir:
+            return self.library_dir
+        prefix = "sqlite:///"
+        if self.database_url.startswith(prefix) and self.database_url[len(prefix):] not in ("", ":memory:"):
+            return os.path.join(os.path.dirname(os.path.abspath(self.database_url[len(prefix):])), "neuxmind_library")
+        return os.path.abspath("neuxmind_library")
 
     @property
     def effective_stream_max_seconds(self) -> float:
@@ -172,6 +204,18 @@ class Settings:
             stale_call_seconds=_int("NEUXMIND_STALE_CALL_SECONDS", cls.stale_call_seconds),
             stream_max_seconds=_int("NEUXMIND_STREAM_MAX_SECONDS", cls.stream_max_seconds),
             stream_idle_seconds=_int("NEUXMIND_STREAM_IDLE_SECONDS", cls.stream_idle_seconds),
+            library_dir=os.environ.get("NEUXMIND_LIBRARY_DIR", "").strip(),
+            library_chunk_bytes=_int("NEUXMIND_LIBRARY_CHUNK_BYTES", cls.library_chunk_bytes),
+            library_max_document_bytes=_int("NEUXMIND_LIBRARY_MAX_DOCUMENT_BYTES", cls.library_max_document_bytes),
+            library_max_package_bytes=_int("NEUXMIND_LIBRARY_MAX_PACKAGE_BYTES", cls.library_max_package_bytes),
+            library_org_quota_bytes=_int("NEUXMIND_LIBRARY_ORG_QUOTA_BYTES", cls.library_org_quota_bytes),
+            library_upload_ttl_seconds=_int("NEUXMIND_LIBRARY_UPLOAD_TTL_SECONDS", cls.library_upload_ttl_seconds),
+            library_max_open_uploads=_int("NEUXMIND_LIBRARY_MAX_OPEN_UPLOADS", cls.library_max_open_uploads),
+            library_org_max_materials=_int("NEUXMIND_LIBRARY_ORG_MAX_MATERIALS", cls.library_org_max_materials),
+            library_max_concurrent_completions=_int("NEUXMIND_LIBRARY_MAX_CONCURRENT_COMPLETIONS",
+                                                    cls.library_max_concurrent_completions),
+            library_uploads_per_hour=_int("NEUXMIND_LIBRARY_UPLOADS_PER_HOUR", cls.library_uploads_per_hour),
+            library_min_free_bytes=_int("NEUXMIND_LIBRARY_MIN_FREE_BYTES", cls.library_min_free_bytes),
             scrypt_log_n=_int("NEUXMIND_SCRYPT_LOG_N", cls.scrypt_log_n),
             operator_allowlist_enabled=({"1": True, "0": False}.get(os.environ.get("NEUXMIND_OPERATOR_ALLOWLIST", "").strip())),
         )

@@ -61,6 +61,7 @@ class Database:
 
     def create_all(self) -> None:
         from . import models  # noqa: F401  (register tables)
+        from . import library_models  # noqa: F401  (issue #33: the material library's tables)
         Base.metadata.create_all(self.engine)
         self._add_missing_columns()
 

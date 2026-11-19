@@ -16,6 +16,7 @@ from . import security
 from .config import Settings
 from .db import Database
 from .errors import ApiError
+from .library import guard_body as library_body_limit
 from .mailer import EmailSender, build_sender
 from .upstream import build_provider
 
@@ -55,6 +56,11 @@ class BodySizeLimitMiddleware:
             return await self.app(scope, receive, send)
         session_call = scope.get("method") == "POST" and bool(SESSION_CALL_PATH.match(scope.get("path", "")))
         limit = self.session_max_bytes if session_call else self.max_bytes
+        # Issue #33: one chunk of a material upload (binary, PUT) has its own bound, granted only to a
+        # caller whose credential exists; anyone else is answered 401 there, before the body is read.
+        limit = await library_body_limit(scope, send, limit)
+        if limit is None:
+            return
         for name, value in scope.get("headers", []):
             if name == b"content-length":
                 try:
@@ -152,6 +158,10 @@ def create_app(settings: Settings | None = None, *, provider_factory: Callable[[
     @app.get("/healthz")
     def healthz():
         return {"ok": True, "env": settings.env}
+
+    # Issue #33: the material library (/library/*), registered apart from the list above.
+    from .routes import library as library_routes
+    app.include_router(library_routes.router, prefix=API_PREFIX)
 
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes,
                        session_max_bytes=settings.session_max_body_bytes)
