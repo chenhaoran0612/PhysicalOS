@@ -181,8 +181,12 @@ function materialProgress(item) {
 // ---------------------------------------------------------------- page
 const materialButton = (text, action, cls = '', id = '') =>
   `<button type="button" class="button ${cls}" data-library-action="${action}" ${id !== '' ? `data-id="${h(id)}"` : ''}>${text}</button>`;
-const materialFamilies = () => state.families || familyNames;
-const materialBodyType = id => materialFamilies()[id] || id;
+// Issue #32: a material is labelled with a type from the platform's list of body types (the same list as
+// adding a device); without that list (an older backend), with the standard values as before. A material
+// labelled earlier with a type that is no longer listed still shows that type's name.
+const materialFamilies = () => (Array.isArray(state.body_types) && state.body_types.length
+  ? Object.fromEntries(state.body_types.map(type => [type.id, type.name])) : state.families || familyNames);
+const materialBodyType = id => materialFamilies()[id] || (state.families || familyNames)[id] || id;
 
 function materialQueueRow(item) {
   const p = materialProgress(item), l = item.labels;
