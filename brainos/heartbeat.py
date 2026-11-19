@@ -95,13 +95,23 @@ def _saved_at(connection):
         return None
 
 
-def _jump_address(connection):
-    """What identifies the jump host of a connection, or None: a login refused there is refused for
-    every robot behind it."""
-    jump = connection.get('jump')
-    if isinstance(jump, dict) and all(key in jump for key in ('host', 'port', 'username')):
-        return ('jump', jump['host'], jump['port'], jump['username'])
-    return None
+def _jump_addresses(connection):
+    """What identifies each jump host of a connection, nearest first: a login refused at one is refused for
+    every robot behind it. A jump host further along is named with the hosts it is reached through (issue
+    #15: several levels), so the first one keeps the key of a connection with a single jump host."""
+    keys, path = [], ('jump',)
+    for jump in device_access.jumps_of(connection):
+        if not (isinstance(jump, dict) and all(key in jump for key in ('host', 'port', 'username'))):
+            break
+        path += (jump['host'], jump['port'], jump['username'])
+        keys.append(path)
+    return keys
+
+
+def _refused_jump(connection, error):
+    """The jump host that refused, by the level the error names (1 when it names none), or None."""
+    keys, level = _jump_addresses(connection), error.get('level') or 1
+    return keys[level - 1] if error['hop'] == 'jump' and 0 < level <= len(keys) else None
 
 
 def _fresh(robot, connection):
@@ -355,7 +365,8 @@ class Heartbeat:
             try:
                 session = self.connect(connection, secret)
             except device_access.ConnectError as exc:
-                return self._note(connection, {'hop': exc.hop, 'reason': exc.reason, 'message': str(exc)}, seen)
+                return self._note(connection, {'hop': exc.hop, 'level': getattr(exc, 'level', None),
+                                               'reason': exc.reason, 'message': str(exc)}, seen)
             except Exception as exc:                  # paramiko / EOF / socket errors outside the phases ConnectError names
                 LOG.warning('the heartbeat login of %s failed: %s', key, type(exc).__name__)
                 return self._note(connection, dict(LOGIN_FAILED), seen)
@@ -391,22 +402,22 @@ class Heartbeat:
     # ------------------------------------------------------------------ refused logins
 
     def _standing(self, connection):
-        """[(who, refusal)] in the way of a login over this connection: its device's, then its jump host's."""
-        own, jump = connection['id'], _jump_address(connection)
+        """[(who, refusal)] in the way of a login over this connection: its device's, then its jump hosts'."""
+        own, jumps = connection['id'], _jump_addresses(connection)
         with self._guard:
             device = self._refused.get(own)
             found = [(own, device)] if device and device['revision'] == _revision(connection) else []
-            return found + ([(jump, self._refused[jump])] if jump in self._refused else [])
+            return found + [(jump, self._refused[jump]) for jump in jumps if jump in self._refused]
 
     def _may_login(self, connection, by_hand):
         """{who: refusals so far} if a login may be tried now, None while a refused one must not be repeated.
         The one later try that is allowed is taken by whoever asks first: of all the robots behind a jump
         host that refused, a single one tries again. By hand it is always allowed, once."""
-        now, own, jump = self.clock(), connection['id'], _jump_address(connection)
+        now, own = self.clock(), connection['id']
         with self._guard:
             if by_hand:
-                self._refused.pop(own, None)
-                self._refused.pop(jump, None)
+                for who in [own, *_jump_addresses(connection)]:
+                    self._refused.pop(who, None)
             standing = self._standing(connection)
             if any(refusal['count'] >= REFUSED_ATTEMPTS or 0 <= now - refusal['at'] < REFUSED_RETRY_SECONDS
                    for _, refusal in standing):
@@ -417,7 +428,7 @@ class Heartbeat:
 
     def _refusal(self, connection, error, seen, now):
         """Count a refused login. Logins that started together and were all refused count once."""
-        jump = _jump_address(connection) if error['hop'] == 'jump' else None
+        jump = _refused_jump(connection, error)
         who = jump or connection['id']
         count = max(self._refused.get(who, {}).get('count', 0), seen.get(who, 0) + 1)
         self._refused[who] = {'count': count, 'at': now, 'error': error,
@@ -457,8 +468,8 @@ class Heartbeat:
         with self._guard:
             self._attempted[key] = revision
             if error is None:
-                self._refused.pop(key, None)
-                self._refused.pop(_jump_address(connection), None)
+                for who in [key, *_jump_addresses(connection)]:
+                    self._refused.pop(who, None)
             elif counted and error['reason'] in NO_RETRY:
                 self._refusal(connection, error, seen or {}, now)
 
