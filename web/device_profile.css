@@ -1,0 +1,37 @@
+/* Issue #27 — the device profile (web/device_profile.js). The dialog also carries .live-status, so the
+   facts, tabs, tiles and tables of the status page (web/live_status.css) apply; only what is new is here. */
+
+/* Where the machine stands with ROS 2: the distribution set large, the verdict next to it. */
+.dp-verdict{margin:0 0 14px;padding:16px 20px 15px;border:1px solid var(--line);border-left:4px solid #b9cbb3;border-radius:10px;background:#fafcf8}
+.dp-verdict-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.dp-verdict h3{margin:0;font-size:22px;line-height:1.3;font-weight:650;letter-spacing:-.01em;color:#234c39}
+.dp-verdict p{margin:6px 0 0;max-width:70ch;color:#5f705a}
+.dp-verdict.dp-ok{border-left-color:var(--green)}
+.dp-verdict.dp-incomplete{border-left-color:#d1a54c}
+.dp-verdict.dp-unsupported{border-left-color:var(--red);background:#fdf6f4}
+.dp-verdict.dp-unsupported h3{color:#8f3f38}
+.dp-verdict.dp-absent h3,.dp-verdict.dp-not_read h3{color:#51654f;font-weight:600}
+
+.dp-env{margin:0 0 6px}
+.dp-env dd small{margin-left:6px;font-size:10px;font-weight:400;color:var(--muted)}
+
+/* Which list, and the search that narrows it. */
+.dp-list-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin:20px 0 12px}
+.dp-list-bar .ls-filters{margin:0}
+.dp-search{flex:1 1 220px;max-width:320px;min-height:32px;padding:6px 12px;border:1px solid #dbe4da;border-radius:8px;background:#fff;color:var(--ink);font-size:12px;transition:border-color .15s,box-shadow .15s}
+.dp-search:hover{border-color:#b9cbb3}
+.dp-search:focus-visible{outline:none;border-color:var(--green);box-shadow:0 0 0 3px #28674f26}
+.dp-name{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;font-weight:550;color:#2f4436}
+.dp-type{display:block;width:fit-content;max-width:100%;padding:1px 7px;border-radius:5px;background:#eef3e9;color:#3e5a44;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;overflow-wrap:anywhere}
+.dp-type+.dp-type{margin-top:4px}
+.device-profile tr[hidden]{display:none}
+.device-profile .dp-unread{color:var(--amber)}
+.device-profile .dp-reading{margin:10px 0 0;color:#4f7486}
+.device-profile .ls-flag.dp-soft{background:#f3efe2;color:var(--amber)}
+
+@media(max-width:700px){
+ .dp-verdict{padding:13px 14px}
+ .dp-verdict h3{font-size:19px}
+ .dp-search{max-width:none}
+}
+@media(prefers-reduced-motion:reduce){.dp-search{transition:none}}
