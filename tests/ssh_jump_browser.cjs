@@ -361,6 +361,7 @@ const fs = require('fs');
   await command.dispatchEvent('change');
   await expectText(page.locator('#ssh-command-result'), ['目标名称 pup', 'ProxyJump']);
   await fill('name', '配置里还有一级的机器人');
+  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
   await page.locator('#dialog [name=auth]').selectOption('password');
   await page.locator('#dialog [name=jump_auth]').selectOption('password');
   await fill('password', cfg.target_password); await fill('jump_password', cfg.jump_password);

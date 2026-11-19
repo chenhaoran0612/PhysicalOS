@@ -72,6 +72,7 @@ let failed = async () => {};
     await page.goto(cfg.url + '/#robots');
     await page.locator('[data-action="robot-add"]').first().click();
     await dialog.locator('[name="name"]').fill(name);
+    await dialog.locator('[name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
     await dialog.locator('[name="endpoint"]').fill(device.url);
     await dialog.locator('[name="token"]').fill(device.access);
     await save();
