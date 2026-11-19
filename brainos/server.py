@@ -153,7 +153,7 @@ def make_handler(application):
                 filename,mime=files[path]
                 return self.respond((ROOT/'web'/filename).read_bytes(),mime=mime)
             if path=='/api/health':
-                return self.respond({'status':'ok','version':'0.19.0'})
+                return self.respond({'status':'ok','version':'0.20.0'})
             if path=='/api/me':
                 me=application.identity.user(self.token())
                 if not me:
