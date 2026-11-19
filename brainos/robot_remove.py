@@ -81,8 +81,11 @@ class RobotRemoval:
                 self.store.delete('robots', robot['id'])
                 self.platform.audit('robot.removed', {'robot_id': robot['id'], 'name': robot['name'],
                                                       'family': robot.get('family'), 'deleted': deleted}, robot['project_id'])
+        from . import device_transfer          # here: device_transfer_record imports brainos.service
         for connection in connections:
             engine.status_sessions.forget(connection['id'])
+            # Issue #18: this computer's records of unfinished transfers to it; the device is not contacted.
+            device_transfer.forget_robot_transfers(self.platform, connection['id'])
         return {'removed': robot['id'], 'deleted': deleted}
 
     def _of(self, robot, kind):
