@@ -341,3 +341,39 @@ class Patrol(Skill):
 - 守护记录每次 `stop()` 的来源（守护线程第几拍 / 监视线程的读取阻塞再停）；"本采样已停"只认守护线程本拍发出，不再用机器人时刻相等推断。最近一次为读取阻塞再停时，复刻到期一律合并进那一次、参考取那次停止时的位置（与 v0.13.0 一致），粗时钟（≥ 20 ms）与高分辨率时钟行为相同。
 - 合并的计数再停事件带 `merged: true, adapter_stopped: false`；单独调用了 `stop()` 的为 `merged: false`。
 - HAL（`hal.py`）：守护重复 `stop()` 相邻 ≥ 0.5 s；驱动不得在超过 0.5 s 的窗口内去抖或丢弃 `stop()`；适配器 `clock` 应为高分辨率单调时钟。
+
+## 10. R1 修复第一批（0.20.0，2026-11-19）
+
+各 issue 的模块文档是准：`runtime/README.md`（§2「设备安全限值」、§2.3「告警上报」、§5、§7）、`cloud/README.md`（「设备告警」「资料库」）、
+`docs/BODY_TYPES.md`、`docs/DEVICE_PROFILE.md`、`docs/DEVICE_TRANSFER.md`、`docs/MATERIAL_LIBRARY.md`。这里只记跨模块的契约。
+
+### 10.1 设备安全限值（issue #22，需求 R1-06；runtime + desktop）
+
+- 限值由人按设备填写，保存在设备上。清单不是 `simulated: true` 的本体没有限值时，所有 `safety=motion` 能力（含零速度指令）一律 `409 safety_limits_missing`；仿真本体只有在声明了 `base.velocity` 却没有 `max_vx`/`max_wz` 时才被要求。请求格式不对仍是 400，急停锁存时仍是 `estop_latched`（先于这一条）。停止、状态读取不受影响。
+- `GET /v2/safety/limits` → `{schema: "neuxmind.device_limits.v1", required, filled, motion_blocked, reason, limits: {base: {max_linear_speed, max_angular_speed, command_timeout_s}} | null, set_by, set_at, revision, effective, bounds, groups: ["base"], history, invalid}`。
+- `POST /v2/safety/limits` `{limits: {base: {...三项}}, set_by, request_id?}` → `{accepted: true, ...同 GET}`。拒绝：400 `limits_invalid`、400 `limits_out_of_range`（`field, value, min, max, bound: platform|body`）、400 `set_by_required`、409 `runs_active`、409 `conformance_running`、503 `busy`、500 `limits_not_saved`。
+- 平台上限：线速度 3.0 m/s、角速度 3.0 rad/s、指令超时 0.05–2 s；本体清单声明了更低的上限时以本体的为准。执行值 = min(填的值, 清单声明的值)。记录绑定本体（`instance_id`、厂商、型号、形态、声明的底盘上限），对不上时按没填处理。
+- `GET /v1/status` 新增 `safety_limits: {required, filled, motion_blocked, reason, limits, set_by, set_at}`；`POST /v1/validate` 对要运动能力的应用多一项「安全限值已填写」；事件 `safety.limits_set`、`safety.limits_invalid`，`safety.rejected` 带 `code: "safety_limits_missing"`。
+- ROS 2 适配器：配置里没有 `limits.max_vx`/`max_wz` 时不再拒绝启动，清单不声明这两项（这样的清单过不了一致性测试的 static 级）。`serve --require-safety-limits`：自带限值的仿真本体也必须先填写（演练用）。一致性测试里因为没填限值被拒的用例记为「受阻」。
+- 桌面端：`POST /api/robots/limits {robot_id, project_id}`（读）、`POST /api/robots/limits/save {robot_id, project_id, limits, request_id}`（写；填写人取登录账号，不取请求体）。
+
+### 10.2 告警上报（issue #26，需求 R7-08、R1-09；runtime ↔ cloud）
+
+- 告警 `neuxmind.alert.v1`：`{schema, id, kind, level: critical|warning|info, ts, device: {instance_id, name, family, simulated}, reason, advice, detail}`。`id` 在设备上生成，云端按（组织, `instance_id`, `id`）只存一次。
+- 设备 → 云端：`POST /api/v1/device-reports`，HTTPS，`Authorization: Bearer <API Key，权限范围 alerts:report>`（登录会话 403 `api_key_required`）。请求体 `neuxmind.device_report.v1`：`{schema, device, sent_at, interval_s, trigger: start|interval|immediate|backlog|heartbeat, alerts, pending}`；答复 `{accepted[], duplicates[], rejected[{index, id, error}], received_at, device}`。
+- 节奏：启动后一次，之后每 300 秒一次；`critical`（急停锁定 `estop_latched`、停止未生效 `stop_not_obeyed`）在几秒内立刻发，同一种 30 秒内最多一次。设备侧其他告警从 `EdgeRuntime.raise_alert(kind, level, reason, advice, detail)` 进入。
+- 设备侧配置：`serve --cloud-config FILE`（或 `NEUXMIND_CLOUD_CONFIG`），JSON `{url: "https://…", key, ca_file?}`，文件权限 0600；没有配置时设备不向外发任何数据。只接受 https，校验证书和主机名，不跟随重定向，不使用代理。`GET /v1/status` 新增 `alert_report`。
+- 云端查看：`GET /api/v1/alerts`、`POST /api/v1/alerts/{id}/handled`、`GET /api/v1/alerts/devices`、`DELETE /api/v1/alerts/devices?instance_id=`（都要 `robots` 权限）。设备最后一次上报距今超过 3 × 300 秒再加 60 秒宽限判为 `offline`，生成一条 `device_offline` 告警。
+- 错误码：400 `invalid_report`、403 `scope_missing` / `api_key_required`、409 `too_many_devices`、429 `rate_limited`。
+
+### 10.3 本体类型清单（issue #32，需求 R1-11；desktop）
+
+- `POST /api/body-types` `{name, state_machine_template, required_capabilities: [标准能力编号]}` → `{id, name, state_machine_template, required_capabilities, builtin: false, created_at}`；`POST /api/body-types/remove` `{body_type_id}`（在用时 400 `body_type_in_use`，带 `devices`、`devices_total`；内置 400 `body_type_builtin`）；`POST /api/robots/body-type` `{project_id, robot_id, family}`。
+- `POST /api/robots`、`POST /api/engineering/ssh/connect`（新建机器人时）：`family` 必须是清单里的类型，否则 400 `body_type_required`；不再接受 `mobile / humanoid / aerial / composite / custom`，也没有默认值。
+- `GET /api/state` 新增 `body_types`、`body_type_interfaces`。`robots[].family` 是人选的类型的编号（新增的类型是 `bodytype-…`）；设备自报的类型在 `robots[].manifest.family`，连接检查不再修改 `family`。清单 `manifest` 的 `family`、云端 `/robots`、云端模型的 `families` 不变。
+- 资料库（issue #33）上传时标的本体类型取自同一份清单（`state.body_types`）；云端只校验格式，不对照清单。
+
+### 10.4 多级跳板机的连接记录（issue #15；desktop）
+
+- `device_connections[].jumps`：有序列表，第一项是本机直接登录的那一级（直连的记录没有这个字段）；`agent_secrets[].jumps` 同序，每项只有 `password`、`private_key`、`passphrase`。0.19.0 的 `jump` / `jump_*` 在打开工作空间时迁移。
+- `ConnectError.level`：`hop == 'jump'` 时是第几级（从 1 数起）；状态页和心跳记录的 `error` 里也带 `level`。
