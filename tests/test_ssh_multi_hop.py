@@ -457,6 +457,12 @@ class SameRouteEverywhereTests(ChainCase):
         for gate in self.gates:
             for transport in list(gate.transports):
                 transport.close()
+        # The drop reaches this computer's end of the tunnel a moment later: wait until it is seen, as it is
+        # after a network fix (checked at once, the session sometimes still looked alive and was not reopened).
+        deadline = time.monotonic() + 10
+        while device.client.get_transport().is_active() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertFalse(device.client.get_transport().is_active(), 'the dropped connection was never noticed')
         before = self.forwarded()
 
         hardware_init.ensure_connected(device, connection, self.secret(connection))
