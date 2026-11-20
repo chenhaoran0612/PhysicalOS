@@ -23,6 +23,10 @@
 #     over from before a reboot is never trusted on its own.
 #   * The default adapter is the simulated body: it opens no device and cannot move the robot.
 #   * The gateway is plain HTTP, so it listens on loopback only; reach it through an SSH tunnel.
+#   * The runtime sends nothing out by itself, with one exception that is off until someone turns it
+#     on: when the install directory holds cloud-report.json (mode 0600; README §2.3), "start" passes
+#     it on and the runtime reports this device's alerts to the cloud named there, over HTTPS, every
+#     five minutes. Without that file the robot needs no network at all.
 # install, start, stop and remove run one at a time per copy of this script.
 set -euo pipefail
 
@@ -214,6 +218,11 @@ start() {
   if port_in_use; then
     fail 1 "127.0.0.1:$PORT is already in use; the runtime was not started"
   fi
+  unset NEUXMIND_CLOUD_CONFIG            # only this install's own file decides whether alerts are reported
+  if [ -e "$CLOUD_CONFIG" ] || [ -L "$CLOUD_CONFIG" ]; then   # the runtime checks it (0600, https, no link) and starts either way
+    export NEUXMIND_CLOUD_CONFIG="$CLOUD_CONFIG"
+    echo "alert reports: $CLOUD_CONFIG"
+  fi
   cd "$ROOT"
   BRAIN_EDGE_TOKEN="$(cat "$TOKEN_FILE")" nohup setsid "$ENTRY" serve \
     --adapter "$ADAPTER" --host 127.0.0.1 --port "$PORT" --state-dir "$STATE" \
@@ -254,6 +263,8 @@ try:
     sandbox = status.get("sandbox") or {}
     summary = {key: status.get(key) for key in ("name", "simulated", "mode", "estop_latched", "runtime_version")}
     summary["sandbox"] = {key: sandbox.get(key) for key in ("level", "mode", "privilege_drop", "python_usable", "pids_cgroup")}
+    report = status.get("alert_report") or {}
+    summary["alert_report"] = {key: report.get(key) for key in ("enabled", "url", "unsent", "last_error", "reason")}
 except (ValueError, AttributeError) as error:     # something else answered on this port
     sys.stderr.write(f"the answer was not a runtime status: {error}\n")
     sys.exit(1)
@@ -317,6 +328,7 @@ TOKEN_FILE="$ROOT/edge-token"
 PID_FILE="$ROOT/runtime.pid"
 LOG="$ROOT/runtime.log"
 MARKER="$ROOT/.neuxmind-device-install"
+CLOUD_CONFIG="$ROOT/cloud-report.json"   # optional, written by the operator: where alerts are reported
 
 case "$1" in
   install) lock; install ;;

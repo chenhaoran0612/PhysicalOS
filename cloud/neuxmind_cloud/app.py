@@ -148,6 +148,8 @@ def create_app(settings: Settings | None = None, *, provider_factory: Callable[[
     from .routes import account, admin, commerce, fleet, gateway_routes
     for module in (account, commerce, gateway_routes, fleet, admin):
         app.include_router(module.router, prefix=API_PREFIX)
+    from .routes import alerts as alert_routes      # issue #26: device alert reports (/device-reports, /alerts)
+    app.include_router(alert_routes.router, prefix=API_PREFIX)
 
     @app.get("/healthz")
     def healthz():

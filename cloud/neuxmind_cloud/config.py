@@ -84,6 +84,16 @@ class Settings:
     # A gateway call still "pending" after this long is treated as lost.
     stale_call_seconds: int = 600
 
+    # --- device alert reports (issue #26, R7-08) --------------------------
+    device_report_interval_seconds: int = 300    # how often a device reports (the device's own constant)
+    device_offline_missed: int = 3               # reports missed in a row before a device counts as offline ...
+    device_offline_grace_seconds: int = 60       # ... once the last of them is this late
+    device_report_max_per_window: int = 60       # reports accepted per device per interval (a backlog comes in several)
+    device_report_org_max_per_window: int = 3000  # ... and per organisation, all its devices together
+    device_report_max_devices: int = 1000        # devices (instance ids) that may report per organisation
+    device_alert_keep: int = 2000                # alerts kept per device (handled and minor ones go first)
+    device_alert_org_keep: int = 200_000         # alerts kept per organisation
+
     # --- session streaming (§4.3) ----------------------------------------
     # Longest a streamed session call may run; 0 = derived so that a stream
     # always ends (and settles) before the sweeper could declare it lost:
@@ -100,6 +110,13 @@ class Settings:
         return self.env in TEST_ENVS
 
     def __post_init__(self):
+        for name in ("device_report_interval_seconds", "device_offline_missed", "device_report_max_per_window",
+                     "device_report_org_max_per_window", "device_report_max_devices", "device_alert_keep",
+                     "device_alert_org_keep"):                                 # issue #26
+            if getattr(self, name) < 1:
+                raise ValueError(f"NEUXMIND_{name.upper()} 须为正整数")
+        if self.device_offline_grace_seconds < 0:
+            raise ValueError("NEUXMIND_DEVICE_OFFLINE_GRACE_SECONDS 不能为负")
         if self.scrypt_log_n < 17 and not self.is_test_env:
             raise ValueError("NEUXMIND_SCRYPT_LOG_N 低于 17 只允许在 dev/test 环境使用")
         if not 10 <= self.scrypt_log_n <= 20:
@@ -170,6 +187,16 @@ class Settings:
             # Settings directly and get the dataclass default (0 = off).
             maintenance_interval_seconds=_int("NEUXMIND_MAINTENANCE_INTERVAL_SECONDS", 60),
             stale_call_seconds=_int("NEUXMIND_STALE_CALL_SECONDS", cls.stale_call_seconds),
+            device_report_interval_seconds=_int("NEUXMIND_DEVICE_REPORT_INTERVAL_SECONDS",
+                                                cls.device_report_interval_seconds),
+            device_offline_missed=_int("NEUXMIND_DEVICE_OFFLINE_MISSED", cls.device_offline_missed),
+            device_offline_grace_seconds=_int("NEUXMIND_DEVICE_OFFLINE_GRACE_SECONDS", cls.device_offline_grace_seconds),
+            device_report_max_per_window=_int("NEUXMIND_DEVICE_REPORT_MAX_PER_WINDOW", cls.device_report_max_per_window),
+            device_report_org_max_per_window=_int("NEUXMIND_DEVICE_REPORT_ORG_MAX_PER_WINDOW",
+                                                  cls.device_report_org_max_per_window),
+            device_report_max_devices=_int("NEUXMIND_DEVICE_REPORT_MAX_DEVICES", cls.device_report_max_devices),
+            device_alert_keep=_int("NEUXMIND_DEVICE_ALERT_KEEP", cls.device_alert_keep),
+            device_alert_org_keep=_int("NEUXMIND_DEVICE_ALERT_ORG_KEEP", cls.device_alert_org_keep),
             stream_max_seconds=_int("NEUXMIND_STREAM_MAX_SECONDS", cls.stream_max_seconds),
             stream_idle_seconds=_int("NEUXMIND_STREAM_IDLE_SECONDS", cls.stream_idle_seconds),
             scrypt_log_n=_int("NEUXMIND_SCRYPT_LOG_N", cls.scrypt_log_n),

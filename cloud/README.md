@@ -82,6 +82,8 @@ NEUXMIND_TEST_DATABASE_URL=postgresql+psycopg://user@127.0.0.1/nxtest python3 -m
 | `usage_records` | 用量 | (org, request_id) 唯一 = 网关幂等；含上游 usage、`upstream_ref` 证据、`simulated`；`hold_tokens`（本次占用，清理任务用）；状态 pending / succeeded / failed / reconciliation_required / overage |
 | `gateway_sessions` | 计量会话 | 访问令牌只存哈希；`used_tokens`、`inflight_tokens`、`unknown_calls`、`overage_calls`、`overage_tokens`、证据列表 |
 | `overage_records` | 超额记录 | 上游报告用量超过预留时写入：已按预留上限计费，超出部分 open → 运营 waived / charged |
+| `device_alerts` | 设备告警 | (org, instance_id, alert_id) 唯一 = 重复上报不重复保存；级别、设备上的时间 `ts`、收到的时间、原因、建议、`detail`；`source` device / cloud（云端生成的“设备离线”）；`handled_at` / `handled_by` |
+| `device_reports` | 设备最近一次上报 | (org, instance_id) 唯一；`last_report_at` 用来判定离线；`pending` 是设备说它还压着没发的条数；`offline_alert_id` 指向当前这次失联的告警，设备在线时为空 |
 | `robots` | 设备群 | (org, instance_id) 唯一；规范化后的 manifest、摘要、能力 ID、`simulated`；`conformance`（JSON，可空，第 04 轮：最新一致性报告摘要，旧库启动时自动加列） |
 | `audit_logs` | 审计 | 注册/登录失败/Key 创建与吊销/购买/支付/webhook 拒绝/调额/核对/改价/机器人登记等 |
 
@@ -111,6 +113,8 @@ NEUXMIND_TEST_DATABASE_URL=postgresql+psycopg://user@127.0.0.1/nxtest python3 -m
 | DELETE `/api-keys/{id}` | 吊销 |
 
 API Key 的 scopes：`gateway`、`catalog:read`、`robots`、`wallet:read`、`usage:read`。Key 实际拥有的权限 = scopes ∩ 创建者当前角色的权限（创建者被降级或移出组织后，Key 立即收窄或失效；有测试 `test_demoting_creator_narrows_key_scopes`）。API Key 不能管理 Key、不能购买、不能访问 `/admin`；通过 Key 调用网关时检查的是**创建者**的邮箱是否已验证。
+
+另有 `alerts:report`（issue #26）：给放在设备上的 Key 用，凭它只能调 `POST /device-reports`；不在默认范围里；四种角色都持有它，所以上面“创建者被降级后收窄”对它不起作用。见“设备告警”。
 
 ### 邮箱验证（修复 C-01）
 
@@ -302,6 +306,28 @@ API Key 的 scopes：`gateway`、`catalog:read`、`robots`、`wallet:read`、`us
 ### 运营（`/admin/*`，需要登录会话且是平台运营员）
 `GET/POST /admin/models`、`PATCH /admin/models/{id}`（改价不影响已有预留的价格快照和已结算的账本）、`POST /admin/models/{id}/status {status: published|unlisted}`、`POST /admin/credit-packs`、`POST /admin/wallets/{org_id}/adjust {delta, reason, reference?}`、`GET /admin/reservations?status=&older_than_seconds=`（默认 reconciliation_required；`status=held|settled|released|all`；每项带 `age_seconds`）、`POST /admin/reservations/{id}/resolve {action: settle|release, credits?, evidence_ref?, reason}`（只处理 reconciliation_required，held 返回 409 `reservation_in_flight`）、`POST /admin/maintenance/sweep`（立即清理，返回 `{lost_calls, sessions_closed, orphan_holds}`）、`GET /admin/overages?status=open|waived|charged|all`、`POST /admin/overages/{id}/resolve {action: waive|charge, credits?, reason}`、`GET /admin/orders?status=`、`POST /admin/orders/{id}/confirm {payment_reference, reason}`（manual 渠道）、`GET /admin/audit?action=`。
 
+### 设备告警
+
+issue #26，需求 R7-08。设备上的管理层每 5 分钟主动上报一次（见 [`runtime/README.md`](../runtime/README.md) §2.3），云端接收、保存、给人看；设备多久没上报算离线也在这里判定。代码在 `alerts.py`、`alert_models.py`、`routes/alerts.py`。
+
+| 接口 | 说明 |
+|---|---|
+| POST `/device-reports` | 设备上报。`{schema: "neuxmind.device_report.v1", device: {instance_id, name?, family?, simulated?, runtime_version?}, alerts: [neuxmind.alert.v1…], pending?}`（`alerts` 可以为空，表示“设备还在”；`pending` 是设备上还压着没发的条数）→ `{accepted[], duplicates[], rejected[{index, id, error}], received_at, device: {instance_id, robot_id, state}}`。只接受带权限范围 `alerts:report` 的 API Key，登录会话不行（403 `api_key_required`） |
+| GET `/alerts?instance_id=&level=&handled=true\|false&limit=&before=` | 本组织的告警，新的在前；`limit` 1–200（默认 50），`more` 为真时带 `before=<next_before>` 取下一页。需要 `robots` 权限 |
+| POST `/alerts/{id}/handled` | `{handled: true\|false}`（默认 true）标“已处理”或取消 → 这条告警。需要 `robots` 权限；其他组织的告警返回 404 |
+| GET `/alerts/devices` | 上报过的设备：`{devices: [{instance_id, robot_id, name, family, simulated, runtime_version, state: online\|offline, first_report_at, last_report_at, reports, offline_after_s, pending_alerts, unhandled_alerts}], report_interval_s, offline_after_missed}`，离线的排在前面。需要 `robots` 权限 |
+| DELETE `/alerts/devices?instance_id=` | 不再盯一台已经撤走的设备（它的告警保留；它要是再上报，就又回到列表里）→ `{forgotten: true, instance_id}`。需要 `robots` 权限 |
+
+一条告警：`{id, alert_id, source: device|cloud, instance_id, robot_id, device_name, kind, level: critical|warning|info, ts, received_at, reason, advice, detail, handled, handled_at, handled_by}`。`ts` 是设备上的时间，`received_at` 是云端收到的时间；`robot_id` 是收到时这个 `instance_id` 登记的机器人，没有登记过就是 `null`（告警照收，不因为登记的先后而丢）。
+
+- **权限。** 给设备用的 Key 只带 `alerts:report`：能调的只有 `/device-reports`（以及所有 Key 都能调的 `GET /me`，它返回这把 Key 所属的账户和组织），读不了告警和机器人，调不了别的写接口。这个范围不在新建 Key 的默认范围里，要显式指定（`POST /api-keys {name, scopes: ["alerts:report"]}`）；四种角色都持有它，所以创建者被降级不会收窄这把 Key，创建者被移出组织或 Key 被吊销才失效。人看告警、标已处理、撤掉设备用已有的 `robots` 权限（登录会话或带 `robots` 的 Key）。
+- **重复上报不重复保存。** 设备给每条告警一个自己的 `id`，云端按（组织, `instance_id`, `id`）只存一次；再次收到同一个 `id` 时放在 `duplicates` 里答复，内容以第一次为准。设备没有收到答复就会随下一次上报重发，所以这条是必需的。同一台设备的两次上报不会同时处理（PostgreSQL 上用 advisory lock，SQLite 本来就是串行的）。
+- **坏的告警单条拒绝。** 级别不是三种之一、时间不是 0 到 1e11 之间的数、原因为空或超过 1000 个字符、`id` 或 `kind` 的字符不合要求、`detail` 不是对象或超过 4000 字节、文字里有数据库存不了的字符（空字符、半个代理对）或其他控制字符（换行和制表符可以）的，放进 `rejected` 并说明原因，同一次上报里其余的照收。整份上报格式不对（`schema`、`device.instance_id`、`alerts` 不是列表或超过 200 条）返回 400 `invalid_report`。设备的名称、类型、版本只是显示用的，里面的这类字符直接替换掉。
+- **离线。** 设备最后一次上报距今超过 `NEUXMIND_DEVICE_OFFLINE_MISSED`（默认 3）× `NEUXMIND_DEVICE_REPORT_INTERVAL_SECONDS`（默认 300 秒）再加 `NEUXMIND_DEVICE_OFFLINE_GRACE_SECONDS`（默认 60 秒）即 16 分钟，就是 `offline`。多出的 1 分钟是给第 3 次上报在路上的时间，不然它晚到几秒就会被算成没收到。云端为这一次失联生成一条告警（`kind: device_offline`，`level: warning`，`source: cloud`），不重复生成；设备再次上报后恢复 `online`，那条告警的 `detail.recovered_at` 记下恢复时间，之后再失联是新的一条。判定在后台清理（`sweep`，结果里多一项 `devices_offline`）里做，有人查看 `/alerts`、`/alerts/devices` 时也会先做一次。只对上报过的设备判定：从没上报过的机器人不算离线。
+- **上限。** 每台设备每 5 分钟最多 `NEUXMIND_DEVICE_REPORT_MAX_PER_WINDOW`（默认 60）次上报，整个组织最多 `NEUXMIND_DEVICE_REPORT_ORG_MAX_PER_WINDOW`（默认 3000）次，超出 429 `rate_limited`；每个组织最多 `NEUXMIND_DEVICE_REPORT_MAX_DEVICES`（默认 1000）个上报过的 `instance_id`，超出 409 `too_many_devices`（用 DELETE `/alerts/devices` 腾位置）；每台设备最多保留 `NEUXMIND_DEVICE_ALERT_KEEP`（默认 2000）条告警，整个组织最多 `NEUXMIND_DEVICE_ALERT_ORG_KEEP`（默认 200000）条。超出时先删已处理的，再按 info、warning、critical 的顺序删最早的：没人处理过的最高级别告警最后才动。
+- **审计。** `device.first_report`、`device.alerts`（收下几条、拒收几条、各级别几条，带来源地址；空的上报不记）、`device.offline`、`device.forgotten`、`alert.handled` / `alert.unhandled`。
+- **限制。** 设备自报 `instance_id`，Key 是组织级的：持有一把上报 Key 就能以本组织任意设备的名义上报（进不了别的组织），包括报假告警、替一台不出声的设备发空上报让它看起来在线、改显示的设备名称、用大量告警把较早的告警挤出保留上限。每台设备单独的凭证还没有做。收到告警之后怎么通知人（飞书、短信、客户的系统）没有做，目前只能查。没有删除单条告警的接口。告警的原因、建议、设备名称是设备给的文字，展示它们的界面要自己转义。`ts` 取决于设备的时钟。在 SQLite 和 PostgreSQL 16 上都跑过测试（含并发上报）；没有在真实设备和部署好的云平台之间验证过。
+
 ## 计费与支付流程
 
 ```
@@ -360,6 +386,7 @@ token 套餐（法币）
 - 注册按 IP 限速（默认每小时 20 次）；验证邮件每用户每小时 5 封。
 - scrypt N=2^17（OWASP 建议值，约 128 MiB/次），同时最多 4 个哈希在计算，防止登录洪水耗尽内存；dev/test 可以用 `NEUXMIND_SCRYPT_LOG_N` 调低以加快测试，其他环境低于 17 拒绝启动。
 - 多租户：每个业务查询都带 `org_id`；跨组织访问返回 404；`X-NeuxMind-Org` 要求是该组织成员。
+- 放在设备上的 Key 只给 `alerts:report`：设备丢失或被攻破时，这把 Key 读不到告警和机器人、调不了别的写接口，能做的是以本组织设备的名义上报（假告警、冒充在线、挤占保留条数，见“设备告警”的限制；有上报频率、设备数、保留条数的上限）；吊销它不影响别的 Key。上报只认 API Key，登录会话不能上报。
 - **平台运营员 = 邮箱已验证 且（管理命令授予 或 白名单且白名单已启用）**。
   - **生产环境推荐流程：`python3 -m neuxmind_cloud create-operator <email>`**。命令在服务器上直接创建一个已验证、已授予运营员的账户，密码不可用，并输出一次性设密令牌；把令牌通过可信渠道交给本人，本人 `POST /auth/password-reset` 设密码。这样运营员账户的密码从来没有经过公开注册，不存在"别人先注册、先设密码"的问题（复审 N-01）。
   - `grant-operator <email>` 只用于本人已在自己会话里验证过邮箱的已有账户；**未验证账户一律拒绝**，并打印该账户的公开注册时间和来源 IP 供核对。`revoke-operator` 撤销。
@@ -390,6 +417,9 @@ token 套餐（法币）
 | `NEUXMIND_REGISTER_IP_MAX_PER_HOUR` | `20` | |
 | `NEUXMIND_MAINTENANCE_INTERVAL_SECONDS` | `60`（服务进程） | 后台清理间隔，0 关闭（网关请求上的惰性清理仍会运行） |
 | `NEUXMIND_STALE_CALL_SECONDS` | `600` | pending 超过这么久的网关调用判定为丢失 |
+| `NEUXMIND_DEVICE_REPORT_INTERVAL_SECONDS` / `NEUXMIND_DEVICE_OFFLINE_MISSED` / `NEUXMIND_DEVICE_OFFLINE_GRACE_SECONDS` | `300` / `3` / `60` | 设备上报的间隔（和设备上的固定值一致）；连续几次没收到算离线；最后一次允许晚到多久（“设备告警”） |
+| `NEUXMIND_DEVICE_REPORT_MAX_PER_WINDOW` / `NEUXMIND_DEVICE_REPORT_ORG_MAX_PER_WINDOW` / `NEUXMIND_DEVICE_REPORT_MAX_DEVICES` | `60` / `3000` / `1000` | 每个间隔里每台设备、每个组织收的上报数；每个组织上报过的设备数 |
+| `NEUXMIND_DEVICE_ALERT_KEEP` / `NEUXMIND_DEVICE_ALERT_ORG_KEEP` | `2000` / `200000` | 每台设备、每个组织保留的告警数 |
 | `NEUXMIND_STREAM_MAX_SECONDS` | `0`（自动） | 流式会话调用的最长时长；自动 = `STALE_CALL_SECONDS − UPSTREAM_TIMEOUT_SECONDS − 30`（≥10），显式值也不会超过它 |
 | `NEUXMIND_STREAM_IDLE_SECONDS` | `30` | 客户端这么久不读数据按断开处理（网关继续排空上游并结算） |
 | `NEUXMIND_SCRYPT_LOG_N` | `17` | 低于 17 只允许 dev/test |

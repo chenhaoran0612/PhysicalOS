@@ -89,6 +89,14 @@ class Principal:
         return self
 
 
+# Issue #26 (R7-08): the one thing a key that lives on a device may do -- report that device's alerts
+# (POST /device-reports). It reads nothing and is in no default; every role may hold it, and whoever
+# may issue keys may issue one with it.
+ALERT_REPORT_SCOPE = "alerts:report"
+API_KEY_SCOPES = (*API_KEY_SCOPES, ALERT_REPORT_SCOPE)
+ROLE_PERMISSIONS = {role: permissions | {ALERT_REPORT_SCOPE} for role, permissions in ROLE_PERMISSIONS.items()}
+
+
 # ---------------------------------------------------------------- helpers
 def _email(value) -> str:
     if not isinstance(value, str):

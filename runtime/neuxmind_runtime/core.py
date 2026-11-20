@@ -68,6 +68,8 @@ def json_digest(value) -> str:
 
 
 class EdgeRuntime:
+    alert_report = None     # issue #26: the alert reporter of a served runtime (alert_report.for_serve)
+
     def __init__(self, adapter: RobotAdapter, state_dir: str | Path, *, start_monitor: bool = True,
                  sandbox: str | SandboxConfig = "process", models: ModelConfig | None = None,
                  telemetry_capacity: int | None = TELEMETRY_CAPACITY, latch_guard: GuardConfig | None = GUARD_DEFAULTS,
@@ -328,6 +330,7 @@ class EdgeRuntime:
             out["adapter"] = extra
         except Exception as exc:
             out["adapter"] = {"error": str(exc)}
+        out["alert_report"] = self._alert_report_view()     # issue #26
         return out
 
     # ------------------------------------------------------------ stop path
@@ -812,3 +815,37 @@ class EdgeRuntime:
             raise NotFound(f"未知运行 {run_id}")
         return {"run_id": run_id, "events": events, "last_seq": events[-1]["seq"] if events else since,
                 "more": len(events) >= limit, **self.events.retention()}
+
+    # ------------------------------------------------------------ alerts (issue #26, R7-08)
+    def raise_alert(self, kind: str, level: str, reason: str, advice: str, detail: dict | None = None) -> dict | None:
+        """The one entry for alerts from anywhere in the runtime: recorded on the device and reported
+        to the cloud by ``alert_report`` (``level``: ``critical`` | ``warning`` | ``info``).
+
+        Returns the alert, or ``None`` when this runtime has no reporter (it was not started by
+        ``serve``) or the reporter failed -- an alert that cannot be recorded never breaks its caller.
+        Only a kind, level or text that is not one raises (``ValueError``: a programming error).
+
+        It works on memory (the reporter's own thread does the disk and the network), so any thread
+        may call it. **Not from the stop path**, which calls nothing it does not need: the two
+        stop-path conditions (e-stop latched, stop not obeyed) are noticed by the reporter looking
+        at the supervisor."""
+        reporter = self.alert_report
+        if reporter is None:
+            return None
+        try:
+            return reporter.raise_alert(kind, level, reason, advice, detail)
+        except ValueError:
+            raise
+        except Exception as exc:
+            self.events.emit("runtime.alert_error", error=str(exc)[:300])
+            return None
+
+    def _alert_report_view(self) -> dict:
+        """``/v1/status.alert_report``: cached values of the reporter; a broken one reads as off."""
+        reporter = self.alert_report
+        if reporter is None:
+            return {"enabled": False, "reason": "告警上报随 serve 启动；这个运行时没有上报"}
+        try:
+            return reporter.describe()
+        except Exception as exc:
+            return {"enabled": False, "reason": f"告警上报状态读不到：{str(exc)[:200]}"}

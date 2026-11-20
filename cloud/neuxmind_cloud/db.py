@@ -60,6 +60,7 @@ class Database:
         self.sessions = sessionmaker(self.engine, expire_on_commit=False)
 
     def create_all(self) -> None:
+        from . import alert_models  # noqa: F401  (issue #26: the device alert tables)
         from . import models  # noqa: F401  (register tables)
         Base.metadata.create_all(self.engine)
         self._add_missing_columns()

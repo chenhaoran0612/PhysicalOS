@@ -93,6 +93,7 @@ def _serve(args) -> int:
                   "存在短暂窗口）；真机部署建议提供 cgroup（systemd Delegate=yes），见 README。", flush=True)
         if box.get("python_note"):
             print("警告：" + box["python_note"], flush=True)
+    reporter = _start_alert_report(runtime, args.cloud_config)     # issue #26
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -103,7 +104,31 @@ def _serve(args) -> int:
         runtime.supervisor.halt_motion("runtime shutdown")
         server.close()
         runtime.close()
+        if reporter is not None:
+            reporter.close()
     return 0
+
+
+def _start_alert_report(runtime, config_path):
+    """Issue #26: start reporting alerts to the cloud (``--cloud-config``). Whatever goes wrong here,
+    the runtime serves: without a usable configuration nothing is sent and the status says why."""
+    from . import alert_report
+    reporter = None
+    try:
+        reporter = alert_report.for_serve(runtime, config_path)
+        view = reporter.describe()
+        if view["enabled"]:
+            print(f"告警上报：每 {view['interval_s'] / 60:g} 分钟向 {view['url']} 上报一次，急停和停止未生效立刻上报",
+                  flush=True)
+        else:
+            print(("警告：" if config_path is not None else "告警上报未开启：") + str(view["reason"]), flush=True)
+        return reporter.start()
+    except Exception as exc:
+        print(f"警告：告警上报没有启动（其余功能不受影响）：{type(exc).__name__}: {exc}", flush=True)
+        if reporter is not None:
+            reporter.close()
+        runtime.alert_report = None
+        return None
 
 
 def _check(args) -> int:
@@ -211,6 +236,11 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8790)
     serve.add_argument("--state-dir", type=Path, default=Path(".nx-runtime-state"))
+    serve.add_argument("--cloud-config", type=Path, metavar="FILE",
+                       default=(Path(os.environ["NEUXMIND_CLOUD_CONFIG"]) if os.environ.get("NEUXMIND_CLOUD_CONFIG")
+                                else None),
+                       help="向云平台上报告警的配置文件（JSON：url 须为 https、key、可选 ca_file；权限须为 0600；"
+                            "默认读环境变量 NEUXMIND_CLOUD_CONFIG）；不给就不向外发送任何数据（见 README §2.3）")
     serve.add_argument("--time-scale", type=float, default=1.0, help="仅仿真本体：仿真时间倍速")
     serve.add_argument("--max-connections", type=int, default=MAX_CONNECTIONS,
                        help="普通并发连接上限；超出立即 503")
