@@ -31,7 +31,7 @@ const includes = (text, part, what) => { assert.ok(String(text).includes(part), 
 const robot = {id: 'robot-1', name: 'dog', endpoint: ''};
 const direct = {host: '192.0.2.10', port: 22, username: 'robot', auth: 'password'};
 const viaJump = {...direct, jumps: [{host: '203.0.113.10', port: 2222, username: 'ops', auth: 'password'}]};
-const facts = (changes = {}) => ({connection: direct, sessions: [], running: null, reports: 0, scans: 0, repairs: 0,
+const facts = (changes = {}) => ({connection: direct, sessions: [], running: null, reports: 0, scans: 0, repairs: 0, profiles: 0,
                                   applications: [], flowRunning: null, flowsUnfinished: 0, ...changes});
 const session = (mode, status = 'completed') => ({id: `agent-session-${mode}-${status}`, mode, status});
 
@@ -60,6 +60,12 @@ check(plan(robot, facts({scans: 2})).lines[1], '硬件扫描结果', 'scans alon
 check(plan(robot, facts({repairs: 2})).lines[1], '2 份硬件修复报告', 'repair reports alone');
 check(plan(robot, facts({sessions: [session('repair')]})).lines[1].includes('调研'), false, 'no investigation: none is named');
 check(plan(robot, facts({sessions: [session('discovery')]})).lines[1].includes('修复'), false, 'no repair: none is named');
+
+// 0.20.0, issue #11 × #27: the device profile goes with the robot (ROBOT_RECORDS), so the confirmation names it.
+p = plan(robot, facts({reports: 1, profiles: 1}));
+check(p.lines.length, 3, 'connection, inventory, device profile');
+check(p.lines[2], '读取到的设备档案（系统、硬件、ROS 2 和资源占用）', 'the device profile is named after the inventories');
+check(plan(robot, facts()).lines.some(line => line.includes('设备档案')), false, 'no profile read: none is named');
 
 // A robot connected by its service address, and one that was only registered.
 p = plan({...robot, endpoint: 'http://192.0.2.20:8080', has_token: true}, facts({connection: undefined}));
@@ -114,6 +120,7 @@ sandbox.state = {
   robot_inventories: [{id: 'i1', ...mine}, {id: 'i2', project_id: 'project-1', robot_id: 'robot-2'}],
   hardware_scans: [{id: 'h1', ...mine}, {id: 'h2', ...mine}],
   hardware_repairs: [{id: 'r1', ...mine}, {id: 'r2', project_id: 'project-2', robot_id: 'robot-1'}],
+  device_profiles: [{id: 'p1', ...mine}, {id: 'p2', project_id: 'project-1', robot_id: 'robot-2'}],
   applications: [{id: 'a1', name: '巡检', ...mine}, {id: 'a2', name: '别的', project_id: 'project-1', robot_id: 'robot-2'}],
   workflow_runs: [flow('w1', 'completed'), flow('w2', 'paused'), flow('w3', 'stopping'), flow('w4', 'running', 'robot-2'),
                   flow('w5', 'running', 'robot-1', null), flow('w6', 'running', 'robot-1', 'robot_adaptation', 'project-2')],
@@ -123,6 +130,7 @@ check(f.connection.id, 'connection-1', 'the connection the robot names');
 check(f.sessions.map(s => s.id), ['s1', 's2'], 'its own sessions only');
 check(f.running.id, 's2', 'the one that is still going');
 check([f.reports, f.scans, f.repairs], [1, 2, 1], 'its own inventories, scans and repair reports, in this project');
+check(f.profiles, 1, 'its own device profile');
 check(f.applications.map(a => a.name), ['巡检'], 'applications that target it');
 check(f.flowRunning.id, 'w3', 'its adaptation flow that is running or stopping');
 check(f.flowsUnfinished, 2, 'its adaptation flows that were not finished: the paused and the stopping one');

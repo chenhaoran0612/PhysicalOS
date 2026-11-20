@@ -87,6 +87,12 @@ class DeviceProfile:
         self.lock = threading.Lock()
         self.reading = set()
 
+    def snapshot(self):
+        """For ``Platform.snapshot``: which robots have a profile kept, so that the deletion's confirmation
+        (web/robot_remove.js) names it, since it goes with the robot. Not the profile itself, which is asked
+        for apart (``saved``); nor its time, so that reading it again does not redraw the page."""
+        return {KIND: [{key: record[key] for key in ('id', 'project_id', 'robot_id')} for record in self.store.list(KIND)]}
+
     def _robot(self, p):
         robot = self.platform.same_project('robots', p.get('robot_id'), p.get('project_id'))
         if not robot.get('connection_id'):

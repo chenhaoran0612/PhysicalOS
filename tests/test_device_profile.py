@@ -159,6 +159,19 @@ class KeptTests(ProfileCase):
         self.assertGreater(second['ros2']['checked_at'], first['ros2']['checked_at'])
         self.assertEqual(len(self.store.list(device_profile.KIND)), 1)
 
+    def test_the_workspace_state_names_the_robots_with_a_profile(self):
+        # 0.20.0, issue #11 × #27: the deletion's confirmation says the profile goes with the robot. The state
+        # carries only which robot has one: the profile itself is asked for apart, and a second read of it
+        # changes nothing here, so it does not redraw the page.
+        connection = self.connect_directly(watch_services=SERVICES)
+        self.assertEqual(self.platform.snapshot()['device_profiles'], [])
+
+        profile = self.read(connection)
+        named = [{'id': profile['id'], 'project_id': self.pid, 'robot_id': connection['robot_id']}]
+        self.assertEqual(self.platform.snapshot()['device_profiles'], named)
+        self.read(connection)
+        self.assertEqual(self.platform.snapshot()['device_profiles'], named)
+
     def test_reading_back_touches_no_machine(self):
         connection = self.connect_directly(watch_services=SERVICES)
         self.read(connection)

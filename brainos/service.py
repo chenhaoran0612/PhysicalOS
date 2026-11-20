@@ -143,6 +143,7 @@ class Platform:
         # Issue #4: the TokenFans connection that tasks without a chosen model use (key never included).
         result['model_compute'] = self.model_compute.summary()
         result.update(self.body_types.snapshot())   # issue #32: the list of body types and the interfaces a type can name
+        result.update(self.device_profile.snapshot())   # issue #27: which robots have a device profile (for the deletion)
         return result
 
     def add_project(self, p):

@@ -26,6 +26,7 @@ function robotRemoveFacts(robot) {
     reports: robotRemoveOf('robot_inventories', robot.id).length,
     scans: robotRemoveOf('hardware_scans', robot.id).length,
     repairs: robotRemoveOf('hardware_repairs', robot.id).length,
+    profiles: robotRemoveOf('device_profiles', robot.id).length,           // issue #27, in the state as a summary
     applications: robotRemoveOf('applications', robot.id),
     flowRunning: flows.find(run => ROBOT_REMOVE_FLOW_RUNNING.includes(run.status)) || null,
     flowsUnfinished: flows.filter(run => run.status !== 'completed').length,
@@ -58,6 +59,7 @@ function robotRemovePlan(robot, facts) {
     lines.push(`${counted.join('、') || `${facts.sessions.length} 次会话`}的对话记录、读取到的设备证据和生成的文件`);
   }
   if (facts.reports) lines.push(`${facts.reports} 份本体档案`);
+  if (facts.profiles) lines.push('读取到的设备档案（系统、硬件、ROS 2 和资源占用）');
   const scans = facts.scans ? '硬件扫描结果' : '', repairReports = facts.repairs ? `${facts.repairs} 份硬件修复报告` : '';
   if (scans || repairReports) lines.push(scans && repairReports ? `${scans}和 ${repairReports}` : scans || repairReports);
   const notes = ['不会登录机器人，也不会改动或停止机器人上的任何程序。'];
