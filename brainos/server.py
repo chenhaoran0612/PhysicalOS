@@ -139,6 +139,8 @@ def make_handler(application):
             extra=extra or {'/heartbeat.js':('heartbeat.js','text/javascript; charset=utf-8'),'/heartbeat.css':('heartbeat.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #17: the link to a robot's management layer over SSH, likewise.
+            extra=extra or {'/runtime_link.js':('runtime_link.js','text/javascript; charset=utf-8'),'/runtime_link.css':('runtime_link.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #33: the material library page, likewise.
             extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
@@ -281,6 +283,11 @@ def make_handler(application):
                         # Round 02 (INTERFACES 4.1, 4.5)
                         'robots/detail':service.robot_detail,
                         'robots/stop':service.stop_robot,
+                        # Issue #17: reach a robot's management layer over its SSH connection (no tunnel, no address)
+                        'robots/runtime-link':service.runtime_link.attach,
+                        'robots/runtime-link/remove':service.runtime_link.detach,
+                        'robots/runtime-link/state':service.runtime_link.overview,
+                        'robots/runtime-link/retry':service.runtime_link.retry,
                         'skills/package-preview':service.preview_skill_package,
                         'skills/package-install':service.install_skill_package,
                         'onsite/poll':service.poll_onsite,

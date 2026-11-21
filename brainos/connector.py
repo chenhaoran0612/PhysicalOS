@@ -1,10 +1,34 @@
 """Calls only endpoints explicitly configured by the workspace owner; never follows redirects."""
+import http.client
 import json
 import re
 import socket
 import urllib.error
 import urllib.parse
 import urllib.request
+import weakref
+
+
+# Issue #17: the ``RuntimeLinks`` of the open workspaces. An endpoint ``ssh-forward:<robot id>`` is not an
+# address: the request goes through that robot's SSH connection (brainos/runtime_forward.py).
+_FORWARDERS = weakref.WeakSet()
+
+
+def register_forwarder(links):
+    _FORWARDERS.add(links)
+
+
+def unregister_forwarder(links):
+    _FORWARDERS.discard(links)
+
+
+def _transport(endpoint):
+    """(base URL, extra urllib handlers) of an endpoint: an address a person configured, or (issue #17)
+    a robot whose management layer is reached over its SSH connection."""
+    from . import runtime_forward
+    if runtime_forward.is_forwarded(endpoint):
+        return runtime_forward.transport(endpoint, _FORWARDERS)
+    return endpoint_url(endpoint), ()
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -61,7 +85,8 @@ def call(endpoint, path, token='', payload=None, timeout=8):
     Used where the caller must tell a refusal (e.g. 409 ``incompatible``)
     apart from an unknown outcome. Redirects are never followed.
     """
-    url = endpoint_url(endpoint) + path
+    base, handlers = _transport(endpoint)
+    url = base + path
     headers = {'Accept': 'application/json'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
@@ -70,7 +95,7 @@ def call(endpoint, path, token='', payload=None, timeout=8):
         data = json.dumps(payload, allow_nan=False).encode()
         headers['Content-Type'] = 'application/json'
     req = urllib.request.Request(url, data=data, headers=headers)
-    opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}))
+    opener = urllib.request.build_opener(NoRedirect, urllib.request.ProxyHandler({}), *handlers)
     try:
         with opener.open(req, timeout=timeout) as response:
             raw = response.read(2_000_001)
@@ -97,6 +122,9 @@ def call(endpoint, path, token='', payload=None, timeout=8):
         raise DeviceError(f'接入服务没有在 {timeout:g} 秒内响应；请求结果未知', code='device_timeout',
                           sent=None) from None
     except OSError:
+        raise DeviceError('与接入服务的连接中断；请求结果未知', code='device_unreachable', sent=None) from None
+    except http.client.HTTPException:
+        # Issue #17: a garbled or cut-off answer (a session lost in the middle of one) is a lost answer too.
         raise DeviceError('与接入服务的连接中断；请求结果未知', code='device_unreachable', sent=None) from None
     if len(raw) > 2_000_000:
         raise DeviceError('服务响应超过 2 MB', status=200, sent=True)

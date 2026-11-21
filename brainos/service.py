@@ -97,6 +97,8 @@ class Platform:
         self.heartbeat = Heartbeat(self)            # issue #24: a heartbeat a minute over SSH; 未接入 / 接入中 / 在线 / 离线
         from .ssh_edit import ConnectionEdit
         self.ssh_edit = ConnectionEdit(self)        # issue #9: change the SSH connection of a connected robot
+        from .runtime_link import RuntimeLinks
+        self.runtime_link = RuntimeLinks(self)      # issue #17: the management layer over the robot's SSH connection, no tunnel by hand
         from .robot_remove import RobotRemoval
         self.robot_remove = RobotRemoval(self)      # issue #11: delete a robot with its connection and investigations
         from .safety_limits import SafetyLimits
@@ -931,6 +933,7 @@ class Platform:
 
     def close(self):
         self.heartbeat.close()      # issue #24: the timer, its SSH sessions and its checks end before the store is closed
+        self.runtime_link.close()   # issue #17: the SSH sessions of the links to the robots' management layers
         self.sims.close()
         self.workflows.close()
         self.engineering.close()
