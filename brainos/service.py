@@ -83,6 +83,8 @@ class Platform:
         self.sims = SimRobots(self, self.store.root)
         from .hardware_init import HardwareInit
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
+        from .device_profile import DeviceProfile
+        self.device_profile = DeviceProfile(self)   # issue #27: hardware, system, ROS 2 and resources in one record
         from .investigation import Investigation
         self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
         from .ssh_edit import ConnectionEdit

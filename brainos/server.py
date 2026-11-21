@@ -124,6 +124,8 @@ def make_handler(application):
             extra=extra or {'/repair_policy.js':('repair_policy.js','text/javascript; charset=utf-8'),'/repair_policy.css':('repair_policy.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #8: the status page of a real machine, likewise.
             extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #27: the device profile (hardware, system, ROS 2, resources), likewise.
+            extra=extra or {'/device_profile.js':('device_profile.js','text/javascript; charset=utf-8'),'/device_profile.css':('device_profile.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
@@ -230,6 +232,8 @@ def make_handler(application):
                         # Issue #2: hardware initialisation (read-only scan, repair sessions with the built-in Skill)
                         'engineering/hardware/scan':service.hardware.scan,'engineering/hardware/detail':service.hardware.scan_detail,
                         'engineering/hardware/repair':service.hardware.start_repair,'engineering/hardware/skill':service.hardware.skill,
+                        # Issue #27: the device profile; `read` runs the fixed read-only commands, `profile` returns the one kept
+                        'engineering/profile':service.device_profile.saved,'engineering/profile/read':service.device_profile.read,
                         # Issue #13: mark a problem as handled on site; switch a repair between asking and running unasked
                         'engineering/hardware/mark':service.hardware.policy.mark,'engineering/hardware/auto_approve':service.hardware.policy.set_auto,
                         # Issue #6: investigation states, full re-investigation, fix chats from the report
