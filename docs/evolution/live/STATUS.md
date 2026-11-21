@@ -23,16 +23,36 @@
 
 ## 分支与部署
 
-- `integration`（工作区 `PhysicalOS-integration/`）= fefdbd2（0.20.1），已推送到 `origin/integration`；main 仍是 df3a108（0.19.0），合并到 main 要用户确认。
+- `integration`（工作区 `PhysicalOS-integration/`）的代码是 fefdbd2（0.20.1），之后只有文档提交，已推送到 `origin/integration`；main 仍是 df3a108（0.19.0），合并到 main 要用户确认。
 - 部署：`/Applications/NeuxMind Robot OS.app` 是 0.20.1（build 31），2026-11-21 07:05 替换并启动。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261121-070532`。
 - 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.20.1-arm64.dmg`（SHA-256 `e79a1936708cad4a0c7a4bd02ca433f0da7c15d4756988f65cf31fc9a5b05763`）和同名 `.pkg`（`b939a48cd8a12e195a86c750738a0877c675b84fc14de0b0cc41d270addfca66`）；0.20.0 及更早的也在 `PhysicalOS-integration/dist/`。
 - 真机：运行时仍是 0.4.0（`~/neuxmind`，回环 8790，本机手工隧道 18790）。#22、#25、#26 改了运行时，更新真机要用户同意，且脚本和运行时要一起换。
-- 新的 issue 分支请基于 `integration`（fefdbd2）。浏览器验收经 `tests/gate_helper.cjs` 登录，测试服务端带 `NEUXMIND_MAIL_DEV_ECHO=1`；添加设备的表单要先选本体类型（#32）；界面改动也要在 WebKit 上跑一遍。提交钩子的密钥扫描会把 `password: '<12 个字以上>'` 当成写死的密码，提示文字里的字段名请加引号。
+- 新的 issue 分支请基于 `integration`（0.20.1 的代码是 fefdbd2，之后只加了文档）。浏览器验收经 `tests/gate_helper.cjs` 登录，测试服务端带 `NEUXMIND_MAIL_DEV_ECHO=1`；添加设备的表单要先选本体类型（#32）；界面改动也要在 WebKit 上跑一遍。提交钩子的密钥扫描会把 `password: '<12 个字以上>'` 当成写死的密码，提示文字里的字段名请加引号。
+
+## 第二批（进行中）
+
+2026-11-21 由研发计划会话启动，六个工作区都基于 `integration` @ 8736aa1（0.20.1）。分支名以各会话交付时的说明为准。
+
+| issue | 内容 | 分支 | 工作区 |
+|---|---|---|---|
+| #16 | 验证连接 | `feat/verify-connection` | `PhysicalOS-verify-connection/` |
+| #17 | 平台转发管理层服务 | `feat/runtime-forward` | `PhysicalOS-runtime-forward/` |
+| #23 | 设备接口表 | `feat/device-interface-table` | `PhysicalOS-interface-table/` |
+| #28 | 运控驱动检查 | `feat/motion-driver-check` | `PhysicalOS-driver-check/` |
+| #31 | 安装包送到设备并核对 | `feat/driver-package-delivery` | `PhysicalOS-package-delivery/` |
+| #34 | 资料解析 | `feat/material-parsing` | `PhysicalOS-material-parsing/` |
+
+合并时预计重叠的地方：
+- #16 和 #17 都在连接层：`brainos/device_access.py`、`brainos/connector.py`、`web/app.js` 里管理层地址的部分。
+- #23 和 #28 都要用「标准接口对应哪种消息类型」，约定只定一份；#23 还会改 `runtime/` 的 `core.py`、`gateway.py`、`cli.py`。
+- #28 和 #31 都在修复流程附近：`brainos/hardware_init.py`。
+- #34 改云平台的共享文件（`app.py`、`config.py`、`db.py`、`maintenance.py`、`auth.py`）和 `web/material_library.js`；#31 按 #34 定的资料状态取值判断。
 
 ## 待办
 
 1. **用户统一检查 0.20.1**（要检查的项目在第 09 轮记录里）。检查通过后由用户决定是否合并到 main。
 2. 各会话按默认做法交付、等用户确认的决定：#15 的 5 级上限、#22 的六项默认、#32 的内置类型内容、#24 的重试策略、#25 磁盘被别的东西占满时不清记录，见第 09 轮记录。
-3. GitHub 上 #11、#12、#13 已在 main（0.19.0）里，仍是打开状态；#14「配置连接页面修改」还没有会话；#15–#35 里 #16、#17、#19–#21、#23、#28–#31、#34、#35 还没有会话。
+3. GitHub 上 #11、#12、#13 已在 main（0.19.0）里，仍是打开状态；#14「配置连接页面修改」还没有会话。R1 第二批六个会话已开始（见上面「第二批」）；#19（等 #17）、#20（等 #19）、#21（等 #23）、#29（等 #28）、#30（等 #34）、#35（等 #19、#20）在等依赖。
 4. 真机上的运行时要不要换成这一版（运行时改了安全限值、记录、告警上报），要用户决定。
-5. 以前的待办仍在：#12 留下的问题（机器人连不上时是否也能不经登录测试直接保存）；内置测试账号默认开启待定；`fix/preexisting-test-failures` 的 5 条低级别意见在那个会话里等确认；真实 TokenFans、SMTP、真机上的完整流程还没有验证。
+5. #18 的弱网验收线已改（2026-11-19，见 issue #18 正文）：带宽 1 Mbps 以内、丢包率 30%、时延 300 ms 以上时要传完且校验一致；60% 时不要求传完，只要求不留下损坏的文件、网络恢复后从断点续传到完成。按新线还没有测；以前在 60% 下测时 SSH 建连本身失败。
+6. 以前的待办仍在：#12 留下的问题（机器人连不上时是否也能不经登录测试直接保存）；内置测试账号默认开启待定；`fix/preexisting-test-failures` 的 5 条低级别意见在那个会话里等确认；真实 TokenFans、SMTP、真机上的完整流程还没有验证。
