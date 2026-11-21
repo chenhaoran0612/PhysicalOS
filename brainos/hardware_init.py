@@ -20,11 +20,12 @@ from pathlib import Path
 
 from . import device_access, hardware_scan
 from . import repair_policy     # issue #13: 默认允许执行, problems software cannot fix
+from . import motion_drivers    # issue #28: missing motion interfaces are problems of their own kind
 from .contracts import required_text
 from .service import digest, now, uid
 
 SKILL_NAME = 'hardware-init'
-SKILL_VERSION = '1.1.0'      # issue #13: software-level fixes only; what software cannot fix is reported, not retried
+SKILL_VERSION = '1.2.0'      # issue #28: playbook for missing motion interfaces (1.1.0, issue #13: software-level fixes only)
 SKILL_DIR = Path(__file__).resolve().parent / 'skills' / SKILL_NAME
 TOOL_NAMES = ('hardware_rescan', 'device_fix', 'save_repair_report')
 OUTCOMES = ('fixed', 'pending_reboot', 'not_reproduced', 'not_fixed', 'needs_user', 'skipped')
@@ -382,6 +383,7 @@ class HardwareInit:
         return parsed, raw, round((time.monotonic() - started) * 1000)
 
     def _save(self, robot, connection, parsed, raw, duration, source, session_id=None):
+        parsed = self.platform.motion_drivers.attach(robot, parsed)     # issue #28: missing motion interfaces, from the kept profile
         record = {'id': uid('hardware-scan'), 'project_id': robot['project_id'], 'robot_id': robot['id'],
                   'connection_id': connection['id'], 'source': source, 'session_id': session_id, 'created_at': now(),
                   'duration_ms': duration, 'qualification': 'read_only_scan', **parsed}
@@ -411,7 +413,10 @@ class HardwareInit:
                 raise ValueError('这台机器人正在扫描硬件，请稍候')
             self.scanning.add(robot['id'])
         try:
+            started = time.monotonic()
             parsed, raw, duration = self._execute_scan(connection)
+            # Issue #28: known motion driver problems are checked again by reading ROS 2, after the scan.
+            parsed = self.platform.motion_drivers.recheck(robot, connection, parsed, started + motion_drivers.SCAN_REQUEST_SECONDS)
         finally:
             with self.lock:
                 self.scanning.discard(robot['id'])
@@ -598,6 +603,8 @@ class HardwareInit:
         fresh.stop_event, fresh.deadline = getattr(device, 'stop_event', None), getattr(device, 'deadline', float('inf'))
         try:
             parsed, raw, duration = self._execute_scan(connection, fresh)
+            # Issue #28: motion driver problems are verified by reading ROS 2 again, not by the hardware scan.
+            parsed = self.platform.motion_drivers.reverify(s, robot, connection, fresh, parsed)
         finally:
             fresh.close()
         record = self._save(robot, connection, parsed, raw, duration, 'repair', sid)
@@ -609,6 +616,7 @@ class HardwareInit:
                    'resolved_since_baseline': sorted(before - after) if complete else [],
                    'new_since_baseline': sorted(after - before),
                    'devices': [{k: d[k] for k in ('id', 'category', 'name', 'driver', 'status')} for d in record['devices'][:150]]}
+        compact['motion_drivers'] = record['motion_drivers']       # issue #28: whether ROS 2 was read again for this, and what it showed
         evidence_id = self._evidence(sid, s, 'hardware_rescan', {}, {'label': '硬件重新扫描', **compact})
         with engine.lock:
             current = self.store.get('agent_sessions', sid)

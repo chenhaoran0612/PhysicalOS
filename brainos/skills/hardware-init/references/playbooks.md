@@ -65,6 +65,14 @@
 - **机器人自身的应用、启动或导航服务（可能带起底盘、电机或运动程序）一律不要启动或重启**，记为 `needs_user` 并说明失败原因；与硬件无关的服务记为 `skipped`。
 - 不要 `systemctl disable` 或 `mask` 服务来“消除”失败。
 
+## motion-driver:<能力编号> — 缺少运控接口（运控驱动没有安装，或没有在运行）
+
+- 这类问题不是硬件扫描发现的：产品按本体类型列出运控驱动应提供的 ROS 2 话题或动作，和只读读取到的 ROS 2 清单对照。`selected_issues` 里这一条的 `expected` 写着应有的接口：`kind`（`topic` 话题 / `action` 动作）、`name`（惯用名，设备上可以不同）、`types`（消息类型，必须对得上）。
+- 检查（只读）：`ls /opt/ros` 看装了哪个 ROS 发行版；`dpkg -l` 的输出里找 `ros-humble-` 开头的包和厂商的驱动包；`systemctl list-units --type=service --all --no-pager` 找本体的驱动或启动服务，再用 `systemctl status <服务> --no-pager`、`journalctl -u <服务> -n 80 --no-pager` 看它是没有安装、没有启动还是启动失败。
+- 不需要自己运行 `ros2` 命令：会话里加载不了 ROS 环境（`source` 会被产品拒绝）。要知道接口现在在不在，调用 `hardware_rescan`：它会重新读取 ROS 2 的清单，结果里的 `motion_drivers.reverified` 为 true 表示这次读到了，`resolved_since_baseline` 里有这个问题才算接口已经出现。
+- **不要自己安装、启动或重启运控驱动**：它会带起底盘或电机（见“必须遵守”）。也不要用发布话题、调用服务、发送动作目标的办法去试接口。
+- 结果：把查到的情况写进 `actions`（ROS 2 是否安装、驱动包是否安装、服务是否存在、为什么没有运行），标为 `needs_user`；`followups` 写明需要用户做什么（提供厂商的驱动安装包、在现场安装并启动驱动）。用户处理后接口出现在清单里，问题才会消失。
+
 ## rootfs-full — 根分区空间不足
 
 - 检查：`du -xh --max-depth=1 / 2>/dev/null | sort -h | tail -n 20`、`journalctl --disk-usage`。
