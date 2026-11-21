@@ -89,7 +89,7 @@ class UnlimitedInvestigationTests(unittest.TestCase):
         self.ssh = SSHFixture(files={'/opt/ros/readme.txt': b'fixture'}, password=SSH_LOGIN)
         scan = self.e.scan({'project_id': self.pid, 'host': '127.0.0.1', 'port': self.ssh.port, 'username': 'robot'})
         connection = self.e.connect({'project_id': self.pid, 'host_check_id': scan['id'], 'trust_fingerprint': scan['fingerprint'],
-                                     'auth': 'password', 'password': SSH_LOGIN, 'name': 'Fixture', 'read_roots': ['/opt/ros']})
+                                     'auth': 'password', 'password': SSH_LOGIN, 'name': 'Fixture', 'family': 'quadruped', 'read_roots': ['/opt/ros']})
         self.robot = connection['robot_id']
         InvestigationModel.requests = []
         self.model_server = Server(InvestigationModel)

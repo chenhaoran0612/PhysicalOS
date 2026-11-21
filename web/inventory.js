@@ -33,7 +33,7 @@ function inventoryOpen(robotId,reportId,keep=false){
  const index=reports.findIndex(x=>x.id===report.id),history=report.id!==currentReport.id,unknowns=inventoryUnknowns(report),evidenceCount=new Set((report.components||[]).flatMap(c=>c.evidence_ids||[])).size;
  const run=rows('agent_sessions').find(s=>s.robot_id===robotId&&s.mode==='discovery'&&engineActive(s.status));
  const options=reports.map((r,i)=>[r.id,`档案 ${String(i+1).padStart(2,'0')} · ${inventoryDate(r.created_at)}${r.id===currentReport.id?' · 当前':''}`]).reverse();
- dialog(h(robot.name)+' · 本体档案',`${h(familyNames[robot.family]||robot.family)} · ${history?'历史版本':'当前版本'} · ${inventoryDate(report.created_at)}`,`<div class="dialog-body inventory-detail">
+ dialog(h(robot.name)+' · 本体档案',`${h(typeof bodyTypeName==='function'?bodyTypeName(robot.family):familyNames[robot.family]||robot.family)} · ${history?'历史版本':'当前版本'} · ${inventoryDate(report.created_at)}`,`<div class="dialog-body inventory-detail">
  <div class="inventory-controls">${field('档案版本',select('inventory-version',options,report.id))}${button(run?'查看正在进行的调查':'补齐未知项 / 继续调查',run?'engine-session':'inventory-continue','small',run?.id||robotId)}</div>
  ${history?notice('正在查看历史档案；不会覆盖当前档案，也不会执行设备操作。 '+button('回到当前档案','inventory-latest','secondary small',robotId)):''}
  <p class="inventory-summary">${h(report.summary)}</p><div class="inventory-metrics"><div><b>${report.components.length}</b><span>有依据的发现</span></div><div><b>${evidenceCount}</b><span>引用证据</span></div><div><b>${unknowns.length}</b><span>待确认项</span></div><div><b>${reports.length}</b><span>档案版本</span></div></div>

@@ -46,7 +46,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
   // Assets through the same API the UI uses.
   const ids = await page.evaluate(async cfg => {
     const robot = async (name, endpoint) => {
-      const r = await api('robots', {project_id: projectId, name, family: 'mobile', endpoint, token: cfg.token});
+      const r = await api('robots', {project_id: projectId, name, family: 'quadruped', endpoint, token: cfg.token});
       await api('robots/connect', {robot_id: r.id});
       return r.id;
     };

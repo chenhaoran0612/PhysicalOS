@@ -11,7 +11,7 @@ const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(150);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
  await page.goto(cfg.url);await gateSignIn(page,{name:'本体接入验收',email:'discovery@example.test',password:'fixture-password-123'});
  await click('journey-start');await fill('name','未知厂商机器人');await fill('objective','调查现有本体的硬件、服务与源码配置');await submit();
- await page.goto(cfg.url+'/#robots');await click('engine-ssh');await fill('name','厂商协议验收本体');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();
+ await page.goto(cfg.url+'/#robots');await click('engine-ssh');await page.locator('#dialog [name=family]').selectOption('quadruped');await fill('name','厂商协议验收本体');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();
  await page.locator('#dialog').getByText('确认 SSH 主机指纹',{exact:true}).waitFor();await page.locator('#dialog input[type=checkbox]').check();await submit();
  // First robot has no model yet. Connecting TokenFans (云平台账户) must return to this robot.
  await page.locator('#dialog [data-action="engine-discover"]').first().click({timeout:30000});await page.locator('#dialog').getByText('这一步需要先给助手配一个大模型',{exact:true}).waitFor();

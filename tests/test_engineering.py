@@ -62,7 +62,7 @@ class EngineeringTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.platform=Platform(self.tmp.name)
         self.pid=self.platform.add_project({'name':'Test','objective':'Discover robot'})['id']
-        self.robot=self.platform.add_robot({'project_id':self.pid,'name':'Test robot','family':'custom'})
+        self.robot=self.platform.add_robot({'project_id':self.pid,'name':'Test robot','family':'quadruped'})
         self.engine=self.platform.engineering
         self.store=self.platform.store
         self.store.put('device_connections',{'id':'connection-test','project_id':self.pid,'robot_id':self.robot['id'],'host':'127.0.0.1','port':22,'username':'test','auth':'password','fingerprint':'SHA256:test','read_roots':['/opt/ros']})
@@ -146,7 +146,7 @@ class EngineeringTests(unittest.TestCase):
         ResponsesFixture.requests=[];ResponsesFixture.engineering=False
         try:
             check=self.engine.scan({'project_id':self.pid,'host':'127.0.0.1','port':ssh.port,'username':'robot'})
-            p={'project_id':self.pid,'host_check_id':check['id'],'trust_fingerprint':check['fingerprint'],'auth':'password','password':'fixture-password','name':'SSH robot','family':'mobile','read_roots':['/opt/ros']}
+            p={'project_id':self.pid,'host_check_id':check['id'],'trust_fingerprint':check['fingerprint'],'auth':'password','password':'fixture-password','name':'SSH robot','family':'quadruped','read_roots':['/opt/ros']}
             with self.assertRaises(ValueError):self.engine.connect({**p,'trust_fingerprint':'SHA256:wrong'})
             c=self.engine.connect(p);self.assertEqual(ssh.commands,[])
             model=self.profile(server.url+'/v1')

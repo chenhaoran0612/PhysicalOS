@@ -45,7 +45,7 @@ class DiscoveryTests(unittest.TestCase):
                             command_outputs={COMMAND:b'ExecStart=/home/robot/vendor_ws/driver.py\n'})
         scan=self.e.scan({'project_id':self.pid,'host':'127.0.0.1','port':self.ssh.port,'username':'robot'})
         self.connection=self.e.connect({'project_id':self.pid,'host_check_id':scan['id'],'trust_fingerprint':scan['fingerprint'],
-            'auth':'password','password':'fixture-password','name':'Vendor fixture','read_roots':['/opt/ros']})
+            'auth':'password','password':'fixture-password','name':'Vendor fixture','family':'quadruped','read_roots':['/opt/ros']})
         self.robot=self.connection['robot_id']
         robot=self.p.store.get('robots',self.robot);robot['token']='ADAPTER_SECRET_NOT_CONTEXT';self.p.store.put('robots',robot)
     def tearDown(self):self.p.close();self.ssh.close();self.tmp.cleanup()

@@ -17,6 +17,10 @@ class Store:
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('CREATE TABLE IF NOT EXISTS objects (kind TEXT, id TEXT, payload TEXT NOT NULL, PRIMARY KEY(kind,id))')
         self.db.commit()
+        # Issue #32: kind -> fields of a saved record that only their owner changes (``put(..., owner=True)``).
+        # Everybody else's ``put`` keeps the saved value: code that read a record, waited for a device and
+        # saves its copy must not undo what the owner changed meanwhile (a robot's body type).
+        self.owned = {}
 
     def list(self, kind):
         with self.lock:
@@ -29,8 +33,13 @@ class Store:
                 raise ValueError(f'找不到 {kind}: {key}')
             return json.loads(row[0])
 
-    def put(self, kind, obj):
+    def put(self, kind, obj, owner=False):
         with self.lock:
+            fields = () if owner else self.owned.get(kind, ())
+            if fields:
+                row = self.db.execute('SELECT payload FROM objects WHERE kind=? AND id=?', (kind, obj['id'])).fetchone()
+                saved = json.loads(row[0]) if row else {}
+                obj.update({field: saved[field] for field in fields if field in saved})    # the caller's copy says what was saved
             self.db.execute('INSERT OR REPLACE INTO objects VALUES (?,?,?)', (kind, obj['id'], json.dumps(obj, ensure_ascii=False, allow_nan=False)))
             self.db.commit()
         return obj

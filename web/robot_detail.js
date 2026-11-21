@@ -74,7 +74,8 @@ function robotDetailRender(d) {
   const robot = d.robot, caps = d.capabilities;
   const simulated = caps.simulated || robot.manifest?.simulated;
   const meta = `<div class="detail-meta"><div><b>机器人</b>${h(robot.name)}${simulated ? ' ' + simBadge() : ''}</div>` +
-    `<div><b>形态</b>${h(familyNames[robot.family] || robot.family)}</div>` +
+    // Issue #32: the type a person chose, by the platform's list; what the device reports beside it when it differs.
+    (typeof bodyTypeDetail === 'function' ? bodyTypeDetail(robot) : `<div><b>形态</b>${h(familyNames[robot.family] || robot.family)}</div>`) +
     `<div><b>连接</b>${status(robot.status)}${robotEstop(robot).latched ? ' ' + badge('急停已锁存', 'bad') : ''}</div>` +
     `<div><b>厂商 / 型号</b>${h(caps.vendor || '—')} / ${h(caps.model || '—')}</div></div>`;
   const simNote = simulated ? notice('<b>仿真本体</b> ' + h(SIMULATION_NOTE) + '。', true) : '';

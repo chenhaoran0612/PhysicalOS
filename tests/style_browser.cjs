@@ -111,7 +111,7 @@ async function dropdownInDialog(page, shots) {
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await list.waitFor({state: 'detached'});
-  check((await native.inputValue()) === 'humanoid', `keyboard pick gave ${await native.inputValue()}`);
+  check((await native.inputValue()) === 'manipulator', `keyboard pick gave ${await native.inputValue()}`);   // issue #32: the type after 四足机器人 in the platform's list
   await page.keyboard.press('ArrowDown');
   await list.waitFor();
   await page.keyboard.press('Escape');
@@ -127,10 +127,11 @@ async function dropdownInDialog(page, shots) {
   check(await trigger.evaluate(t => document.activeElement === t), 'focus did not return to the trigger');
 
   // Code paths: selectOption (tests) and select.value = … (app code) both show on the trigger.
-  await native.selectOption('aerial');
-  check((await trigger.innerText()).trim() === '无人机', 'selectOption not mirrored');
-  await native.evaluate(s => { s.value = 'mobile'; });
-  check((await trigger.innerText()).trim() === '移动机器人', 'programmatic value not mirrored');
+  // (issue #32: the options are the platform's list of body types.)
+  await native.selectOption('quadruped');
+  check((await trigger.innerText()).trim() === '四足机器人', 'selectOption not mirrored');
+  await native.evaluate(s => { s.value = 'manipulator'; });
+  check((await trigger.innerText()).trim() === '机械臂', 'programmatic value not mirrored');
   await page.locator('#dialog [data-action=close]').first().click();
 }
 

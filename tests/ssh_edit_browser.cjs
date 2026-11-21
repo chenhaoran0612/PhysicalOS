@@ -106,6 +106,7 @@ let failed = async () => {};
   await page.goto(cfg.url + '/#robots');
   await click('engine-ssh');
   await fill('name', SSH_ROBOT); await fill('host', '127.0.0.1'); await fill('port', cfg.first_port);
+  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
   await fill('username', cfg.robot_user); await fill('password', cfg.robot_login);
   await dialog.locator('details.page-purpose summary').click();
   await fill('watch_services', 'bridge');
@@ -116,6 +117,7 @@ let failed = async () => {};
   await page.goto(cfg.url + '/#robots');
   await click('robot-add');
   await fill('name', PLAIN_ROBOT); await fill('endpoint', 'http://127.0.0.1:9');
+  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
   await submit();
 
   // 1 · The SSH robot's card says "配置连接"; the form is the SSH form, filled in, without credentials.

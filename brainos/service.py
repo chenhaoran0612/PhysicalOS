@@ -83,6 +83,8 @@ class Platform:
         self.library = MaterialLibrary(self)        # issue #33: documents and driver packages kept in the cloud
         from .model_compute import ModelCompute
         self.model_compute = ModelCompute(self)
+        from .body_types import BodyTypes
+        self.body_types = BodyTypes(self)           # issue #32: the platform's list of body types; a device has the type a person chose
         from .sim_robots import SimRobots
         self.sims = SimRobots(self, self.store.root)
         from .hardware_init import HardwareInit
@@ -140,6 +142,7 @@ class Platform:
         result['cloud_account'] = self.cloud.summary()
         # Issue #4: the TokenFans connection that tasks without a chosen model use (key never included).
         result['model_compute'] = self.model_compute.summary()
+        result.update(self.body_types.snapshot())   # issue #32: the list of body types and the interfaces a type can name
         return result
 
     def add_project(self, p):
@@ -152,13 +155,14 @@ class Platform:
 
     def add_robot(self, p):
         project = self.project(p.get('project_id'))
-        if p.get('family') not in FAMILIES:
-            raise ValueError('请选择本体形态')
+        self.body_types.require(p.get('family'))    # issue #32: a type from the platform's list, not any value of the standard
         endpoint = connector.endpoint_url(p['endpoint']) if p.get('endpoint') else ''
         obj = {'id': uid('robot'), 'project_id': project['id'], 'name': required_text(p.get('name'), '本体名称', 100),
                'family': p['family'], 'endpoint': endpoint, 'token': self.token(p), 'status': 'unconnected',
                'capabilities': [], 'created_at': now()}
-        self.store.put('robots', obj)
+        with self.store.atomic():                   # issue #32: the type is not removed between the check and the save
+            self.body_types.require(obj['family'])
+            self.store.put('robots', obj)
         self.audit('robot.registered', {'robot_id': obj['id'], 'family': obj['family']}, project['id'])
         return self.redact(obj)
 
@@ -207,8 +211,10 @@ class Platform:
             health = connector.request(obj['endpoint'], '/v1/status', obj['token'])
             if health.get('instance_id') != manifest['instance_id']:
                 raise ValueError('设备身份不一致')
+            # Issue #32: ``family`` stays what a person chose (the store keeps it, see ``Store.owned``); what the
+            # device reports is in ``manifest['family']``.
             obj.update(manifest=manifest, manifest_digest=digest(manifest), capabilities=manifest['capabilities'],
-                       family=manifest['family'], device_status=health, status='connected', checked_at=now())
+                       device_status=health, status='connected', checked_at=now())
             obj['reset_policy'] = reset_policy(health, manifest)
             obj.pop('error', None)
             if isinstance(health.get('estop_latched'), bool):
@@ -373,7 +379,8 @@ class Platform:
             raise ValueError('该模型没有已登记的端侧部署包')
         self.connect_robot({'robot_id':robot['id']})
         robot=self.store.get('robots',robot['id'])
-        if robot['family'] not in model.get('families',[]) or model.get('runtime') not in robot['manifest'].get('model_runtimes',[]):
+        # Issue #32: a model package names values of the standard, so it is matched against what the device declares.
+        if robot['manifest']['family'] not in model.get('families',[]) or model.get('runtime') not in robot['manifest'].get('model_runtimes',[]):
             raise ValueError('本体形态或端侧推理运行时不兼容此模型包')
         if 'model.install' not in robot['capabilities']:
             raise ValueError('设备未声明模型安装能力')

@@ -19,6 +19,11 @@ PASS_FIELDS += ('bound',)
 _LONG_TEXT = {'hint': 400}
 
 
+# Issue #32: what a refusal says about each device it lists, and how many it lists at most.
+DEVICE_FIELDS = ('id', 'name', 'project_id', 'project_name')
+DEVICES_MAX = 500
+
+
 class CodedError(ValueError):
     """A desktop-side refusal with a stable ``code`` (e.g. ``authorization_required``)."""
 
@@ -79,4 +84,9 @@ def error_payload(exc):
         out.update(refusal_fields(exc.extra))
         if isinstance(exc.extra.get('next'), str):
             out['next'] = exc.extra['next'][:300]
+    # Issue #32: a body type that devices still use is not removed; the refusal names those devices.
+    if isinstance(getattr(exc, 'devices', None), list):
+        out['devices'] = [{key: str(device.get(key) or '')[:200] for key in DEVICE_FIELDS}
+                          for device in exc.devices[:DEVICES_MAX] if isinstance(device, dict)]
+        out['devices_total'] = len(exc.devices)      # the list above is cut at DEVICES_MAX
     return out

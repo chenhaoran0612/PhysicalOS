@@ -21,7 +21,7 @@ CATEGORIES=['system','compute','sensors','actuators','interfaces','software','mi
 
 
 def seed_inventory(platform,pid,name='移动底盘 · 测试资料'):
-    robot=platform.add_robot({'project_id':pid,'name':name,'family':'mobile'})
+    robot=platform.add_robot({'project_id':pid,'name':name,'family':'quadruped'})
     rid=robot['id'];store=platform.store
     connection={'id':'connection-adapt-'+rid[-6:],'project_id':pid,'robot_id':rid,'host':'fixture.invalid','port':22,'username':'robot','auth':'password','read_roots':['/etc/robot'],'created_at':'2026-11-08T08:00:00Z'}
     store.put('device_connections',connection)

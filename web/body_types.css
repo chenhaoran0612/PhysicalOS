@@ -1,0 +1,38 @@
+/* Issue #32: the list of body types and the type of a device. Uses the shared tokens from style.css. */
+:root{--body-type-caution:#7a5718;--body-type-quiet:#5d6a62}
+
+/* On a card: the type, a quiet way to change it, and what is worth knowing in the amber of a caution. */
+.body-type-name{color:var(--ink)}
+.card p .body-type-change{margin-left:4px;padding:5px 4px;font-size:11px;font-weight:500}
+.tag.body-type-flag{border-color:#eee4ca;background:#fbf7ed;color:var(--body-type-caution)}
+.detail-meta .body-type-flag{margin-left:6px}
+.body-type-reported{display:block;margin-top:6px;font-size:10px;color:var(--body-type-caution)}
+
+/* The list at the foot of the page (.page-purpose is made for the top of one): a table that may wrap. */
+.page-purpose.body-types{margin-top:8px}
+.body-types .table-wrap{margin:14px 0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.body-types table{white-space:normal}
+.body-types td{vertical-align:top}
+.body-types td:first-child,.body-types td:nth-child(4),.body-types td:last-child{white-space:nowrap}
+.body-types .cell-main{margin-bottom:0}
+.body-type-interface .mono{color:var(--body-type-quiet)}
+.body-type-builtin{font-size:10px;color:var(--body-type-quiet)}
+
+/* Adding a type: the interfaces as two groups of checkboxes, each with its title and its standard id. */
+fieldset.body-type-required{margin:0 0 18px;padding:0;border:0;min-width:0;gap:10px}
+fieldset.body-type-required>legend{padding:0;margin-bottom:8px}
+.body-type-interfaces{margin:0;padding:12px 14px 8px;min-width:0;border:1px solid #dbe4d1;border-radius:6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(220px,100%),1fr));gap:2px 16px}
+.body-type-interfaces legend{padding:0 6px;font-size:10px;color:var(--body-type-quiet)}
+.body-type-check{display:flex;align-items:center;gap:8px;min-width:0;min-height:30px;padding:2px 4px;border-radius:4px;font-size:12px;color:var(--ink);cursor:pointer}
+.body-type-check:hover{background:#f3f7ee}
+.body-type-check input{flex:none;width:auto;min-height:0;margin:0;padding:0;accent-color:var(--green)}
+.body-type-check span{min-width:0;overflow-wrap:anywhere}
+.body-type-check .mono{margin-left:auto;color:var(--body-type-quiet);text-align:right}
+
+/* Removing a type: the devices that still use it are the one thing set apart. */
+.body-type-lead{margin:0;font-size:12px;line-height:1.7;color:var(--ink)}
+.body-type-users{margin:0 0 16px;padding:6px 16px;list-style:none;border:1px solid #eee4ca;border-radius:10px;background:#fdfbf5}
+.body-type-users li{display:flex;justify-content:space-between;gap:16px;padding:9px 0;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.body-type-users li+li{border-top:1px solid #f1ead6}
+.body-type-users b{font-weight:550;color:var(--ink)}
+.body-type-users span{color:var(--body-type-quiet);text-align:right}

@@ -15,7 +15,7 @@ const {connectTokenFans}=require('./tokenfans_browser.cjs');
  await page.locator('form[data-form=project]').waitFor();await fill('name','仓库异常巡检');await fill('objective','每天检查仓库通道，识别障碍并输出异常报告。');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
  await page.locator('.journey-next').getByText('连接你的机器人',{exact:true}).waitFor();await click('journey-connect');await page.getByText('有 SSH 地址、用户名和密码或密钥',{exact:true}).waitFor();await click('close');
  // Real HTTP persistence for task assets; no model invocation or device action.
- await page.evaluate(async()=>{const s=await api('state'),pid=s.projects[0].id;await api('robots',{project_id:pid,name:'巡检设备',family:'mobile',endpoint:''});await refresh(true);});
+ await page.evaluate(async()=>{const s=await api('state'),pid=s.projects[0].id;await api('robots',{project_id:pid,name:'巡检设备',family:'quadruped',endpoint:''});await refresh(true);});
  // Issue #4: models come only from TokenFans, connected on 云平台账户 (fake key from the fixture's stand-in).
  await connectTokenFans(page,cfg);
  await page.goto(cfg.url+'/#agents');await click('journey-prepare');await page.locator('[name=objective]').waitFor();if(!(await page.locator('#dialog [name=model_id]').inputValue()).startsWith('agent-model-tokenfans-'))throw Error('Plan does not use the TokenFans model');if(!(await page.locator('[name=objective]').inputValue()).includes('检查仓库通道'))throw Error('Task goal was lost');await submit();await page.getByRole('heading',{name:'启动 仓库异常巡检 · 工程准备',exact:true}).waitFor();

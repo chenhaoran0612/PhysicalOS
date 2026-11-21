@@ -96,7 +96,7 @@ class ResetFieldsTests(unittest.TestCase):
         self.device = LatchingDevice()
         self.gateway = Gateway(self.device, TOKEN, self.tmp.name + '/edge')
         self.server = Server(edge_handler(self.gateway))
-        self.robot = self.app.add_robot({'project_id': pid, 'name': 'R', 'family': 'mobile',
+        self.robot = self.app.add_robot({'project_id': pid, 'name': 'R', 'family': 'quadruped',
                                          'endpoint': self.server.url, 'token': TOKEN})
         self.app.connect_robot({'robot_id': self.robot['id']})
         self.device.latched = True

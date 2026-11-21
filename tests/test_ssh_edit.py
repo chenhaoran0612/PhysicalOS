@@ -192,7 +192,7 @@ class EditInPlaceTests(EditCase):
 
     def test_only_a_robot_of_this_project_with_an_ssh_connection_can_be_edited(self):
         old = self.connect_directly()
-        plain = self.platform.add_robot({'project_id': self.pid, 'name': 'No SSH', 'family': 'custom'})
+        plain = self.platform.add_robot({'project_id': self.pid, 'name': 'No SSH', 'family': 'quadruped'})
         elsewhere = self.platform.add_project({'name': 'Other', 'objective': 'Another project'})['id']
 
         with self.assertRaises(ValueError) as caught:

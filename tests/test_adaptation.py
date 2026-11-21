@@ -105,7 +105,7 @@ class MappingValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'固定的本体档案'):self.check(m)
 
     def test_start_requires_inventory_and_latest_version(self):
-        other=self.platform.add_robot({'project_id':self.pid,'name':'无档案','family':'mobile'})
+        other=self.platform.add_robot({'project_id':self.pid,'name':'无档案','family':'quadruped'})
         with self.assertRaisesRegex(ValueError,'还没有本体档案'):self.platform.workflows.start_adaptation({'robot_id':other['id'],'model_id':'x','data_authorized':True})
         with self.assertRaisesRegex(ValueError,'最新的本体档案'):self.platform.workflows.start_adaptation({'robot_id':self.rid,'inventory_id':'inventory-old','model_id':'x','data_authorized':True})
 

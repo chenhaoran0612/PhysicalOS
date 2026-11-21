@@ -566,7 +566,7 @@ class LiveStatusTests(SshCase):
         self.assertEqual(self.engine.status_sessions.open_connections(), [])
 
     def test_a_robot_without_an_ssh_connection_has_no_ssh_status(self):
-        robot = self.platform.add_robot({'project_id': self.pid, 'name': 'No SSH', 'family': 'custom'})
+        robot = self.platform.add_robot({'project_id': self.pid, 'name': 'No SSH', 'family': 'quadruped'})
 
         with self.assertRaises(ValueError):
             self.engine.status({'project_id': self.pid, 'robot_id': robot['id']})

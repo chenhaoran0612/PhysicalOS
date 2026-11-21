@@ -81,7 +81,7 @@ class ProductTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def workflow(self,connect=True):
-        robot=self.app.add_robot({'project_id':self.pid,'name':'Test robot','family':'mobile','endpoint':self.server.url,'token':self.token})
+        robot=self.app.add_robot({'project_id':self.pid,'name':'Test robot','family':'quadruped','endpoint':self.server.url,'token':self.token})
         if connect:
             self.app.connect_robot({'robot_id':robot['id']})
         skill=self.app.add_skill({'project_id':self.pid,'name':'Navigate','version':'1.0','requires':['navigation.goal'],
@@ -264,7 +264,7 @@ class IdentityHttpTests(unittest.TestCase):
         self.assertEqual(len(self.request('/api/state',cookie=a)[1]['projects']),1)
         self.assertEqual(len(self.request('/api/state',cookie=b)[1]['projects']),0)
         aid=self.request('/api/state',cookie=a)[1]['projects'][0]['id']
-        self.assertEqual(self.request('/api/robots',{'project_id':aid,'name':'intrusion','family':'mobile'},b)[0],400)
+        self.assertEqual(self.request('/api/robots',{'project_id':aid,'name':'intrusion','family':'quadruped'},b)[0],400)
         self.request('/api/logout',{},a)
         self.assertEqual(self.request('/api/state',cookie=a)[0],401)
 

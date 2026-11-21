@@ -67,7 +67,7 @@ class ProjectSkillParameterTests(unittest.TestCase):
     def test_declarations_do_not_constrain_application_parameters(self):
         # The device validates parameters (it has the authoritative skill.json); the console only describes them.
         s = self.skill(parameters=[{'name': 'loops', 'type': 'int', 'required': True}])
-        robot = self.p.add_robot({'project_id': self.pid, 'name': '底盘', 'family': 'mobile'})
+        robot = self.p.add_robot({'project_id': self.pid, 'name': '底盘', 'family': 'quadruped'})
         app = self.p.add_application({'project_id': self.pid, 'name': '巡逻', 'version': '1.0', 'robot_id': robot['id'],
                                       'steps': [{'skill_id': s['id'], 'parameters': {'anything': [1, 2]}, 'timeout_s': 30}]})
         self.assertEqual(app['steps'][0]['parameters'], {'anything': [1, 2]})
