@@ -49,6 +49,9 @@ const UX_CODES = {
   in_progress: ['state', '同样的操作正在进行中。', '等它完成后查看结果，不要重复提交'],
   install_busy: ['state', '机器人正在安装另一个技能或模型。', '等安装完成后再试'],
   conformance_busy: ['state', '机器人已经在做一致性测试。', '等当前测试结束'],
+  // ---- 验证连接 (issue #16, brainos/connection_verify.py)
+  verify_while_onboarding: ['state', '这台机器人正在接入（扫描硬件、调查、修复、读取设备档案，或应用启动后的第一次心跳检查还没结束），这时不能验证 SSH 连接。', '等它结束后再点“验证 SSH 连接”'],
+  verify_in_progress: ['state', '这台机器人的 SSH 连接正在验证，上一次还没有结束。', '等这一次的结果出来'],
   outcome_unknown: ['state', '这个请求之前发出过，但结果没有得到确认；为安全起见不会重复执行。', '先在“实时状态”或现场核对机器人状态', '需要时重新打开表单，用新的请求再发起'],
   manifest_changed: ['state', '机器人的能力清单变了（例如换了驱动或配置），之前的检查结果不再适用。', '点“连接检查”重新读取能力', '重新做应用检查'],
   // ---- parameters

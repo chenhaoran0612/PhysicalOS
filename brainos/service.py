@@ -97,6 +97,8 @@ class Platform:
         self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
         from .heartbeat import Heartbeat
         self.heartbeat = Heartbeat(self)            # issue #24: a heartbeat a minute over SSH; 未接入 / 接入中 / 在线 / 离线
+        from .connection_verify import ConnectionVerify
+        self.connection_verify = ConnectionVerify(self)     # issue #16: 「验证连接」 logs in over the saved SSH connection, hop by hop
         from .ssh_edit import ConnectionEdit
         self.ssh_edit = ConnectionEdit(self)        # issue #9: change the SSH connection of a connected robot
         from .runtime_link import RuntimeLinks
@@ -140,6 +142,7 @@ class Platform:
         result.update(self.engineering.snapshot())
         result.update(self.hardware.snapshot())
         result.update(self.heartbeat.snapshot())    # issue #24: the workspace is shown, so its heartbeat runs; the states are asked for apart
+        result.update(self.connection_verify.snapshot(result['robots'], result['agent_sessions']))    # issue #16: robots being onboarded, where 「验证连接」 is not offered
         result.update(self.investigation.snapshot())
         result.update(self.workflows.snapshot())
         # The cloud session token stays in the credential file; only a summary is shown.

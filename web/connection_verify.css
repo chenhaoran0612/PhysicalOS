@@ -1,0 +1,76 @@
+/* Issue #16 — 「验证 SSH 连接」 (web/connection_verify.js). Uses the shared tokens of style.css.
+   Small text uses #5f705a rather than var(--muted): on these light grounds it keeps a contrast of 4.5:1 or more. */
+
+/* On the card: while the robot is being onboarded the button is there, but is not offered. */
+/* It looks like the product's disabled buttons, but can still be focused: its reason is on it. */
+.button.secondary.cv-held,.button.secondary.cv-held:hover,.button.secondary.cv-held:active{opacity:.45;cursor:not-allowed;background:#fff;border-color:#dbe4da;color:#51654f}
+.button.secondary.cv-held:focus-visible{opacity:.85}
+
+.cv{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.cv-what{margin:0;max-width:72ch;font-size:12px;line-height:1.75;color:#5f705a}
+
+/* The verdict: one line that says where it stands, set large; what was read under it. */
+.cv-verdict{min-width:0;padding:16px 20px 15px;border:1px solid var(--line);border-left:4px solid #b9cbb3;border-radius:10px;background:#fafcf8}
+.cv-verdict-head{display:flex;align-items:center;gap:12px}
+.cv-verdict h3{margin:0;font-size:20px;line-height:1.35;font-weight:650;letter-spacing:-.01em;color:#234c39;border-radius:4px}
+/* The headline takes the focus only so that it is read out; it is not a control and is not in the Tab order. */
+.cv-verdict h3[tabindex="-1"]:focus,.cv-verdict h3[tabindex="-1"]:focus-visible{outline:none}
+.cv-mark{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:14px;font-weight:700;line-height:1}
+.cv-verdict.cv-passed{border-left-color:var(--green)}
+.cv-verdict.cv-failed{border-left-color:var(--red);background:#fdf6f4}
+.cv-verdict.cv-failed h3{color:#8f3f38}
+.cv-verdict.cv-failed .cv-mark{background:var(--red)}
+.cv-verdict.cv-refused{border-left-color:#d1a54c;background:#fdfaf1}
+.cv-verdict.cv-refused h3{color:#80591a}
+.cv-verdict.cv-refused .cv-mark{background:#80591a}
+.cv-verdict.cv-running h3{color:#51654f;font-weight:600}
+.cv-where{margin:10px 0 0}
+.cv-where code,.cv-hop-name code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;overflow-wrap:anywhere}
+.cv-where code{padding:2px 8px;border-radius:5px;background:#f6e4e0;color:#8f3f38}
+.cv-reason{margin:8px 0 0;max-width:72ch;line-height:1.75;color:var(--ink);overflow-wrap:anywhere}
+.cv-more{margin:8px 0 0;font-size:11px;color:#5f705a;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.cv-caution{margin:8px 0 0;padding-left:9px;border-left:2px solid #f0e2c2;max-width:72ch;font-size:12px;line-height:1.7;color:#80591a}
+
+/* System, architecture and time: the three things a verification that passed is asked for. */
+.cv-facts{display:flex;flex-wrap:wrap;gap:1px;margin:14px 0 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--line)}
+.cv-facts div{flex:1 1 150px;min-width:0;padding:10px 14px;background:#fff}
+.cv-facts div:first-child{flex-grow:2}
+.cv-facts dt{font-size:10px;letter-spacing:.08em;color:#5f705a}
+.cv-facts dd{margin:3px 0 0;font-size:15px;font-weight:600;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+
+/* The route: every hop in the order it is logged in to, joined by the line the session runs along.
+   Each row draws its own piece of the line through the middle of its node (rows of any height meet). */
+.cv-route-block h4{margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.08em;color:#5f705a}
+.cv-route{list-style:none;margin:0;padding:0}
+.cv-hop{position:relative;display:flex;align-items:center;gap:12px;padding:9px 0 9px 2px}
+.cv-hop::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:2px;background:#dfe8d8}
+.cv-hop:first-child::before{top:50%}
+.cv-hop:last-child::before{bottom:50%}
+.cv-hop:only-child::before{display:none}
+.cv-hop.cv-ok::before{background:#9fc3ae}
+.cv-node{position:relative;z-index:1;flex:none;width:14px;height:14px;border-radius:50%;border:2px solid #cfd9cc;background:#fff}
+.cv-hop.cv-ok .cv-node{border-color:var(--green);background:var(--green)}
+/* The hop it got stuck at is the row the eye should land on. */
+.cv-hop.cv-failed{margin:0 -8px;padding-left:10px;padding-right:8px;border-radius:8px;background:#fdf1ee}
+.cv-hop.cv-failed::before{left:16px}
+.cv-hop.cv-failed .cv-node{border-color:var(--red);background:var(--red);box-shadow:0 0 0 4px #b44a4222}
+.cv-not_reached,.cv-pending,.cv-unknown{color:#5f705a}
+.cv-not_reached .cv-node{border-style:dashed}
+.cv-hop-name{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
+.cv-hop-name b{font-weight:600}
+.cv-hop-name code{color:#4f5d55}
+/* The shared badges, darker here: they are the only words that say what became of a hop. */
+.cv-hop .status{flex:none;font-size:11px;font-weight:550;padding:4px 8px;color:#4f5d55}
+.cv-hop .status.good{color:#3f6a2c}
+.cv-hop .status.bad{color:#963c35}
+.cv-hop .status .dot{width:5px;height:5px}
+
+.cv-spinner{flex:none;width:22px;height:22px;border:3px solid #dfe8d8;border-top-color:var(--green);border-radius:50%;animation:cv-spin .9s linear infinite}
+@keyframes cv-spin{to{transform:rotate(360deg)}}
+.cv-actions{justify-content:flex-end}
+
+@media(max-width:700px){
+ .cv-verdict{padding:13px 14px}
+ .cv-verdict h3{font-size:17px}
+}
+@media(prefers-reduced-motion:reduce){.cv-spinner{animation:none}}
