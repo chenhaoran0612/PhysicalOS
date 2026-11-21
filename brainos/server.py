@@ -137,6 +137,8 @@ def make_handler(application):
             extra=extra or {'/device_profile.js':('device_profile.js','text/javascript; charset=utf-8'),'/device_profile.css':('device_profile.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #24: the connection state and the last heartbeat on the cards and the status page, likewise.
             extra=extra or {'/heartbeat.js':('heartbeat.js','text/javascript; charset=utf-8'),'/heartbeat.css':('heartbeat.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #16: 「验证连接」 of a robot's saved SSH connection, likewise.
+            extra=extra or {'/connection_verify.js':('connection_verify.js','text/javascript; charset=utf-8'),'/connection_verify.css':('connection_verify.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #33: the material library page, likewise.
@@ -244,6 +246,8 @@ def make_handler(application):
                         'engineering/ssh/links':service.heartbeat.overview,'engineering/ssh/heartbeat':service.heartbeat.check,
                         # Issue #9: change the SSH connection of a robot that is already connected
                         'engineering/ssh/update':service.ssh_edit.update,
+                        # Issue #16: log in to every hop of a robot's saved SSH connection once; read the system and the architecture
+                        'engineering/ssh/verify':service.connection_verify.verify,
                         'engineering/start':service.engineering.start,'engineering/resume':service.engineering.resume,
                         'engineering/work':service.engineering.start_work,'engineering/approve':service.engineering.approve,
                         'engineering/artifact':service.engineering.artifact,
