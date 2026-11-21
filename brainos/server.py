@@ -139,6 +139,8 @@ def make_handler(application):
             extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #22: safety limits per device, likewise.
+            extra=extra or {'/safety_limits.js':('safety_limits.js','text/javascript; charset=utf-8'),'/safety_limits.css':('safety_limits.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
@@ -264,6 +266,9 @@ def make_handler(application):
                         'robots/reset':service.reset_robot,
                         # Issue #11: delete a real robot with its SSH connection, saved logins and investigations
                         'robots/remove':service.robot_remove.remove,
+                        # Issue #22: safety limits a person fills in per device; the signed-in account is recorded as who
+                        'robots/limits':service.safety_limits.read,
+                        'robots/limits/save':lambda p:service.safety_limits.save(p,user),
                         # Round 02 (INTERFACES 4.1, 4.5)
                         'robots/detail':service.robot_detail,
                         'robots/stop':service.stop_robot,

@@ -318,6 +318,13 @@ def run_motion(adapter, **kw):
     return conformance.run_adapter(adapter, "motion", True, **kw)
 
 
+# Issue #22: a body that does not call itself simulated is only driven once a person has filled in
+# its safety limits. The stand-ins below get the simulated quadruped's own values (nothing changes
+# for the cases themselves), through the same checked write as any other fill.
+FILLED_LIMITS = {"limits": {"base": {"max_linear_speed": 1.0, "max_angular_speed": 1.5, "command_timeout_s": 0.5}},
+                 "set_by": "一致性测试"}
+
+
 class OperatorStopIsNeverCleared(unittest.TestCase):
     """Q4-01: at every phase the operator's latch wins."""
 
@@ -535,7 +542,7 @@ class MotionFailuresStopAndLatch(unittest.TestCase):
 class NavigationAndTimeScale(unittest.TestCase):
     def test_no_localization_no_goal(self):               # Q4-04
         adapter = NoLocalization()
-        report = run_motion(adapter)
+        report = run_motion(adapter, device_limits=FILLED_LIMITS)
         for name in ("min_goal", "cancel", "stop_latency"):
             c = case(report, f"motion.base.navigate_to.{name}")
             self.assertEqual((c["status"], c["skip_kind"]), ("skipped", "blocked"))
@@ -556,13 +563,13 @@ class NavigationAndTimeScale(unittest.TestCase):
                 g[1] -= 3.0
                 return super().start_action(cap_id, dict(args, goal=g))
         adapter = Offset()
-        report = run_motion(adapter)
+        report = run_motion(adapter, device_limits=FILLED_LIMITS)
         self.assertTrue(report["aborted"])
         self.assertLess(math.hypot(adapter.x, adapter.y), 0.6)          # watchdog + velocity cases ~0.3 m
 
     def test_untrusted_time_scale_is_ignored(self):       # Q4-05
         adapter = FakeTimeScaleRealBody()
-        report = run_motion(adapter)
+        report = run_motion(adapter, device_limits=FILLED_LIMITS)
         self.assertEqual((report["time_scale"], report["executed_time_scale"]), (20.0, 1.0))
         self.assertIs(report["time_scale_rebased"], False)                # not a trusted simulation
         self.assertEqual(adapter.clock.time_scale, 20.0)                 # never touched

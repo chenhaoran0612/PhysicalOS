@@ -1,0 +1,32 @@
+/* Issue #22: safety limits a person fills in per device (web/safety_limits.js).
+   Colours, sizes and radii follow style.css; only what the app did not have yet is here. */
+:root{--safety-limits-bad-surface:#f9ece9;--safety-limits-bad-line:#eccac4;--safety-limits-bad-text:#b4574f;--safety-limits-bad-ring:#f6dcd8;--safety-limits-quiet:#667a58;--safety-limits-value:#405c32;--safety-limits-label:#59704a}
+
+/* The robot's card: "安全限值未填，不能运动" with the way to the form, or the filled values in a quiet line. */
+.safety-limits-card{margin:0 0 12px;font-size:10px;line-height:1.7}
+.safety-limits-card-blocked{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 10px;padding:9px 10px;border:1px solid var(--safety-limits-bad-line);border-radius:6px;background:var(--safety-limits-bad-surface)}
+.safety-limits-card-blocked .status{padding:0;background:none;color:var(--red);font-size:11px;font-weight:600;white-space:normal}
+.safety-limits-card-line{color:var(--safety-limits-quiet);overflow-wrap:anywhere}
+
+/* The "安全限值" section of a robot's detail. */
+.safety-limits-section .section-head{margin-bottom:8px}
+.safety-limits-section .notice{margin:8px 0}
+.safety-limits-section .button-row{margin-top:10px}
+.safety-limits-reason{margin:0 0 8px;color:var(--safety-limits-bad-text)}
+.safety-limits-values{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin:10px 0 8px}
+.safety-limits-values div{font-size:12px;color:var(--safety-limits-value)}
+.safety-limits-values b{font-size:10px}
+.safety-limits-record{margin:0;overflow-wrap:anywhere}
+.safety-limits-unreadable{margin:8px 0}
+.safety-limits-history{margin-top:8px;font-size:10px;color:var(--safety-limits-quiet)}
+.safety-limits-history summary{cursor:pointer;width:max-content;max-width:100%}
+.safety-limits-history summary:hover{color:var(--safety-limits-value)}
+.safety-limits-history ul{margin:6px 0 0;padding-left:16px;line-height:1.8;overflow-wrap:anywhere}
+
+/* The form: a problem sits under the input it is about. */
+.safety-limits-field label{cursor:pointer}
+.safety-limits-field small{color:var(--safety-limits-quiet)}
+.safety-limits-field input[aria-invalid="true"]{border-color:var(--red);box-shadow:0 0 0 2px var(--safety-limits-bad-ring)}
+.field small.safety-limits-problem{color:var(--red);font-size:11px;line-height:1.6}
+.safety-limits-problem:empty{display:none}
+.safety-limits-who{margin:0 0 6px;font-size:11px;line-height:1.8;color:var(--safety-limits-label);overflow-wrap:anywhere}

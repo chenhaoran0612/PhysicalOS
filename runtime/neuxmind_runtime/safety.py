@@ -32,12 +32,22 @@ Responsibilities
    ``stop()`` and a zero ``base.velocity`` to be called concurrently with an
    in-flight ``invoke`` (see hal.RobotAdapter).
 
+8. **Device limits** (issue #22, R1-06) — the limits a person fills in for
+   this device (``device_limits.py``: maximum linear and angular speed,
+   velocity command timeout). A body that needs them and has none gets
+   every motion capability refused (``safety_limits_missing``); once they
+   are there, the lower of the filled value and what the manifest declares
+   is enforced. They are held here as one immutable object next to the
+   frozen manifest limits, never inside the manifest.
+
 The stop path (:meth:`emergency_stop`) sets a ``threading.Event`` and calls
 ``adapter.stop()`` directly. It takes no lock that a command or skill could
-hold, touches no queue, database, model or network.
+hold, touches no queue, database, model or network. Stop, halt and the
+watchdog never read the device limits.
 
 This is a *software* layer. It does not replace a hardware e-stop, and it
-can only enforce limits the manifest declares.
+can only enforce limits the manifest declares or a person filled in, on
+commands that pass through it.
 """
 from __future__ import annotations
 
@@ -51,12 +61,15 @@ from typing import Any
 
 from neuxmind_spec import capabilities as spec_caps
 
+from . import device_limits as device_limit_rules
 from .errors import Conflict, EStopLatched, NotAuthorized, SafetyRejected
 from .events import EventBus
 
 DEFAULT_VELOCITY_TIMEOUT_S = 0.5
-MIN_VELOCITY_TIMEOUT_S = 0.05
-MAX_VELOCITY_TIMEOUT_S = 2.0
+# 0.05–2 s, kept (issue #22): a person picks this device's value inside the range, nothing exceeds it.
+MIN_VELOCITY_TIMEOUT_S = device_limit_rules.MIN_COMMAND_TIMEOUT_S
+MAX_VELOCITY_TIMEOUT_S = device_limit_rules.MAX_COMMAND_TIMEOUT_S
+_DEVICE_LIMITS = "device_limits"     # key under which check() hands the filled limits to a limiter
 _EPS = 1e-9
 
 # policy.action_chunk timing limits (N-06): the per-step velocity limit is
@@ -203,6 +216,13 @@ class SafetySupervisor:
         self.params = {cap: freeze(p) for cap, p in params.items()}
         self.limits = freeze(limits)
         self.manifest_drift: str | None = None    # set when the adapter's manifest changes at runtime
+        # Issue #22: the limits a person filled in for this device (None = not filled), frozen and
+        # replaced as a whole; and whether this body may move without them. A body starts without
+        # limits, so one that needs them is blocked until set_device_limits() is given valid ones.
+        velocity = self.params.get("base.velocity")
+        self.base_ceilings = MappingProxyType(device_limit_rules.body_ceilings(velocity, self.limits))
+        self._device_limits = None
+        self._device_limits_required = device_limit_rules.required_for(manifest.get("simulated"), velocity)
 
         self._latched = threading.Event()
         self.latch_reason: str | None = None
@@ -279,6 +299,44 @@ class SafetySupervisor:
             raise EStopLatched("该调用发起后发生过停止；停止之前发起的指令永远不会再下发，请重新发起",
                                code="stale_after_stop")
 
+    # ---------------------------------------------------- device limits
+    @property
+    def device_limits(self):
+        """The filled limits in force (read-only mapping ``{"base": {...}}``) or ``None``."""
+        return self._device_limits
+
+    @property
+    def device_limits_required(self) -> bool:
+        """True when this body is refused all motion while :attr:`device_limits` is ``None``."""
+        return self._device_limits_required
+
+    def require_device_limits(self) -> None:
+        """Need filled limits from now on, whatever the manifest says. There is no way back."""
+        self._device_limits_required = True
+
+    def set_device_limits(self, limits) -> None:
+        """Put filled limits in force, or take them away with ``None``.
+
+        Checked again here whoever the caller is (finite numbers inside the platform's range, every
+        field present); anything else raises and what was in force stays. One attribute assignment:
+        a check running at the same moment uses either the old or the new limits, never a mix."""
+        self._device_limits = None if limits is None else freeze(device_limit_rules.normalize(limits))
+
+    def ensure_device_limits(self, cap_id: str = "") -> None:
+        """Raise ``safety_limits_missing`` if this body needs filled limits and has none."""
+        if self._device_limits is None and self._device_limits_required:
+            self._reject_unfilled(cap_id)
+
+    def _reject_unfilled(self, cap_id: str):
+        reason, code = device_limit_rules.UNFILLED_REASON, device_limit_rules.MISSING_CODE
+        self._events.emit("safety.rejected", capability=cap_id, reason=reason, code=code)
+        raise SafetyRejected(f"{cap_id} 被拒绝：{reason}", code=code)
+
+    @property
+    def velocity_active(self) -> bool:
+        """A velocity setpoint is in effect (not yet zeroed, expired or stopped)."""
+        return self._velocity_deadline is not None
+
     # --------------------------------------------------------- checking
     def check(self, cap_id: str, args: dict, authorized: bool, context: dict | None = None,
               epoch: int | None = None) -> tuple[dict, list[dict]]:
@@ -296,6 +354,9 @@ class SafetySupervisor:
         if self.manifest_drift:
             raise SafetyRejected(f"本体能力清单在运行中发生变化（{self.manifest_drift}）；"
                                  "为安全起见拒绝一切运动，请检查本体后重启运行时", code="manifest_changed")
+        filled = self._device_limits     # read once: the same limits for the whole of this check
+        if filled is None and self._device_limits_required:
+            self._reject_unfilled(cap_id)
         if authorized is not True:
             raise NotAuthorized(f"{cap_id} 会使机器人运动，需要 hardware_authorized=true")
         if not _all_finite(args):
@@ -307,7 +368,8 @@ class SafetySupervisor:
             return dict(args), []
         notes: list[dict] = []
         try:
-            limited = limiter(dict(args), notes, context or {})
+            # The filled limits travel in the limiter's context; a caller's own entry is overwritten.
+            limited = limiter(dict(args), notes, {**(context or {}), _DEVICE_LIMITS: filled})
         except (_LimitError, ValueError, TypeError, IndexError, KeyError, OverflowError) as exc:
             # Fail closed: a limiter that cannot compute a safe value rejects.
             self._reject(cap_id, f"无法安全限幅：{exc}")
@@ -328,8 +390,21 @@ class SafetySupervisor:
         return value
 
     # ----------------------------------------------------------- limiters
-    def _limit_base_velocity(self, args: dict, notes: list, _ctx: dict) -> dict:
+    def _axis_limit(self, cap: str, pname: str, base) -> float:
+        """Limit for one velocity axis: what the manifest declares, lowered by the filled limits.
+        With filled limits a manifest that declares nothing is fine; without them it rejects."""
+        if base is None:
+            return float(self._param(cap, pname))
+        declared = self.params.get(cap, {}).get(pname)
+        filled = float(base["max_angular_speed" if pname == "max_wz" else "max_linear_speed"])
+        return filled if declared is None else min(float(declared), filled)
+
+    def _limit_base_velocity(self, args: dict, notes: list, ctx: dict) -> dict:
         cap = "base.velocity"
+        # check() hands the filled limits over; a caller that does not gets the ones in force now,
+        # so there is no way to run this limiter without them.
+        filled = ctx[_DEVICE_LIMITS] if _DEVICE_LIMITS in ctx else self._device_limits
+        base = filled["base"] if filled is not None else None      # this device's filled chassis limits
         holonomic = self.params.get(cap, {}).get("holonomic", False)
         for name, pname in (("vx", "max_vx"), ("vy", "max_vy"), ("wz", "max_wz")):
             if name not in args:
@@ -343,24 +418,34 @@ class SafetySupervisor:
             if value == 0.0:
                 args[name] = 0.0
                 continue
-            limit = float(self._param(cap, pname))
+            limit = self._axis_limit(cap, pname, base)
             applied = _clamp(value, -limit, limit)
             if applied != value:
                 notes.append({"field": name, "requested": value, "applied": applied, "limit": limit})
             args[name] = applied
         # Optional overall linear speed cap from manifest.safety.
         max_speed = self.limits.get("max_linear_speed")
+        if base is not None:
+            filled_speed = float(base["max_linear_speed"])
+            declared = isinstance(max_speed, (int, float)) and max_speed > 0
+            max_speed = min(float(max_speed), filled_speed) if declared else filled_speed
         if isinstance(max_speed, (int, float)) and max_speed > 0:
             vx, vy = args.get("vx", 0.0), args.get("vy", 0.0)
             speed = math.hypot(vx, vy)
             if speed > max_speed:
                 scale = max_speed / speed
+                while math.hypot(vx * scale, vy * scale) > max_speed:
+                    scale = math.nextafter(scale, 0.0)      # rounding left it one ulp above the cap
                 notes.append({"field": "speed", "requested": speed, "applied": max_speed, "limit": max_speed})
                 args["vx"] = vx * scale
                 if "vy" in args:
                     args["vy"] = vy * scale
-        timeout = float(args.get("timeout_s", DEFAULT_VELOCITY_TIMEOUT_S))
-        applied = _clamp(timeout, MIN_VELOCITY_TIMEOUT_S, MAX_VELOCITY_TIMEOUT_S)
+        # The filled timeout is this device's default and the most a command may ask for.
+        longest, default = MAX_VELOCITY_TIMEOUT_S, DEFAULT_VELOCITY_TIMEOUT_S
+        if base is not None:
+            longest = default = min(MAX_VELOCITY_TIMEOUT_S, float(base["command_timeout_s"]))
+        timeout = float(args.get("timeout_s", default))
+        applied = _clamp(timeout, MIN_VELOCITY_TIMEOUT_S, longest)
         if "timeout_s" in args and applied != timeout:
             notes.append({"field": "timeout_s", "requested": timeout, "applied": applied})
         args["timeout_s"] = applied
@@ -500,7 +585,7 @@ class SafetySupervisor:
                 self._reject(cap, "base_velocity 动作空间须为 3 维 (vx, vy, wz)")
             for row in actions:
                 step = self._limit_base_velocity(
-                    {"vx": float(row[0]), "vy": float(row[1]), "wz": float(row[2])}, [], {})
+                    {"vx": float(row[0]), "vy": float(row[1]), "wz": float(row[2])}, [], ctx)
                 out = [step["vx"], step["vy"], step["wz"]]
                 clamped += sum(1 for a, b in zip(row, out) if a != b)
                 limited.append(out)

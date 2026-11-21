@@ -128,6 +128,7 @@ ssh -N -L 127.0.0.1:18790:127.0.0.1:8790 用户@机器人
 | 4 | 仿真可见 | manifest `simulated=true`（v1 视图也携带 `simulated`/`vendor`/`model`），`/v1/status`、`/v2/manifest`、技能 `ctx.simulated`、`/v1/evaluate` 的 `simulated`/`evidence_kind="simulation"`/`simulation://` 证据引用。按契约，调用方不得把它当现场证据（桌面端负责拒绝）；ROS 2 适配器的 `simulated` 来自配置 `simulated`/`use_sim_time` 或节点参数 `use_sim_time` |
 | 5 | 停止之前发起的指令永不再下发 | 停止代数（见下） |
 | 6 | 停止在连接被占满时仍可用 | 停止专用名额（见“连接上限与停止保障路径”） |
+| 7 | 没填安全限值不能动 | 设备的安全限值由人填写并保存在设备上（`device_limits.py`，见下「设备安全限值」）；需要限值而没有的本体，所有运动能力一律 409 `safety_limits_missing`。运行时照常启动、状态可读、停止可用 |
 
 **停止路径**（`/v1/stop`、`/v2/stop`、`safety.stop` 能力、技能内 `ctx.call("safety.stop")`）：
 1. 认证（`compare_digest`，无锁）→ 2. 停止代数 +1 → 3. 设置锁存 `threading.Event` → 4. 直接调用 `adapter.stop()` → 5. 给每个运行置停止事件并取消其动作句柄，**然后**给技能子进程发一次非阻塞 `SIGTERM`（不等待它）→ 6. 发事件 → 7. 置“待持久化”标志（常驻持久化线程负责写盘；停止路径**不创建线程**，线程耗尽时 stop 仍成功）→ 返回。子进程的强杀（`SIGKILL`）由监视线程在宽限期后执行，不在停止路径上。
@@ -236,6 +237,31 @@ ssh -N -L 127.0.0.1:18790:127.0.0.1:8790 用户@机器人
 - 软件安全层**不能替代硬件急停**。
 - 进程隔离模式下，不配合停止的技能进程在 1 s 宽限期后被 `SIGKILL`；inprocess 模式下只能撤销线程的能力访问（宽限期 2 s 后强制结束运行记录），无法杀死 Python 线程。
 - Bearer token 是唯一凭据，HTTP 明文。默认只监听 127.0.0.1；跨网络请放在 TLS/VPN 之后。软件 stop 端点只应在受信网段开放，**硬件急停才是主通道**。
+
+### 设备安全限值（issue #22，需求 R1-06）
+
+平台不猜一台设备能跑多快。三项限值由人按设备填写，保存在设备上（状态目录的 `runtime.sqlite3`，`safety` / `device_limits`），并记下填写人、时间、修订号（保留最近 20 次修改）和这份记录是为哪台本体填的（清单的 `instance_id`、厂商、型号、形态和它声明的底盘上限）：
+
+| 项 | 单位 | 可填范围 | 作用 |
+|---|---|---|---|
+| `max_linear_speed` 最大线速度 | m/s | 大于 0，不超过平台上限 3.0，也不超过本体清单自己声明的上限（`max_vx`，全向底盘与 `max_vy` 合成；清单另有 `safety.max_linear_speed` 时取更低的） | `base.velocity` 的 `vx`、`vy` 和合速度，以及 base_velocity 空间的动作块 |
+| `max_angular_speed` 最大角速度 | rad/s | 大于 0，不超过平台上限 3.0，也不超过清单的 `max_wz` | `base.velocity` 的 `wz` |
+| `command_timeout_s` 运动指令超时 | s | 0.05–2（监督器原有的范围，保留） | 速度指令不刷新多久后看门狗发零速度：既是这台设备的默认值，也是单条指令 `timeout_s` 能要求的最长时间（指令只能要求更短） |
+
+规则：
+
+- **哪些本体必须填**：清单不是 `simulated: true` 的本体一律要填。仿真本体只有在清单声明了底盘却没有声明 `max_vx` / `max_wz` 时才要填（例如接在仿真器上、配置里没写限值的 ROS 2 桥接）；自带限值的仿真本体（`sim_quadruped`、`sim_arm`）不填也照常运行，填了则按更低的执行。`/v2/safety/limits` 的 `required` 说明这台本体属于哪一种。
+- **没填时**：安全监督器在授权检查之前拒绝**所有**运动能力（包括零速度指令、导航、姿态、机械臂、动作块、厂商扩展），HTTP 409，`code: safety_limits_missing`，事件 `safety.rejected {capability, reason, code}`。直接调用在分配运行号、记录 `request_id` 之前就被拒绝（填好后同一个请求可以重发）；技能照常启动，它发出的每条运动指令被拒绝。读状态、`/v1/status`、遥测、装技能都不受影响；`/v1/validate` 对需要运动能力的应用多一项检查「安全限值已填写」。启动时终端打印一行警告。
+- **填了之后**：执行的是「填的值」与「清单声明的值」中较低的一个（`effective`）。填的值不会放宽清单；清单没有声明速度上限时，填的值就是唯一的上限。
+- **写入被拒绝的情况**：格式不对或缺项 400 `limits_invalid`（带 `field`）；超出范围 400 `limits_out_of_range`（带 `field`、`value`、`min`、`max`、`bound: platform|body`）；没有填写人 400 `set_by_required`（填写人是不超过 200 个字符的一行文字，含控制字符或不可见格式字符时 400 `limits_invalid`）；有会发运动指令的运行未结束、或速度指令仍在生效 409 `runs_active`（先停止，再改；模型安装、只读技能不算）；一致性测试进行中 409 `conformance_running`；另一次保存卡在存储上超过 2 s 503 `busy`；设备存储写不进去 500 `limits_not_saved`（限值保持原样，这次失败的写入也不会被之后别的写入带进库里）。先写盘、再生效：生效的限值一定是重启后能读到的那一份。格式、范围和 `runs_active` 在记录 `request_id` 之前答复：改正或停稳后可以用同一个 id 重发。
+- **读不出来、越界或属于另一台本体的记录按没填处理**（事件 `safety.limits_invalid`，`/v2/safety/limits` 的 `invalid` 写明原因），重新填写即可。记录绑定的本体信息和这台本体的不一样时不会被沿用：状态目录拷到了另一台机器人、换了适配器、或集成方改了本体声明的底盘上限，都要由人重新填写。`instance_id`、型号和声明的上限都相同的两台机器人分不出来（整盘克隆，或 ROS 2 适配器都保留默认的 `ros2-robot`）：请给每台机器人配置各自的 `instance_id`。
+- **修改在下一条指令生效**：写入的那一刻已经通过检查、正在下发途中的一条指令，仍按它检查时的限值执行，最长持续它拿到的超时时间。
+- **和清单的关系**：限值不写进适配器的清单。清单在运行中不允许变化（`manifest_changed`），限值可以改；监督器把它作为一个不可变对象整体替换，一次检查从头到尾用同一份。
+- **停止路径**：`/v1/stop`、`/v2/stop`、`halt_motion` 和速度看门狗不读限值、不拿写入用的锁、不等存储。限值被取走后，已经下发的速度指令照样按原来的超时归零。
+
+**在仿真本体上演练**：`serve --require-safety-limits` 让自带限值的仿真本体也必须先填写才能运动（只能收紧，运行中不能取消），用来在没有真机时走一遍「未填 → 填写 → 生效」。
+
+只做了底盘（`base`）这一组。机械臂要填哪些限值还没有定：这一版里机械臂动作在填了底盘限值之后仍按清单的关节限位和限速执行；定下来后在 `device_limits.GROUPS` 里加一组，并在对应的限幅函数里使用。`base.navigate_to` 的行驶速度由导航栈决定，运行时限不住（见 §7）。
 
 ## 2.1 连接上限与停止保障路径
 
@@ -457,6 +483,8 @@ SkillContext：`call(cap, **args)`、`read(cap)`、`check_stop()`、`sleep(s)`�
 | GET | `/v2/models` | 已安装模型 `{models:[{sha256, model_id（目录 ID，可空）, name, runtime, source, file, size, installed_at, path}]}`（§5.2） |
 | POST ★ | `/v2/conformance` | `{level: static|dry|motion, hardware_authorized}` → `{accepted, conformance_id, run_id, status:"running", level, simulated}`；在运行时进程内异步执行一致性测试（§3.1）；motion 未授权 403；同时只允许一个（409 `conformance_busy`）；dry/motion 有运行未结束 409 `runs_active`；`level` 非法 400 `invalid_level` |
 | GET | `/v2/conformance` / `/v2/conformance/{id}` | 列表 `{conformance:[{id, status, level, static_ok, dry_ok, motion_ok, simulated}]}` / `{id, status: running|completed|failed|unknown, level, progress, report?（conformance.report.v1）, error?}`；重启时未结束的为 `unknown`（不重跑）；未知 id 404 `conformance_not_found` |
+| GET | `/v2/safety/limits` | 这台设备的安全限值（issue #22，§2「设备安全限值」）→ `{schema: "neuxmind.device_limits.v1", required, filled, motion_blocked, reason, limits: {base: {max_linear_speed, max_angular_speed, command_timeout_s}} \| null, set_by, set_at, revision, effective, bounds: {base: {<项>: {unit, min, min_exclusive, max, platform_max, body_max}}}, groups: ["base"], history: [{revision, limits, set_by, set_at}]（新的在前，最多 20 条）, invalid}`；`/v1/status` 的 `safety_limits` 带其中的 `{required, filled, motion_blocked, reason, limits, set_by, set_at}` |
+| POST | `/v2/safety/limits` | `{limits: {base: {max_linear_speed, max_angular_speed, command_timeout_s}}, set_by, request_id?}` → `{accepted: true, ...同 GET}`；三项都要填。拒绝：400 `limits_invalid` / `limits_out_of_range` / `set_by_required`（这三种在记录 `request_id` 之前答复，改正后可用同一个 id 重发），409 `runs_active` / `conformance_running`，500 `limits_not_saved` |
 | DELETE ★ | `/v2/models/{sha256 或唯一的目录 ID}` | `{hardware_authorized:true, request_id?}` → `{deleted, model_id: <sha256>}`；目录 ID 对应多个版本时 409 `model_ambiguous`；运行中技能用着时 409 `model_in_use`（带 `runs`）；未安装 404 `model_not_found` |
 
 ### 5.1 异步现场测试
@@ -577,6 +605,10 @@ EOF
 - 一致性测试：报告自报、与适配器同进程可被篡改（见 §3.1 信任边界）；读数与动作同时伪造、识别测试模式、`hardware_estop` 声明无法发现；适配器仍可从调用栈等识别出正在被测（临时目录已改为通用前缀 `nx-rt-`）。机械臂关节对应只来自清单的 `arm.joint_position.params.joint_names`（v1.1 可选参数）；未声明的本体所有机械臂/joint_position 动作块动态用例 `blocked`。声明本身无法验证：dry 不发机械臂目标；motion 级按声明执行，声明错误时由运动包络在约 0.02 rad 内停下并中止（不是 0）。未声明 `joint_names` 时运行时拒绝 joint_position 动作块（旧适配器须补声明）。每次停止后都会自行恢复运动的驱动，软件停止停不住（报告给出警告）；中止后的观察窗为 5 s，窗外才恢复的驱动报告无法发现——但第 05 轮起运行时的锁存守护在整个锁存期间监视反馈并周期性再停（只能对声明了 `base.odometry`/`joint.state` 的本体生效，且反馈本身可能说谎；每次恢复仍会在被发现前运动约一个采样周期 0.1 s）。dry 通过不说明 `joint_names` 声明正确：机械臂映射只在 motion 级验证（R4c-03）。大幅姿态变化没有自动用例。黑盒 `--mode client` 没有 dry 守卫，依赖拒绝的探测与停止代数 `blocked`，dry 不会判为通过。若操作员的停止与套件自己的停止在同一瞬间发生，锁存原因可能显示为套件的原因（锁存本身与中止不受影响）。
 - 技能沙箱不隔离网络和本机设备，未做 seccomp；非 root 部署时技能与运行时同用户（见 §2.2 剩余信任边界）。每次技能运行多一次 Python 启动（实测约 40 ms）。
 - `base.navigate_to` 的速度由适配器的规划器决定，运行时无法限幅，只能检查目标与工作区；仿真导航忽略目标朝向。
+- 设备安全限值（issue #22）只有底盘一组；填写的最大线速度、角速度只约束经过运行时的速度指令（`base.velocity`、base_velocity 动作块），约束不了导航栈自己规划的速度，也没有按里程计实测速度做越限停车。填写的指令超时只管 `base.velocity`：base_velocity 动作块每一步保持多久仍由它自己的 `dt` 上限决定。机械臂限值未定义。脚手架生成的适配器仍要求在生成时给出 `max_vx` / `max_wz`（没有改）。
+- 一致性测试与安全限值：需要限值而没填的本体，凡是要发运动指令的用例（零速度指令、motion 级别的全部用例）标「受阻」并写明原因，套件不向本体发任何运动指令；读状态和停止类用例照常测试。真机请先填限值，再用 `--url` 对运行中的运行时测试。测试指令的幅度按「清单声明」与「已填写」中较低的取。清单里没有声明 `max_vx` / `max_wz` 的本体（例如没在配置里写限值的 ROS 2 桥接）过不了 static 级（能力标准要求清单带这两项），动态级别因此不执行：填了限值它可以运行，但不算通过一致性测试。`conformance.run_adapter(..., device_limits={"limits": ..., "set_by": ...})` 可以给临时运行时带入限值（走同一套校验），那是调用方给这一次测试的限值，不是设备上保存的记录。
+- 一台本体算不算仿真，取自适配器清单的 `simulated`。适配器是受信任的代码：把真机标成仿真，就绕过了「必须由人填写」这一条（它的测试结果同时也不会被当作现场证据）。
+- 填写安全限值只凭运行时令牌，不要求 `hardware_authorized`：谁能调用运行时的接口，谁就能改限值（在平台上限和本体声明的上限之内）；每次修改有记录和事件 `safety.limits_set`。
 - `/v1/evaluate` 的同步模式仍受桌面端 8 s 超时限制；桌面端应使用 `async:true`（§5.1）。
 - 仿真本体的 `/v1/evaluate` 如实返回 `passed`，并标注 `simulated=true`、`evidence_kind="simulation"`、`simulation://` 引用；按契约由桌面端拒绝把它当现场证据（桌面端修复由桌面集成 Agent 负责）。
 - `/v1/stop` 会锁存急停；运行时已提供 `/v1/reset`，桌面端“解除急停”入口由桌面集成 Agent 接入。

@@ -44,8 +44,13 @@ class Ros2ConverterTests(unittest.TestCase):
     def test_nav_goal_and_manifest(self):
         fields = ros2.nav_goal_fields({"goal": [1, 2, 0, 0, 0, 0, 1]}, "map")
         self.assertEqual(fields["header"]["frame_id"], "map")
-        with self.assertRaises(ValueError):          # limits must come from the integrator
-            ros2.build_manifest(ros2.DEFAULT_CONFIG)
+        # Issue #22 (R1-06): limits missing from the configuration no longer keep the bridge from
+        # starting. The manifest then declares none, and the runtime refuses every motion command
+        # until a person fills them in for this device (test_device_limits).
+        bare = spec_manifest.validate_manifest_v2(ros2.build_manifest(ros2.DEFAULT_CONFIG))
+        velocity = next(c for c in bare["capabilities"] if c["id"] == "base.velocity")
+        self.assertEqual(sorted(velocity["params"]), ["holonomic", "max_vy"])
+        self.assertNotIn("max_linear_speed", bare["safety"])
         config = json.loads(json.dumps(ros2.DEFAULT_CONFIG))
         config["limits"].update(max_vx=0.8, max_wz=1.0)
         manifest = spec_manifest.validate_manifest_v2(ros2.build_manifest(config))

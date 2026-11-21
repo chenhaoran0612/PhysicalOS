@@ -19,6 +19,7 @@ from neuxmind_spec import manifest as spec_manifest
 from . import __version__
 from .bus import CapabilityBus
 from .conformance import ConformanceRuns
+from .device_limits import VALIDATE_CASE as LIMITS_CASE, DeviceLimits
 from .diskguard import DiskGuard
 from .errors import BadRequest, Conflict, NotAuthorized, NotFound, RuntimeApiError, SafetyRejected
 from .events import RingBusy
@@ -137,6 +138,9 @@ class EdgeRuntime:
         if self.models is not None:
             self.models.in_use = self._model_users
         self.ledger = Ledger(self.store)
+        # Issue #22: this device's filled safety limits, read from the store and put in force before
+        # anything can ask for motion. A body that needs them and has none stays blocked.
+        self.device_limits = DeviceLimits(self)
         self.evaluations = Evaluations(self.store, self.runner, self._evaluation_result)
         self.conformance = ConformanceRuns(self)       # §6.1 POST /v2/conformance
         self.conformance_lease: str | None = None       # motion lease while a conformance run is active
@@ -429,6 +433,7 @@ class EdgeRuntime:
                "estop_latched": self.supervisor.latched, "latch_reason": self.supervisor.latch_reason,
                "stop_count": self.supervisor.stop_count, "stop_epoch": self.supervisor.epoch,
                "manifest_changed": self.supervisor.manifest_drift,
+               "safety_limits": self.device_limits.summary(),      # issue #22: filled or "cannot move"
                "reset_in_progress": self.supervisor.reset_in_progress,
                **self.supervisor.reset_progress_view(),
                # Q7b-05/06: what this runtime does with a reset, so a client can word its warning
@@ -550,6 +555,12 @@ class EdgeRuntime:
         kind = self.bus.kind(cap_id)
         if is_motion(cap_id):
             self._check_lease(payload, "invoke:" + cap_id)
+            # Issue #22: no filled limits is answered here, before a run id is handed out or the
+            # request id is recorded. The order is the bus's and the supervisor's: a malformed
+            # request is answered as such (400), a latched e-stop keeps its own answer.
+            if not self.supervisor.latched and self.device_limits.blocked_reason() is not None:
+                self.bus._validate_inputs(cap_id, args)
+                self.supervisor.ensure_device_limits(cap_id)
         if kind in ("state", "stream"):
             raise BadRequest(f"{cap_id} 是 {kind} 能力，请用 GET /v2/state?ids={cap_id}")
         authorized = payload.get("hardware_authorized") is True
@@ -673,6 +684,10 @@ class EdgeRuntime:
              "可运动" if not self.supervisor.latched else
              f"急停已锁存（{self.supervisor.latch_reason}）。请在桌面端解除急停：确认现场安全后点击"
              f"“解除急停”（POST /v1/reset，需 hardware_authorized=true）")
+        if any(is_motion(cap) for cap in required):
+            # Issue #22: an application that moves the body is told before it is deployed or tested.
+            blocked = self.device_limits.blocked_reason()
+            case(LIMITS_CASE, blocked is None, blocked or "已填写，或这台仿真本体自带限值")
         passed = all(c["passed"] for c in cases)
         return {"accepted": passed, "passed": passed, "cases": cases, "simulated": self.manifest["simulated"]}
 

@@ -310,7 +310,10 @@ class LatchGateTests(unittest.TestCase):
 
 
 def _supervisor(caps, safety=None):
-    manifest = {"capabilities": [{"id": "safety.stop"}, {"id": "system.health"}] + caps, "safety": safety or {}}
+    # "simulated": a stand-in body. Since issue #22 a body that does not say so needs limits filled in
+    # by a person before any motion, and these tests are about the limiters behind that check.
+    manifest = {"simulated": True, "capabilities": [{"id": "safety.stop"}, {"id": "system.health"}] + caps,
+                "safety": safety or {}}
     return SafetySupervisor(manifest, None, EventBus(), ManualClock())
 
 

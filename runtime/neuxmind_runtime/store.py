@@ -53,23 +53,40 @@ class Store:
     def put(self, kind: str, obj: dict) -> dict:
         data = json.dumps(obj, ensure_ascii=False, allow_nan=False)
         with self._lock:
-            self._db.execute(
-                "INSERT OR REPLACE INTO objects (kind, id, payload) VALUES (?, ?, ?)",
-                (kind, obj["id"], data),
-            )
-            self._db.commit()
+            try:
+                self._db.execute(
+                    "INSERT OR REPLACE INTO objects (kind, id, payload) VALUES (?, ?, ?)",
+                    (kind, obj["id"], data),
+                )
+                self._db.commit()
+            except Exception:
+                self._discard_pending()
+                raise
         return obj
 
     def insert_new(self, kind: str, obj: dict) -> bool:
         """Insert only if absent. Returns False when the id already exists."""
         data = json.dumps(obj, ensure_ascii=False, allow_nan=False)
         with self._lock:
-            cur = self._db.execute(
-                "INSERT OR IGNORE INTO objects (kind, id, payload) VALUES (?, ?, ?)",
-                (kind, obj["id"], data),
-            )
-            self._db.commit()
+            try:
+                cur = self._db.execute(
+                    "INSERT OR IGNORE INTO objects (kind, id, payload) VALUES (?, ?, ?)",
+                    (kind, obj["id"], data),
+                )
+                self._db.commit()
+            except Exception:
+                self._discard_pending()
+                raise
             return cur.rowcount == 1
+
+    def _discard_pending(self) -> None:
+        """A write failed (disk full, I/O error on commit): drop what it left in the open
+        transaction. Otherwise the next successful write would commit it too, and a caller that
+        was told "not saved" (issue #22: the safety limits) would find it saved after a restart."""
+        try:
+            self._db.rollback()
+        except Exception:
+            pass
 
     def close(self) -> None:
         with self._lock:
