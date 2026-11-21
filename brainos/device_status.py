@@ -227,8 +227,8 @@ def _recent(part):
 
 
 def _session_lost(connection):
-    """The session broke without saying where. Through a jump host either hop may have dropped it."""
-    if connection.get('jump'):
+    """The session broke without saying where. Through jump hosts any hop may have dropped it."""
+    if device_access.jumps_of(connection):
         return {'hop': 'connection', 'reason': 'unreachable', 'message': 'SSH 会话中断；请确认跳板机和设备都在线'}
     return {'hop': 'device', 'reason': 'unreachable', 'message': 'SSH 会话中断；请确认设备在线'}
 
@@ -238,9 +238,9 @@ def _endpoint(endpoint):
 
 
 def _view(connection, error, status=None, latency_ms=None):
-    jump = connection.get('jump')
+    jumps = device_access.jumps_of(connection)       # issue #15: every hop of the route, in order
     return {'checked_at': time.time(), 'reachable': status is not None, 'latency_ms': latency_ms,
-            'via_jump': bool(jump), 'target': _endpoint(connection), 'jump': _endpoint(jump) if jump else None,
+            'via_jump': bool(jumps), 'target': _endpoint(connection), 'jump': ' → '.join(map(_endpoint, jumps)) or None,
             'status': status, 'error': error, 'hardware': None, 'software': None, 'refresh_seconds': REFRESH_SECONDS}
 
 
@@ -323,7 +323,7 @@ class StatusSessions:
             result = entry['device'].execute(command, COMMAND_TIMEOUT_SECONDS, redact=False)
             latency_ms = round((time.monotonic() - started) * 1000)
         except device_access.ConnectError as exc:
-            return _view(connection, {'hop': exc.hop, 'reason': exc.reason, 'message': str(exc)})
+            return _view(connection, {'hop': exc.hop, 'level': exc.level, 'reason': exc.reason, 'message': str(exc)})
         except Exception as exc:                      # paramiko / EOF / socket errors of a dead session
             LOG.warning('SSH status session of %s failed: %s', connection['id'], type(exc).__name__)
             self._drop(entry)

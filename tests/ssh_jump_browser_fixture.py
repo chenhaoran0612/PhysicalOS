@@ -1,11 +1,16 @@
-"""Browser fixture: the console plus a "robot" and a "jump host" SSH protocol fixture.
+"""Browser fixture: the console plus a "robot" and "jump host" SSH protocol fixtures.
 
     python tests/ssh_jump_browser_fixture.py [info.json]
 
-Writes the console URL, both SSH ports and the fixture logins to the JSON file and
+Writes the console URL, the SSH ports and the fixture logins to the JSON file and
 serves until interrupted. Nothing here reaches a real machine.
+
+Issue #15 adds a chain of three jump hosts (``chain``: only the last one reaches the robot, each has
+its own login, made up on every run) and a jump host that is not typed anywhere (``inner``): the
+first jump host's ssh config names it as the ProxyJump of the name "pup".
 """
 import json
+import secrets
 import sys
 import tempfile
 import time
@@ -33,10 +38,22 @@ if __name__ == '__main__':
                                          hardware_scan.SCAN_EXEC: jetson().encode()})      # issue #2: scan after connecting
     # What `ssh dog` would connect to from the jump host: the answer its `ssh -G dog` gives.
     alias = {device_access.resolve_command('dog'): f'user robot\nhostname 127.0.0.1\nport {target.port}\n'.encode()}
-    jump = SSHFixture(username=JUMP_USER, password=JUMP_PASSWORD, forward_to=[('127.0.0.1', target.port)],
-                      command_outputs=alias)
+    # Issue #15: a jump host the user never typed. "pup" is the robot again, but the jump host's config sends
+    # it through "inner" first (ProxyJump).
+    inner = SSHFixture(username='inner', password=secrets.token_hex(6), forward_to=[('127.0.0.1', target.port)])
+    alias[device_access.resolve_command('pup')] = f'user robot\nhostname 127.0.0.1\nport {target.port}\nproxyjump inner\n'.encode()
+    alias[device_access.resolve_command('inner')] = f'user inner\nhostname 127.0.0.1\nport {inner.port}\n'.encode()
+    jump = SSHFixture(username=JUMP_USER, password=JUMP_PASSWORD,
+                      forward_to=[('127.0.0.1', target.port), ('127.0.0.1', inner.port)], command_outputs=alias)
+    # Issue #15: three jump hosts in a row. This machine reaches the first, each one the next, the last the robot.
+    chain, reach = [], target
+    for level in (3, 2, 1):
+        reach = SSHFixture(username=f'gate{level}', password=secrets.token_hex(6), forward_to=[('127.0.0.1', reach.port)])
+        chain.insert(0, reach)
     info = {'url': api.url, 'target_port': target.port, 'target_user': 'robot', 'target_password': 'fixture-password',
-            'jump_port': jump.port, 'jump_user': JUMP_USER, 'jump_password': JUMP_PASSWORD, 'services': SERVICES}
+            'jump_port': jump.port, 'jump_user': JUMP_USER, 'jump_password': JUMP_PASSWORD, 'services': SERVICES,
+            'chain': [{'port': gate.port, 'user': gate.username, 'password': gate.password} for gate in chain],
+            'inner': {'port': inner.port, 'user': inner.username, 'password': inner.password}}
     with open(sys.argv[1] if len(sys.argv) > 1 else '/tmp/neuxmind-ssh-jump-ui.json', 'w') as f:
         json.dump(info, f)
     print(api.url, flush=True)
@@ -46,4 +63,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
     finally:
-        api.close(); app.close(); target.close(); jump.close(); tmp.cleanup()
+        api.close(); app.close(); target.close(); jump.close(); inner.close()
+        for gate in chain:
+            gate.close()
+        tmp.cleanup()

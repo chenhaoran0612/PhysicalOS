@@ -18,7 +18,7 @@ const sandbox = {
   date: value => String(value),
   notice: (text, warn = false) => `<div class="notice ${warn ? 'warn' : ''}"><div>${text}</div></div>`,
   button: (text, action, cls = '', id = '') => `<button class="button ${cls}" data-action="${action}" data-id="${h(id)}">${text}</button>`,
-  sshRouteLabel: c => (c?.jump ? `（经跳板机 ${c.jump.username}@${c.jump.host}:${c.jump.port}）` : ''),
+  sshRouteLabel: c => (c?.jumps?.length ? `（经跳板机 ${c.jumps.map(j => `${j.username}@${j.host}:${j.port}`).join(' → ')}）` : ''),
 };
 vm.createContext(sandbox);
 const {robotRemovePlan: plan, robotRemoveCardButton: cardButton, robotRemoveFacts: factsOf, robotRemoveDialog: dialogOf} =
@@ -30,7 +30,7 @@ const includes = (text, part, what) => { assert.ok(String(text).includes(part), 
 
 const robot = {id: 'robot-1', name: 'dog', endpoint: ''};
 const direct = {host: '192.0.2.10', port: 22, username: 'robot', auth: 'password'};
-const viaJump = {...direct, jump: {host: '203.0.113.10', port: 2222, username: 'ops', auth: 'password'}};
+const viaJump = {...direct, jumps: [{host: '203.0.113.10', port: 2222, username: 'ops', auth: 'password'}]};
 const facts = (changes = {}) => ({connection: direct, sessions: [], running: null, reports: 0, scans: 0, repairs: 0,
                                   applications: [], flowRunning: null, flowsUnfinished: 0, ...changes});
 const session = (mode, status = 'completed') => ({id: `agent-session-${mode}-${status}`, mode, status});

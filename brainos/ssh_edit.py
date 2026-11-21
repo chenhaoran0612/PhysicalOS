@@ -8,18 +8,21 @@ connection record in place: the robot, its investigations, inventories and hardw
   call ``prepare`` first, and ``connect`` hands the tested connection to ``apply`` instead of
   creating a robot.
 * A hop whose address changed has its fingerprint confirmed again, exactly as when connecting
-  (both hops through a jump host). ``update`` saves without that only while no address changed,
+  (every hop through jump hosts). ``update`` saves without that only while no address changed,
   and then the hops stay pinned to the fingerprints confirmed before.
 * Credentials never come back. A credential field left empty keeps the saved login, and a saved
   login is only ever sent to the machine it was saved for: the host key of that hop must be the
   one confirmed before. Any other machine gets a login only if it is typed again.
+* Several jump hosts in a row (issue #15) follow the same rules hop by hop. A hop is compared with
+  the saved hop of the same level: a jump host that moved to another place in the route is, for
+  its saved login, a new one.
 * Saving never waits for the robot (issue #12): an investigation, a repair or a hardware scan that is
   running does not stop it. A session that is already running keeps the SSH session it opened and ends
   on the machine it started on; see ``ConnectionEdit.session_login``.
 """
 import time
 
-from . import device_access
+from . import device_access, ssh_route
 from .service import now, uid
 
 SECRET_FIELDS = ('password', 'private_key', 'passphrase')
@@ -29,7 +32,7 @@ ADDRESS_CHANGED = '主机或跳板机的地址变了：要先重新读取并确�
 CHANGED_MEANWHILE = '这台机器人的连接刚刚被改过；请关闭后重新打开“配置连接”再改'
 MOVED_AWAY = ('这台机器人的 SSH 连接改过了，现在指向另一台机器（主机指纹和本次会话开始时不同）。'
               '本次会话不会换到那台机器上继续，新保存的登录信息也不会发给原来那台机器。请结束本次会话，再重新开始')
-ROUTE_ONLY_FIELDS = ('jump', 'alias')      # present only on some routes: never carried over from the old record
+ROUTE_ONLY_FIELDS = ('jump', 'jumps', 'alias')      # present only on some routes: never carried over from the old record
 REVISION = '_edit_revision'        # set by prepare: the saved connection's last change, as this request saw it
 
 
@@ -39,6 +42,11 @@ def _endpoint(hop):
 
 def _address(hop):
     return (hop['host'], hop['port']) if hop else None
+
+
+def _route(connection):
+    """The jump hosts of a connection as one line for the audit, first hop first; None for a direct one."""
+    return ' → '.join(_endpoint(hop) for hop in device_access.jumps_of(connection)) or None
 
 
 def _device_secret(secret):
@@ -55,13 +63,14 @@ def _hide_too(device, secret):
     device.secrets = list(dict.fromkeys([*device.secrets, *device_access.secret_values(secret)]))
 
 
-def _secret_to_save(connection, secret):
+def secret_to_save(connection, secret):
     """The logins of a connection as they are stored: per hop, only what its login method uses."""
     kept = {key: secret.get(key, '') if key in _used_fields(connection['auth']) else '' for key in SECRET_FIELDS}
-    jump = connection.get('jump')
-    if jump:
-        kept.update({'jump_' + key: secret.get('jump_' + key, '') if key in _used_fields(jump['auth']) else ''
-                     for key in SECRET_FIELDS})
+    jumps = device_access.jumps_of(connection)
+    if jumps:
+        logins = device_access.jump_secrets(secret, len(jumps))
+        kept['jumps'] = [{key: login[key] if key in _used_fields(hop['auth']) else '' for key in SECRET_FIELDS}
+                         for hop, login in zip(jumps, logins)]
     return kept
 
 
@@ -86,35 +95,58 @@ class ConnectionEdit:
         with self.store.atomic():                         # the record and the logins of one and the same edit
             _, saved = self._editable(p)
             secret = self.store.get('agent_secrets', saved['id'])
-        engine, p = self.platform.engineering, dict(p)
-        p[REVISION] = saved.get('updated_at')
-        saved_jump = saved.get('jump') or {}
-        if p.get('host_check_id'):                        # connect: the device login, and the jump login once more
+        engine, p = self.platform.engineering, {**ssh_route.canonical(p), REVISION: saved.get('updated_at')}
+        if p.get('host_check_id'):                        # connect: the device login, and every jump login once more
             check = engine._host_check(p['host_check_id'], p.get('project_id'))
             if check.get('stage') != 'jump' and p.get('trust_fingerprint') == check['fingerprint']:
-                self._keep_login(p, '', '设备', p.get('auth'), saved, check, secret)
-                if check.get('jump'):
-                    self._keep_login(p, 'jump_', '跳板机', check['jump']['auth'], saved_jump, check['jump'], secret)
-        elif p.get('jump_check_id'):                      # second scan: reads the device key through the jump host
-            first = engine._host_check(p['jump_check_id'], p.get('project_id'))
-            if first.get('stage') == 'jump' and p.get('trust_jump_fingerprint') == first['fingerprint']:
-                self._keep_login(p, 'jump_', '跳板机', p.get('jump_auth'), saved_jump, first, secret)
+                p = self._keep_login(p, '设备', p.get('auth'), saved, check['fingerprint'], secret)
+                confirmed = [(hop.get('auth'), hop['fingerprint']) for hop in device_access.jumps_of(check)]
+                p = self._keep_jump_logins(p, confirmed, saved, secret)
+        elif p.get('jump_check_id'):                      # a further scan: reads the next key through the hops confirmed so far
+            last = engine._host_check(p['jump_check_id'], p.get('project_id'))
+            if last.get('stage') == 'jump' and p.get('trust_jump_fingerprint') == last['fingerprint']:
+                p = self._keep_jump_logins(p, self._confirmed_so_far(p, last), saved, secret)
         return p
 
     @staticmethod
-    def _keep_login(p, prefix, label, auth, saved_hop, confirmed_hop, secret):
-        """Fill one hop's empty credential field with its saved login, if the hop is still the same machine.
+    def _confirmed_so_far(p, check):
+        """(login method, confirmed fingerprint) of every hop a jump check has behind it. The hop the check
+        itself read is confirmed by this request and brings its login method with it."""
+        recorded = check['route']['jumps'][:check['level']]
+        given = p.get('jumps') if isinstance(p.get('jumps'), list) else []
+        asked = [hop.get('auth') if isinstance(hop, dict) else None for hop in given] + [None] * len(recorded)
+        return [(hop.get('auth', asked[index]), hop.get('fingerprint', check['fingerprint']))
+                for index, hop in enumerate(recorded)]
 
-        The caller pins the connection to ``confirmed_hop``'s fingerprint, so the saved login can only
-        reach a machine that holds the host key it was saved for."""
+    def _keep_jump_logins(self, p, confirmed, saved, secret):
+        """The request with the saved login of every confirmed jump host whose credential field was left empty.
+        A hop is compared with the saved hop of the same level."""
+        given = p.get('jumps')
+        if not isinstance(given, list) or len(given) < len(confirmed) or not all(isinstance(hop, dict) for hop in given):
+            return p                                      # not the route that was confirmed: refused where it is used
+        saved_hops = device_access.jumps_of(saved)
+        saved_logins = device_access.jump_secrets(secret, len(saved_hops))
+        kept = list(given)
+        for index, (auth, fingerprint) in enumerate(confirmed):
+            before = (saved_hops[index], saved_logins[index]) if index < len(saved_hops) else ({}, {})
+            kept[index] = self._keep_login(given[index], ssh_route.jump_label(index + 1, len(given)), auth,
+                                           before[0], fingerprint, before[1])
+        return {**p, 'jumps': kept}
+
+    @staticmethod
+    def _keep_login(fields, label, auth, saved_hop, fingerprint, saved_login):
+        """One hop's login fields, the empty credential field filled with its saved login if the hop is
+        still the same machine (``fingerprint``: the one just confirmed for it).
+
+        The caller pins the connection to that fingerprint, so the saved login can only reach a machine
+        that holds the host key it was saved for."""
         field, name = SECRET_OF_AUTH.get(auth, (None, None))
-        if not field or p.get(prefix + field) or auth != saved_hop.get('auth'):
-            return                                        # no secret needed, a new one was typed, or none is saved
-        if confirmed_hop['fingerprint'] != saved_hop.get('fingerprint'):
+        if not field or fields.get(field) or auth != saved_hop.get('auth'):
+            return fields                                 # no secret needed, a new one was typed, or none is saved
+        if fingerprint != saved_hop.get('fingerprint'):
             raise ValueError(f'{label}的主机指纹和原来保存的不同（换了一台机器，或重装过系统），'
                              f'已保存的{name}不会发给它；请重新输入{label}的{name}')
-        for key in SECRET_FIELDS:
-            p[prefix + key] = p.get(prefix + key) or secret.get(prefix + key, '')
+        return {**fields, **{key: fields.get(key) or saved_login.get(key, '') for key in SECRET_FIELDS}}
 
     def update(self, p):
         """Save an edit of a robot's SSH connection.
@@ -162,19 +194,21 @@ class ConnectionEdit:
     def _confirmed_before(p, saved):
         """A host check for a request that keeps every address: the fingerprints confirmed when these
         addresses were connected. ``Engineering.connect`` treats it like a check that was just confirmed."""
-        jump = device_access.jump_target(p)
-        if p.get('resolve_on_jump'):
-            raise ValueError(ADDRESS_CHANGED)             # asking the jump host again is a new look-up
-        host, port, user = device_access.target(p)
-        saved_jump = saved.get('jump')
-        if (host, port) != _address(saved) or _address(jump) != _address(saved_jump):
-            raise ValueError(ADDRESS_CHANGED)
-        check = {'id': uid('ssh-key'), 'project_id': saved['project_id'], 'host': host, 'port': port, 'username': user,
+        p = ssh_route.canonical(p)
+        route = ssh_route.request_route(p)
+        jumps, target, saved_jumps = route['jumps'], route['target'], device_access.jumps_of(saved)
+        if any('resolve_on' in place for place in jumps + [target]):
+            raise ValueError(ADDRESS_CHANGED)             # asking a jump host again is a new look-up
+        if _address(target) != _address(saved) or [_address(hop) for hop in jumps] != [_address(hop) for hop in saved_jumps]:
+            raise ValueError(ADDRESS_CHANGED)             # another address, another number of hops or another order
+        check = {'id': uid('ssh-key'), 'project_id': saved['project_id'], **target,
                  'fingerprint': saved['fingerprint'], 'scanned_at': time.time(), 'confirmed_for': saved['id']}
         if saved.get('alias'):
             check['alias'] = saved['alias']
-        if jump:
-            check['jump'] = {**jump, 'auth': p.get('jump_auth'), 'fingerprint': saved_jump['fingerprint']}
+        if jumps:                                         # the name a hop was found under stays with its fingerprint
+            check['jumps'] = [{**hop, 'auth': given.get('auth'), 'fingerprint': before['fingerprint'],
+                               **({'alias': before['alias']} if before.get('alias') else {})}
+                              for hop, given, before in zip(jumps, p['jumps'], saved_jumps)]
         return check
 
     def apply(self, p, connection, secret):
@@ -186,7 +220,7 @@ class ConnectionEdit:
             if saved.get('updated_at') != p.get(REVISION):
                 raise ValueError(CHANGED_MEANWHILE)       # another edit was saved while this one was being tested
             old_secret = self.store.get('agent_secrets', saved['id'])
-            secret = _secret_to_save(connection, secret)
+            secret = secret_to_save(connection, secret)
             # Fields this module does not know stay; a jump host or a name the new route no longer has goes.
             kept = {key: value for key, value in saved.items() if key not in ROUTE_ONLY_FIELDS}
             updated = {**kept, **connection, 'id': saved['id'], 'robot_id': robot['id'],
@@ -207,11 +241,12 @@ class ConnectionEdit:
         changed = [key for key in AUDITED_FIELDS if old.get(key) != new.get(key)]
         if _device_secret(old_secret) != _device_secret(new_secret):
             changed.append('credentials')
-        if old.get('jump') != new.get('jump'):
+        old_jumps, new_jumps = device_access.jumps_of(old), device_access.jumps_of(new)
+        if old_jumps != new_jumps:
             changed.append('jump')
-        if device_access.jump_secret(old_secret) != device_access.jump_secret(new_secret):
+        if device_access.jump_secrets(old_secret, len(old_jumps)) != device_access.jump_secrets(new_secret, len(new_jumps)):
             changed.append('jump_credentials')
         return {'robot_id': robot['id'], 'connection_id': new['id'], 'changed': changed,
-                'before': {'target': _endpoint(old), 'jump': _endpoint(old.get('jump'))},
-                'after': {'target': _endpoint(new), 'jump': _endpoint(new.get('jump'))},
+                'before': {'target': _endpoint(old), 'jump': _route(old)},
+                'after': {'target': _endpoint(new), 'jump': _route(new)},
                 'fingerprint_changed': old['fingerprint'] != new['fingerprint']}

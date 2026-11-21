@@ -6,9 +6,11 @@
 // Passwords and keys are never sent to the page: an empty field keeps the saved login.
 // Issue #12: the form opens and saves whatever the robot is doing. A running investigation or repair
 // is named in the form, not a reason to refuse: it goes on over the SSH session it already has.
+// Issue #15: several jump hosts in a row. Every hop follows the same rules, compared with the saved
+// hop of the same level.
 
 const SSH_EDIT_SECRETS = {password: ['password', '密码'], key: ['private_key', '私钥']};
-const SSH_EDIT_SECRET_FIELDS = ['password', 'private_key', 'passphrase', 'jump_password', 'jump_private_key', 'jump_passphrase'];
+const SSH_EDIT_SECRET_FIELDS = ['password', 'private_key', 'passphrase'];      // the device's; a jump host's are typed as step_*
 const SSH_EDIT_FORM = '#dialog form[data-form="engine-ssh"]';
 const SSH_EDIT_SESSION_NAMES = {discovery: '调查', repair: '修复'};
 let sshEditBaseAction = null, sshEditBaseSubmit = null;
@@ -16,19 +18,28 @@ let sshEditBaseAction = null, sshEditBaseSubmit = null;
 const sshEditSaved = robotId => find('device_connections', find('robots', robotId)?.connection_id);
 const sshEditBusy = robotId => rows('agent_sessions').find(s => s.robot_id === robotId && engineActive(s.status));
 
-// The hops of a request as the form names their fields, each with what is saved for it.
-function sshEditHops(p, saved) {
-  const hops = [{prefix: '', label: '设备', title: '', saved}];
-  if (p.route === 'jump') hops.push({prefix: 'jump_', label: '跳板机', title: '跳板机 ', saved: saved.jump || null});
-  return hops;
+// One jump host of a request as the form names its fields, with what is saved for that level.
+function sshEditJumpHop(level, total, saved) {
+  const label = sshJumpLabel(level, total);
+  return {prefix: sshJumpPrefix(level), label, title: label + ' ', saved: saved.jumps?.[level - 1] || null};
 }
 
-// True when a hop's address changed, or a name has to be resolved again: the fingerprints are then
-// read and confirmed again, as for a new connection. The backend applies the same rule.
+// The hops of a request, the device first, then the jump hosts in their order.
+function sshEditHops(p, saved) {
+  const jumps = sshFormJumps(p);
+  return [{prefix: '', label: '设备', title: '', saved},
+          ...jumps.map((_, index) => sshEditJumpHop(index + 1, jumps.length, saved))];
+}
+
+// True when a hop's address changed, the number or order of the jump hosts did, or a name has to be
+// resolved again: every fingerprint is then read and confirmed again, as for a new connection. The
+// backend applies the same rule.
 function sshEditAddressChanged(p, saved) {
-  const viaJump = p.route === 'jump';
-  if (viaJump !== Boolean(saved.jump) || p.host.trim() !== saved.host || Number(p.port) !== saved.port) return true;
-  return viaJump && (Boolean(p.resolve_on_jump) || p.jump_host.trim() !== saved.jump.host || Number(p.jump_port) !== saved.jump.port);
+  const jumps = sshFormJumps(p), before = saved.jumps || [];
+  if (jumps.length !== before.length || p.host.trim() !== saved.host || Number(p.port) !== saved.port) return true;
+  if (jumps.length && p.resolve_on_jump) return true;
+  return jumps.some((hop, index) => Boolean(hop.resolve_on) || String(hop.host).trim() !== before[index].host ||
+                                    Number(hop.port) !== before[index].port);
 }
 
 // A login method other than the saved one has nothing to fall back on: say so before any step is taken.
@@ -58,13 +69,30 @@ function sshEditMovedNote(session) {
                 '它得到的结果说的也是原来那台机器。建议停止它，再重新开始。', true);
 }
 
+const SSH_EDIT_PLACEHOLDERS = {password: '', private_key: '粘贴私钥内容', passphrase: ''};       // what the form shows without a saved login
+// The field names are quoted: unquoted, the commit hook's secret scan takes a long hint after "password" for a credential.
+const SSH_EDIT_KEEP_HINTS = {password: {'password': '留空：沿用已保存的密码'},
+                             key: {'private_key': '留空：沿用已保存的私钥', 'passphrase': '留空：沿用已保存的口令'}};
+
+// The credential fields of one hop say whether leaving them empty keeps a saved login (`auth`: the
+// login method that is saved for this hop; none when nothing saved applies to it).
 function sshEditKeepHint(prefix, auth) {
-  const hints = {password: [['password', '留空：沿用已保存的密码']],
-                 key: [['private_key', '留空：沿用已保存的私钥'], ['passphrase', '留空：沿用已保存的口令']]};
-  for (const [name, text] of hints[auth] || []) {
-    const control = $(`#dialog [name="${prefix}${name}"]`);
-    if (control) control.placeholder = text;
+  const hints = SSH_EDIT_KEEP_HINTS[auth] || {};
+  for (const [name, plain] of Object.entries(SSH_EDIT_PLACEHOLDERS)) {
+    const control = $(`#dialog [name="${prefix}${name}"]`), text = hints[name] ?? plain;
+    if (control && control.placeholder !== text) control.placeholder = text;
   }
+}
+
+// The hints of the jump hosts follow the rows: a jump host is added, removed or pasted over while the
+// form is open. A row keeps the hint only while it still shows the address saved for its level, since
+// a saved login is never sent to the machine that took another one's place.
+function sshEditJumpHints(p, saved) {
+  const jumps = sshFormJumps(p), before = saved.jumps || [];
+  jumps.forEach((hop, index) => {
+    const same = before[index] && String(hop.host).trim() === before[index].host && Number(hop.port) === before[index].port;
+    sshEditKeepHint(sshJumpPrefix(index + 1), same ? before[index].auth : '');
+  });
 }
 
 function sshEditNotes(robot, saved) {
@@ -74,7 +102,7 @@ function sshEditNotes(robot, saved) {
     : '';
   return alias +
     '<div id="ssh-edit-route" hidden>' +
-    notice('主机或跳板机的地址变了：保存前要重新读取并确认主机指纹（经跳板机时两跳都要），和新接入时一样。', true) + '</div>' +
+    notice('主机或跳板机的地址变了，或者跳板机的级数、顺序变了：保存前要重新读取并确认主机指纹（经跳板机时每一级都要），和新接入时一样。', true) + '</div>' +
     '<label class="hardware-confirm"><input type="checkbox" name="rescan" value="1">' +
     '<span>重新读取并确认主机指纹。地址没变、但设备重装过系统，或提示“指纹与已确认的不一致”时勾选。</span></label>' +
     '<p class="inline-note">机器人上已经运行 NeuxMind 运行时或兼容的接入服务？' +
@@ -87,17 +115,14 @@ function sshEditFill(robot, saved) {
   if (!form) return;
   $('#dialog .dialog-head h2').textContent = '配置连接';
   $('#dialog .dialog-head p').textContent = `${robot.name} · 修改这台机器人的 SSH 连接。保存前会用新的设置登录一次，登录不上就不保存。`;
+  const jumps = saved.jumps || [];
   const values = {host: saved.host, port: saved.port, username: saved.username, auth: saved.auth,
-                  route: saved.jump ? 'jump' : 'direct', read_roots: saved.read_roots.join('\n'),
+                  route: jumps.length ? 'jump' : 'direct', read_roots: saved.read_roots.join('\n'),
                   watch_services: (saved.watch_services || []).join('\n')};
-  if (saved.jump) {
-    Object.assign(values, {jump_host: saved.jump.host, jump_port: saved.jump.port,
-                           jump_username: saved.jump.username, jump_auth: saved.jump.auth});
-  }
-  // route comes before the jump fields in this order, so they are enabled by the time they are filled
+  // the route is set before the jump hosts are filled in, so their controls are enabled by then
   for (const [name, value] of Object.entries(values)) sshSetControl(name, value);
-  sshEditKeepHint('', saved.auth);
-  if (saved.jump) sshEditKeepHint('jump_', saved.jump.auth);
+  if (jumps.length) sshSetHops(jumps.map(hop => ({host: hop.host, port: hop.port, username: hop.username, auth: hop.auth})));
+  sshEditKeepHint('', saved.auth);        // the jump hosts' hints: sshEditSync, below and whenever the rows change
   const body = form.querySelector('.dialog-body');
   body.querySelector('.form-error').insertAdjacentHTML('afterend', sshEditRunningNote(robot.id) +
     notice('密码和私钥不会显示在这里。留空就沿用已保存的；已保存的登录信息只会发给指纹和原来一致的那台机器。'));
@@ -111,6 +136,7 @@ function sshEditSync() {
   const form = $(SSH_EDIT_FORM), saved = sshEditSaved(form?.elements.edit_robot_id?.value);
   if (!saved) return;
   const p = Object.fromEntries(new FormData(form)), moved = sshEditAddressChanged(p, saved);
+  sshEditJumpHints(p, saved);
   const note = $('#ssh-edit-route'), button = form.querySelector('[type=submit]');
   const label = moved || p.rescan ? '读取主机指纹' : '保存';
   if (note.hidden === moved) note.hidden = !moved;
@@ -127,13 +153,14 @@ function sshEditOpen(robotId) {
 
 // ---------------------------------------------------------------- fingerprint steps
 
-function sshEditSecretFields(hop, auth) {
+// `prefix`: how the step names the fields ('' for the device; step_ for the jump host a step shows).
+function sshEditSecretFields(hop, auth, prefix) {
   const why = `已保存的${SSH_EDIT_SECRETS[auth][1]}不会发给另一台机器，请重新输入。`;
   if (auth === 'password') {
-    return field(`${hop.title}SSH 密码`, `<input name="${hop.prefix}password" type="password" autocomplete="new-password" required>`, why);
+    return field(`${hop.title}SSH 密码`, `<input name="${prefix}password" type="password" autocomplete="new-password" required>`, why);
   }
-  return field(`${hop.title}SSH 私钥`, `<textarea name="${hop.prefix}private_key" spellcheck="false" placeholder="粘贴私钥内容" required></textarea>`, why) +
-    field('私钥解密口令（可选）', `<input name="${hop.prefix}passphrase" type="password" autocomplete="new-password">`);
+  return field(`${hop.title}SSH 私钥`, `<textarea name="${prefix}private_key" spellcheck="false" placeholder="粘贴私钥内容" required></textarea>`, why) +
+    field('私钥解密口令（可选）', `<input name="${prefix}passphrase" type="password" autocomplete="new-password">`);
 }
 
 // A fingerprint step of an edit is on screen: say whether this is the machine the robot was connected
@@ -143,17 +170,20 @@ function sshEditDecorateStep() {
   const confirm = form?.querySelector('.hardware-confirm');
   if (!saved || !confirm) return;
   const device = Boolean(draft.host_check_id);          // the device's key has been read: this is its step
-  const hop = sshEditHops({route: 'jump'}, saved)[device ? 0 : 1];
+  const level = draft.jump_level, total = draft.jumps?.length || 0;
+  const hop = device ? {label: '设备', title: '', saved} : sshEditJumpHop(level, total, saved);
   const fingerprint = device ? draft.trust_fingerprint : draft.trust_jump_fingerprint;
-  const auth = draft[hop.prefix + 'auth'], secret = (SSH_EDIT_SECRETS[auth] || [])[0];
-  let html;
+  const login = device ? draft : draft.jumps[level - 1];       // what the form (or an earlier step) gave for this hop
+  const secret = (SSH_EDIT_SECRETS[login.auth] || [])[0];
+  let html = '';
   if (!hop.saved) {
-    html = notice('这台机器人以前没有经过跳板机连接，这是第一次保存这台跳板机的指纹。');
+    html = notice(saved.jumps?.length ? `这台机器人原来的路线里没有${hop.label}，这是第一次保存它的指纹。`
+                                      : '这台机器人以前没有经过跳板机连接，这是第一次保存这台跳板机的指纹。');
   } else if (fingerprint === hop.saved.fingerprint) {
     html = notice(`和这台机器人原来保存的${hop.label}指纹一致：还是同一台机器。`);
   } else {
     html = notice(`和这台机器人原来保存的${hop.label}指纹不同：这是另一台机器，或者它重装过系统。请和设备管理员核对后再确认。`, true);
-    if (secret && !draft[hop.prefix + secret] && auth === hop.saved.auth) html += sshEditSecretFields(hop, auth);
+    if (secret && !login[secret] && login.auth === hop.saved.auth) html += sshEditSecretFields(hop, login.auth, device ? '' : 'step_');
   }
   confirm.insertAdjacentHTML('beforebegin', html);
   if (device) form.querySelector('[type=submit]').textContent = '确认并保存';
@@ -199,8 +229,8 @@ async function sshEditSubmit(p, f) {
     sshEditDecorateStep();
     return result;
   }
-  // No address changed: the hops stay pinned to the fingerprints confirmed before.
-  return sshEditSave({...p, ...sshScanRequest(p), read_roots: sshServiceList(p.read_roots),
+  // No address changed: the hops stay pinned to the fingerprints confirmed before. Every hop sends its login fields.
+  return sshEditSave({...p, ...sshScanRequest(p, Infinity), read_roots: sshServiceList(p.read_roots),
                       watch_services: sshServiceList(p.watch_services), ssh_command: undefined});
 }
 
@@ -219,7 +249,7 @@ async function sshEditSubmit(p, f) {
   engineSubmit = async (kind, p, f) => {
     if (kind === 'engine-ssh' && p.edit_robot_id) return sshEditSubmit(p, f);
     if (sshDraft?.edit_robot_id && (kind === 'engine-ssh-jump' || kind === 'engine-ssh-confirm')) {
-      sshDraft = {...sshDraft, ...sshEditTyped(p)};                     // a login typed in this step
+      if (kind === 'engine-ssh-confirm') sshDraft = {...sshDraft, ...sshEditTyped(p)};      // the device's login, typed in this step
       if (kind === 'engine-ssh-confirm') return sshEditSave(sshDraft);
       const result = await sshEditBaseSubmit(kind, p, f);
       sshEditDecorateStep();

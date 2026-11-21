@@ -45,8 +45,8 @@ class EditCase(base.SshCase):
         request = {'project_id': self.pid, 'edit_robot_id': connection['robot_id'], 'host': connection['host'],
                    'port': connection['port'], 'username': connection['username'], 'auth': connection['auth'],
                    'read_roots': connection['read_roots'], 'watch_services': connection['watch_services']}
-        if connection.get('jump'):
-            jump = connection['jump']
+        if connection.get('jumps'):                 # one hop, sent the way the form did before issue #15: still accepted
+            jump = connection['jumps'][0]
             request.update(jump={k: jump[k] for k in ('host', 'port', 'username')}, jump_auth=jump['auth'])
         return {**request, **changes}
 
@@ -110,7 +110,7 @@ class EditInPlaceTests(EditCase):
 
         self.assertEqual(self.secret(new), before)
         self.assertEqual((new['watch_services'], new['read_roots']), (base.SERVICES, ['/opt/ros', '/etc/robot']))
-        self.assertEqual(new['jump'], old['jump'])
+        self.assertEqual(new['jumps'], old['jumps'])
         # the kept logins were tried on both hops before anything was saved
         self.assertEqual((len(self.jump.auth_attempts), len(self.target.auth_attempts)), (attempts[0] + 1, attempts[1] + 1))
 
@@ -158,7 +158,7 @@ class EditInPlaceTests(EditCase):
 
         stored = self.secret(new)
         self.assertEqual((stored['password'], stored['private_key']), ('', key_text(key)))
-        self.assertEqual(stored['jump_password'], base.JUMP_PASSWORD)    # the other hop is untouched
+        self.assertEqual(stored['jumps'][0]['password'], base.JUMP_PASSWORD)    # the other hop is untouched
         self.assertNotIn(leftover, json.dumps(stored))
 
     def test_a_saved_private_key_is_kept_while_the_key_field_stays_empty(self):
@@ -242,9 +242,9 @@ class FingerprintTests(EditCase):
         new = self.edit.update({**form, 'host_check_id': second['id'], 'trust_fingerprint': second['fingerprint']})
 
         self.assertEqual(new['id'], old['id'])
-        self.assertEqual(new['jump'], {'host': '127.0.0.1', 'port': self.jump.port, 'username': base.JUMP_USER,
-                                       'auth': 'password', 'fingerprint': device_access.fingerprint(self.jump.key)})
-        self.assertEqual(self.secret(new)['jump_password'], base.JUMP_PASSWORD)
+        self.assertEqual(new['jumps'], [{'host': '127.0.0.1', 'port': self.jump.port, 'username': base.JUMP_USER,
+                                         'auth': 'password', 'fingerprint': device_access.fingerprint(self.jump.key)}])
+        self.assertEqual(self.secret(new)['jumps'][0]['password'], base.JUMP_PASSWORD)
         self.assertTrue(self.status(new)['via_jump'])
 
     def test_another_jump_host_confirms_both_fingerprints_and_needs_its_login_again(self):
@@ -267,8 +267,8 @@ class FingerprintTests(EditCase):
         new = self.edit.update({**confirmed, 'jump_password': base.JUMP_PASSWORD, 'host_check_id': second['id'],
                                 'trust_fingerprint': second['fingerprint']})
 
-        self.assertEqual(new['jump']['port'], gate.port)
-        self.assertEqual(new['jump']['fingerprint'], device_access.fingerprint(gate.key))
+        self.assertEqual(new['jumps'][0]['port'], gate.port)
+        self.assertEqual(new['jumps'][0]['fingerprint'], device_access.fingerprint(gate.key))
         self.assertEqual(new['fingerprint'], old['fingerprint'])
         self.assertEqual(gate.forwarded, [('127.0.0.1', self.target.port)] * 2)     # device key read, then the login test
 
@@ -277,8 +277,8 @@ class FingerprintTests(EditCase):
 
         new = self.save_confirmed(old, jump=None)
 
-        self.assertNotIn('jump', new)
-        self.assertEqual(self.secret(new).get('jump_password', ''), '')
+        self.assertNotIn('jumps', new)
+        self.assertEqual(self.secret(new).get('jumps', []), [])
         self.assertFalse(self.status(new)['via_jump'])
 
     def test_a_saved_password_is_not_sent_to_a_different_machine(self):
@@ -512,8 +512,8 @@ class AddressRuleTests(unittest.TestCase):
 
     def changed(self, saved, **request):
         request = {'host': saved['host'], 'port': saved['port'], 'username': saved['username'], **request}
-        if saved.get('jump') and 'jump' not in request:
-            request['jump'] = {k: saved['jump'][k] for k in ('host', 'port', 'username')}
+        if saved.get('jumps') and 'jump' not in request:
+            request['jump'] = {k: saved['jumps'][0][k] for k in ('host', 'port', 'username')}
         try:
             ssh_edit.ConnectionEdit._confirmed_before(request, saved)
         except ValueError as exc:
@@ -531,7 +531,7 @@ class AddressRuleTests(unittest.TestCase):
         self.assertTrue(self.changed(saved, jump={'host': '203.0.113.10', 'port': 22, 'username': 'ops'}))
 
     def test_a_connection_through_a_jump_host(self):
-        saved = {**self.DIRECT, 'jump': self.JUMP}
+        saved = {**self.DIRECT, 'jumps': [self.JUMP]}
         self.assertFalse(self.changed(saved))
         self.assertFalse(self.changed(saved, jump={'host': '203.0.113.10', 'port': 2222, 'username': 'admin'}))
         self.assertTrue(self.changed(saved, jump={'host': '203.0.113.11', 'port': 2222, 'username': 'ops'}))
@@ -540,15 +540,15 @@ class AddressRuleTests(unittest.TestCase):
         self.assertTrue(self.changed(saved, resolve_on_jump=True))
 
     def test_the_stand_in_check_carries_the_fingerprints_confirmed_before(self):
-        saved = {**self.DIRECT, 'jump': self.JUMP, 'alias': 'dog'}
+        saved = {**self.DIRECT, 'jumps': [self.JUMP], 'alias': 'dog'}
         request = {'host': '192.0.2.10', 'port': 22, 'username': 'operator', 'jump_auth': 'key',
                    'jump': {'host': '203.0.113.10', 'port': 2222, 'username': 'admin'}}
 
         check = ssh_edit.ConnectionEdit._confirmed_before(request, saved)
 
         self.assertEqual((check['fingerprint'], check['username'], check['alias']), ('SHA256:device', 'operator', 'dog'))
-        self.assertEqual(check['jump'], {'host': '203.0.113.10', 'port': 2222, 'username': 'admin', 'auth': 'key',
-                                         'fingerprint': 'SHA256:jump'})
+        self.assertEqual(check['jumps'], [{'host': '203.0.113.10', 'port': 2222, 'username': 'admin', 'auth': 'key',
+                                           'fingerprint': 'SHA256:jump'}])
         self.assertNotIn('stage', check)
 
 
