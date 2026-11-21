@@ -51,6 +51,12 @@ ROLE_PERMISSIONS = {
     # Org-level field operator (runs robots); not the platform operator.
     "operator": {"catalog:read", "robots", "wallet:read", "usage:read"},
 }
+# Issue #33 — the material library: every member reads, a field operator does not upload or delete.
+# Both are also API-key scopes (a key never gets more than its creator's role).
+LIBRARY_PERMISSIONS = {"owner": {"library:read", "library:write"}, "admin": {"library:read", "library:write"},
+                       "developer": {"library:read", "library:write"}, "operator": {"library:read"}}
+API_KEY_SCOPES = (*API_KEY_SCOPES, "library:read", "library:write")
+ROLE_PERMISSIONS = {role: permissions | LIBRARY_PERMISSIONS[role] for role, permissions in ROLE_PERMISSIONS.items()}
 
 
 @dataclass

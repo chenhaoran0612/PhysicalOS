@@ -1,0 +1,51 @@
+/* Issue #33: the 资料库 page (web/material_library.js). Colours are the tokens of style.css. */
+:root{--material-track:#edf1e8;--material-done:#86a56c;--material-move:.25s}
+
+/* Uploads in progress: one row per file, the bar grows with a transform (no layout work per tick). */
+.material-upload{padding:16px 20px;border-top:1px solid var(--line)}
+.material-upload:first-child{border-top:0}
+.material-upload-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px}
+.material-upload-head b{color:var(--ink);font-size:12px;overflow-wrap:anywhere}
+.material-upload-head .cell-sub{font-family:inherit}
+.material-progress{height:6px;border-radius:3px;background:var(--material-track);overflow:hidden;margin:12px 0 10px}
+.material-progress i{display:block;height:100%;background:var(--green);transform-origin:left center;transition:transform var(--material-move) ease-out}
+.material-upload.good .material-progress i{background:var(--material-done)}
+.material-upload.warn .material-progress i{background:var(--amber)}
+.material-upload.bad .material-progress i{background:var(--red)}
+.material-upload-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px}
+.material-upload-state{flex:1 1 260px;font-size:11px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.material-upload.warn .material-upload-state{color:var(--amber)}
+.material-upload.bad .material-upload-state{color:var(--red)}
+/* A finished upload needs one line, not a full bar. */
+.material-upload.good{padding:11px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+.material-upload.good .material-progress{display:none}
+.material-upload.good .material-upload-head{flex:1 1 320px}
+.material-upload.good .material-upload-foot{flex:0 1 auto}
+.material-upload.good .material-upload-state{flex:0 1 auto;color:#557a41}
+.material-queue-head{display:flex;align-items:center;gap:12px}
+
+/* The list: filters sit in the section head; long file names wrap instead of widening the table. */
+.material-filters{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.material-filters select,.material-filters input{border:1px solid #dbe4d1;border-radius:5px;background:#fff;color:#405c32;min-height:31px;padding:6px 10px;font-size:11px}
+.material-filters input{width:240px;max-width:100%}
+/* The shared dropdown (dropdown.js) mirrors the select's class; keep it as wide as its content. */
+.material-type-filter.nx-select{width:auto;min-width:180px}
+.material-filters{align-items:center}
+.material-filters select:focus-visible,.material-filters input:focus-visible{outline:2px solid var(--green);outline-offset:1px}
+#material-list td{vertical-align:top}
+#material-list .cell-main{max-width:360px;overflow-wrap:anywhere}
+#material-list .cell-sub{font-family:inherit}
+.material-more{padding:14px 20px;border-top:1px solid var(--line);text-align:center}
+.material-supported{max-width:980px}
+
+/* The upload form: vendor, model and version side by side; several refusals one per line. */
+.material-label-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 12px}
+[data-library-form] .form-error{white-space:pre-line}
+[data-library-form] input[type=file]{padding:8px 10px}
+
+@media(max-width:600px){
+  .material-label-row{grid-template-columns:1fr}
+  .material-filters{justify-content:flex-start;width:100%}
+  .material-filters input{width:100%}
+}
+@media(prefers-reduced-motion:reduce){.material-progress i{transition:none}}

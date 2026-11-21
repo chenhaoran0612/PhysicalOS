@@ -114,6 +114,9 @@ def sweep(db: Database, settings: Settings, at: float | None = None) -> dict:
             ledger.mark_reconciliation(s, reservation_id, "sweeper: hold outlived any possible call/session")
             audit.record(s, "maintenance.orphan_hold", ACTOR, org_id=org_id, target=reservation_id)
             counts["orphan_holds"] += 1
+    # Issue #33: uploads nobody continued, and files on the library volume that no record knows.
+    from . import library
+    counts.update(library.sweep(db, settings))
     if any(counts.values()):
         log.info("sweep: %s", counts)
     return counts

@@ -111,6 +111,13 @@ def make_handler(application):
                 self.respond({'error':'请先登录工作空间','code':'unauthorized'},401)
             return user
 
+        def do_PUT(self):
+            # Issue #33: one binary chunk of a material upload; every other operation stays JSON over POST.
+            if not self.trusted():
+                return
+            from .material_library import handle_chunk
+            return handle_chunk(self,application)
+
         def do_GET(self):
             if not self.trusted():
                 return
@@ -128,6 +135,8 @@ def make_handler(application):
             extra=extra or {'/device_profile.js':('device_profile.js','text/javascript; charset=utf-8'),'/device_profile.css':('device_profile.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #33: the material library page, likewise.
+            extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
@@ -282,6 +291,11 @@ def make_handler(application):
                         'cloud/overview':service.cloud.overview,
                         'cloud/models':service.cloud.models,
                         'cloud/gateway-models':service.cloud.gateway_models,
+                        # Issue #33: materials and driver packages in the cloud library (file bytes go through do_PUT)
+                        'library/overview':service.library.overview,'library/list':service.library.list,
+                        'library/upload/start':service.library.start,'library/upload/status':service.library.status,
+                        'library/upload/complete':service.library.complete,'library/upload/cancel':service.library.cancel,
+                        'library/delete':service.library.remove,
                         # Issue #4: TokenFans models & compute (the key and password never come back).
                         'model-compute/key':service.model_compute.connect_key,
                         'model-compute/login':service.model_compute.login,

@@ -45,6 +45,9 @@ services:
       NEUXMIND_OPERATOR_EMAILS: ops@demo.local
     ports:
       - "127.0.0.1:${NEUXMIND_CLOUD_PORT:-8800}:8800"
+    volumes:
+      # Issue #33: the material library's files. Kept by `down`, deleted by `down -v` (like the database).
+      - library-data:/var/lib/neuxmind/library
     depends_on:
       db:
         condition: service_healthy
@@ -69,3 +72,4 @@ services:
 
 volumes:
   db-data:
+  library-data:

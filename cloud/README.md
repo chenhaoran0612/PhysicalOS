@@ -84,6 +84,8 @@ NEUXMIND_TEST_DATABASE_URL=postgresql+psycopg://user@127.0.0.1/nxtest python3 -m
 | `overage_records` | 超额记录 | 上游报告用量超过预留时写入：已按预留上限计费，超出部分 open → 运营 waived / charged |
 | `robots` | 设备群 | (org, instance_id) 唯一；规范化后的 manifest、摘要、能力 ID、`simulated`；`conformance`（JSON，可空，第 04 轮：最新一致性报告摘要，旧库启动时自动加列） |
 | `audit_logs` | 审计 | 注册/登录失败/Key 创建与吊销/购买/支付/webhook 拒绝/调额/核对/改价/机器人登记等 |
+| `library_materials` | 资料库里的一份资料（issue #33） | `org_id`、显示用文件名、`kind`（document / package）、`format`、本体类型标识、厂家、型号、版本、`size`、`sha256`、`status`（parsing / parsed / failed）。同组织内（标注 + 内容）唯一、（标注 + 文件名）唯一 |
+| `library_uploads` / `library_upload_chunks` | 进行中的上传与已收到的分片 | 上传属于发起它的用户；`expires_at` 之后连同已收到的数据一起清除 |
 
 余额 = `SUM(ledger_entries.delta)`；可用 = 余额 − 状态为 held 或 reconciliation_required 的预留之和。
 
@@ -299,6 +301,42 @@ API Key 的 scopes：`gateway`、`catalog:read`、`robots`、`wallet:read`、`us
 `require_level` 取 `static` 或 `dry`（其他值 400 `invalid_level`）。某能力在级别 L **可用** ⇔ 最新摘要未过期（`manifest_digest` 等于登记的 manifest）、报告自带的 `manifest_digest` 已核对（`digest_verified`；不带它的旧运行时报告会保存，但不用于 `require_level`）、摘要的级别 ≥ L、且该能力在 L 及所有更低级别的结论都是 `passed`（"跳过（不适用）"**不算通过**）。运行时 b0e53c7 起 `legged.posture` 与 `model.install` 都有不运动的 dry 用例（姿态：非标准值与锁存期间被拒；安装：拒绝非法请求），通过后即算可用——`model.install` 的 dry 通过只说明会拒绝非法请求，不说明能成功安装（审查 Q4-22，是否收紧留给契约决定）。`safety.stop` 不可用时一律视为没有可用能力（失败即关闭）；`model.install` 不可用时 `model_runtimes` 视为空（纯端侧包不再兼容）。然后用这份"缩减后的 manifest"走原有的 `catalog.compatible_with` / `spec.check_compatibility`。
 没有摘要、摘要过期或级别不够 → 409 `conformance_required`（附提示：`nx robot conformance <robot> --level dry --upload`）。`/catalog/models/compatible` 只给 `manifest` 时，必须能在本组织找到同 `instance_id` 且 manifest 完全相同（摘要相同）的登记记录，否则同样 409 `conformance_required`。
 
+### 资料库（issue #33，`library.py`）
+
+机器人的手册、参数表、URDF 和驱动安装包存在云端，按组织隔离；每份资料标明本体类型（先存类型的标识）、厂家、型号和版本。文件存在服务器的磁盘卷上（`NEUXMIND_LIBRARY_DIR`），不进数据库。解析（issue #34）不在这里：上传完成的资料停在 `status: "parsing"`（解析中），解析器用 `library.set_parse_state` 改成 `parsed` 或 `failed`。
+
+权限：`library:read`（列表、详情、取回文件）四种组织角色都有；`library:write`（上传、取消、删除）owner / admin / developer 有，operator（现场操作员）没有，并且要求邮箱已验证。两者也是 API Key 的权限范围。
+
+| 方法 路径 | 请求 → 响应 |
+|---|---|
+| GET `/library/formats` | → `{formats: [{id, label, kind, extensions[]}], extensions[], supported, limits: {document_bytes, package_bytes, org_quota_bytes, chunk_bytes}}` |
+| POST `/library/uploads` | `{filename, size, sha256, body_type, vendor, model, version, description?}` → 201 上传 `{id, status, resumed, filename, kind, format, size, sha256, chunk_bytes, chunk_count, received[], received_count, received_bytes, expires_at, …}`。同一个人对同一个文件、同一组标注已有未完成的上传时返回 **200** 和那一次上传（`resumed: true`，`received` 是云端已有的分片）：中断后续传就是再发一次这个请求，然后只补缺的分片。已经完成全部分片但卡在最后一步的上传也这样接回来（`status: "assembling"`，直接再调 complete）。拒绝：415 `unsupported_type`（带 `supported` 扩展名列表，文字里写明支持的类型）、413 `file_too_large`（`max_bytes`、`kind`）、409 `material_exists` / `version_exists`（`material_id`）、409 `library_quota_exceeded`（空间：`quota_bytes`、`used_bytes`；份数：`max_materials`）、409 `too_many_uploads`、429 `rate_limited`（被拒绝的请求也计数）、507 `storage_full` |
+| GET `/library/uploads/{id}` | → 上传（同上） |
+| PUT `/library/uploads/{id}/chunks/{n}` | 请求体是这一片的原始字节，`Content-Type: application/octet-stream`；除最后一片外每片恰好 `chunk_bytes`。可选 `X-Chunk-SHA256`（与请求体不符时 400 `chunk_digest_mismatch`）→ `{upload_id, index, sha256, received_count, chunk_count, received_bytes}`。分片可以乱序、可以重发。凭据不存在或已失效时，在读取请求体之前就回答 401。400 `invalid_chunk`、415 `octet_stream_required`、429 `chunk_attempts_exceeded`（这次上传不能再继续；再发一次开始请求会换一个新的上传）、507 `storage_full`、413（超过 `chunk_bytes`） |
+| POST `/library/uploads/{id}/complete` | → 201 资料（见下）。核对总长度、SHA-256 和内容类型后才保存。409 `chunks_missing`（`missing[]`，上传仍然开着）、503 `library_busy`（同时核对的文件数到了上限，带 `retry_after`，上传仍然开着）、409 `digest_mismatch`、415 `unsupported_type`、409 `material_exists` / `version_exists`、409 `upload_lost`；后五种会丢弃这次上传。核对要读完整个文件，2 GB 的安装包可能要几十秒到几分钟，前置代理的超时要放够 |
+| DELETE `/library/uploads/{id}` | 取消并释放已收到的数据 → `{cancelled, id}`；已经完成入库的上传回答 404 |
+| GET `/library/materials` | 过滤：`body_type`、`vendor`、`model`、`version`（后三个不分大小写）、`kind`、`format`、`status`、`sha256`、`q`（文件名、厂家、型号里的子串）；`limit`（1–200，默认 50）、`offset` → `{materials[], total, limit, offset}`，新的在前 |
+| GET `/library/materials/{id}` | → `{id, filename, kind, format, body_type, vendor, model, version, description, size, sha256, status, status_detail, created_by, created_at, updated_at}` |
+| GET `/library/materials/{id}/content` | 文件内容，支持 `Range`。永远是 `application/octet-stream` + `Content-Disposition: attachment`，带 `X-Checksum-SHA256`（整个文件的摘要）、`X-Content-Type-Options: nosniff`、`Content-Security-Policy: default-src 'none'; sandbox` |
+| DELETE `/library/materials/{id}` | → `{deleted, id}`；同组织里没有别的资料引用这份内容时，文件一并删除 |
+
+接收哪些类型（`library_types.py`，文件名的后缀只表示“声称是什么”，是否接收看内容）：
+
+| 类型 | 后缀 | 内容上的判定 |
+|---|---|---|
+| Word / Excel | `.docx` `.xlsx` | ZIP 结构，目录里有 `[Content_Types].xml` 和 `word/document.xml` / `xl/workbook.xml`；目录超过 5000 项或声明 ZIP64 的拒绝 |
+| Word / Excel 97–2003 | `.doc` `.xls` | 复合文档头，目录里有 `WordDocument` / `Workbook`（或 `Book`）流 |
+| PDF | `.pdf` | 前 1024 字节里有 `%PDF-` |
+| 文本 | `.md` `.markdown` `.txt` `.rst` `.csv` `.tsv` `.log` `.ini` `.cfg` `.conf` `.toml` `.yaml` `.yml` `.json` `.xml` | 全文没有控制字符，并且能按 UTF-8、否则按 GB 18030 完整解码，或者带 BOM 的 UTF-16；`.json` 以 `{` 或 `[` 开头，`.xml` 以 `<` 开头。其他编码（Shift-JIS、Big5、不带 BOM 的 UTF-16 等）要先转成 UTF-8 |
+| URDF | `.urdf` `.xacro` | 文本、以 `<` 开头，开头 4 MiB 里有 `<robot` 元素 |
+| 驱动安装包 | `.zip` `.tar.gz` `.tgz` `.tar.xz` `.txz` `.tar.bz2` `.tbz2` `.tar` `.deb` | ZIP：本地文件头和目录结束记录；压缩的 tar：对应的魔数，并且解出的前 512 字节是 tar 头（只解这 512 字节）；tar：头部校验和；deb：`ar` 头且第一个成员是 `debian-binary` |
+
+其他类型（可执行文件、脚本、HTML、SVG、带宏的 Office 文档、图片、rar / 7z 等）一律拒绝。云端不解压、不执行、不用 XML 解析器读上传的内容。
+
+这些判定只是**认出**文件是不是声称的类型，不是对内容的担保：压缩包只看开头，后面可以是任何东西。之后真正打开这些文件的地方（解析 #34、把驱动安装包送到设备 #31）仍然要把内容当作不可信的输入处理。
+
+“同一份资料同一版本不重复收”的含义：同一组织内，标注（本体类型、厂家、型号、版本，后三项不分大小写）相同且内容相同的，拒绝（`material_exists`，文件名不同也算同一份）；标注相同、文件名相同但内容不同的，拒绝并提示改版本号（`version_exists`）。同一内容换一个版本或型号可以再收，磁盘上只存一份。
+
 ### 运营（`/admin/*`，需要登录会话且是平台运营员）
 `GET/POST /admin/models`、`PATCH /admin/models/{id}`（改价不影响已有预留的价格快照和已结算的账本）、`POST /admin/models/{id}/status {status: published|unlisted}`、`POST /admin/credit-packs`、`POST /admin/wallets/{org_id}/adjust {delta, reason, reference?}`、`GET /admin/reservations?status=&older_than_seconds=`（默认 reconciliation_required；`status=held|settled|released|all`；每项带 `age_seconds`）、`POST /admin/reservations/{id}/resolve {action: settle|release, credits?, evidence_ref?, reason}`（只处理 reconciliation_required，held 返回 409 `reservation_in_flight`）、`POST /admin/maintenance/sweep`（立即清理，返回 `{lost_calls, sessions_closed, orphan_holds}`）、`GET /admin/overages?status=open|waived|charged|all`、`POST /admin/overages/{id}/resolve {action: waive|charge, credits?, reason}`、`GET /admin/orders?status=`、`POST /admin/orders/{id}/confirm {payment_reference, reason}`（manual 渠道）、`GET /admin/audit?action=`。
 
@@ -371,6 +409,17 @@ token 套餐（法币）
 - 用户可见的上游错误只给通用文案（例如“上游服务暂不可用”）；凭据环境变量名、主机名、TLS 细节只写进审计 `detail` 和服务端日志（修复 C-06）。
 - prod/staging 关闭 `/api/v1/docs` 和 `openapi.json`（修复 C-08）；prod/staging 上架 `echo` 测试替身直接 400 `upstream_not_allowed`（修复 C-09），调用时仍会再拒绝一次。
 - 请求体上限（默认 1 MB）、CORS 白名单（默认不开）、统一错误格式、未处理异常返回 500 `internal_error`，不泄露堆栈。
+- 资料库（issue #33）按文件上传的最严做法处理：
+  - 类型由内容决定，后缀不在清单里的在发送任何字节之前拒绝；第一片到达时先核对一次，整份文件收齐后再核对一次，不符合的不留任何数据。
+  - 文件名只作显示：去掉路径、控制字符和不可见字符、文件系统的特殊字符，最长 150 个字符。文件从不以上传的名字落盘：路径只由服务端生成的编号和服务端算出的 SHA-256 拼成（`library_store.py`），所以不存在路径穿越。
+  - 每个请求都鉴权并检查权限，每一片也一样；上传只有发起它的人能继续；跨组织一律 404。
+  - 每片有自己的请求体上限（`NEUXMIND_LIBRARY_CHUNK_BYTES`）：只对路径完全符合 `PUT /api/v1/library/uploads/<上传编号>/chunks/<n>` 的请求生效，并且只给凭据确实存在的调用方；没有凭据或凭据失效的，在读取请求体之前就回答 401，其他路由仍是 1 MB。
+  - 单个文件、组织合计的字节数和份数、同时进行的上传数、每小时开始上传的次数（被拒绝的也算）、每次上传的分片请求数、一次上传从开始到完成的最长时间（7 天）、同时核对的文件数都有上限。
+  - 卷的剩余空间按“现在的剩余 − 所有组织已经登记但还没写完的字节”来算，低于下限时不再接收新的上传，写每一片之前再看一次。
+  - 保存前核对整份文件的 SHA-256；分片写入持共享文件锁、完成步骤持独占锁，并且在移动文件的前后核对“名字下面的文件就是被核对的那个文件”（inode），被核对的字节就是被保存的字节。
+  - 文件所在目录不由任何 Web 服务器提供，文件没有执行位（目录 0700、文件 0440）；取回时固定为二进制下载，带 `nosniff` 和 `sandbox`，不会被当成网页或脚本。
+  - 上传开始、入库、拒绝、取消、删除都写审计（`library.*`）。
+  - 清理（`maintenance.sweep`，后台线程、`sweep` 命令）：过期的上传连同数据一起清除；没有上传认领的临时文件、没有记录的已存文件（进程在两步之间崩溃留下的）满 1 小时后清除，后一种每个进程最多每小时扫一次。
 - TLS 由前置的反向代理或负载均衡终止。
 
 ## 配置（环境变量）
@@ -396,6 +445,15 @@ token 套餐（法币）
 | `NEUXMIND_CORS_ORIGINS` | 空 | 逗号分隔的允许来源 |
 | `NEUXMIND_MAX_BODY_BYTES` | `1000000` | |
 | `NEUXMIND_SESSION_MAX_BODY_BYTES` | `8000000` | 只用于会话模型调用（`/gateway/sessions/{id}/v1/responses`、`/chat/completions`；审查 Q3-07）：智能体运行时每次都发送完整历史。字节仍全部计入输入上界与会话预算。超限 413 `payload_too_large`，带 `max_bytes` 与“会话历史过长，请开启新会话继续” |
+| `NEUXMIND_LIBRARY_DIR` | SQLite 时在数据库文件旁的 `neuxmind_library/`，否则 `./neuxmind_library`；镜像里是 `/var/lib/neuxmind/library` | 资料库（issue #33）存文件的目录，应当是一个持久的磁盘卷 |
+| `NEUXMIND_LIBRARY_CHUNK_BYTES` | `4194304` | 上传的分片大小，也是分片路由的请求体上限（64 KiB–64 MiB） |
+| `NEUXMIND_LIBRARY_MAX_DOCUMENT_BYTES` / `NEUXMIND_LIBRARY_MAX_PACKAGE_BYTES` | `209715200` / `2147483648` | 单个文档 200 MB、单个驱动安装包 2 GB |
+| `NEUXMIND_LIBRARY_ORG_QUOTA_BYTES` | `21474836480` | 每个组织合计 20 GB（已保存的加上进行中的上传） |
+| `NEUXMIND_LIBRARY_UPLOAD_TTL_SECONDS` | `86400` | 上传这么久没有新分片就连同数据一起清除 |
+| `NEUXMIND_LIBRARY_MAX_OPEN_UPLOADS` / `NEUXMIND_LIBRARY_UPLOADS_PER_HOUR` | `5` / `120` | 每个组织同时进行的上传数；每个用户每小时开始上传的次数（被拒绝的也算） |
+| `NEUXMIND_LIBRARY_ORG_MAX_MATERIALS` | `20000` | 每个组织的资料份数上限 |
+| `NEUXMIND_LIBRARY_MAX_CONCURRENT_COMPLETIONS` | `2` | 每个进程同时核对（完成）的上传数；超过时回答 503 `library_busy` |
+| `NEUXMIND_LIBRARY_MIN_FREE_BYTES` | `1073741824` | 扣掉所有已登记上传还没写完的字节后，卷上至少还要剩这么多，否则 507 `storage_full` |
 | `NEUXMIND_SESSION_TTL_SECONDS` | `43200` | |
 | `NEUXMIND_LOGIN_MAX_FAILURES` / `NEUXMIND_LOGIN_WINDOW_SECONDS` | `8` / `60` | 前者现在是每（邮箱, IP）组合的上限 |
 | `NEUXMIND_WEBHOOK_SECRET_<PROVIDER>` | 空 | 例如 `NEUXMIND_WEBHOOK_SECRET_SANDBOX`；sandbox 没有密钥时不可用 |
@@ -408,6 +466,8 @@ token 套餐（法币）
 ## 部署
 
 见 `cloud/Dockerfile`（在仓库根目录构建：`docker build -f cloud/Dockerfile -t neuxmind-cloud .`）。生产环境要用 PostgreSQL（安装 `psycopg[binary]`），前面放 TLS 反向代理并配置 `NEUXMIND_TRUSTED_PROXIES`，配置 SMTP（否则用户只能由运营 `verify-email`），**不要配置 `NEUXMIND_OPERATOR_EMAILS`**，运营员用 `create-operator` 命令创建。表在启动时用 `create_all` 自动创建，也可以执行 `python3 -m neuxmind_cloud init-db`；对旧库只做“补列”（`db.ADDED_COLUMNS`），不是完整迁移。
+
+资料库（issue #33）需要一个持久的磁盘卷：镜像里的目录是 `/var/lib/neuxmind/library`（属主是运行用户，权限 0700），部署时把卷挂到这里，建议带 `noexec,nosuid,nodev`。数据库和这个卷要一起备份、一起恢复：数据库里是资料的记录，卷里是文件。多个云平台进程可以共用同一个卷（文件锁在本机文件系统上有效；网络文件系统上要先确认 `flock` 可用）。
 
 管理命令：`init-db`、`create-operator <email> [--name]`、`verify-email <email> [--force]`、`grant-operator <email>`、`revoke-operator <email>`、`sweep`。
 
@@ -424,6 +484,7 @@ docker compose -f cloud/compose.yaml down -v                # 停止并删除数
 
 - 运行在 `NEUXMIND_ENV=dev`：开启 Echo 替身模型、运营员邮箱白名单和公开的演示密码，所以端口只发布在 `127.0.0.1`，数据库不对外发布。**不要把这份配置放到公网。**
 - 数据库在名为 `neuxmind-cloud_db-data` 的卷里，重启后数据还在；写入演示数据的 `seed` 任务每次启动都会运行，已有数据时什么都不改。`up --wait` 返回后还要等几秒，`seed` 任务才结束（首次启动时演示账号在那之后才能登录）。
+- 资料库的文件在名为 `neuxmind-cloud_library-data` 的卷里（issue #33）：`down` 保留，`down -v` 连同数据库一起删除。
 - 可选环境变量：`NEUXMIND_CLOUD_PORT`（默认 8800）、`NEUXMIND_DB_PASSWORD`（本地默认值，只在 compose 网络内可达）。数据库密码只能用字母、数字、`-`、`_`（它被原样拼进 `DATABASE_URL`），并且只在卷第一次创建时生效，之后要改先 `down -v`。
 - `db` 和 `cloud` 设了 `restart: unless-stopped`：Docker 重启后它们会自己起来，不想要时执行 `down`。
 - `NX_DEMO_CLOUD=docker python3 scripts/demo.py up` 用这套容器代替本机进程里的云平台，其余（仿真机器人、控制台）不变；`scripts/demo.py down` 一并停止容器。
@@ -440,3 +501,4 @@ docker compose -f cloud/compose.yaml down -v                # 停止并删除数
 6. 授权没有吊销接口，也没有订阅到期机制；退款流程没有实现。
 7. 没有修改邮箱；SMTP 发送器只用 mock 测过；验证、认领、重设令牌都通过 API 提交（没有网页落地页）；被认领停用的旧账户行和它的个人组织保留在库里（不能再登录），没有清理。
 8. API Key 的 `last_used_at` 每次请求都写库，高 QPS 时需要改成批量更新。
+11. 资料库（issue #33）：只做了存文件和上传，解析是 issue #34，所以资料会一直停在“解析中”；存储只有磁盘卷一种实现（`library_store.LibraryStore`，换对象存储是再写一个同样接口的类）；没有病毒扫描；能力库还没有，权限先用组织角色；本体类型只校验标识的格式，没有对照本体类型清单（issue #32）；没有修改标注的接口，标错了要删除后重传；别人开的上传只有本人能取消（组织管理员不能代为取消，最迟 7 天后过期）；配额按资料条数计字节，同一内容标成两个版本算两次；取回文件没有频率限制；下载时文件恰好被删除会得到 500；`.zip` 和压缩的 tar 只看开头，不检查完整性。

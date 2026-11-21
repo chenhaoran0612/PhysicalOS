@@ -18,6 +18,9 @@ COPY spec/neuxmind_spec /app/spec/neuxmind_spec
 COPY cloud/neuxmind_cloud /app/cloud/neuxmind_cloud
 
 RUN useradd --system --uid 10001 neuxmind
+# Issue #33: uploaded materials and driver packages live on a disk volume mounted here (cloud/README.md, 资料库).
+ENV NEUXMIND_LIBRARY_DIR=/var/lib/neuxmind/library
+RUN mkdir -p /var/lib/neuxmind/library && chown -R neuxmind /var/lib/neuxmind && chmod 700 /var/lib/neuxmind/library
 USER neuxmind
 WORKDIR /app/cloud
 EXPOSE 8800

@@ -77,6 +77,8 @@ class Platform:
         self.workflows = Workflows(self)
         from .cloud_account import CloudAccount
         self.cloud = CloudAccount(self)
+        from .material_library import MaterialLibrary
+        self.library = MaterialLibrary(self)        # issue #33: documents and driver packages kept in the cloud
         from .model_compute import ModelCompute
         self.model_compute = ModelCompute(self)
         from .sim_robots import SimRobots
