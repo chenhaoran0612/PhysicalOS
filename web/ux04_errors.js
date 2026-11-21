@@ -185,6 +185,15 @@ const UX_CODES = {
   device_timeout: ['network', '机器人（接入服务）没有在时限内回应，这次操作的结果未知；结果未知的操作不会自动重试。', '先在“实时状态”或现场核对，再决定是否重试'],
   device_unreachable: ['network', '连不上机器人的接入服务：它可能没有启动，或者地址、端口不对。', '确认机器人上的运行时服务正在运行', '点“连接检查”'],
   connection_failed: ['network', '连接失败。', '确认对方服务正在运行、地址正确'],
+  // ---- issue #17: the management layer reached over the robot's SSH connection (brainos/runtime_link.py).
+  // None of these requests was sent: nothing happened on the robot, so there is nothing to check on site.
+  device_link_down: ['network', '到机器人的 SSH 通道断开了，平台正在自动重连。这次请求没有发出，机器人上什么都没有发生。', '等卡片上“管理层”一行回到“已连通”后再试，不需要手工操作', '一直连不上时，看卡片上的心跳状态和原因'],
+  device_link_refused: ['network', '机器人（或跳板机）拒绝了 SSH 登录，平台已停止自动重连，以免账号被锁。这次请求没有发出。', '在“配置连接”里核对用户名、密码或密钥，以及主机指纹', '改好后，在卡片“管理层”一行点“重试”'],
+  device_link_slow: ['network', '到机器人的 SSH 通道还在，但机器人在时限内没有应答（网络可能很慢）。这次请求没有发出，机器人上什么都没有发生。', '稍等片刻再试', '网络一直很慢时，看卡片上的心跳状态'],
+  device_service_down: ['state', 'SSH 能连上机器人，但机器人本机的管理层端口没有程序在监听：管理层可能还没有安装，或者没有启动。这次请求没有发出。', '在机器人上启动管理层（运行时）', '然后点“连接检查”'],
+  device_forward_forbidden: ['state', '机器人的 SSH 服务不允许转发连接，平台到不了机器人本机的管理层服务。这次请求没有发出。', '请管理员在机器人的 sshd 配置里允许转发（AllowTcpForwarding 设为 local 或 yes），并重启 SSH 服务', '然后点“连接检查”'],
+  device_link_not_configured: ['state', '这台机器人还没有经 SSH 接入管理层，或者接入已经被移除。', '在机器人卡片上点“接入管理层”'],
+  runtime_token_not_found: ['input', '没有在机器人上读到管理层的令牌。标准安装的令牌文件是 ~/neuxmind/edge-token，SSH 登录的账号要能读它。', '确认管理层装在 SSH 登录的这个账号下', '或者在“令牌”里手工填写，再提交'],
   // ---- login / account / cloud
   unauthorized: ['account', '登录状态已失效，或访问令牌不对。', '重新登录，或检查访问令牌'],
   not_logged_in: ['account', '还没有登录云平台账户。', '先登录云平台账户'],

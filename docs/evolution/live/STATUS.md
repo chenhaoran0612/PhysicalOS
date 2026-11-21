@@ -26,6 +26,7 @@
 - `integration`（工作区 `PhysicalOS-integration/`）的代码是 fefdbd2（0.20.1），之后只有文档提交，已推送到 `origin/integration`；main 仍是 df3a108（0.19.0），合并到 main 要用户确认。
 - 部署：`/Applications/NeuxMind Robot OS.app` 是 0.20.1（build 31），2026-11-21 07:05 替换并启动。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261121-070532`。
 - 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.20.1-arm64.dmg`（SHA-256 `e79a1936708cad4a0c7a4bd02ca433f0da7c15d4756988f65cf31fc9a5b05763`）和同名 `.pkg`（`b939a48cd8a12e195a86c750738a0877c675b84fc14de0b0cc41d270addfca66`）；0.20.0 及更早的也在 `PhysicalOS-integration/dist/`。
+- 暂存合并：`refs/integration/staging/next`（合并会话的临时工作区）= `integration` + #31（e574012）+ README 加 PACKAGE_DELIVERY.md 一行（5ff4edf）。#31 的单元测试、删除机器人和传文件的测试在上面通过（190 项）；完整套件等全部交付后统一跑。交付一个合并一个，全部交付后再并入 `integration`，然后回归、打包、部署。
 - 真机：运行时仍是 0.4.0（`~/neuxmind`，回环 8790，本机手工隧道 18790）。#22、#25、#26 改了运行时，更新真机要用户同意，且脚本和运行时要一起换。
 - 新的 issue 分支请基于 `integration`（0.20.1 的代码是 fefdbd2，之后只加了文档）。浏览器验收经 `tests/gate_helper.cjs` 登录，测试服务端带 `NEUXMIND_MAIL_DEV_ECHO=1`；添加设备的表单要先选本体类型（#32）；界面改动也要在 WebKit 上跑一遍。提交钩子的密钥扫描会把 `password: '<12 个字以上>'` 当成写死的密码，提示文字里的字段名请加引号。
 
@@ -37,20 +38,22 @@
 |---|---|
 | 已在 main（0.19.0），GitHub 上仍开着 | #11、#12、#13 |
 | 在 0.20.1 里（已进 `integration`），等用户验证 | #15、#18、#22、#24、#25、#26、#27、#32、#33 |
-| 正在做 | #14、#16、#17、#28、#31、#34 |
-| 等依赖 | #19（等 #17）、#20（等 #19）、#21（等 #22、#23）、#29（等 #28）、#30（等 #34） |
+| 已交付，在暂存合并里 | #31 |
+| 正在做 | #14、#16、#17、#21、#28、#34 |
+| 等依赖 | #19（等 #17）、#20（等 #19）、#29（等 #28）、#30（等 #34） |
 
-同日关闭的两个：#23（设备接口表）关闭为不做，它的工作区和分支已删除，#21 的依赖里还写着它，要重新定；#35（移除设备时处理设备上的内容）关闭为已完成。
+同日关闭的两个：#23（设备接口表）关闭为不做，它的工作区和分支已删除，#21 的依赖里还写着它（#21 已开始做）；#35（移除设备时处理设备上的内容）关闭为已完成。
 
-#16、#17、#28、#31、#34 由研发计划会话 2026-11-21 启动，基于 `integration` @ 8736aa1（0.20.1）；#14 基于 8dd0705，改动已写完，等用户在那个会话里同意提交。分支名以各会话交付时的说明为准。
+#16、#17、#28、#31、#34 由研发计划会话 2026-11-21 启动，基于 `integration` @ 8736aa1（0.20.1），有的已换到更新的 `integration` 上；#14 基于 8dd0705，改动已写完，等用户在那个会话里同意提交；#21 基于 eaa79a7。分支名以各会话交付时的说明为准。
 
 | issue | 内容 | 分支 | 工作区 |
 |---|---|---|---|
 | #14 | 配置连接页面修改 | `fix/connection-dialog-layout` | `PhysicalOS-connection-layout/` |
 | #16 | 验证连接 | `feat/verify-connection` | `PhysicalOS-verify-connection/` |
 | #17 | 平台转发管理层服务 | `feat/runtime-forward` | `PhysicalOS-runtime-forward/` |
+| #21 | 接真实的 ROS 2 Humble | `feat/ros2-humble-adapter` | `PhysicalOS-ros2-humble/` |
 | #28 | 运控驱动检查 | `feat/motion-driver-check` | `PhysicalOS-driver-check/` |
-| #31 | 安装包送到设备并核对 | `feat/driver-package-delivery` | `PhysicalOS-package-delivery/` |
+| #31 | 安装包送到设备并核对（已交付） | `feat/driver-package-delivery` @ d15f9cc | `PhysicalOS-package-delivery/` |
 | #34 | 资料解析 | `feat/material-parsing` | `PhysicalOS-material-parsing/` |
 
 合并时预计重叠的地方：
@@ -66,4 +69,5 @@
 3. #21 的依赖 #23 已关闭为不做，要重新定。#11、#12、#13 已在 main 里，GitHub 上仍开着。
 4. 真机上的运行时要不要换成这一版（运行时改了安全限值、记录、告警上报），要用户决定。
 5. #18 的弱网验收线已改（2026-11-19，见 issue #18 正文）：带宽 1 Mbps 以内、丢包率 30%、时延 300 ms 以上时要传完且校验一致；60% 时不要求传完，只要求不留下损坏的文件、网络恢复后从断点续传到完成。按新线还没有测，放到下一次打包时跑；以前在 60% 下测时 SSH 建连本身失败。
-6. 以前的待办仍在：#12 留下的问题（机器人连不上时是否也能不经登录测试直接保存）；内置测试账号默认开启待定；`fix/preexisting-test-failures` 的 5 条低级别意见在那个会话里等确认；真实 TokenFans、SMTP、真机上的完整流程还没有验证。
+6. #31：`USABLE_STATUSES` 还是占位 `('available',)`，#34 已把「可用」定为 `usable`，#31 的会话在看，改了会再交付；在那之前没有安装包能送出去。送达记录 `package_deliveries` 随机器人删除，但删除确认框不列它（和 #18 的续传记录一样），统一检查时请用户定要不要列。升级检查要加：新的存储种类 `package_deliveries`、工作区多一个 `package-cache/`（700，没有传送时不创建），没有迁移。
+7. 以前的待办仍在：#12 留下的问题（机器人连不上时是否也能不经登录测试直接保存）；内置测试账号默认开启待定；`fix/preexisting-test-failures` 的 5 条低级别意见在那个会话里等确认；真实 TokenFans、SMTP、真机上的完整流程还没有验证。
