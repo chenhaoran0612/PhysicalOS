@@ -124,6 +124,8 @@ def make_handler(application):
             extra=extra or {'/repair_policy.js':('repair_policy.js','text/javascript; charset=utf-8'),'/repair_policy.css':('repair_policy.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #8: the status page of a real machine, likewise.
             extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #24: the connection state and the last heartbeat on the cards and the status page, likewise.
+            extra=extra or {'/heartbeat.js':('heartbeat.js','text/javascript; charset=utf-8'),'/heartbeat.css':('heartbeat.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
@@ -220,6 +222,8 @@ def make_handler(application):
                         'engineering/models/cloud':service.engineering.use_cloud_model,'engineering/cloud/close':service.engineering.cloud_close,
                         'engineering/ssh/scan':service.engineering.scan,'engineering/ssh/connect':service.engineering.connect,
                         'engineering/ssh/status':service.engineering.status,'engineering/ssh/services':service.engineering.watch_services,
+                        # Issue #24: every robot's connection state and last heartbeat; ask one robot now instead of at the next round
+                        'engineering/ssh/links':service.heartbeat.overview,'engineering/ssh/heartbeat':service.heartbeat.check,
                         # Issue #9: change the SSH connection of a robot that is already connected
                         'engineering/ssh/update':service.ssh_edit.update,
                         'engineering/start':service.engineering.start,'engineering/resume':service.engineering.resume,

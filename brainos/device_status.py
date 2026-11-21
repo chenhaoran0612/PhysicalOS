@@ -262,6 +262,8 @@ class StatusSessions:
         # Why the hardware of this robot must not be scanned right now, '' when it may (set by the engine):
         # another scan of it is running, or a repair session is changing it.
         self.scan_hold = lambda robot_id: ''
+        # Issue #24: told the id of every connection that is forgotten (set by the heartbeat, which lets go of it too).
+        self.on_forget = lambda key: None
 
     def read(self, connection, secret, full=False):
         """One status read. ``full`` also reads the running software and the hardware (two more fixed commands)."""
@@ -389,6 +391,7 @@ class StatusSessions:
             entry = self._entries.pop(key, None)
         if entry is not None:
             self._retire(entry)
+        self.on_forget(key)                           # issue #24
 
     def _retire(self, entry, wait=False):
         entry['gone'] = True
