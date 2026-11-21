@@ -426,6 +426,16 @@ class LifecycleTests(unittest.TestCase):
 
         self.assertNotIn(self.device.token, " ".join(arguments(self.device.pid())))
 
+    def test_the_runtime_is_given_its_log_to_rotate(self):
+        self.device.start()
+
+        log = self.device.root / "runtime.log"
+        given = arguments(self.device.pid())
+
+        self.assertEqual(given[given.index("--log-file") + 1], str(log))
+        self.assertIn("NeuxMind runtime", log.read_text())           # the start-up lines arrive in that file
+        self.assertEqual(log.stat().st_mode & 0o077, 0)
+
     def test_runtime_outlives_the_shell_that_started_it(self):
         self.device.start()
 

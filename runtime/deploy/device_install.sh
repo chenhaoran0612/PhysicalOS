@@ -217,6 +217,7 @@ start() {
   cd "$ROOT"
   BRAIN_EDGE_TOKEN="$(cat "$TOKEN_FILE")" nohup setsid "$ENTRY" serve \
     --adapter "$ADAPTER" --host 127.0.0.1 --port "$PORT" --state-dir "$STATE" \
+    --log-file "$LOG" \
     >> "$LOG" 2>&1 < /dev/null 9<&- &
   child=$!
   echo "$child" > "$PID_FILE"

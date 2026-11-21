@@ -154,6 +154,7 @@ class Runner:
         self.sandboxes = sandboxes if sandboxes is not None else Sandboxes(SandboxConfig())
         self._runs: dict[str, RunState] = {}
         self._lock = threading.Lock()       # guards _runs only; never held while running code
+        self.result_sink: Callable[[dict], None] | None = None   # told the final record of every run
 
     # ------------------------------------------------------------ restart
     def recover_after_restart(self) -> list[str]:
@@ -409,6 +410,12 @@ class Runner:
             run.progress = 1.0
         run.ended_at = time.time()
         run.add_event("finished", status=status, error=error, note=note)
+        sink = self.result_sink         # before the store write: a full disk must not cost the task result
+        if sink is not None:
+            try:
+                sink(run.to_dict())
+            except Exception as exc:
+                self.bus.events.emit("runtime.monitor_error", error=f"result_sink: {exc}")
         self._persist(run)
         if run.on_finish is not None:
             try:

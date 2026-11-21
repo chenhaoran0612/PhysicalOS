@@ -69,14 +69,14 @@ ssh -N -L 127.0.0.1:18790:127.0.0.1:8790 用户@机器人
 
 桌面端在这台机器人的“配置连接”里填服务地址 `http://127.0.0.1:18790` 和令牌文件（`~/neuxmind/edge-token`）里的令牌，再连接。
 
-安装脚本是 [`deploy/device_install.sh`](deploy/device_install.sh)：只用它旁边的两个包，不联网、不用 sudo。机器人上同一个用户通常还跑着别的软件，所以它守这几条（都有测试，`tests/test_device_install.py`，43 项，只在 Linux 上运行，其余平台跳过）：
+安装脚本是 [`deploy/device_install.sh`](deploy/device_install.sh)：只用它旁边的两个包，不联网、不用 sudo。机器人上同一个用户通常还跑着别的软件，所以它守这几条（都有测试，`tests/test_device_install.py`，44 项，只在 Linux 上运行，其余平台跳过）：
 
 - **只动安装目录。** 安装目录由 `NX_ROOT` 指定（默认 `~/neuxmind`），解析符号链接之后必须在用户目录之下，上一级目录必须已经存在；`$HOME//`、`$HOME/.`、带 `..` 或经符号链接绕出去的写法都被拒绝。脚本只把里面有它自己写的标记文件（`.neuxmind-device-install`）的目录当作自己建的：`remove` 只删这样的目录，别的目录即使在用户目录里、看起来像一份安装也不删，`stop` 也不碰里面的文件和从那里启动的进程。
 - **只给自己启动的运行时发信号。** 判断“在运行”看的是进程的命令行里有没有这份安装的运行时入口，不是只看 pid 文件：机器人重启后留下的 pid 文件、pid 被别的进程占用、pid 文件内容损坏（`0`、`-1` 等）时，`stop`、`remove` 不会发任何信号，`start` 不会误报“已在运行”。
 - **失败后可以直接重来。** 缺包、安装中途失败不留下半成品；被打断的安装（标记文件还停在 `state=installing`，或只留下一个空目录）下次 `install` 会清掉重装。端口已被别的程序占用时 `start` 拒绝启动；启动失败时打印日志末尾并清掉 pid 文件；`status` 在网关不应答时约 5 秒后报错退出。
 - `install`、`start`、`stop`、`remove` 同一时间只执行一个（锁加在脚本文件本身，不产生文件）。令牌只经环境变量传给运行时，不出现在输出和进程参数里。
 
-`NX_PORT`（默认 8790）、`NX_ADAPTER`（默认 `sim_quadruped`）、`NX_PYTHON`（默认 `python3`）可以改。脚本做的事等价于：建虚拟环境、`pip install --no-index --no-deps` 这两个包、生成令牌、以 `BRAIN_EDGE_TOKEN=… nohup setsid neuxmind-runtime serve --adapter … --host 127.0.0.1 --port … --state-dir …` 启动。它需要 bash、GNU coreutils（`realpath`、`stat`）和 util-linux（`setsid`、`flock`），Ubuntu 自带。
+`NX_PORT`（默认 8790）、`NX_ADAPTER`（默认 `sim_quadruped`）、`NX_PYTHON`（默认 `python3`）可以改。脚本做的事等价于：建虚拟环境、`pip install --no-index --no-deps` 这两个包、生成令牌、以 `BRAIN_EDGE_TOKEN=… nohup setsid neuxmind-runtime serve --adapter … --host 127.0.0.1 --port … --state-dir … --log-file ~/neuxmind/runtime.log` 启动（日志由运行时自己按大小轮转，见 §5.4；脚本和运行时包要一起更新，旧的运行时不认识 `--log-file`）。它需要 bash、GNU coreutils（`realpath`、`stat`）和 util-linux（`setsid`、`flock`），Ubuntu 自带。
 
 - **这样装验证的是运行时本身，不是机器人。** `sim_quadruped` 是内存里的仿真本体，不打开任何设备、不引入 ROS、不起子进程、不联网；清单带 `simulated: true`，桌面端会标“仿真”，结果不算现场证据。要控制真实本体，换成这台机器人的适配器（[§3](#3-写适配器把本体接进来)），motion 级测试必须在现场、有人值守、硬件急停在手。
 - 网关只监听回环地址，没有令牌或令牌不对一律 401；令牌文件权限 0600。不要为了省掉隧道改成 `--host 0.0.0.0`：网关是明文 HTTP。
@@ -451,6 +451,9 @@ SkillContext：`call(cap, **args)`、`read(cap)`、`check_stop()`、`sleep(s)`�
 | POST | `/v2/reset` | `{hardware_authorized:true, request_id?, expect_stop_count?, expire_s?}` → `{latched}`；带 `expect_stop_count` 时为条件复位：停止计数不符 409 `stop_count_mismatch` 并保持锁存；一致性测试运行期间其他来源 409 `conformance_running`；上一次复位的 `adapter.reset()` 尚未返回 409 `reset_in_progress`；`adapter.reset()` 超过 `expire_s`（默认/上限 30 s）才返回 → 保持锁存，409 `estop_latched` `cause: reset_expired`（第 07 轮修复 Q7-10；`/v1/reset` 同） |
 | GET | `/v2/telemetry?since=<seq>` | `{events:[{seq, ts, type, ...}], last_seq}`；跨重启连续（§5.3） |
 | GET | `/v2/runs/{run_id}/events?since=&limit=` | 回放一次运行的全部事件（含重启前）→ `{run_id, events, last_seq, more, oldest_seq}`；未知运行 404 |
+| GET | `/v2/telemetry?since_ts=&until_ts=&after=&limit=` | 按时间段取状态和运行数据（只有最近 1 小时）→ `{events, next_after, more, retention_s, oldest_seq, oldest_ts}`（§5.3） |
+| GET | `/v2/records` | 设备上的记录概况：各类数量和起止时间、最近的清理记录、磁盘情况（§5.4） |
+| GET | `/v2/records/{safety\|task\|operation\|cleanup}?since_ts=&until_ts=&after=&limit=` | 按时间段取一类记录 → `{class, records, more, next_after, count, first_id, last_id, oldest_ts, newest_ts, ...}`；未知的类 404 `not_found`（§5.4） |
 | GET | `/v2/models` | 已安装模型 `{models:[{sha256, model_id（目录 ID，可空）, name, runtime, source, file, size, installed_at, path}]}`（§5.2） |
 | POST ★ | `/v2/conformance` | `{level: static|dry|motion, hardware_authorized}` → `{accepted, conformance_id, run_id, status:"running", level, simulated}`；在运行时进程内异步执行一致性测试（§3.1）；motion 未授权 403；同时只允许一个（409 `conformance_busy`）；dry/motion 有运行未结束 409 `runs_active`；`level` 非法 400 `invalid_level` |
 | GET | `/v2/conformance` / `/v2/conformance/{id}` | 列表 `{conformance:[{id, status, level, static_ok, dry_ok, motion_ok, simulated}]}` / `{id, status: running|completed|failed|unknown, level, progress, report?（conformance.report.v1）, error?}`；重启时未结束的为 `unknown`（不重跑）；未知 id 404 `conformance_not_found` |
@@ -498,14 +501,44 @@ curl -H "Authorization: Bearer $T" -H 'Content-Type: application/json' \
 
 INTERFACES §5.2。`emit()` 仍然无锁、无 IO（停止路径照旧先执行）；常驻线程 `nx-telemetry` 每 0.1 s 把待写队列批量写入 `<state-dir>/telemetry.sqlite3`（WAL、0600），这是一个**有界环形存储**（默认 100 000 条，`--telemetry-capacity`，写入时删掉最旧的）。
 
+遥测是**状态和运行数据**：除了条数上限，还有时间上限（issue #25，需求 R1-09 / R7-12）。安全事件、任务结果和操作记录不靠这个环保存，它们各有自己的日志，见 [§5.4](#54-设备上的记录安全事件任务结果操作记录)。
+
+- **只保留 1 小时**（`--telemetry-retention-s`，默认 3600）：比这更早的事件由写线程每 5 s 删一次；还没来得及删的也不会被任何读取接口返回。时间按事件自带的 `ts`（墙钟）算。
+- **按时间段取**：`GET /v2/telemetry?since_ts=&until_ts=&after=&limit=` 返回 `since_ts <= ts < until_ts` 且 `seq > after` 的事件，按 seq 从旧到新，`{events, next_after, more, retention_s, oldest_seq, oldest_ts}`；`more` 为真时带上 `after=next_after` 继续取（`limit` 默认 500，最多 2000）。断网后恢复连接的一方用它把这段时间补回去；断开超过 1 小时，能取到的只有最近 1 小时，`oldest_ts` 说明是从什么时候开始的（没有可取的事件时为空）。遥测库一时读不到（被占用）时答复 503 `busy`，稍后重试，不会拿内存里的那一小段冒充全部。
+- 清理时库里最新的一条总是留着（不会被读到）：启动时靠它确认上次是正常关闭，空闲一夜后正常重启，seq 照样接续、没有缺口。
+- 条数上限仍然有效，作用是限制磁盘占用：事件多到 1 小时内就超过 `--telemetry-capacity` 时，最旧的会提前被删，`/v1/status.telemetry.evicted_by_capacity` 计数（按年龄删掉的计入 `evicted_by_age`）。
+- 升级前留下的遥测库在第一次启动时原地升级（加一列事件时间，逐条从已存的事件里读出），seq 照常接续。只做一次；10 万条、约 29 MB 的库在开发用的 Mac 上实测 0.5 s，没有在机器人的板子上量过。
+
 - **seq 跨重启单调、绝不重复**（第 03 轮审查 Q3-02 修复）：正常关闭时全部落盘并记下"干净关闭 + 最后 seq"，下次从 `最后 seq + 1` 继续——**没有缺口**。其他任何启动（崩溃、断电、上次写盘失败、遥测降级、库被重建）从 `max(库中最大 seq, 磁盘预留, 墙钟微秒数) + 1` 开始并发 `telemetry.seq_floor` 事件：写线程在**写入每批之前**先把预留推进到领先 1 万，磁盘写不进去时预留跟不上，微秒下限保证新起点大于上一进程可能发出的任何 seq（那需要自 1970 年起每微秒超过一个事件）。代价是崩溃后 seq 跳到约 1.8×10^15，客户端只会看到缺口。唯一剩余情形：墙钟被拨回**且**库不可读。
 - **写失败不丢批**：写入失败的批次保留下来下个周期重试（与新事件合计上限 20 万条，超出丢最旧并计入 `dropped_unpersisted`）。
 - **遥测永远不阻止启动**（Q3-01，P1）：库损坏、同名路径是目录、预留值越界（>2^62）→ 改名为 `telemetry.sqlite3.corrupt-<时间>-<pid>`（连同 `-wal`/`-shm`，**不删除**）后重建，事件 `telemetry.quarantined`；被其他进程锁住（如有人用 `sqlite3` 命令行查看）或同一状态目录已有另一个运行时实例（`telemetry.lock` 上的 `flock`，Q3-17）→ 降级为内存遥测，事件 `telemetry.persist_failed`。启动时锁等待 0.1 s，其余 SQLite 等待 0.5 s；安全监督、停止、锁存持久化都不依赖遥测（测试：四种状态下启动后 `/v1/stop` <1 s）。
 - `/v1/status` 只读遥测的缓存值、不碰数据库（Q3-08：库被锁时此前要等约 5 s）；`/v2/telemetry`、回放用独立的读连接，库忙时退回内存中的事件。
-- `GET /v2/telemetry?since=<seq>`：比内存缓冲（5000 条）更早时从环形存储读，最新尚未落盘的部分从内存补齐；早于环形存储最旧一条的事件已被淘汰（`/v1/status.telemetry.oldest_seq`）。
+- `GET /v2/telemetry?since=<seq>`：比内存缓冲（5000 条）更早时从环形存储读，最新尚未落盘的部分从内存补齐；早于环形存储最旧一条的事件已被淘汰（`/v1/status.telemetry.oldest_seq`、`oldest_ts`）。被淘汰的只是状态和运行数据；安全事件不会因此丢失（§5.4）。
 - `GET /v2/runs/{run_id}/events`：某次运行的全部事件（`run.*`、`sandbox.*`、带 `run_id` 的其他事件），跨重启，分页 `since`/`limit`（最多 1 万），`more` 表示还有。运行记录里内嵌的 `events`（每个运行最多 300 条）不变。
 - 磁盘卡住时：事件仍在内存中可读，stop 不受影响（测试：持有数据库锁期间 HTTP stop <1 s，恢复后事件落盘）；待写队列上限 20 万条，超出丢最旧并计数。
-- `/v1/status`：顶层 `telemetry_degraded`；`telemetry` = `{persistent, degraded, degraded_reason?, quarantined?, start: clean|after_unclean|degraded, capacity, path, last_seq, first_seq_this_boot, unflushed, write_errors, last_write_error?, dropped_unpersisted, oldest_seq}`。`telemetry_capacity=None`（嵌入使用）时只在内存。
+- `/v1/status`：顶层 `telemetry_degraded`；`telemetry` = `{persistent, degraded, degraded_reason?, quarantined?, start: clean|after_unclean|degraded, capacity, path, last_seq, first_seq_this_boot, unflushed, write_errors, last_write_error?, dropped_unpersisted, oldest_seq}`。`telemetry_capacity=None`（嵌入使用）时只在内存。issue #25 之后 `telemetry` 另有 `oldest_ts, retention_s, evicted_by_age, evicted_by_capacity`。
+
+### 5.4 设备上的记录（安全事件、任务结果、操作记录）
+
+issue #25（需求 R1-09、R7-11 到 R7-13）。这三类记录和遥测分开保存，**不按条数淘汰，也没有保留期限**，留在设备上等人来取；只有磁盘将满时才清理。
+
+| 类 | 里面是什么 | 从哪里来 |
+|-|-|-|
+| `safety` 安全事件记录 | 每一条 `safety.*` 事件：急停、解除、保护停止、看门狗、限幅、拒绝、锁存守护等，字段和遥测里的同一条事件相同（含 `seq`） | 事件总线上的一个旁路：`emit()` 里往队列追加，无锁、无 IO |
+| `task` 任务结果 | 每次运行结束时的一条 `task.result`：`run_id, kind, target, status, error, result, created_at, started_at, ended_at, stop_reason`。重启时还没结束的运行记为 `unknown` | 运行结束时（`Runner._finalize`）；运行过程中的事件属于运行数据，不在这里 |
+| `operation` 操作记录 | 每个改变设备的请求一条：`operation`（`stop`、`reset`、`skill.install`、`skill.run`、`run.cancel`、`capability.invoke`、`app.deploy`、`app.start`、`app.evaluate`、`model.install`、`model.delete`、`conformance.start`）、`target`、`operator`、`request_id`、`hardware_authorized`、`outcome`（`ok`/`rejected`/`error`）、`http_status`，被拒绝时带 `code` 和 `error`，产生了运行时带 `run_id`，停止带 `stopped`、`stop_count`、`reason` | 网关在答复请求之后记；停止是在本体已经被叫停、答复已经发出之后 |
+
+- **操作人**：设备上只有一个令牌，分不出是谁。调用方可以在请求头 `X-NeuxMind-Operator` 里写明操作人（只留可打印字符，最多 120 个），不写时 `operator` 为空。读取、`/v1/validate`、没通过令牌校验的请求不算操作；`base.velocity` 这类 `command` 能力是连续的控制指令，也不记（`safety.stop` 记为一次 `stop`）。请求内容本身不进操作记录（模型地址里可能带凭据），参数和结果从对应的任务结果看；被拒绝时的 `error` 是答复里错误文字的前 300 个字。操作人是调用方自己报的，设备不校验。
+- **存在哪里**：`<state-dir>/records/<类>/`，每类一个目录，里面是一段一段的 JSON 行文件（每段约 256 KiB，目录 0700、文件 0600）。正在写的一段叫 `seg-<首条编号>.open`，写满后改名为 `seg-<首编号>-<末编号>-<最早毫秒>-<最晚毫秒>-<条数>.jsonl`。每条记录有一个本类里递增的 `id`，清理之后也不会重复使用（最后一个编号另存在同目录的 `floor` 文件里）。上次没正常收尾留下的 `.open` 段在下次启动时补上正式名字；读不出记录的改名为 `….unreadable` 留着，不删。普通用户部署（§0.2）时技能和运行时是同一个用户，技能读得到、也改得了这些文件。
+- **不影响停止**：往队列里放记录不加锁、不做 IO；写盘在单独的线程 `nx-records`（每 0.2 s 一批，每批 `fsync`）。磁盘写不进、卡住、目录不可用时，记录留在内存里等着（每类最多 5 万条，超出丢最早的并计入 `dropped`），磁盘恢复后写入；停止、急停锁定和锁定状态的保存都不经过这里（测试：写线程卡在磁盘里时 HTTP 停止 <1 s，锁定照常落盘）。记录目录不可用也不阻止启动，每 10 s 重试一次。同一个状态目录同时只有一个运行时写记录（`records/records.lock` 上的 `flock`，和遥测库一样）：第二个实例不碰目录里的文件，它的记录留在内存里，等前一个退出后接手。
+- **高频的三种安全事件会合并**：`safety.limited`（限幅）、`safety.rejected`、`safety.stale_rejected` 可以被客户端每秒触发很多次（摇杆一直推过限值时每条指令一条）。同一种、同一能力在 10 s 内的第一条立即保存，其余的合并成一条，带 `summary: true`、`repeats`（合并了几条）、`from_ts`、`to_ts` 和最后一条的内容。急停、解除、看门狗、锁存守护等其余安全事件始终一条一条保存。
+- **按时间段取**：`GET /v2/records/{safety|task|operation|cleanup}?since_ts=&until_ts=&after=&limit=` → `{class, records, more, next_after, count, bytes, segments, first_id, last_id, oldest_ts, newest_ts}`，按 `id` 从旧到新，`since_ts <= ts < until_ts`；`more` 为真时带上 `after=next_after` 继续（`limit` 默认 500，最多 5000，单次答复最多约 4 MiB）。写线程正占着这一类时答复 503 `busy`，稍后重试。`first_id` 大于手里的游标加一，说明中间有记录被清理掉了，哪一段见 `cleanup`。`GET /v2/records` 给出各类的数量和起止时间、最近的清理记录和磁盘情况。刚产生的记录最多晚 0.2 s 才能取到。
+- **磁盘将满时的清理**（R7-13）：每 30 s 看一次状态目录所在文件系统的占用，达到 **90%**（`--disk-full-percent`，可取 50–99）就清理：先清操作记录，再清任务结果，安全事件记录最后清；同一类里从最早的清起，一段一段删，只删到回到线以下为止（按各段大小算出要删到哪一段，外加一段的余量；删完重新量，不够再继续）。
+  - **清了也回不到线下时不清。** 三类记录加起来比缺的空间还少，说明盘是被别的东西占满的，这时删光记录也腾不出地方，所以一条都不删，只在 `storage.disk_low` 和 `/v1/status.storage` 里标 `cleanup_can_help: false`。
+  - **每次清理、每一类留一条清理记录**：`{class, from_ts, to_ts, records, bytes, first_id, last_id, free_bytes_before, total_bytes, full_percent}`，存在 `records/cleanup/`（只保留最近约 500 KiB）。这条记录在动手删之前写下，删到一半掉电也不会出现“删了没记”；某一段没删成时再补一条 `storage.cleanup_incomplete`。盘满到连这条记录都写不进时，照样先删（删了才有地方），记录留在内存里下次检查再写，期间重启会丢。
+  - 事件：清理之后发 `storage.records_cleaned`（比清理记录多 `free_bytes_after`、`enough`）；越线和回到线下分别发 `storage.disk_low`、`storage.disk_ok`；磁盘读数取不到或不合理时发一次 `storage.check_failed`，并且不清理。这些事件还没有被上报成告警（告警上报是另一件事，issue #26）。
+- `/v1/status`：`records` = `{path, classes: {safety|task|operation: {count, bytes, segments, first_id, last_id, oldest_ts, newest_ts}}, skipped_files, pending, dropped, write_errors, last_write_error?, degraded, degraded_reason?, coalesce_s}`；`storage` = `{low, low_since, cleanup_can_help, full_percent, disk: {total_bytes, free_bytes, used_percent, checked_at}, last_cleanup, cleanups, unsaved_cleanups, error, cleanup_error}`；`log` = `{path, max_bytes, keep, rotations, error}`（没带 `--log-file` 时为空）。都只读内存里的值。
+- **运行日志轮转**：`serve --log-file <路径>` 让运行时自己管日志：标准输出和标准错误改写到这个文件，文件到 10 MiB（`--log-max-mb`）时改名为 `<路径>.1`，更早的依次后移，最多留 3 个旧文件（`--log-keep`），占用约 `(keep + 1) × max`（大小每 30 s 看一次，一个周期里写得多会超出一些）。只会改名、删除这个文件和它的 `.1` … `.<keep>`，而且只在它们是普通文件时；新文件开不出来时把名字改回去，下个周期再试。安装脚本启动时已经带上 `--log-file`（§0.4）。
 
 v1 应用中 step 的 `entrypoint` 解析为已安装技能 `id`（取最高版本）或 `id@version`；`deploy` 时固定为 `id@version` 并记录 digest。
 
@@ -550,7 +583,11 @@ EOF
 - 动作块的单步限速假设适配器按 `dt` 节奏执行；`dt` 与总时长已设上限（见限幅规则），但适配器若忽略 `dt` 一次性执行，仍只能靠逐步限位兜底。厂商扩展 `x.*` 在 spec 与 runtime 中是否算运动能力的判定仍不一致（runtime 一律视为运动并拒绝）。
 - Nav2 停止语义只用替身对象测过，未在真实 ROS 2 上验证。
 - `model.install` 原生实现只做"下载 + 校验 + 原子安装"，不解压、不验证模型能否被推理运行时加载，也没有签名验证（只有 SHA-256，对得上来源由云端授权保证）；https 的真实 CDN/对象存储未验证，测试只用本机 http 镜像与 file://。
-- 遥测环形存储默认 10 万条，更早的事件被淘汰；崩溃时最后约 0.1 s 未落盘的事件会丢失（seq 留缺口）。
+- 遥测（状态和运行数据）只保留 1 小时，且最多 10 万条，更早的事件被淘汰；崩溃时最后约 0.1 s 未落盘的事件会丢失（seq 留缺口）。安全事件、任务结果和操作记录不在此列（§5.4）。
+- 设备上的记录（§5.4）：崩溃或断电时，最后约 0.2 s 还在内存里的记录会丢（停止路径上不做 IO 的代价）；运行时正常关闭的瞬间才结束的运行，任务结果可能来不及写入。保留期按墙钟算：没有实时时钟的板子开机后对时把时间往前拨了一大段，对时之前的状态和运行数据会被当成过期（三类记录不受影响）。运行超过 1 小时的，`/v2/runs/{id}/events` 回放里只剩最近 1 小时的事件。写入既没完成、又撤不回来的那一批（磁盘出错）重试后可能有内容相同、`id` 不同的两条。
+- 磁盘清理只管 `records/` 下的三类记录。`runtime.sqlite3`（运行记录连同各自的事件、`request_id` 账本、已部署的版本）仍然只增不减：账本删了旧的，同一个 `request_id` 的重放就会被再执行一次，要先定保留多久才能动。磁盘是被别的东西占满、清记录也回不到线下时，记录一条都不清（§5.4），只发事件；这时新记录可能写不进盘，留在内存里等。
+- 操作记录里的操作人来自调用方自报的请求头，设备不校验；桌面端目前还不发这个头。持有令牌的调用方反复触发急停可以不断产生安全事件记录（急停不限流），磁盘因此将满时先被清掉的是操作记录和任务结果，清理记录会留下痕迹。
+- 运行日志只有带 `--log-file` 启动才轮转（安装脚本已带）；轮转不了时（例如旧文件名被目录占住）日志继续写在原文件里并在下次检查时重试。
 - 普通用户部署是"尽力而为"隔离（§0.2）：同用户技能可以 `chmod` 并替换已安装的模型文件，`/v2/models` 仍列出原 sha（第 03 轮审查 Q3-14，未修；建议加载模型前按 sha 复核）。
 - 下载线程在"只发响应头、永不结束"的服务器上，停止后仍可能存活到 http.client 读完头部或逐操作超时（运行本身立即 `stopped`，不会发布任何内容；Q3-10 只加了总时限）。
 - HTTP 无 TLS。

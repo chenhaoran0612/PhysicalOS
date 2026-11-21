@@ -137,6 +137,8 @@ _EVALUATION = re.compile(r"^/v1/evaluations/([^/]+)$")
 _RUN_EVENTS = re.compile(r"^/v2/runs/([^/]+)/events$")
 _MODEL = re.compile(r"^/v2/models/([^/]+)$")
 _CONFORMANCE = re.compile(r"^/v2/conformance/([^/]+)$")
+_RECORDS = re.compile(r"^/v2/records/([^/]+)$")
+OPERATOR_HEADER = "X-NeuxMind-Operator"   # who is acting, when the caller says so (operation records)
 
 
 def check_token(token: str | None) -> str:
@@ -179,6 +181,7 @@ def make_handler(runtime: EdgeRuntime, token: str):
 
         # ---------------------------------------------------------- io
         def _send(self, obj: dict, status: int = 200) -> None:
+            self._op_status, self._op_body = status, obj       # for the operation record
             data = json.dumps(obj, ensure_ascii=False, allow_nan=False).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -223,11 +226,13 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 raise BadRequest("请求不是合法 JSON（不允许 NaN/Infinity）") from None
             except RecursionError:      # Q6-08: absurd nesting is the client's error, not a 500
                 raise BadRequest("请求 JSON 嵌套过深（不是合法请求）") from None   # code bad_request: no new code for the desktop
+            self._op_payload = payload                         # for the operation record
             if not isinstance(payload, dict):
                 raise BadRequest("请求须为 JSON 对象")
             return payload
 
         def _dispatch(self, fn) -> None:
+            self._op_status = self._op_body = self._op_payload = None    # nothing left from an earlier request
             try:
                 self._send(fn())
             except _ConnectionAbort:
@@ -237,6 +242,21 @@ def make_handler(runtime: EdgeRuntime, token: str):
             except Exception:
                 runtime.events.emit("gateway.internal_error", path=self.path)
                 self._send({"error": "运行时内部错误", "code": "internal_error"}, 500)
+            finally:
+                self._record_operation()
+
+        def _record_operation(self) -> None:
+            """Queue the operation record of this request (R7-11) once it has been answered.
+            Queuing takes no lock and does no IO; whatever goes wrong here is ignored."""
+            try:
+                status, body = getattr(self, "_op_status", None), getattr(self, "_op_body", None)
+                payload = getattr(self, "_op_payload", None)
+                self._op_status = self._op_body = self._op_payload = None
+                if self.command in ("POST", "DELETE"):
+                    runtime.record_operation(self.command, urlsplit(self.path).path, payload, status=status,
+                                             body=body, operator=self.headers.get(OPERATOR_HEADER))
+            except Exception:
+                pass
 
         # ---------------------------------------------------------- GET
         def do_GET(self):
@@ -265,6 +285,13 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 return {"skills": runtime.skills.list()}
             if path == "/v2/runs":
                 return {"runs": runtime.runner.list()}
+            if path == "/v2/telemetry" and ("since_ts" in query or "until_ts" in query):
+                return runtime.telemetry_window(*self._range_query(query))
+            if path == "/v2/records":
+                return runtime.records_summary()
+            m = _RECORDS.match(path)
+            if m:
+                return runtime.records_query(unquote(m.group(1)), *self._range_query(query))
             if path == "/v2/telemetry":
                 try:
                     since = int(query.get("since", ["0"])[0])
@@ -296,6 +323,23 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 return int(query.get(name, [str(default)])[0])
             except ValueError:
                 raise BadRequest(f"{name} 须为整数") from None
+
+        def _range_query(self, query: dict) -> tuple:
+            """``since_ts``/``until_ts`` (seconds, optional), ``after`` (cursor) and ``limit``."""
+            stamps = []
+            for name in ("since_ts", "until_ts"):
+                raw = query.get(name, [None])[0]
+                try:
+                    value = None if raw is None else float(raw)
+                except ValueError:
+                    raise BadRequest(f"{name} 须为数值（秒）") from None
+                if value is not None and not 0 <= value < float("inf"):     # also refuses NaN
+                    raise BadRequest(f"{name} 须为不小于 0 的有限数值（秒）")
+                stamps.append(value)
+            after, limit = self._int_query(query, "after", 0), self._int_query(query, "limit", 500)
+            if not 0 <= after < 1 << 62:
+                raise BadRequest("after 须为不小于 0 的整数")
+            return stamps[0], stamps[1], after, limit
 
         # ---------------------------------------------------------- DELETE
         def do_DELETE(self):
@@ -336,9 +380,11 @@ def make_handler(runtime: EdgeRuntime, token: str):
             sup = runtime.supervisor
             prior = sup.latch_reason if sup.latched else None    # no IO: read before stopping
             result = runtime.emergency_stop(STOP_PLACEHOLDER, source=path)
+            self._op_payload = None        # the stop has happened; from here on only bookkeeping
             try:
                 raw = self._raw_body()
                 payload = json.loads(raw, parse_constant=_reject_constant) if raw else {}
+                self._op_payload = payload                         # for the operation record
                 if isinstance(payload, dict) and payload.get("keep_reason") is True and prior:
                     # R4b-08: a re-stop (e.g. conformance --mode client) keeps the existing latch
                     # reason (the operator's); the stop itself already happened and was counted.
@@ -360,6 +406,7 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 self._send(result)
             except OSError:
                 pass                       # robot is stopped; the client went away
+            self._record_operation()       # after the stop and its answer; queues only
 
         def _post(self, path: str, payload: dict) -> dict:
             if path == "/v1/validate":
