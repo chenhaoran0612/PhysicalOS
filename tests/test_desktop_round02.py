@@ -87,7 +87,7 @@ class CapabilityTableTests(RuntimeCase):
         gateway = Gateway(DeviceFixture(), LEGACY_TOKEN, tmp.name + '/edge')
         server = Server(edge_handler(gateway))
         try:
-            robot = connect(self.platform, self.pid, server.url, LEGACY_TOKEN, family='mobile')
+            robot = connect(self.platform, self.pid, server.url, LEGACY_TOKEN, family='quadruped')
             detail = self.platform.robot_detail({'robot_id': robot['id']})
             caps = detail['capabilities']
             self.assertEqual(caps['source'], 'v1')
@@ -103,7 +103,7 @@ class CapabilityTableTests(RuntimeCase):
             tmp.cleanup()
 
     def test_unconnected_robot_has_no_table_and_does_not_touch_network(self):
-        robot = self.platform.add_robot({'project_id': self.pid, 'name': '未连接', 'family': 'mobile'})
+        robot = self.platform.add_robot({'project_id': self.pid, 'name': '未连接', 'family': 'quadruped'})
         detail = self.platform.robot_detail({'robot_id': robot['id']})
         self.assertIsNone(detail['capabilities']['source'])
         self.assertFalse(detail['skills']['available'])
@@ -301,7 +301,7 @@ class SkillInstallTests(RuntimeCase):
         gateway = Gateway(DeviceFixture(), LEGACY_TOKEN, tmp.name + '/edge')
         server = Server(edge_handler(gateway))
         try:
-            robot = connect(self.platform, self.pid, server.url, LEGACY_TOKEN, family='mobile')
+            robot = connect(self.platform, self.pid, server.url, LEGACY_TOKEN, family='quadruped')
             with self.assertRaisesRegex(ValueError, '/v2/manifest'):
                 self.platform.preview_skill_package({'robot_id': robot['id'], 'path': write_skill(tmp.name)})
         finally:
@@ -645,7 +645,7 @@ class RobotStopTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         platform, pid = new_platform(tmp.name)
         try:
-            robot = platform.add_robot({'project_id': pid, 'name': 'R', 'family': 'mobile'})
+            robot = platform.add_robot({'project_id': pid, 'name': 'R', 'family': 'quadruped'})
             with self.assertRaisesRegex(ValueError, '硬件急停'):
                 platform.stop_robot({'robot_id': robot['id']})
             platform.configure_connection({'kind': 'robots', 'id': robot['id'], 'endpoint': 'http://127.0.0.1:9'})

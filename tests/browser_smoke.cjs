@@ -15,7 +15,7 @@ const path=require('path');
  const submit=async()=>{await page.locator('#dialog button[type=submit]').click();await page.waitForTimeout(300);const e=await page.locator('.form-error').allTextContents();if(e.some(Boolean))throw Error(e.join(';'));};
  await gateSignIn(page,{name:'安装包验收工作空间',email:`qa-${Date.now()}@example.test`,password:'test-only-password-123'});
  await click('journey-start');await fill('name','机器人交付流程验收');await fill('objective','验证本体接入、技能编排、工程检查和发布流程');await submit();
- await page.goto(base+'/#robots');await click('robot-add');await fill('name','协议测试设备');await page.locator('[name=family]').selectOption('mobile');await fill('endpoint',device);await fill('token','browser-fixture-token-12345678');await submit();await click('robot-connect');await page.waitForTimeout(300);
+ await page.goto(base+'/#robots');await click('robot-add');await fill('name','协议测试设备');await page.locator('[name=family]').selectOption('quadruped');await fill('endpoint',device);await fill('token','browser-fixture-token-12345678');await submit();await click('robot-connect');await page.waitForTimeout(300);
  await page.goto(base+'/#skills');await click('skill-add');await fill('name','导航技能');await fill('entrypoint','navigation.goto');await fill('requires','navigation.goal');await fill('success_condition','到达目标点');await fill('stop_condition','定位丢失或超时停止');await submit();
  await click('application-add');await fill('name','巡检应用');await page.locator('#steps-container .step-editor').first().waitFor();await fill('parameters','{"goal":[1,2]}');await submit();await page.getByText('应用交付清单',{exact:true}).waitFor();
  // Since round 02 the application's delivery checklist drives check → on-site test → publish → start/stop

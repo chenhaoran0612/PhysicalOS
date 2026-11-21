@@ -12,7 +12,7 @@ const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  
  await page.goto(cfg.url);await gateSignIn(page,{name:'工程验收工作空间',email:`engine-${Date.now()}@example.test`,password:'fixture-password-123'});
  await click('journey-start');await fill('name','通用本体接入验收');await fill('objective','SSH 调查、档案、工程开发闭环');await submit();
  await connectTokenFans(page,cfg);await useTokenFansModel(page,cfg,'fixture-discovery');
- await page.goto(cfg.url+'/#robots');await click('engine-ssh');await fill('name','SSH 协议验收设备');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();
+ await page.goto(cfg.url+'/#robots');await click('engine-ssh');await page.locator('#dialog [name=family]').selectOption('quadruped');await fill('name','SSH 协议验收设备');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password','fixture-password');await submit();
  await page.locator('#dialog').getByText('确认 SSH 主机指纹',{exact:true}).waitFor();await page.locator('#dialog input[type=checkbox]').check();await submit();
  await page.locator('#dialog [data-action="engine-discover"]').first().click({timeout:30000});await page.locator('#dialog').getByText('让 Agent 调查本体',{exact:true}).waitFor();
  await page.locator('[name=data_authorized]').check();await submit();

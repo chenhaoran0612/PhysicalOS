@@ -115,7 +115,7 @@ class SafetyWatchTests(unittest.TestCase):
         self.device = LatchingDevice()
         self.gateway = Gateway(self.device, TOKEN, self.tmp.name + '/edge')
         self.server = Server(edge_handler(self.gateway))
-        self.robot = self.app.add_robot({'project_id': self.pid, 'name': '真机 A', 'family': 'mobile',
+        self.robot = self.app.add_robot({'project_id': self.pid, 'name': '真机 A', 'family': 'quadruped',
                                          'endpoint': self.server.url, 'token': TOKEN})
         self.app.connect_robot({'robot_id': self.robot['id']})
         self.status = {'estop_latched': False, 'stop_epoch': 1, 'telemetry': {'last_seq': 0},
@@ -251,8 +251,8 @@ class SafetyWatchTests(unittest.TestCase):
 
     def test_other_projects_and_unconnected_robots_are_not_asked(self):
         other = self.app.add_project({'name': 'Q', 'objective': 'O'})['id']
-        self.app.add_robot({'project_id': other, 'name': 'B', 'family': 'mobile', 'endpoint': 'http://127.0.0.1:9', 'token': 'x'})
-        self.app.add_robot({'project_id': self.pid, 'name': 'C', 'family': 'mobile', 'endpoint': 'http://127.0.0.1:9', 'token': 'x'})
+        self.app.add_robot({'project_id': other, 'name': 'B', 'family': 'quadruped', 'endpoint': 'http://127.0.0.1:9', 'token': 'x'})
+        self.app.add_robot({'project_id': self.pid, 'name': 'C', 'family': 'quadruped', 'endpoint': 'http://127.0.0.1:9', 'token': 'x'})
         out = self.watch()
         self.assertEqual([e['robot_id'] for e in out['robots']], [self.robot['id']])
 

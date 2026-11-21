@@ -68,7 +68,7 @@ class FloatOptionTests(unittest.TestCase):
         self.device = RecordingDevice()
         self.gateway = Gateway(self.device, TOKEN, self.tmp.name + '/edge')
         self.server = Server(edge_handler(self.gateway))
-        self.robot = self.app.add_robot({'project_id': self.pid, 'name': '真机', 'family': 'mobile',
+        self.robot = self.app.add_robot({'project_id': self.pid, 'name': '真机', 'family': 'quadruped',
                                          'endpoint': self.server.url, 'token': TOKEN})
         self.app.connect_robot({'robot_id': self.robot['id']})
 
@@ -185,7 +185,7 @@ class ResetRequestTests(unittest.TestCase):
         self.device.status = lambda: {**orig(), **self.extra}
         self.gateway = Gateway(self.device, TOKEN, self.tmp.name + '/edge')
         self.server = Server(edge_handler(self.gateway))
-        self.robot = self.app.add_robot({'project_id': pid, 'name': 'R', 'family': 'mobile',
+        self.robot = self.app.add_robot({'project_id': pid, 'name': 'R', 'family': 'quadruped',
                                          'endpoint': self.server.url, 'token': TOKEN})
         self.device.latched = True
 
@@ -299,7 +299,7 @@ class AllProjectsWatchTests(unittest.TestCase):
             device = LatchingDevice()
             gw = Gateway(device, TOKEN, self.tmp.name + '/edge' + name)
             srv = Server(edge_handler(gw))
-            robot = self.app.add_robot({'project_id': pid, 'name': '机器人' + name, 'family': 'mobile',
+            robot = self.app.add_robot({'project_id': pid, 'name': '机器人' + name, 'family': 'quadruped',
                                         'endpoint': srv.url, 'token': TOKEN})
             self.app.connect_robot({'robot_id': robot['id']})
             device.latched = name == 'B'

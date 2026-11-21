@@ -63,6 +63,7 @@ const STATUS_API = '/api/engineering/ssh/status';
   await page.goto(cfg.url + '/#robots');
   await page.locator('[data-action="engine-ssh"]').first().click();
   await fill('name', '巡检机器人'); await fill('host', '127.0.0.1'); await fill('port', cfg.target_port);
+  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
   await fill('username', cfg.target_user); await fill('password', cfg.target_password);
   await page.locator('#dialog [name=route]').selectOption('jump');
   await fill('jump_host', '127.0.0.1'); await fill('jump_port', cfg.jump_port);

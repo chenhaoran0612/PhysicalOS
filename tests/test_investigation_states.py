@@ -66,7 +66,7 @@ class Base(unittest.TestCase):
         self.ssh = SSHFixture(command_outputs={SCAN: jetson().encode()}, password=SSH_LOGIN)
         scan = self.e.scan({'project_id': self.pid, 'host': '127.0.0.1', 'port': self.ssh.port, 'username': 'robot'})
         self.connection = self.e.connect({'project_id': self.pid, 'host_check_id': scan['id'], 'trust_fingerprint': scan['fingerprint'],
-                                          'auth': 'password', 'password': SSH_LOGIN, 'name': 'Orin robot'})
+                                          'auth': 'password', 'password': SSH_LOGIN, 'name': 'Orin robot', 'family': 'quadruped'})
         self.robot = self.connection['robot_id']
         self.model = self.e.model_add({'project_id': self.pid, 'name': 'Fixture', 'model': 'fixture-agent',
                                        'base_url': 'http://127.0.0.1:9/v1', 'api_key': MODEL_KEY})
@@ -112,7 +112,7 @@ class StateTests(Base):
         self.assertIsNone(state['progress'])
 
     def test_robots_without_ssh_have_no_investigation_state(self):
-        other = self.p.add_robot({'project_id': self.pid, 'name': 'HTTP robot', 'family': 'custom'})
+        other = self.p.add_robot({'project_id': self.pid, 'name': 'HTTP robot', 'family': 'quadruped'})
         self.assertNotIn(other['id'], [x['robot_id'] for x in self.p.snapshot()['investigations']])
 
     def test_a_running_investigation_shows_its_progress(self):
@@ -237,7 +237,7 @@ class RestartTests(Base):
             other = self.p.add_project({'name': 'Other', 'objective': 'x'})['id']
             with self.assertRaisesRegex(ValueError, '不属于当前项目'):
                 self.inv.restart({'project_id': other, 'robot_id': self.robot, 'data_authorized': True})
-            plain = self.p.add_robot({'project_id': self.pid, 'name': 'HTTP robot', 'family': 'custom'})
+            plain = self.p.add_robot({'project_id': self.pid, 'name': 'HTTP robot', 'family': 'quadruped'})
             with self.assertRaisesRegex(ValueError, 'SSH'):
                 self.restart(robot_id=plain['id'])
         launch.assert_not_called()

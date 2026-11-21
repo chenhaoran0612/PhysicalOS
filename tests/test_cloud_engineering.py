@@ -338,7 +338,7 @@ class ProtocolLevelTest(CloudEngineeringBase):
 
     def test_discovery_uses_the_same_cloud_path(self):
         self.login()
-        robot = self.platform.add_robot({'project_id': self.pid, 'name': 'Cloud robot', 'family': 'custom'})
+        robot = self.platform.add_robot({'project_id': self.pid, 'name': 'Cloud robot', 'family': 'quadruped'})
         self.store.put('device_connections', {'id': 'conn', 'project_id': self.pid, 'robot_id': robot['id'],
                                               'host': '127.0.0.1', 'port': 22, 'username': 't', 'auth': 'password',
                                               'fingerprint': 'SHA256:t', 'read_roots': ['/opt/ros']})
@@ -520,7 +520,7 @@ class RealRuntimeThroughCloudTest(CloudEngineeringBase):
 
     def test_discovery_through_the_gateway(self):
         self.login()
-        robot = self.platform.add_robot({'project_id': self.pid, 'name': 'Cloud robot', 'family': 'custom'})
+        robot = self.platform.add_robot({'project_id': self.pid, 'name': 'Cloud robot', 'family': 'quadruped'})
         self.store.put('device_connections', {'id': 'conn', 'project_id': self.pid, 'robot_id': robot['id'],
                                               'host': '127.0.0.1', 'port': 22, 'username': 't', 'auth': 'password',
                                               'fingerprint': 'SHA256:t', 'read_roots': ['/opt/ros']})

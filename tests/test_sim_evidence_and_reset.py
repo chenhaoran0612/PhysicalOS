@@ -99,7 +99,7 @@ class Base(unittest.TestCase):
         self.tmp.cleanup()
 
     def workflow(self):
-        robot = self.app.add_robot({'project_id': self.pid, 'name': 'Robot', 'family': 'mobile',
+        robot = self.app.add_robot({'project_id': self.pid, 'name': 'Robot', 'family': 'quadruped',
                                     'endpoint': self.server.url, 'token': TOKEN})
         self.app.connect_robot({'robot_id': robot['id']})
         skill = self.app.add_skill({'project_id': self.pid, 'name': 'Navigate', 'version': '1.0',
@@ -297,7 +297,7 @@ class ResetTests(Base):
             cookie = cookie.split(';')[0]
             workspace = application.workspace(user['user'])
             pid = workspace.add_project({'name': 'P', 'objective': 'O'})['id']
-            remote = workspace.add_robot({'project_id': pid, 'name': 'R', 'family': 'mobile',
+            remote = workspace.add_robot({'project_id': pid, 'name': 'R', 'family': 'quadruped',
                                           'endpoint': self.server.url, 'token': TOKEN})
             status, body, _ = post('robots/reset', {'robot_id': remote['id']}, cookie)
             self.assertEqual(status, 400)

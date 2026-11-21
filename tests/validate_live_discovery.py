@@ -42,7 +42,7 @@ def run(config,report_path):
             e=p.engineering
             scan=e.scan({'project_id':pid,'host':'127.0.0.1','port':ssh.port,'username':'robot'})
             conn=e.connect({'project_id':pid,'host_check_id':scan['id'],'trust_fingerprint':scan['fingerprint'],
-                'auth':'password','password':'fixture-password','name':'Synthetic vendor robot','read_roots':['/opt/ros','/etc/robot']})
+                'auth':'password','password':'fixture-password','name':'Synthetic vendor robot','family':'quadruped','read_roots':['/opt/ros','/etc/robot']})
             model=e.model_add({'project_id':pid,'name':'Live model acceptance',**config})
             s=e.start({'robot_id':conn['robot_id'],'model_id':model['id'],'data_authorized':True,'max_tokens':200000,'max_minutes':6,
                 'objective':'这是隔离的合成设备验收。请调查可见软硬件，沿厂商工作空间追查驱动使用的协议、bitrate、actuator_ids 与 FIRMWARE_HANDSHAKE，读取真实文件作为证据。不要假设存在实物或执行动作。保存档案，清楚说明哪些未验证。'})

@@ -26,7 +26,7 @@ class MarksOfADeletedRobotTests(PolicyBase):
         self.addCleanup(ssh.close)
         check = self.e.scan({'project_id': self.pid, 'host': '127.0.0.1', 'port': ssh.port, 'username': 'robot'})
         connection = self.e.connect({'project_id': self.pid, 'host_check_id': check['id'], 'trust_fingerprint': check['fingerprint'],
-                                     'auth': 'password', 'password': 'fixture-password', 'name': 'Second robot'})
+                                     'auth': 'password', 'password': 'fixture-password', 'name': 'Second robot', 'family': 'quadruped'})
         self.hw.scan({'project_id': self.pid, 'robot_id': connection['robot_id']})
         self.policy.mark({'project_id': self.pid, 'robot_id': connection['robot_id'], 'issue_id': CAN, 'handled': True})
         return connection['robot_id']

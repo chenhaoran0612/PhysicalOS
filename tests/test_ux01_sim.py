@@ -253,7 +253,7 @@ class SimRobotTests(unittest.TestCase):
         edge = Server(edge_handler(gateway))
         try:
             project = self.app.add_project({'name': 'P', 'objective': 'O'})
-            real = self.app.add_robot({'project_id': project['id'], 'name': 'real', 'family': 'mobile',
+            real = self.app.add_robot({'project_id': project['id'], 'name': 'real', 'family': 'quadruped',
                                        'endpoint': edge.url, 'token': 'test-only-token-123456789000'})
             with self.assertRaisesRegex(ValueError, '只对仿真机器人开放'):
                 self.run_skill(real['id'], 'patrol', 'x1')

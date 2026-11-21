@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory() as tmp:
         project=api('projects',{'name':'Frozen QA','objective':'Verify packaged discovery'})
         m=api('engineering/models',{'project_id':project['id'],'name':'Local fixture','model':'fixture-agent','base_url':model.url+'/v1','api_key':'fixture-key'})
         check=api('engineering/ssh/scan',{'project_id':project['id'],'host':'127.0.0.1','port':ssh.port,'username':'robot'})
-        c=api('engineering/ssh/connect',{'project_id':project['id'],'host_check_id':check['id'],'trust_fingerprint':check['fingerprint'],'auth':'password','password':'fixture-password','name':'Frozen SSH','family':'custom','read_roots':['/opt/ros']})
+        c=api('engineering/ssh/connect',{'project_id':project['id'],'host_check_id':check['id'],'trust_fingerprint':check['fingerprint'],'auth':'password','password':'fixture-password','name':'Frozen SSH','family':'quadruped','read_roots':['/opt/ros']})
         run=api('engineering/start',{'robot_id':c['robot_id'],'model_id':m['id'],'data_authorized':True,'max_tokens':1000,'max_minutes':1})
         deadline=time.monotonic()+30
         while time.monotonic()<deadline:
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert s['inventory_id'] and ssh.commands
         dm=api('engineering/models',{'project_id':project['id'],'name':'Deep discovery fixture','model':'fixture-agent','base_url':deep_model.url+'/v1','api_key':'fixture-key'})
         check=api('engineering/ssh/scan',{'project_id':project['id'],'host':'127.0.0.1','port':deep_ssh.port,'username':'robot'})
-        dc=api('engineering/ssh/connect',{'project_id':project['id'],'host_check_id':check['id'],'trust_fingerprint':check['fingerprint'],'auth':'password','password':'fixture-password','name':'Frozen deep SSH','family':'custom','read_roots':['/opt/ros']})
+        dc=api('engineering/ssh/connect',{'project_id':project['id'],'host_check_id':check['id'],'trust_fingerprint':check['fingerprint'],'auth':'password','password':'fixture-password','name':'Frozen deep SSH','family':'quadruped','read_roots':['/opt/ros']})
         task=api('engineering/start',{'robot_id':dc['robot_id'],'model_id':dm['id'],'data_authorized':True,'max_tokens':10000,'max_minutes':1})
         deadline=time.monotonic()+35;approved=[]
         while time.monotonic()<deadline:
@@ -106,7 +106,7 @@ with tempfile.TemporaryDirectory() as tmp:
         saved=api('jobs/save-model',{'project_id':project['id'],'job_id':job['id'],'preview_digest':proof['preview_digest'],'name':'Frozen trained asset','task_type':'Fixture'})
         assert saved['status']=='artifact' and saved['provenance']['assets']['dataset']['version']=='1'
         assert b'resultModelActions' in opener.open(base+'/results.js').read()
-        robot=api('robots',{'project_id':project['id'],'name':'Frozen delivery device','family':'mobile','endpoint':edge.url,'token':gateway.token})
+        robot=api('robots',{'project_id':project['id'],'name':'Frozen delivery device','family':'quadruped','endpoint':edge.url,'token':gateway.token})
         api('robots/connect',{'robot_id':robot['id']})
         skill=api('skills',{'project_id':project['id'],'name':'Fixture navigate','version':'1','entrypoint':'navigate','requires':['navigation.goal'],'success_condition':'at goal','stop_condition':'stop on error','model_ids':[]})
         application=api('applications',{'project_id':project['id'],'name':'Frozen delivery','version':'1','robot_id':robot['id'],'steps':[{'skill_id':skill['id']}]})

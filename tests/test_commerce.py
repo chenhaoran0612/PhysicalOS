@@ -54,7 +54,7 @@ class CommerceTests(unittest.TestCase):
     def test_edge_model_install_checks_runtime_and_exact_digest(self):
         catalog=self.commerce.publish_model({'name':'Test model','source':'native','version':'1','model_ref':'test@1','task_type':'perception','input_contract':'image','output_contract':'objects','license':'test only','package_ref':'test://package','package_digest':'a'*64,'runtime':'test-runtime','families':['mobile']})
         model=self.platform.use_catalog_model({'project_id':self.project,'catalog_model_id':catalog['id']})
-        robot=self.platform.add_robot({'project_id':self.project,'name':'Test robot','family':'mobile','endpoint':'http://127.0.0.1:9999'})
+        robot=self.platform.add_robot({'project_id':self.project,'name':'Test robot','family':'quadruped','endpoint':'http://127.0.0.1:9999'})
         manifest={'schema':'robot.adapter.v1','instance_id':'fixture','name':'Test robot','family':'mobile','adapter_version':'1','capabilities':['model.install'],'model_runtimes':['wrong-runtime']}
         with patch('brainos.connector.request',return_value=manifest):
             with self.assertRaises(ValueError):self.platform.deploy_model({'model_id':model['id'],'robot_id':robot['id']})

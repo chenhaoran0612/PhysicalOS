@@ -31,7 +31,7 @@ class Base(unittest.TestCase):
         self.ssh = SSHFixture(command_outputs={SCAN: jetson().encode()})
         scan = self.e.scan({'project_id': self.pid, 'host': '127.0.0.1', 'port': self.ssh.port, 'username': 'robot'})
         self.connection = self.e.connect({'project_id': self.pid, 'host_check_id': scan['id'], 'trust_fingerprint': scan['fingerprint'],
-                                          'auth': 'password', 'password': 'fixture-password', 'name': 'Orin robot'})
+                                          'auth': 'password', 'password': 'fixture-password', 'name': 'Orin robot', 'family': 'quadruped'})
         self.robot = self.connection['robot_id']
 
     def tearDown(self):
@@ -77,7 +77,7 @@ class ScanTests(Base):
         self.assertNotIn('fixture-password', json.dumps(self.p.snapshot()))
 
     def test_scan_needs_an_ssh_robot_in_the_same_project(self):
-        other = self.p.add_robot({'project_id': self.pid, 'name': 'No SSH', 'family': 'custom'})
+        other = self.p.add_robot({'project_id': self.pid, 'name': 'No SSH', 'family': 'quadruped'})
         with self.assertRaisesRegex(ValueError, 'SSH'):
             self.hw.scan({'project_id': self.pid, 'robot_id': other['id']})
         elsewhere = self.p.add_project({'name': 'Other', 'objective': 'Other'})['id']
@@ -419,7 +419,7 @@ class StartRepairTests(Base):
                       {'issue_ids': SERIAL + SERIAL[:1]}, {'max_minutes': 0}]:
             with self.assertRaises(ValueError, msg=str(extra)):
                 self.start(**extra)
-        other = self.p.add_robot({'project_id': self.pid, 'name': 'Other', 'family': 'custom'})
+        other = self.p.add_robot({'project_id': self.pid, 'name': 'Other', 'family': 'quadruped'})
         self.store.put('hardware_scans', {**self.store.get('hardware_scans', self.baseline['id']), 'id': 'hardware-scan-other', 'robot_id': other['id']})
         with self.assertRaisesRegex(ValueError, '不属于'):
             self.start(scan_id='hardware-scan-other')

@@ -181,6 +181,18 @@ const UX_CODES = {
   nothing_to_charge: ['account', '没有需要扣费的用量。', '无需操作'],
   reservation_not_held: ['account', '预留的额度已经释放。', '重新发起'],
   ledger_conflict: ['state', '账本记录冲突（同时有别的操作）。', '刷新后再试'],
+  // Issue #32: the platform's list of body types (brainos/body_types.py, web/body_types.js)
+  body_type_required: ['input', '这台设备还没有从本体类型清单里选类型。', '在“本体类型”里选一个类型后再提交'],
+  body_type_unknown: ['notfound', '清单里已经没有这个本体类型了，可能刚被删除。', '刷新页面后重新选择'],
+  body_type_builtin: ['state', '这是内置的本体类型，不能删除。'],
+  body_type_in_use: ['state', '还有设备在用这个本体类型，所以不能删除。', '先把这些设备改成别的类型，或删除这些设备', '然后再删除这个类型'],
+  body_type_sim_fixed: ['sim', '仿真机器人的本体类型由它的仿真种类决定，不能修改。'],
+  body_type_name_taken: ['input', '已经有同名的本体类型。', '换一个名称后再添加'],
+  body_type_name_invalid: ['input', '类型名称不符合要求：需要 1–40 个字符，不能有换行或看不见的字符。', '改一个名称后再添加'],
+  body_type_limit: ['state', '清单里添加的本体类型已经到上限了。', '先删除不用的类型，再添加'],
+  body_type_template_invalid: ['input', '状态机模板标识的写法不对。', '只用小写字母、数字、点、下划线或连字符，并以字母或数字开头'],
+  body_type_interfaces_required: ['input', '本体类型至少要有一个应有的运控接口。', '勾选至少一个接口后再添加'],
+  body_type_interface_unknown: ['input', '选的接口里有一个不是标准能力编号。', '从列表里勾选接口后再添加'],
 };
 
 // Codes that start like these are parameter refusals even when not listed (e.g. a new runtime code).
