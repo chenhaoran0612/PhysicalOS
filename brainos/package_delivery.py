@@ -4,8 +4,8 @@ Both ends existed: the library keeps packages in the cloud (issue #33) and ``dev
 puts a local file on a device, in chunks, resumable, verified by the device's own SHA-256
 (issue #18). This module is the part between them and the result it leaves:
 
-1. the material's record is read from the cloud and checked: it must be a driver package and
-   marked usable (R1-13; see ``USABLE_STATUSES``);
+1. the material's record is read from the cloud and checked: it must be a driver package, marked
+   usable (R1-13; see ``USABLE_STATUSES``), and not belong to another robot (issue #34);
 2. the package is fetched to this computer and verified against the checksum the library
    recorded (``package_fetch``): a fetch that was cut goes on from where it stopped;
 3. it is sent to ``~/neuxmind-pkg/library/<first 32 digits of the SHA-256>/<plain name>`` through
@@ -47,9 +47,12 @@ from .service import now, uid
 
 KIND = 'package_deliveries'
 # R1-13: only materials marked usable are delivered. A material gets there by being parsed and
-# then confirmed by a person; that step and the name of its state belong to issue #34. Until it
-# exists every upload stays in "parsing", and nothing can be delivered.
-USABLE_STATUSES = ('available',)
+# then confirmed by a person (issue #34, which named the state ``usable``; ``parsed`` is "待确认").
+USABLE_STATUSES = ('usable',)
+# Issue #34: a material belongs to the robot it was uploaded for (its ``device_id`` is the robot's
+# id). One that belongs to another robot is not sent; one uploaded before (no owner) may go anywhere.
+OWNER_KEYS = ('device_id', 'device_name')
+NOT_PLAIN = '\x00'                      # stands for an owner that is not plain text: never a robot's id
 PACKAGE = 'package'
 DEVICE_DIR = '~/neuxmind-pkg/library'
 CACHE_DIR = 'package-cache'
@@ -60,7 +63,7 @@ MAX_STEM_CHARS = 80
 SUFFIXES = {'zip': ('.zip',), 'tar.gz': ('.tar.gz', '.tgz'), 'tar.xz': ('.tar.xz', '.txz'),
             'tar.bz2': ('.tar.bz2', '.tbz2'), 'tar': ('.tar',), 'deb': ('.deb',)}
 LABELS = ('body_type', 'vendor', 'model', 'version', 'format')
-STATUS_NAMES = {'parsing': '解析中', 'parsed': '已解析，等待确认', 'failed': '解析失败'}
+STATUS_NAMES = {'parsing': '解析中', 'parsed': '待确认', 'failed': '没解析出来'}      # as the library page names them (#34)
 KEEP_JOBS = 50
 MAX_RUNNING = 4                         # deliveries a person can have running at once in a workspace
 DIR_DIGITS = 32                         # of the SHA-256, for the directory on the device: two packages never share one
@@ -201,18 +204,22 @@ class PackageDelivery:
     def material(self, material_id):
         """The record of a material as the cloud has it now."""
         material_id = _material_id(material_id)
-        view = _scalars(self.platform.library._call('GET', '/library/materials/' + material_id), MATERIAL_KEYS)
+        answer = self.platform.library._call('GET', '/library/materials/' + material_id)
+        view = _scalars(answer, MATERIAL_KEYS + OWNER_KEYS)
         for key, value in view.items():
-            if isinstance(value, str) and key not in ('id', 'sha256'):
+            if isinstance(value, str) and key not in ('id', 'sha256', 'device_id'):
                 view[key] = target.shown(value, FILENAME_CHARS if key == 'filename' else LABEL_CHARS)
+        owner = answer.get('device_id')
+        if owner not in (None, ''):         # read from the answer itself: one that is not plain text is nobody's id
+            view['device_id'] = owner if isinstance(owner, str) else NOT_PLAIN
         if view.get('id') != material_id:
             raise CodedError('云平台答复的不是所问的那份资料，没有继续', code='package_record_invalid')
         return view
 
     @staticmethod
-    def check(material):
-        """Refuse what may not go to a device: anything but a driver package, and a package that is
-        not marked usable (R1-13)."""
+    def check(material, robot):
+        """Refuse what may not go to this robot: anything but a driver package, a package that is not
+        marked usable (R1-13), and one that belongs to another robot (issue #34)."""
         if material.get('kind') != PACKAGE:
             raise CodedError('只有驱动安装包可以送到设备；这份资料不是安装包', code='package_not_deliverable')
         if not usable(material):
@@ -220,6 +227,10 @@ class PackageDelivery:
             name = STATUS_NAMES.get(status) or (target.shown(status, 40) if isinstance(status, str) and status else '未知')
             raise CodedError('这份安装包还没有标为“可用”（现在是“%s”），不能送到设备：资料要先解析、再由人确认' % name,
                              code='package_not_usable')
+        owner = material.get('device_id')
+        if owner not in (None, '') and owner != robot['id']:
+            other = material.get('device_name') if isinstance(material.get('device_name'), str) and material['device_name'] else '另一台设备'
+            raise CodedError('这份安装包属于“%s”，不能送到这台机器人；请在这台机器人的资料里上传它' % other, code='package_other_device')
         package_fetch._record(material)
 
     def _source(self):
@@ -253,7 +264,7 @@ class PackageDelivery:
         tell = _Progress(on_progress)
         tell('checking', 0, 0)
         material = self.material(material_id)
-        self.check(material)
+        self.check(material, robot)
         return self._deliver(robot, connection, material, tell, stop, fetch or {}, transfer or {})
 
     def _deliver(self, robot, connection, material, tell, stop, fetch, transfer):
@@ -352,7 +363,7 @@ class PackageDelivery:
         material_id = _material_id(p.get('material_id'))
         robot, connection = self._target(p.get('robot_id'), p.get('project_id'))
         material = self.material(material_id)
-        self.check(material)
+        self.check(material, robot)
         job = {'id': uid('package-delivery-job'), 'project_id': robot['project_id'], 'robot_id': robot['id'],
                'material_id': material_id, 'filename': material.get('filename', ''), 'status': 'running', 'phase': 'checking',
                'done': 0, 'total': material['size'], 'error': None, 'code': None, 'resumable': None, 'note': None,

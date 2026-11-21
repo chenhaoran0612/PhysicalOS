@@ -80,7 +80,7 @@ class FakeLibraryCloud:
 
     # --- what a test prepares and reads -------------------------------------------------------
 
-    def add(self, filename, data, status='available', kind='package', fmt='deb', declared_sha256=None,
+    def add(self, filename, data, status='usable', kind='package', fmt='deb', declared_sha256=None,
             declared_size=None, **labels):
         """A material as the cloud would describe it. ``declared_*`` make the description disagree with the bytes."""
         material_id = 'mat_' + secrets.token_hex(10)

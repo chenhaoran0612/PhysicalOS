@@ -118,6 +118,7 @@ const UX_CODES = {
   // ---- driver packages from the library to a device (issue #31, brainos/package_fetch.py and package_delivery.py)
   package_not_usable: ['state', '这份安装包还没有标为“可用”，不能送到设备。', '资料要先解析，再由人确认；确认后再送'],
   package_not_deliverable: ['input', '只有驱动安装包可以送到设备，这份资料不是安装包。', '在“资料库”页选择一份驱动安装包'],
+  package_other_device: ['input', '这份安装包属于另一台设备，不能送到这台机器人。', '在这台机器人的资料里上传它，确认可用后再送'],
   package_record_invalid: ['service', '云平台给出的这份资料的记录不完整，或者文件超过了可以送到设备的大小，没有取文件。', '在“资料库”页刷新后再试', '一直这样请删除这份资料后重新上传'],
   package_busy: ['state', '这个安装包正在取，或正在送往一台设备。', '等这一次结束后再试'],
   package_delivery_not_authorized: ['auth', '把安装包写到设备上需要你的确认。', '确认允许向这台设备写入文件后再开始'],
