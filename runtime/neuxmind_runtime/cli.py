@@ -67,6 +67,11 @@ def _serve(args) -> int:
     latched = "；急停已锁存：" + str(runtime.supervisor.latch_reason) if runtime.supervisor.latched else ""
     print(f"NeuxMind runtime {manifest['name']}{tag} 监听 {server.url}", flush=True)   # URL stays last
     print(f"连接上限 {args.max_connections}，另保留 {args.stop_reserved} 个停止专用名额{latched}", flush=True)
+    if args.require_safety_limits:
+        runtime.device_limits.require()
+    unfilled = runtime.device_limits.blocked_reason()
+    if unfilled:                     # issue #22: it serves and shows its state, but nothing moves
+        print("警告：" + unfilled + "（POST /v2/safety/limits）", flush=True)
     guard = runtime.latch_guard
     if guard is not None and guard.sources:
         cfg = guard.describe()
@@ -237,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
                        help="现场标定锁存守护（可重复，或一个 JSON 对象）：pos_m, yaw_rad, joint_rad, noise_m, noise_rad, "
                             "yaw_total_rad, yaw_drift_rad_s, stop_settle_s, escalate_after；覆盖清单 safety.latch_guard，"
                             "取值按同一范围校验并限幅（见 README §2 锁存守护标定）")
+    serve.add_argument("--require-safety-limits", action="store_true",
+                       help="自带限值的仿真本体也必须先由人填写安全限值才能运动（真机始终如此，见 README §2「设备安全限值」）")
     serve.set_defaults(func=_serve)
 
     check = sub.add_parser("check", help="离线检查技能包与本体是否兼容")

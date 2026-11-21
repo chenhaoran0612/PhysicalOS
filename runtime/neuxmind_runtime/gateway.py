@@ -275,6 +275,8 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 return runtime.list_models()
             if path == "/v2/conformance":
                 return {"conformance": runtime.conformance.list()}
+            if path == "/v2/safety/limits":       # issue #22: this device's filled safety limits
+                return runtime.device_limits.view()
             m = _CONFORMANCE.match(path)
             if m:
                 return runtime.get_conformance(unquote(m.group(1)))
@@ -380,6 +382,8 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 return runtime.v1_reset(payload)
             if path == "/v2/conformance":
                 return runtime.start_conformance(payload)
+            if path == "/v2/safety/limits":       # issue #22: fill them in (who and when are recorded)
+                return runtime.device_limits.write(payload)
             m = _CAP_INVOKE.match(path)
             if m:
                 return runtime.invoke(unquote(m.group(1)), payload)

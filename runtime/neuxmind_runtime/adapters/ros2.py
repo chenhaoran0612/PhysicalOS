@@ -13,8 +13,8 @@ safety.stop            —           zero Twist on /cmd_vel + cancel all Nav2 go
 system.health          —           node alive + freshness of subscribed topics
 =====================  ==========  ===============================================
 
-What is real here: the mapping table, the manifest builder (limits come from
-the operator's config, never guessed) and the pure message-conversion
+What is real here: the mapping table, the manifest builder (limits are never
+guessed: see "Limits" below) and the pure message-conversion
 functions, which are unit-tested with stand-in objects. Since round 04 the
 whole adapter (``Ros2Bridge`` plumbing, publishers, subscriptions, Nav2 goal
 handling, stop) also passes the conformance suite's ``static`` and ``dry``
@@ -48,6 +48,18 @@ TODO (before any field use)
 * Lifecycle: wait for Nav2 to be active (``bt_navigator``) before declaring
   ``base.navigate_to`` in the manifest.
 * Time: use ROS time for stamps when ``use_sim_time`` is set.
+
+Limits
+------
+``limits.max_vx`` / ``limits.max_wz`` in the configuration are what the body
+itself allows (its datasheet). They may be left out (issue #22, R1-06): the
+bridge then starts all the same, its manifest declares no speed limits, and
+the runtime refuses every motion command (``safety_limits_missing``) until a
+person has filled in this device's safety limits (``POST /v2/safety/limits``,
+the console's "安全限值"). When both exist the lower one is enforced. This
+adapter never invents a value. The filled limits are kept for the body that
+``instance_id`` (with vendor, model and the declared limits) names: give every
+robot its own ``instance_id`` in the configuration, not the default.
 
 Simulation flag
 ---------------
@@ -90,7 +102,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "topics": {"cmd_vel": "/cmd_vel", "odom": "/odom", "battery": "/battery_state"},
     "nav2_action": "navigate_to_pose",
     "map_frame": "map",
-    # Limits MUST be filled in by the integrator from the robot's datasheet.
+    # What the body itself allows, from its datasheet; never guessed. May stay null: nothing moves
+    # then until a person has filled in this device's safety limits (see "Limits" above).
     "limits": {"max_vx": None, "max_vy": 0.0, "max_wz": None, "holonomic": False},
     "stale_after_s": 1.0,
     "hardware_estop": False,
@@ -183,10 +196,14 @@ def is_simulated(config: dict, use_sim_time_param: bool = False) -> bool:
 
 def build_manifest(config: dict, use_sim_time_param: bool = False) -> dict:
     limits = config["limits"]
-    if limits.get("max_vx") is None or limits.get("max_wz") is None:
-        raise ValueError("ROS 2 适配器需要在配置 limits 中填写 max_vx 与 max_wz（来自本体规格）")
+    # Issue #22: a limit that is not configured is not declared (and not replaced by a default).
+    # The supervisor refuses all motion on a chassis without declared or filled limits.
+    velocity = {name: limits[name] for name in ("max_vx", "max_wz") if limits.get(name) is not None}
+    velocity.update(max_vy=limits.get("max_vy", 0.0), holonomic=bool(limits.get("holonomic", False)))
     simulated = is_simulated(config, use_sim_time_param)
-    safety = {"hardware_estop": bool(config["hardware_estop"]), "max_linear_speed": limits["max_vx"]}
+    safety = {"hardware_estop": bool(config["hardware_estop"])}
+    if "max_vx" in velocity:
+        safety["max_linear_speed"] = velocity["max_vx"]
     if config.get("latch_guard"):
         normalize_latch_guard(config["latch_guard"], "ROS 2 配置 latch_guard")   # fail fast (raises ValueError)
         safety["latch_guard"] = dict(config["latch_guard"])
@@ -198,9 +215,7 @@ def build_manifest(config: dict, use_sim_time_param: bool = False) -> dict:
         "capabilities": [
             {"id": "safety.stop", "params": {"hardware_estop": bool(config["hardware_estop"])}},
             {"id": "system.health"},
-            {"id": "base.velocity", "params": {"max_vx": limits["max_vx"], "max_vy": limits.get("max_vy", 0.0),
-                                               "max_wz": limits["max_wz"],
-                                               "holonomic": bool(limits.get("holonomic", False))}},
+            {"id": "base.velocity", "params": velocity},
             {"id": "base.odometry", "params": {"frame": "odom"}},
             {"id": "sensor.battery"},
             {"id": "base.navigate_to", "params": {"planner": "nav2"}},
@@ -449,7 +464,7 @@ class Ros2Adapter(RobotAdapter):
         Ros2Bridge.require(("geometry_msgs.msg", "nav_msgs.msg", "sensor_msgs.msg", "nav2_msgs.action"))
         self.clock = RealClock()
         self.config = config or load_config()
-        build_manifest(self.config)            # fail fast on missing limits before touching ROS
+        build_manifest(self.config)            # fail fast on a bad configuration before touching ROS
         self._bridge = Ros2Bridge(self.config["node_name"], self.config["stale_after_s"])
         try:
             self._manifest = build_manifest(self.config, self._bridge.use_sim_time)

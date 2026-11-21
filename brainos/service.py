@@ -89,6 +89,8 @@ class Platform:
         self.ssh_edit = ConnectionEdit(self)        # issue #9: change the SSH connection of a connected robot
         from .robot_remove import RobotRemoval
         self.robot_remove = RobotRemoval(self)      # issue #11: delete a robot with its connection and investigations
+        from .safety_limits import SafetyLimits
+        self.safety_limits = SafetyLimits(self)     # issue #22: safety limits a person fills in per device
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):

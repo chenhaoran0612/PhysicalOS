@@ -84,6 +84,7 @@ SCHEMA = "conformance.report.v1"
 LEVELS = ("static", "dry", "motion")
 PASSED, FAILED, SKIPPED = "passed", "failed", "skipped"
 NOT_APPLICABLE, BLOCKED = "not_applicable", "blocked"
+LIMITS_MISSING = "safety_limits_missing"     # issue #22: the runtime's code for "no filled safety limits"
 TERMINAL_RUN = ("succeeded", "failed", "stopped", "unknown")
 TRUST_NOTE = ("报告是自报的：在 --adapter 与 POST /v2/conformance（server）模式下，套件与适配器代码在同一进程，"
               "适配器代码可以篡改判定；任何基于适配器自身反馈的测试都无法发现“读数与动作同时伪造”或“识别出正在被测而表现不同”；"
@@ -219,6 +220,14 @@ class _Skip(Exception):
         self.kind = kind
 
 
+def _blocked_without_limits(code, message) -> None:
+    """Issue #22: a call the runtime refused because this device has no filled safety limits. It
+    sent nothing to the body, so the case is not failed (and there is nothing to stop): it could
+    not be tested. Raised as a blocked skip from the targets, whatever the case does with refusals."""
+    if code == LIMITS_MISSING:
+        raise _Skip(f"{message}。填写后重跑；真机请对已填写限值的运行时用 --url 测试", BLOCKED)
+
+
 class _Abort(Exception):
     """Stop the suite: every remaining case is blocked with this reason."""
 
@@ -318,6 +327,10 @@ class Target:
     def latch_reason(self) -> str | None: raise NotImplementedError
     def active_runs(self) -> list: raise NotImplementedError
 
+    def filled_limits(self) -> dict:
+        """Issue #22: the chassis limits a person filled in, as enforced (``{}``: none filled)."""
+        return {}
+
     def stop_count(self) -> int | None:
         """The runtime's emergency-stop counter (never decreases); None = not reported.
         The suite tells its own stops from anyone else's with it (Q4-01)."""
@@ -387,6 +400,7 @@ class RuntimeTarget(Target):
         try:
             return fn()
         except RuntimeApiError as exc:
+            _blocked_without_limits(exc.code, str(exc))
             raise CallError(str(exc), exc.code, exc.status) from None
 
     @staticmethod
@@ -487,6 +501,9 @@ class RuntimeTarget(Target):
     def latch_reason(self):
         return self.runtime.supervisor.latch_reason
 
+    def filled_limits(self):
+        return dict((self.runtime.device_limits.view()["effective"] or {}).get("base") or {})
+
     def active_runs(self):
         return [r.id for r in self.runtime.runner.active_runs()]
 
@@ -568,6 +585,10 @@ class AdapterTarget(RuntimeTarget):
     ``close()`` closes the runtime and therefore the adapter."""
 
     kind = "adapter"
+    # Issue #22: ``{"limits": {"base": {...}}, "set_by": "..."}`` filled into the throw-away runtime
+    # when it starts (checked like any other write). Without it a body that needs filled limits is
+    # sent no motion call: the cases that need one are blocked (reads and stops are still tested).
+    device_limits: dict | None = None
 
     def __init__(self, adapter):
         self.adapter = adapter
@@ -606,6 +627,8 @@ class AdapterTarget(RuntimeTarget):
         self._tmp = tempfile.TemporaryDirectory(prefix="nx-rt-")
         # No skills run here, so no skill sandbox is needed; telemetry stays in memory.
         self.runtime = EdgeRuntime(self.adapter, self._tmp.name, sandbox="inprocess", telemetry_capacity=None)
+        if self.device_limits is not None:
+            self.runtime.device_limits.write(dict(self.device_limits))
 
     def close(self):
         try:
@@ -644,6 +667,7 @@ class HttpTarget(Target):
                 body = json.loads(exc.read() or b"{}")
             except ValueError:
                 body = {}
+            _blocked_without_limits(body.get("code"), body.get("error"))
             raise CallError(body.get("error") or f"HTTP {exc.code}", body.get("code") or "http_error",
                             exc.code) from None
         except (urllib.error.URLError, OSError) as exc:
@@ -720,6 +744,14 @@ class HttpTarget(Target):
 
     def latch_reason(self):
         return self._status().get("latch_reason")
+
+    def filled_limits(self):
+        try:
+            effective = self.request("GET", "/v2/safety/limits").get("effective")
+        except CallError:                 # a runtime without this interface has no filled limits
+            return {}
+        base = effective.get("base") if isinstance(effective, dict) else None
+        return dict(base) if isinstance(base, dict) else {}
 
     def active_runs(self):
         return list(self._status().get("active_runs") or [])
@@ -1225,6 +1257,17 @@ class Suite:
 
     def _param(self, cap: str, name: str, default=None):
         return self.caps.get(cap, {}).get("params", {}).get(name, default)
+
+    def _speed_limit(self, declared: str, filled: str) -> float:
+        """Issue #22: the chassis speed limit in force -- the lower of what the manifest declares
+        (``declared``: max_vx / max_wz) and what was filled in for this device (``filled``). A body
+        may declare none and rely on the filled value; with neither there is nothing to scale a
+        test command by, and the case is blocked."""
+        values = [self._param("base.velocity", declared), self.target.filled_limits().get(filled)]
+        values = [float(v) for v in values if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0]
+        if not values:
+            raise _Skip(f"本体清单没有声明 {declared}，这台设备也没有填写对应的安全限值，无法确定测试速度", BLOCKED)
+        return min(values)
 
     def _read(self, cap: str) -> dict:
         return self.target.read(cap)
@@ -2125,7 +2168,7 @@ class Suite:
     def _velocity_args(self, timeout_s: float) -> tuple[dict, float]:
         if "base.odometry" not in self.caps:
             raise _Skip("未声明 base.odometry，无法读取运动反馈", BLOCKED)
-        v = min(self.t.base_speed, 0.25 * float(self._param("base.velocity", "max_vx")))
+        v = min(self.t.base_speed, 0.25 * self._speed_limit("max_vx", "max_linear_speed"))
         return {"vx": v, "wz": 0.0, "timeout_s": timeout_s}, v
 
     def _wait_moving(self, start: dict, ev: dict) -> None:
@@ -2229,7 +2272,7 @@ class Suite:
             v = min(self.t.base_speed, 0.25 * max_vy)
             args = {"vx": 0.0, "vy": v, "wz": 0.0}
         else:
-            v = min(self.t.turn_rate, 0.25 * float(self._param("base.velocity", "max_wz")))
+            v = min(self.t.turn_rate, 0.25 * self._speed_limit("max_wz", "max_angular_speed"))
             args = {"vx": 0.0, "wz": v}
             if self._param("base.velocity", "holonomic"):
                 args["vy"] = 0.0
@@ -2520,6 +2563,9 @@ class Suite:
             if "base.odometry" not in self.caps:
                 raise _Skip("需要 base.odometry", BLOCKED)
             v = min(self.t.base_speed, 0.25 * float(self._param("base.velocity", "max_vx", 0.4)))
+            filled = self.target.filled_limits().get("max_linear_speed")     # issue #22: may be lower than declared
+            if isinstance(filled, (int, float)) and not isinstance(filled, bool) and filled > 0:
+                v = min(v, 0.25 * float(filled))
             rows = [[v, 0.0, 0.0]] * 5
         else:
             self._na(f"运行时无法为动作空间 {space} 限幅")
@@ -2647,6 +2693,7 @@ def run_adapter(adapter, level: str = "static", authorized: bool = False, **kwar
     if level == "motion" and authorized is not True:
         raise NotAuthorized("motion 级别会让机器人运动，需要 hardware_authorized=true（现场确认）")
     target = AdapterTarget(adapter)
+    target.device_limits = kwargs.pop("device_limits", None)      # issue #22, see AdapterTarget
     try:
         return run(target, level, authorized, **kwargs)
     finally:

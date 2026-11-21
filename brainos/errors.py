@@ -13,6 +13,8 @@ answers HTTP 400 as before; these helpers only add fields to the JSON body.
 PASS_FIELDS = ('param', 'parameter', 'field', 'min', 'max', 'choices', 'options', 'value', 'limit',
                'capability', 'reset_in_progress_s', 'cause', 'hint', 'problem', 'constraint', 'expected',
                'step', 'value_length')
+# Issue #22: a limits_out_of_range refusal says whether the platform or the body sets the maximum.
+PASS_FIELDS += ('bound',)
 # Longer free text the browser shows as is (the runtime's operator hint).
 _LONG_TEXT = {'hint': 400}
 
