@@ -62,7 +62,7 @@ v1 manifest 视图携带 `simulated`、`vendor`、`model`（参与桌面端 mani
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/auth/register` `/auth/login` `/auth/logout` | 邮箱+密码；返回 session token |
-| GET | `/me` | 用户、所属组织、角色 |
+| GET | `/me` | 用户、所属组织、角色（用 API Key 调用时只有这把 Key 的组织、角色和权限，不含用户和其他组织） |
 | POST/GET/DELETE | `/api-keys` | 创建（明文只返回一次）、列表、吊销 |
 | GET | `/wallet` | `{balance, reserved, available}`，单位：token 点（整数） |
 | GET | `/wallet/ledger` | 账本 |

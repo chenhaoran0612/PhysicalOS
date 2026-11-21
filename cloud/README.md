@@ -106,7 +106,7 @@ NEUXMIND_TEST_DATABASE_URL=postgresql+psycopg://user@127.0.0.1/nxtest python3 -m
 | POST `/auth/verify-email/resend` | 需要会话 → `{email_verified:false, verification, dev_verification_token?}`；409 `already_verified`；429 `rate_limited`（每用户每小时 5 封）；**503 `email_sender_not_configured`**（服务端没有配置邮件发送） |
 | POST `/auth/login` | `{email, password}` → `{token, token_type, expires_at, user}`；401 `invalid_credentials`；429 `rate_limited` |
 | POST `/auth/logout` | → `{logged_out}` |
-| GET `/me` | → `{user, email_verified, platform_operator, auth, current_org_id, role, permissions[], organizations[{id,name,personal,role}]}` |
+| GET `/me` | 登录会话 → `{user, email_verified, platform_operator, auth:"session", current_org_id, role, permissions[], organizations[{id,name,personal,role}]}`。API Key → 只有 `{auth:"api_key", current_org_id, role, permissions[]}`：Key 所在的组织、创建者在这个组织的角色、Key 实际的权限，不含创建者的邮箱、姓名、邮箱验证状态、运营员标志和其他组织（Key 可能放在设备上，见“设备告警”）；`X-NeuxMind-Org` 对 Key 不起作用 |
 | POST `/org/members` | `{email, role: admin|developer|operator}`（owner 不能通过接口授予或修改；只有 owner 能授予 admin、修改 admin 的角色） |
 | GET `/org/members` | `{members:[{user_id, email, name, role}]}` |
 | DELETE `/org/members/{user_id}` | 修复新增：移除成员。owner 不能被移除（也不能自己退出）；owner/admin 可移除 developer/operator；只有 owner 能移除 admin；任何人可以移除自己（退出）。被移除成员创建的 API Key 立即失效 |
@@ -358,7 +358,7 @@ issue #26，需求 R7-08。设备上的管理层每 5 分钟主动上报一次�
 
 一条告警：`{id, alert_id, source: device|cloud, instance_id, robot_id, device_name, kind, level: critical|warning|info, ts, received_at, reason, advice, detail, handled, handled_at, handled_by}`。`ts` 是设备上的时间，`received_at` 是云端收到的时间；`robot_id` 是收到时这个 `instance_id` 登记的机器人，没有登记过就是 `null`（告警照收，不因为登记的先后而丢）。
 
-- **权限。** 给设备用的 Key 只带 `alerts:report`：能调的只有 `/device-reports`（以及所有 Key 都能调的 `GET /me`，它返回这把 Key 所属的账户和组织），读不了告警和机器人，调不了别的写接口。这个范围不在新建 Key 的默认范围里，要显式指定（`POST /api-keys {name, scopes: ["alerts:report"]}`）；四种角色都持有它，所以创建者被降级不会收窄这把 Key，创建者被移出组织或 Key 被吊销才失效。人看告警、标已处理、撤掉设备用已有的 `robots` 权限（登录会话或带 `robots` 的 Key）。
+- **权限。** 给设备用的 Key 只带 `alerts:report`：能调的只有 `/device-reports`（以及所有 Key 都能调的 `GET /me`：用 Key 调用时只回这把 Key 的组织 id、创建者的角色和 Key 的权限，拿到设备上这把 Key 的人读不到创建者的邮箱、姓名和创建者所在的其他组织），读不了告警和机器人，调不了别的写接口。这个范围不在新建 Key 的默认范围里，要显式指定（`POST /api-keys {name, scopes: ["alerts:report"]}`）；四种角色都持有它，所以创建者被降级不会收窄这把 Key，创建者被移出组织或 Key 被吊销才失效。人看告警、标已处理、撤掉设备用已有的 `robots` 权限（登录会话或带 `robots` 的 Key）。
 - **重复上报不重复保存。** 设备给每条告警一个自己的 `id`，云端按（组织, `instance_id`, `id`）只存一次；再次收到同一个 `id` 时放在 `duplicates` 里答复，内容以第一次为准。设备没有收到答复就会随下一次上报重发，所以这条是必需的。同一台设备的两次上报不会同时处理（PostgreSQL 上用 advisory lock，SQLite 本来就是串行的）。
 - **坏的告警单条拒绝。** 级别不是三种之一、时间不是 0 到 1e11 之间的数、原因为空或超过 1000 个字符、`id` 或 `kind` 的字符不合要求、`detail` 不是对象或超过 4000 字节、文字里有数据库存不了的字符（空字符、半个代理对）或其他控制字符（换行和制表符可以）的，放进 `rejected` 并说明原因，同一次上报里其余的照收。整份上报格式不对（`schema`、`device.instance_id`、`alerts` 不是列表或超过 200 条）返回 400 `invalid_report`。设备的名称、类型、版本只是显示用的，里面的这类字符直接替换掉。
 - **离线。** 设备最后一次上报距今超过 `NEUXMIND_DEVICE_OFFLINE_MISSED`（默认 3）× `NEUXMIND_DEVICE_REPORT_INTERVAL_SECONDS`（默认 300 秒）再加 `NEUXMIND_DEVICE_OFFLINE_GRACE_SECONDS`（默认 60 秒）即 16 分钟，就是 `offline`。多出的 1 分钟是给第 3 次上报在路上的时间，不然它晚到几秒就会被算成没收到。云端为这一次失联生成一条告警（`kind: device_offline`，`level: warning`，`source: cloud`），不重复生成；设备再次上报后恢复 `online`，那条告警的 `detail.recovered_at` 记下恢复时间，之后再失联是新的一条。判定在后台清理（`sweep`，结果里多一项 `devices_offline`）里做，有人查看 `/alerts`、`/alerts/devices` 时也会先做一次。只对上报过的设备判定：从没上报过的机器人不算离线。

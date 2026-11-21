@@ -403,6 +403,11 @@ def require_platform_operator(principal: Principal) -> Principal:
 
 
 def me(session: Session, principal: Principal) -> dict:
+    if principal.kind != "session":
+        # An API key can sit on a device (issue #26): describe the key, never the account that created it
+        # (no e-mail, name or other organisations; a personal org's name carries the creator's name).
+        return {"auth": principal.kind, "current_org_id": principal.org_id, "role": principal.role,
+                "permissions": sorted(principal.permissions)}
     rows = session.execute(select(Membership, Organization).join(Organization, Organization.id == Membership.org_id)
                            .where(Membership.user_id == principal.user.id)).all()
     return {"user": user_view(principal.user), "email_verified": bool(principal.user.email_verified),

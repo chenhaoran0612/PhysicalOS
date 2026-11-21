@@ -263,6 +263,41 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(home.json("password-reset", "confirm", "nxv_bogus", "--password", "x" * 12,
                                    expect=1)["code"], "recovery_token_invalid")
 
+    def test_me_and_whoami_with_an_api_key_describe_the_key_not_its_creator(self):
+        """The cloud answers GET /me for an API key with the key's org, role and permissions only."""
+        import contextlib
+        import io
+        import os
+        from unittest import mock
+        from neuxmind import cli
+
+        owner = CloudClient(self.cloud.url)
+        owner.register("keyholder@sdk.test", PASSWORD, name="Keyholder Sample")
+        org_id = owner.me()["current_org_id"]
+        key = owner.create_api_key(["alerts:report"], name="on-the-device")
+        me = CloudClient(self.cloud.url, key["key"]).me()
+        self.assertEqual(me, {"auth": "api_key", "current_org_id": org_id, "role": "owner",
+                              "permissions": ["alerts:report"]})
+
+        home = CliHome()
+        self.addCleanup(home.close)
+
+        def whoami(*flags):
+            out, err = io.StringIO(), io.StringIO()
+            env = {"NEUXMIND_HOME": str(home.path), "NEUXMIND_CLOUD_URL": self.cloud.url, "NEUXMIND_API_KEY": key["key"]}
+            with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = cli.main(["whoami", *flags])
+            self.assertEqual(code, 0, err.getvalue())
+            return out.getvalue()
+
+        self.assertEqual(json.loads(whoami("--json")), me)
+        text = whoami()
+        self.assertIn("凭据：API Key", text)
+        self.assertIn(org_id, text)
+        self.assertIn("alerts:report", text)
+        for absent in ("keyholder@sdk.test", "Keyholder Sample", "None", "邮箱"):
+            self.assertNotIn(absent, text)
+
     def _manifest(self, server):
         from neuxmind.robot import RobotClient
         return RobotClient(server.url, server.token).manifest()
