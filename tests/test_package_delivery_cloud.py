@@ -134,6 +134,25 @@ class RealCloudDelivery(unittest.TestCase):
         self.assertGreater(result['fetch']['attempts'], 2)
         self.assertEqual(self.device.read(result['device_path']), data)
 
+    def test_a_package_uploaded_for_another_robot_is_not_sent_to_this_one(self):
+        from neuxmind_cloud.library_models import Material
+        if not hasattr(Material, 'device_id'):
+            self.skipTest('the cloud of this tree does not record which device a material belongs to (issue #34)')
+        data = package(20_000, seed=13)
+        material = self.upload('driver.zip', data)
+        self.mark_usable(material['id'])
+        for owner, delivered in (('robot-0123456789ab', False), (ROBOT, True)):
+            with self.subTest(owner=owner):
+                with self.cloud.app.state.ctx.db.transaction() as session:      # who it was uploaded for, as #34 records it
+                    session.get(Material, material['id']).device_id = owner
+                if delivered:
+                    self.assertEqual(self.device.read(self.deliver(material['id'])['device_path']), data)
+                    continue
+                with self.assertRaises(CodedError) as caught:
+                    self.deliver(material['id'])
+                self.assertEqual(caught.exception.code, 'package_other_device')
+                self.assertEqual(self.device.connections, 0)
+
     def test_a_package_of_another_organisation_cannot_be_fetched(self):
         material = self.upload('driver.zip', package(20_000, seed=11))
         self.mark_usable(material['id'])

@@ -2,7 +2,7 @@
 
 资料库里的驱动安装包存在云平台（issue #33，见 [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md)）；向设备传文件的通道只接受本机文件（issue #18，见 [DEVICE_TRANSFER.md](DEVICE_TRANSFER.md)）。这里是中间的一段，和它留下的结果：
 
-1. 向云平台要这份资料的记录并检查：必须是驱动安装包，而且已经标为「可用」（R1-13）。
+1. 向云平台要这份资料的记录并检查：必须是驱动安装包，已经标为「可用」（R1-13），而且不属于另一台机器人（issue #34）。
 2. 把安装包取到本机，按资料库记录的 SHA-256 核对。取到一半断了，下一次从断开的地方接着取。
 3. 经 #18 的通道送到设备的 `~/neuxmind-pkg/library/<SHA-256 的前 32 位>/<合规的文件名>`。通道自己分块、压缩、续传，设备上算出同一个 SHA-256 之后文件才出现在这个位置。
 4. 记下送到了什么：哪份资料、设备上叫什么、放在哪里、大小和校验值。这条记录就是交给修复流程的结果。
@@ -45,7 +45,7 @@ record = platform.package_delivery.deliver(robot_id, project_id, material_id, au
 
 | 异常 | 什么时候 | 再调用一次 |
 | --- | --- | --- |
-| `CodedError`：`package_not_usable`、`package_not_deliverable`、`package_record_invalid`、`cloud_login_required`、`package_busy` | 动手之前就拒绝：还没标为可用、不是安装包、云端的记录不成立、没有登录云平台、同一个包正在取或送 | 条件变了才有用 |
+| `CodedError`：`package_not_usable`、`package_not_deliverable`、`package_other_device`、`package_record_invalid`、`cloud_login_required`、`package_busy` | 动手之前就拒绝：还没标为可用、不是安装包、属于另一台机器人、云端的记录不成立、没有登录云平台、同一个包正在取或送 | 条件变了才有用 |
 | `CloudError` | 云平台拒绝：登录失效（`unauthorized`，本机的登录状态随之清掉）、没有这份资料（404）、文件已不在云端（`content_missing`） | 同上 |
 | `package_fetch.FetchError` | 取的一段没有完成，见下表；`resumable`、`received`、`total` | 看 `resumable` |
 | `device_transfer.TransferError` | 送的一段没有完成，原因一览在 DEVICE_TRANSFER.md「失败时」 | 看 `resumable` |
@@ -76,9 +76,17 @@ record = platform.package_delivery.deliver(robot_id, project_id, material_id, au
 
 修复助手只能用「可用」状态的资料。把关的地方只有一处：`package_delivery.usable(material)`，取值在 `USABLE_STATUSES`。
 
-- 资料怎样变成「可用」（解析、人确认）以及这个状态在云端叫什么，由 issue #34 决定，现在还没有做：**目前上传完的资料都停在「解析中」，所以现在没有任何安装包能被送出去**，`deliver` 和 `start` 都会以 `package_not_usable` 拒绝，不联系设备。这是有意的。
-- `USABLE_STATUSES` 现在写的是 `('available',)`，是占位：#34 定下状态的名字后，把这一个常量改成它的取值即可，别处不用动。
+- 资料怎样变成「可用」由 issue #34 做：解析完是 `parsed`（待确认），有人核对并确认后才是 `usable`（可用）；`parsing`（解析中）、`failed`（没解析出来）都不送。`USABLE_STATUSES` 是 `('usable',)`，取的是 #34 定下的值（2026-11-21，当时 #34 还没有提交）。
+- **#34 合并之前，上传完的资料都停在「解析中」，所以没有任何安装包能被送出去**，`deliver` 和 `start` 都会以 `package_not_usable` 拒绝，不联系设备。这是有意的。
+- 拒绝的说明里用页面上的叫法：解析中、待确认、没解析出来。
 - 测试里用替身把资料置为可用：假云端直接给出状态；真云端的测试在云端数据库里改这一个字段，测试的说明里写了它代替的是 #34 的哪一步。
+
+### 资料属于哪台设备（issue #34）
+
+- #34 里每份资料属于上传它的那台机器人：`device_id` 是桌面端机器人的编号。属于另一台机器人的安装包不送（`package_other_device`），也不从云端取。
+- `device_id` 为空的资料（#34 之前上传的）不受限制，可以送到这个项目里的任何一台机器人。
+- `device_id` 是从云端答复里原样读的；不是普通文字的值（数字、列表等）不会被当成「没有归属」，一律拒绝。
+- #34 合并之前，云端的答复里没有这个字段，所以不受限制。
 - 状态是送之前向云端现查的，不用页面或调用方传来的值。
 
 ## 文件名
@@ -159,7 +167,7 @@ record = platform.package_delivery.deliver(robot_id, project_id, material_id, au
 
 修复会话现在不能加载外部资料，也没有「安装包」这类工具，所以这一轮修复助手自己还发起不了传送。接入点：
 
-- **#30（修复会话能查资料库）**：把候选的安装包列给会话时，用 `package_delivery.usable()` 过滤；把 `platform.package_delivery.delivered(s['robot_id'])` 写进会话的工作目录（和 `HARDWARE_SCAN.json` 一样由 `HardwareInit.prepare_workspace` 写），助手就知道哪些包已经在设备上、在哪里、校验值是多少。
+- **#30（修复会话能查资料库）**：候选的安装包按 #34 的做法取（`GET /library/materials?device_id=<机器人编号>&status=usable&kind=package`），再用 `package_delivery.usable()` 过滤；把 `platform.package_delivery.delivered(s['robot_id'])` 写进会话的工作目录（和 `HARDWARE_SCAN.json` 一样由 `HardwareInit.prepare_workspace` 写），助手就知道哪些包已经在设备上、在哪里、校验值是多少。
 - **#29（装运控驱动的规则）**：给修复会话加一个工具（`hardware_init.tools_spec()` 和 `HardwareInit.tool()` 里各加一处），处理函数里在人批准这一步之后调用 `platform.package_delivery.deliver(s['robot_id'], s['project_id'], material_id, authorized=True, stop=device.stop_event)`，把返回的记录存成一条证据（`HardwareInit._evidence`），再把 `device_path`、`sha256` 交给助手。之后的安装命令（`dpkg -i <device_path>` 等）照常走 `device_fix` 和人的批准。
 - 这个工具要不要每次都由人批准，由 #29 定；`deliver` 本身要求调用方传 `authorized=True`，不传就拒绝。它只往 `~/neuxmind-pkg/library` 写一个不可执行的文件，资料又必须是人确认过的「可用」状态；但它确实改动了设备。平台侧的步骤要求 `modify_authorized`。
 - 交给模型和用在命令里时：`filename`、`labels`、`device_name` 是别人填的文字，只当数据；`device_path` 放进命令时要加引号（`~` 会被 shell 展开）；安装前在设备上再算一次校验值。校验值只说明文件和云端记录的一致，没有签名：云端本身被攻破时它可以换上别的包和与之相符的校验值，所以人对安装的批准才是关键的一步。
@@ -179,7 +187,7 @@ PYTHONPATH=.:tests python -m unittest test_package_fetch test_package_delivery t
 - `tests/package_cloud_fixture.py`：`FakeLibraryCloud` 是只在本机的假云端，回答资料记录和文件内容两条路由，文件由测试现造，令牌每个实例随机生成；可以注入的故障有：传够若干字节后断开、不再接受连接、不理会 `Range`、从别的位置开始回答、给出另一个校验值、不再发送但不断开、回答指定的状态码、不给长度、文件后面多出字节。`CuttingRelay` 是放在真云端前面的中继，取文件内容的连接传够若干字节就切断。
 - 设备是 #18 的测试替身 `tests/upload_fixture.py`（本机的 SSH 服务端，只肯执行那三段脚本）。
 - `test_package_fetch`（取）：整包取到并核对；同一次调用里断线续传、以后的调用里续传、反复断线；云端不理会 `Range`、回的位置不对、回 416、206 不说是哪一段；从头重来时进度也从头报；未完成的文件比包还长、已经完整；云端不再发送；停止（包括云端沉默时、核对校验值时）；校验值不一致、响应头里的校验值不同、长度不同、不给长度（以关闭连接结束、分块传输、连接一直不关）；资料记录不成立；登录失效、跳转、云端的错误文字被清理和截断、地址策略拒绝的不重试而解析不了的重试；进度回调出错不当成网络问题；本机磁盘不够、写失败、一次只写进一点、位置被链接占着；清理旧文件（正在用的不清、再次用到的不算旧）、不经链接操作缓存目录。
-- `test_package_delivery`（送）：验收（从资料库到设备，设备上的内容、位置、权限、校验值，设备只运行了检查和核对两段脚本）；交给修复流程的记录，连接改到另一台机器后不再交出；重复送；只送「可用」的安装包；没有人的确认什么都不做；别人填的文字被清理和截断；取和送各自中断后续传、两头同时反复断线、两段各自被停止；云端内容和校验值不一致时不联系设备；本机副本在核对之后被换掉时设备上什么都不写；传到设备途中损坏时设备上不留文件、不留记录；文件名换名的对照表和每个名字都过通道的规则；空格、括号、中文的名字实际送到设备；后台步骤的开始、进度、停止、失败的归类（设备的问题不说成连接中断）、同时进行的上限、只在本项目内可见、线程开不起来、关闭、关闭之后结束的传送不碰存储；经桌面端接口调用；删除机器人。
+- `test_package_delivery`（送）：验收（从资料库到设备，设备上的内容、位置、权限、校验值，设备只运行了检查和核对两段脚本）；交给修复流程的记录，连接改到另一台机器后不再交出；重复送；只送「可用」的安装包，拒绝时用页面上的状态名；属于另一台机器人的不送、没有归属的照送、归属不是普通文字的不送；没有人的确认什么都不做；别人填的文字被清理和截断；取和送各自中断后续传、两头同时反复断线、两段各自被停止；云端内容和校验值不一致时不联系设备；本机副本在核对之后被换掉时设备上什么都不写；传到设备途中损坏时设备上不留文件、不留记录；文件名换名的对照表和每个名字都过通道的规则；空格、括号、中文的名字实际送到设备；后台步骤的开始、进度、停止、失败的归类（设备的问题不说成连接中断）、同时进行的上限、只在本项目内可见、线程开不起来、关闭、关闭之后结束的传送不碰存储；经桌面端接口调用；删除机器人。
 - `test_package_delivery_cloud`（真云端，`cloud/` 的应用跑在本机；没有云端依赖时跳过）：经云端的上传接口放进一个包，置为可用后送到设备并核对；刚上传完（「解析中」）的包被拒绝；真云端前面的连接被切断两次后靠 `Range` 取完；别的组织的包取不到。
 
 ### 弱网实测（取的一段）

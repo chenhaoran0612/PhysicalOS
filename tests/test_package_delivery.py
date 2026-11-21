@@ -135,7 +135,7 @@ class Acceptance(DeliveryCase):
 
 class OnlyUsablePackages(DeliveryCase):
     def test_a_material_that_is_not_marked_usable_is_not_fetched_and_not_sent(self):
-        for status in ('parsing', 'parsed', 'failed', '', None, 'AVAILABLE', ['available']):
+        for status in ('parsing', 'parsed', 'failed', 'available', '', None, 'USABLE', ['usable']):
             with self.subTest(status=status):
                 error = self.refused(self.cloud.add('driver.deb', PACKAGE, status=status), CodedError)
                 self.assertEqual(error.code, 'package_not_usable')
@@ -144,10 +144,17 @@ class OnlyUsablePackages(DeliveryCase):
         self.assertEqual(self.delivery.delivered(ROBOT), [])
 
     def test_the_usable_state_is_decided_in_one_place(self):
-        self.assertEqual(package_delivery.USABLE_STATUSES, ('available',))
-        self.assertTrue(package_delivery.usable({'status': 'available'}))
+        self.assertEqual(package_delivery.USABLE_STATUSES, ('usable',))       # issue #34: 「可用」 after a person confirmed it
+        self.assertTrue(package_delivery.usable({'status': 'usable'}))
+        self.assertFalse(package_delivery.usable({'status': 'parsed'}))       # 待确认: parsed, not yet confirmed
         self.assertFalse(package_delivery.usable({'status': 'parsing'}))
         self.assertFalse(package_delivery.usable({}))
+
+    def test_the_refusal_names_the_state_as_the_page_does(self):
+        for status, name in (('parsing', '解析中'), ('parsed', '待确认'), ('failed', '没解析出来')):
+            with self.subTest(status=status):
+                error = self.refused(self.cloud.add('driver.deb', PACKAGE, status=status), CodedError)
+                self.assertIn('“%s”' % name, str(error))
 
     def test_a_document_is_not_a_package(self):
         error = self.refused(self.cloud.add('manual.pdf', b'%PDF-1.4 made up', kind='document', fmt='pdf'), CodedError)
@@ -370,6 +377,38 @@ class Verification(DeliveryCase):
         self.assertEqual(seen['inside'], Path(self.store.root) / 'package-cache')
         self.assertNotIn('roots', seen['options'])                             # only ~/neuxmind-pkg, the channel's default
         self.assertEqual(seen['options'].get('mode', 0o644), 0o644)
+
+
+class BelongsToADevice(DeliveryCase):
+    """Issue #34: a material belongs to the robot it was uploaded for (``device_id``)."""
+
+    def test_a_package_of_this_robot_is_delivered(self):
+        record = self.deliver(self.cloud.add('driver.deb', PACKAGE, device_id=ROBOT, device_name='测试机器人'))
+        self.assertEqual(self.device.read(record['device_path']), PACKAGE)
+
+    def test_a_package_of_another_robot_is_not_fetched_and_not_sent(self):
+        material_id = self.cloud.add('driver.deb', PACKAGE, device_id='robot-0123456789ab', device_name='另一台 \u202e')
+        error = self.refused(material_id, CodedError)
+        self.assertEqual(error.code, 'package_other_device')
+        self.assertIn('另一台', str(error))
+        self.assertNotIn('\u202e', str(error))
+        self.assertEqual(self.cloud.content_requests(), [])
+        self.assertEqual(self.device.connections, 0)
+        with self.assertRaises(CodedError) as caught:
+            self.delivery.start({'project_id': PROJECT, 'robot_id': ROBOT, 'material_id': material_id, 'modify_authorized': True})
+        self.assertEqual(caught.exception.code, 'package_other_device')
+
+    def test_a_package_that_belongs_to_no_device_is_delivered(self):
+        for owner in ({}, {'device_id': ''}, {'device_id': None}):         # uploaded before issue #34
+            with self.subTest(owner=owner):
+                record = self.deliver(self.cloud.add('driver.deb', random.Random(str(owner)).randbytes(20_000), **owner))
+                self.assertTrue(record['verified'])
+
+    def test_an_owner_that_is_not_plain_text_is_not_taken_for_this_robot(self):
+        for owner in (5, True, [ROBOT]):
+            with self.subTest(owner=owner):
+                error = self.refused(self.cloud.add('driver.deb', PACKAGE, device_id=owner), CodedError)
+                self.assertEqual(error.code, 'package_other_device')
 
 
 class DeviceNames(unittest.TestCase):
