@@ -55,7 +55,7 @@
 
 - v1.1：力/力矩传感器、移动操作（`mobile_manipulation.*`）、灵巧手、多相机标定与 TF 树查询。
 - v1.x：观测/动作空间的标准化描述，对齐 LeRobot / Open X-Embodiment 数据格式，使 VLA 模型可按动作空间自动适配。
-- 与 ROS 2 接口的双向映射表（见 `runtime/` ROS2 桥接）。
+- 与 ROS 2 接口的双向映射表（见 `runtime/` ROS2 桥接）。能力到 ROS 2 接口的方向已作为下面的“ROS 2 接口表”进入标准（issue #28）。
 
 ## v1.1 新增（2026-11-09，第 04 轮）
 
@@ -77,3 +77,31 @@
 - 声明本身无法被软件验证；声明错误时，套件与守卫会按错误声明执行。
 - v2 计划改为必填。
 - （fbd9f37）未声明 `joint_names` 时，运行时**拒绝** joint_position 动作块；`joint.state` 关节名重复也拒绝。已有动作块但未声明的旧适配器需补声明。
+
+## ROS 2 接口表（issue #28）
+
+> 权威源码：`spec/neuxmind_spec/ros2_interfaces.py`（`from neuxmind_spec import ros2_interfaces`，桌面端经 `brainos.spec_bridge`）。只新增了这个模块：能力表、清单、`SPEC_VERSION` 都没有改。
+
+通过 ROS 2 驱动的本体上，一项标准能力由一个 ROS 2 话题或动作承载。这张表写明是哪一个、什么消息类型，让各处对“这个话题能不能承载那项能力”的判断一致：桌面端的运控驱动检查（[MOTION_DRIVER_CHECK.md](../MOTION_DRIVER_CHECK.md)）、设备接口表（issue #23）、运行时的 ROS 2 桥接和脚手架。对应的发行版是 ROS 2 Humble。
+
+| 能力 | 种类 | 本体驱动的角色 | 消息类型 | 惯用名 |
+|---|---|---|---|---|
+| `base.velocity` | 话题 | 订阅（指令进） | `geometry_msgs/msg/Twist` | `/cmd_vel` |
+| `base.odometry` | 话题 | 发布 | `nav_msgs/msg/Odometry` | `/odom` |
+| `base.navigate_to` | 动作 | 服务端 | `nav2_msgs/action/NavigateToPose` | `/navigate_to_pose` |
+| `joint.state` | 话题 | 发布 | `sensor_msgs/msg/JointState` | `/joint_states` |
+| `arm.joint_position` | 动作 | 服务端 | `control_msgs/action/FollowJointTrajectory` | `/joint_trajectory_controller/follow_joint_trajectory` |
+| `gripper.position` | 动作 | 服务端 | `control_msgs/action/GripperCommand` | `/gripper_controller/gripper_cmd` |
+| `sensor.battery` | 话题 | 发布 | `sensor_msgs/msg/BatteryState` | `/battery_state` |
+| `sensor.imu` | 话题 | 发布 | `sensor_msgs/msg/Imu` | `/imu` |
+| `sensor.camera.rgb` | 话题 | 发布 | `sensor_msgs/msg/Image` 或 `sensor_msgs/msg/CompressedImage` | `/camera/image_raw` |
+| `sensor.camera.depth` | 话题 | 发布 | `sensor_msgs/msg/Image` | `/camera/depth/image_raw` |
+| `sensor.lidar` | 话题 | 发布 | `sensor_msgs/msg/LaserScan` 或 `sensor_msgs/msg/PointCloud2` | `/scan` |
+| `localization.pose` | 话题 | 发布 | `geometry_msgs/msg/PoseWithCovarianceStamped` | `/amcl_pose` |
+
+- **角色**写的是本体自己的驱动对这个接口做什么；和驱动对话的一方（平台、运行时桥接）角色相反。
+- **消息类型**的写法和 `ros2 topic list -t` 的输出一致（`包/msg/类型`、`包/action/类型`）。`canonical_type` 把 `geometry_msgs.msg:Twist`、`geometry_msgs/Twist` 也归一成这种写法；`accepts(能力, 类型)` 判断一个类型能不能承载这项能力。
+- **惯用名只是提示**：真机常带命名空间或改过名，按类型认接口；某台设备到底用哪个话题，由设备接口表按设备确认。
+- **不在表里的能力**（`get` 返回 `None`）：`safety.stop`（ROS 2 本体靠运动接口停下：发零速度、取消动作）、`system.health`、`legged.posture` 与 `arm.ee_pose`（各厂商或各软件栈的接口不同，标准不定）、`gripper.state`、`arm.ee_state`、`policy.action_chunk`、`model.install`、`audio.speak`。调用方必须把 `None` 当作“从 ROS 2 图上核对不了”，不能当作“缺少”。
+- 运行时桥接今天实现的是脚手架 `ROS2_TEMPLATES` 里的 7 项；桌面端有一条测试保证两边的类型、惯用名和种类一致。表里其余几项写的是该能力惯用的 ROS 2 类型，桥接还没有实现。
+- `registry()` 给出可序列化的整张表（`schema: neuxmind.ros2_interfaces.v1`）。测试：`spec/tests/test_ros2_interfaces.py`。

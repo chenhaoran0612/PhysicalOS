@@ -135,6 +135,8 @@ def make_handler(application):
             extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #27: the device profile (hardware, system, ROS 2, resources), likewise.
             extra=extra or {'/device_profile.js':('device_profile.js','text/javascript; charset=utf-8'),'/device_profile.css':('device_profile.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #28: the motion driver check (the interfaces a body type should have, against the profile), likewise.
+            extra=extra or {'/motion_drivers.js':('motion_drivers.js','text/javascript; charset=utf-8'),'/motion_drivers.css':('motion_drivers.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #24: the connection state and the last heartbeat on the cards and the status page, likewise.
             extra=extra or {'/heartbeat.js':('heartbeat.js','text/javascript; charset=utf-8'),'/heartbeat.css':('heartbeat.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.

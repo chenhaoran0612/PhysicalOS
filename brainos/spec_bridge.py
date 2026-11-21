@@ -30,5 +30,6 @@ def _ensure_importable():
 _ensure_importable()
 
 from neuxmind_spec import capabilities, manifest  # noqa: E402
+from neuxmind_spec import ros2_interfaces  # noqa: E402,F401  (issue #28)
 
 __all__ = ['capabilities', 'manifest']

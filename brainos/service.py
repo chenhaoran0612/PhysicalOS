@@ -91,6 +91,8 @@ class Platform:
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         from .device_profile import DeviceProfile
         self.device_profile = DeviceProfile(self)   # issue #27: hardware, system, ROS 2 and resources in one record
+        from .motion_drivers import MotionDrivers
+        self.motion_drivers = MotionDrivers(self)   # issue #28: the motion interfaces a body type should have, against the profile
         from .investigation import Investigation
         self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
         from .heartbeat import Heartbeat
@@ -144,6 +146,7 @@ class Platform:
         result['model_compute'] = self.model_compute.summary()
         result.update(self.body_types.snapshot())   # issue #32: the list of body types and the interfaces a type can name
         result.update(self.device_profile.snapshot())   # issue #27: which robots have a device profile (for the deletion)
+        result.update(self.motion_drivers.snapshot())   # issue #28: per SSH robot, which motion interfaces of its type are missing
         return result
 
     def add_project(self, p):
