@@ -317,6 +317,7 @@ class Engineering:
         A full read lists the hardware and the running software too (issue #8); ``quick`` leaves those two out."""
         robot,connection=self._ssh_connection(p)
         view=self.status_sessions.read(*self.platform.ssh_edit.saved_login(connection['id']),full=p.get('quick') is not True)   # issue #12
+        if view.get('reachable') and not view.get('refreshing'):self.platform.heartbeat.heard(connection)   # issue #24: an answer to this read is a heartbeat too
         return {'robot_id':robot['id'],'name':robot['name'],**view}
 
     def _status_scan_hold(self,robot_id):

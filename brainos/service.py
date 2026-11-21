@@ -91,6 +91,8 @@ class Platform:
         self.device_profile = DeviceProfile(self)   # issue #27: hardware, system, ROS 2 and resources in one record
         from .investigation import Investigation
         self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
+        from .heartbeat import Heartbeat
+        self.heartbeat = Heartbeat(self)            # issue #24: a heartbeat a minute over SSH; 未接入 / 接入中 / 在线 / 离线
         from .ssh_edit import ConnectionEdit
         self.ssh_edit = ConnectionEdit(self)        # issue #9: change the SSH connection of a connected robot
         from .robot_remove import RobotRemoval
@@ -131,6 +133,7 @@ class Platform:
                       system={'version': '0.19.0', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
         result.update(self.hardware.snapshot())
+        result.update(self.heartbeat.snapshot())    # issue #24: the workspace is shown, so its heartbeat runs; the states are asked for apart
         result.update(self.investigation.snapshot())
         result.update(self.workflows.snapshot())
         # The cloud session token stays in the credential file; only a summary is shown.
@@ -919,6 +922,7 @@ class Platform:
         return gallery(self, p)
 
     def close(self):
+        self.heartbeat.close()      # issue #24: the timer, its SSH sessions and its checks end before the store is closed
         self.sims.close()
         self.workflows.close()
         self.engineering.close()
