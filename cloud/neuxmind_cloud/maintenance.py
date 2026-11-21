@@ -55,6 +55,14 @@ def sweep(db: Database, settings: Settings, at: float | None = None) -> dict:
     t = now() if at is None else at
     stale_before = t - settings.stale_call_seconds
     counts = {"lost_calls": 0, "sessions_closed": 0, "orphan_holds": 0}
+    # Devices that stopped reporting (issue #26, see alerts.py). Its own transaction; a failure here
+    # is logged and never keeps the money sweeps below from running.
+    try:
+        from . import alerts as device_alerts
+        counts["devices_offline"] = device_alerts.sweep_offline(db, settings, t)
+    except Exception:
+        log.exception("device offline sweep failed")
+        counts["devices_offline"] = 0
 
     # 1. lost calls -----------------------------------------------------------
     with db.transaction() as s:
