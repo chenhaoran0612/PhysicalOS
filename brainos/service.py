@@ -71,6 +71,8 @@ class Platform:
     def __init__(self, root, commerce=None, user_id=None):
         self.store = Store(root)
         self.commerce, self.user_id = commerce, user_id
+        from . import ssh_route
+        ssh_route.migrate(self.store)               # issue #15: saved one-hop connections become a list of jump hosts, before anything reads them
         from .engineering import Engineering
         self.engineering = Engineering(self)
         from .workflows import Workflows

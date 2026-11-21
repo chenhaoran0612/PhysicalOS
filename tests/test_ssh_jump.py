@@ -1,5 +1,7 @@
-"""SSH access through a jump host (one hop, like ``ssh -J``) and the read-only live status.
+"""SSH access through one jump host (like ``ssh -J``) and the read-only live status.
 
+The requests here are written the way they were before issue #15 (one ``jump`` and ``jump_*`` fields): that
+form is still accepted and means a list of one. Several jump hosts in a row: tests/test_ssh_multi_hop.py.
 Both ends are local protocol fixtures: nothing here reaches a real machine.
 """
 import io
@@ -154,8 +156,8 @@ class JumpHostTests(SshCase):
         second = self.engine.scan(self.request(**self.jump_login(first)))
 
         self.assertEqual(second['fingerprint'], device_access.fingerprint(self.target.key))
-        self.assertEqual(second['jump'], {'host': '127.0.0.1', 'port': self.jump.port, 'username': JUMP_USER,
-                                          'auth': 'password', 'fingerprint': first['fingerprint']})
+        self.assertEqual(second['jumps'], [{'host': '127.0.0.1', 'port': self.jump.port, 'username': JUMP_USER,
+                                            'auth': 'password', 'fingerprint': first['fingerprint']}])
         self.assertEqual(self.jump.forwarded, [('127.0.0.1', self.target.port)])
         self.assertEqual(self.target.auth_attempts, [])              # robot credentials wait for its own fingerprint
 
@@ -177,15 +179,16 @@ class JumpHostTests(SshCase):
         self.assertEqual(self.target.transports, [])
 
     def test_a_failed_second_scan_names_the_robot(self):
-        first = self.engine.scan(self.request())
         not_ssh = self.plain_listener()
         self.jump.forward_to.add(('127.0.0.1', not_ssh.port))
         unreachable = self.closed_port()                              # not in forward_to: the jump host cannot connect
 
-        self.assert_refused('device', 'no_ssh', '目标', lambda: self.engine.scan(
-            self.request(port=not_ssh.port, **self.jump_login(first))))
-        self.assert_refused('device', 'unreachable', '目标', lambda: self.engine.scan(
-            self.request(port=unreachable, **self.jump_login(first))))
+        def second_scan(port):
+            first = self.engine.scan(self.request(port=port))
+            return self.engine.scan(self.request(port=port, **self.jump_login(first)))
+
+        self.assert_refused('device', 'no_ssh', '目标', lambda: second_scan(not_ssh.port))
+        self.assert_refused('device', 'unreachable', '目标', lambda: second_scan(unreachable))
 
     def test_a_failed_direct_scan_says_what_is_wrong_with_the_address(self):
         self.assert_refused('device', 'unreachable', '不可达', lambda: self.engine.scan(
@@ -242,13 +245,13 @@ class JumpHostTests(SshCase):
 
         serialized = json.dumps(self.platform.snapshot(), ensure_ascii=False)
 
-        self.assertEqual(connection['jump']['host'], '127.0.0.1')
+        self.assertEqual(connection['jumps'][0]['host'], '127.0.0.1')
         self.assertNotIn(JUMP_PASSWORD, serialized)
         self.assertNotIn('fixture-password', serialized)
 
     def test_a_changed_fingerprint_on_either_hop_is_refused_and_named(self):
         connection = self.connect_through_jump()
-        changed = {'jump': {**connection, 'jump': {**connection['jump'], 'fingerprint': 'SHA256:changed'}},
+        changed = {'jump': {**connection, 'jumps': [{**connection['jumps'][0], 'fingerprint': 'SHA256:changed'}]},
                    'device': {**connection, 'fingerprint': 'SHA256:changed'}}
         for hop, altered in changed.items():
             with self.subTest(hop=hop):
@@ -261,17 +264,17 @@ class JumpHostTests(SshCase):
         connection = self.connect_through_jump()
 
         with self.assertRaises(device_access.ConnectError) as caught:
-            device_access.SSHDevice(connection, {**self.secret(connection), 'jump_password': 'not-the-password'})
+            device_access.SSHDevice(connection, {**self.secret(connection), 'jumps': [{'password': 'not-the-password'}]})
 
         self.assertEqual((caught.exception.hop, caught.exception.reason), ('jump', 'auth'))
         self.assertEqual(self.target.auth_attempts.count('robot'), 1)    # only the earlier, successful connect
 
     def test_an_unreadable_jump_key_is_reported_for_the_jump_host(self):
         connection = self.connect_through_jump()
-        with_key = {**connection, 'jump': {**connection['jump'], 'auth': 'key'}}
+        with_key = {**connection, 'jumps': [{**connection['jumps'][0], 'auth': 'key'}]}
 
         with self.assertRaises(device_access.ConnectError) as caught:
-            device_access.SSHDevice(with_key, {**self.secret(connection), 'jump_private_key': 'not a private key'})
+            device_access.SSHDevice(with_key, {**self.secret(connection), 'jumps': [{'private_key': 'not a private key'}]})
 
         self.assertEqual((caught.exception.hop, caught.exception.reason), ('jump', 'key'))
         self.assertIn('跳板机', str(caught.exception))
@@ -326,7 +329,7 @@ class JumpHostTests(SshCase):
 
         device.probe('network')
 
-        self.assertNotIn('jump', connection)
+        self.assertNotIn('jumps', connection)
         self.assertEqual(self.target.commands, [device_access.PROBES['network'][1]])
         self.assertEqual(self.jump.transports, [])
 
@@ -377,7 +380,8 @@ class KeyLoginTests(SshCase):
         connection = self.connect({'jump_auth': 'agent'}, {'auth': 'agent'})
 
         self.assert_probe_reaches_the_robot(connection)
-        self.assertEqual({k: v for k, v in self.secret(connection).items() if k != 'id' and v}, {})   # nothing stored
+        stored = {k: v for k, v in self.secret(connection).items() if k != 'id'}
+        self.assertEqual(device_access.secret_values(stored), [])      # nothing stored, for either hop
 
     def start_agent_with(self, *keys):
         directory = tempfile.mkdtemp(prefix='nxa', dir='/tmp')        # short: socket paths are limited to ~100 bytes
@@ -645,7 +649,7 @@ class StatusSessionLifetimeTests(unittest.TestCase):
 
     def test_a_lost_session_through_a_jump_host_does_not_blame_the_robot(self):
         sessions = self.sessions()
-        through_jump = {**self.connection('behind-jump'), 'jump': {'host': '127.0.0.1', 'port': 22, 'username': 'gate'}}
+        through_jump = {**self.connection('behind-jump'), 'jumps': [{'host': '127.0.0.1', 'port': 22, 'username': 'gate'}]}
         with mock.patch.object(FakeDevice, 'execute', side_effect=OSError('connection reset')):
             via_jump = sessions.read(through_jump, {})
             direct = sessions.read(self.connection('direct'), {})

@@ -99,7 +99,9 @@ class SSHFixture:
                     write(data)
             except (OSError,EOFError,paramiko.SSHException):pass
             finally:
-                channel.close()
+                # The session that carried the channel may be gone already (a chain of jump hosts closes back to front).
+                try:channel.close()
+                except (OSError,EOFError,paramiko.SSHException):pass
                 try:upstream.close()
                 except OSError:pass
         threading.Thread(target=copy,args=(channel.recv,upstream.sendall),daemon=True).start()

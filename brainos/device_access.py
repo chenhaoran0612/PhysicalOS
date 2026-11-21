@@ -27,6 +27,9 @@ DEFAULT_ROOTS=['/opt/ros','/etc/ros','/etc/robot','/usr/local/share']
 # takes over a second and the agent may offer several keys: measured on a real one, the key
 # exchange took 3-5 s and the login 6 s, which the earlier 8 s limits did not always cover.
 TCP_TIMEOUT=10;HANDSHAKE_TIMEOUT=20;AUTH_TIMEOUT=20;CHANNEL_TIMEOUT=15
+# Seconds a chain of jump hosts may take in all before the next hop is not even tried (issue #15): with
+# several hops the limits above add up, and a request must not wait for minutes on a route that crawls.
+ROUTE_TIMEOUT=120
 RESOLVE_OUTPUT_LIMIT=65536      # bytes of `ssh -G` output read from a jump host
 SENSITIVE=re.compile(r'(?:^|/)(?:\.ssh|\.aws|\.config|\.env[^/]*|\.git|credentials?[^/]*|secrets?[^/]*|[^/]*(?:private[._-]?key|id_rsa|id_ed25519)[^/]*)(?:/|$)',re.I)
 
@@ -71,76 +74,92 @@ def named_target(p):
     return _host(p.get('host')),None if port in (None,'') else _port(port),_user(user) if user not in (None,'') else ''
 
 
-def check_target(p,jump):
-    """Validate the target of a scan request before anything is contacted. True if the jump host resolves it."""
-    resolve=bool(p.get('resolve_on_jump'))
-    if resolve and not jump:raise ValueError('只有经跳板机连接时，才能按跳板机上的 SSH 配置解析目标名称')
-    (named_target if resolve else target)(p)
-    return resolve
-
-
 def fingerprint(key):return 'SHA256:'+base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip('=')
 
 
-def inspect_host(p,sock=None,hop='device',via_jump=False):
+def inspect_host(p,sock=None,hop='device',via_jump=False,**where):
     """Read a host key. ``sock`` is a channel through a jump host; without it the host is dialled directly.
-    A failure says which hop it was (``hop``) and whether nothing answered or something other than SSH did."""
+    A failure says which hop it was (``hop``, and ``where``: the ``level`` and ``total`` of ConnectError) and
+    whether nothing answered or something other than SSH did."""
     import paramiko
     host,port,user=target(p)
     transport=None;started=time.monotonic()
     try:
         if sock is None:
             try:sock=socket.create_connection((host,port),timeout=TCP_TIMEOUT)
-            except TimeoutError:raise ConnectError(hop,'timeout',via_jump) from None
-            except OSError:raise ConnectError(hop,'unreachable',via_jump) from None
+            except TimeoutError:raise ConnectError(hop,'timeout',via_jump,**where) from None
+            except OSError:raise ConnectError(hop,'unreachable',via_jump,**where) from None
         started=time.monotonic();transport=paramiko.Transport(sock);transport.banner_timeout=HANDSHAKE_TIMEOUT
         transport.start_client(timeout=HANDSHAKE_TIMEOUT);key=transport.get_remote_server_key()
         return {'host':host,'port':port,'username':user,'fingerprint':fingerprint(key),'key_type':key.get_name()}
     except (OSError,EOFError,paramiko.SSHException) as exc:
         # paramiko gives up on a silent host without saying "timeout": the clock tells the two apart.
         slow=_timed_out(exc) or time.monotonic()-started>=HANDSHAKE_TIMEOUT
-        raise ConnectError(hop,'timeout' if slow else 'no_ssh',via_jump) from None
+        raise ConnectError(hop,'timeout' if slow else 'no_ssh',via_jump,**where) from None
     finally:
         if transport:transport.close()
 
 
-def jump_target(p):
-    """The optional jump host of a connection request: one hop, like ``ssh -J``. None means direct."""
-    jump=p.get('jump')
-    if not jump:return None
-    if not isinstance(jump,dict):raise ValueError('跳板机配置无效')
-    try:host,port,user=target(jump)
-    except ValueError as exc:raise ValueError('跳板机：'+str(exc)) from None
-    return {'host':host,'port':port,'username':user}
+SECRET_FIELDS=('password','private_key','passphrase')     # the saved login of one hop
 
 
-def jump_secret(secret):return {k:secret.get('jump_'+k,'') for k in ('password','private_key','passphrase')}
+def jumps_of(record):
+    """The jump hosts of a connection record or of a confirmed host check, first hop first; [] means direct.
+    Before issue #15 a record had one jump host in a field of its own (``jump``): read as a list of one."""
+    jumps=record.get('jumps')
+    if jumps is None:jumps=[record['jump']] if record.get('jump') else []
+    return list(jumps)
+
+
+def jump_secrets(secret,count):
+    """The saved logins of ``count`` jump hosts, in the order of the hops. Before issue #15 the login of
+    the one jump host was in ``jump_*`` fields."""
+    saved=secret.get('jumps')
+    if saved is None:saved=[{k:secret.get('jump_'+k,'') for k in SECRET_FIELDS}]
+    return [{k:saved[i].get(k,'') if i<len(saved) else '' for k in SECRET_FIELDS} for i in range(count)]
+
+
+def jump_label(level,total):
+    """How a message names a jump host: numbered from this machine, unless there is only one."""
+    return '跳板机' if total<=1 else f'第 {level} 级跳板机'
 
 
 class ConnectError(ValueError):
     """An SSH hop did not let us in. ``hop``: 'jump' or 'device'; ``reason``: 'unreachable', 'timeout',
-    'no_ssh', 'auth', 'key', 'fingerprint' or 'forbidden'."""
-    MESSAGES={('jump','unreachable'):'连不上跳板机；请核对跳板机的地址、端口和网络',
-              ('jump','no_ssh'):'跳板机的这个地址和端口没有应答 SSH；请核对跳板机的地址和端口',
-              ('jump','timeout'):'跳板机应答超时：可能是地址或端口不通，也可能只是网络慢；请核对后重试',
+    'no_ssh', 'auth', 'key', 'fingerprint' or 'forbidden'.
+
+    Through several jump hosts (issue #15) ``level`` says which jump host it was, counted from this
+    machine (1 is the first); it is None for the device. ``total`` is the number of jump hosts on the
+    route: with more than one the message names the level, and the hop before it where that hop is the
+    one that could not get through."""
+    MESSAGES={('jump','unreachable'):'连不上{jump}；请核对{jump}的地址、端口和网络',
+              ('jump','no_ssh'):'{jump}的这个地址和端口没有应答 SSH；请核对{jump}的地址和端口',
+              ('jump','timeout'):'{jump}应答超时：可能是地址或端口不通，也可能只是网络慢；请核对后重试',
               ('device','timeout'):'设备应答超时：可能是地址或端口不通，也可能只是网络慢；请核对后重试',
               ('device','no_ssh'):'这个地址和端口没有应答 SSH；请核对设备的地址和端口',
-              ('jump','auth'):'跳板机拒绝登录：SSH 认证失败；请核对跳板机的用户名和密码或密钥',
-              ('jump','fingerprint'):'跳板机的主机指纹与已确认的不一致；请重新读取并核对指纹',
-              ('jump','key'):'跳板机：无法解析 SSH 私钥或解密口令不正确',
+              ('jump','auth'):'{jump}拒绝登录：SSH 认证失败；请核对{jump}的用户名和密码或密钥',
+              ('jump','fingerprint'):'{jump}的主机指纹与已确认的不一致；请重新读取并核对指纹',
+              ('jump','key'):'{jump}：无法解析 SSH 私钥或解密口令不正确',
               ('device','unreachable'):'SSH 连接超时或设备不可达；请核对地址、端口和网络',
               ('device','key'):'无法解析 SSH 私钥或解密口令不正确',
-              ('device','forbidden'):'跳板机不允许转发连接（它的 SSH 服务关闭了 TCP 转发）；请让管理员允许转发，或换一台跳板机',
+              ('device','forbidden'):'{via}不允许转发连接（它的 SSH 服务关闭了 TCP 转发）；请让管理员允许转发，或换一台跳板机',
+              ('jump','forbidden'):'{via}不允许转发连接（它的 SSH 服务关闭了 TCP 转发），到不了{jump}；请让管理员允许转发，或换一台跳板机',
               ('device','auth'):'设备拒绝登录：SSH 认证失败；请核对用户名和密码或密钥',
               ('device','fingerprint'):'设备的主机指纹与已确认的不一致；设备可能重装过系统，或这个地址现在是另一台机器，请重新读取并核对指纹'}
-    # Through a jump host the same failure of the device hop needs different advice.
-    VIA_JUMP={('device','unreachable'):'跳板机连不上目标机；请核对目标地址，并确认目标机已开机、和跳板机在同一网络',
-              ('device','no_ssh'):'跳板机能连到目标地址，但那里没有应答 SSH；请核对目标机的地址和端口',
-              ('device','timeout'):'目标机经跳板机应答超时：可能是目标地址不通，也可能只是网络慢；请核对后重试'}
+    # Through a jump host the same failure of the next hop needs different advice: ``via`` is the hop before it.
+    VIA_JUMP={('device','unreachable'):'{via}连不上目标机；请核对目标地址，并确认目标机已开机、和{via}在同一网络',
+              ('device','no_ssh'):'{via}能连到目标地址，但那里没有应答 SSH；请核对目标机的地址和端口',
+              ('device','timeout'):'目标机经{via}应答超时：可能是目标地址不通，也可能只是网络慢；请核对后重试',
+              ('jump','unreachable'):'{via}连不上{jump}；请核对{jump}的地址，并确认它已开机、{via}能访问它',
+              ('jump','no_ssh'):'{via}能连到{jump}的地址，但那里没有应答 SSH；请核对{jump}的地址和端口',
+              ('jump','timeout'):'{jump}经{via}应答超时：可能是它的地址不通，也可能只是网络慢；请核对后重试'}
     FORWARDING_PROHIBITED=1     # SSH channel-open failure code: "administratively prohibited"
-    def __init__(self,hop,reason,via_jump=False):
+    def __init__(self,hop,reason,via_jump=False,level=None,total=1):
         self.hop,self.reason=hop,reason
-        super().__init__((self.VIA_JUMP if via_jump else {}).get((hop,reason)) or self.MESSAGES[(hop,reason)])
+        self.level=(level or 1) if hop=='jump' else None
+        before=total if hop=='device' else self.level-1       # the jump host this hop is reached through
+        text=(self.VIA_JUMP if via_jump else {}).get((hop,reason)) or self.MESSAGES[(hop,reason)]
+        super().__init__(text.format(jump=jump_label(self.level,total),via=jump_label(before,total)))
 
 
 class _KeyMismatch(Exception):pass
@@ -159,8 +178,9 @@ def private_key(secret):
     raise ValueError('无法解析 SSH 私钥或解密口令不正确')
 
 
-def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False):
-    """Authenticated client for one hop. The host key must equal the fingerprint the user confirmed."""
+def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False,**where):
+    """Authenticated client for one hop. The host key must equal the fingerprint the user confirmed.
+    ``where``: the ``level`` and ``total`` of ConnectError, for a route with several jump hosts."""
     import paramiko
     host,port,user=target(endpoint)
     class PinnedKey(paramiko.MissingHostKeyPolicy):
@@ -172,7 +192,7 @@ def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False):
     if auth=='password':kwargs['password']=secret.get('password','')
     elif auth=='key':
         try:kwargs['pkey']=private_key(secret)
-        except ValueError:raise ConnectError(hop,'key') from None
+        except ValueError:raise ConnectError(hop,'key',**where) from None
     started=time.monotonic()
     try:client.connect(**kwargs);return client
     except _KeyMismatch:reason='fingerprint'
@@ -184,19 +204,52 @@ def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False):
         if refused:reason='auth'
         elif _timed_out(exc) or time.monotonic()-started>=HANDSHAKE_TIMEOUT:reason='timeout'
         else:reason='unreachable'
-    client.close();raise ConnectError(hop,reason,via_jump) from None
+    client.close();raise ConnectError(hop,reason,via_jump,**where) from None
 
 
-def open_tunnel(jump,endpoint):
-    """A channel from the jump host to the device: what ``ssh -J`` does. Closes the jump client on failure."""
-    import paramiko
-    host,port,_=target(endpoint)
-    try:return jump.get_transport().open_channel('direct-tcpip',(host,port),('127.0.0.1',0),timeout=CHANNEL_TIMEOUT)
-    except (OSError,EOFError,AttributeError,paramiko.SSHException) as exc:
-        jump.close()
-        prohibited=isinstance(exc,paramiko.ChannelException) and exc.code==ConnectError.FORWARDING_PROHIBITED
-        reason='forbidden' if prohibited else 'timeout' if _timed_out(exc) else 'unreachable'
-        raise ConnectError('device',reason,True) from None
+class Route:
+    """The jump hosts a session runs through, logged in to one after the other: what ``ssh -J a,b,c`` does.
+    Each hop is reached through a channel of the hop before it and pinned to the fingerprint the user
+    confirmed. A hop that does not let us in closes the hops before it and raises ConnectError with its level.
+
+    ``jumps``: the hops to log in to, first hop first, each with ``auth`` and ``fingerprint``; ``secrets``:
+    their logins in the same order. ``total``: the number of jump hosts of the whole route when ``jumps``
+    is only its beginning (reading fingerprints goes one hop further at each step)."""
+    def __init__(self,jumps,secrets,total=None):
+        if len(jumps)!=len(secrets):raise ValueError('跳板机和登录信息的数量不一致')     # never skip a hop for want of its login
+        self.clients=[];self.total=total or len(jumps);self.started=time.monotonic()
+        try:
+            for level,(jump,secret) in enumerate(zip(jumps,secrets),1):
+                self._in_time('jump',level)
+                sock=self.tunnel(jump,'jump',level) if self.clients else None
+                self.clients.append(open_client(jump,jump['auth'],secret,jump['fingerprint'],'jump',sock,sock is not None,level=level,total=self.total))
+        except Exception:
+            self.close();raise
+
+    def _in_time(self,hop,level=None):
+        """Give up before the next hop when the hops so far used up ROUTE_TIMEOUT: reported as that hop's timeout."""
+        if time.monotonic()-self.started<=ROUTE_TIMEOUT:return
+        self.close();raise ConnectError(hop,'timeout',bool(level and level>1) or hop=='device',level=level,total=self.total)
+
+    def tunnel(self,endpoint,hop='device',level=None):
+        """A channel from the last hop to ``endpoint``: the next jump host (``hop='jump'`` and its level)
+        or the device. Closes every hop on failure."""
+        import paramiko
+        host,port,_=target(endpoint)
+        self._in_time(hop,level)
+        try:return self.clients[-1].get_transport().open_channel('direct-tcpip',(host,port),('127.0.0.1',0),timeout=CHANNEL_TIMEOUT)
+        except (OSError,EOFError,AttributeError,paramiko.SSHException) as exc:
+            self.close()
+            prohibited=isinstance(exc,paramiko.ChannelException) and exc.code==ConnectError.FORWARDING_PROHIBITED
+            reason='forbidden' if prohibited else 'timeout' if _timed_out(exc) else 'unreachable'
+            raise ConnectError(hop,reason,True,level=level,total=self.total) from None
+
+    def close(self):
+        """Close the hops, the last one first. One that fails to close does not keep the others open."""
+        clients,self.clients=self.clients,[]
+        for client in reversed(clients):
+            try:client.close()
+            except Exception:continue     # a session that is already broken has nothing left to close
 
 
 def credentials(p,prefix='',label=''):
@@ -249,37 +302,54 @@ def _output_of(client,command):
     finally:channel.close()
 
 
-def resolve_on_jump(client,p):
-    """Where ``ssh <name>`` would go from the jump host: its ssh config decides, aliases included.
-    Returns the request with the real host, port and user filled in."""
+def jump_spec(text):
+    """One entry of a ProxyJump list as ``ssh -G`` prints it: ``[user@]host[:port]``, a numeric address in
+    brackets, or an ssh:// URI. User and port may be left to the ssh config of the host ('' / None).
+    It comes from a jump host, so it is checked like typed input."""
+    spec=text.strip()
+    if spec.lower().startswith('ssh://'):spec=spec[len('ssh://'):].split('/')[0]
+    user,_,rest=spec.rpartition('@')
+    bracketed=re.fullmatch(r'\[([^\]]+)\](?::(.*))?',rest)
+    if bracketed:host,port=bracketed.group(1),bracketed.group(2)
+    elif rest.count(':')==1:host,port=rest.split(':')
+    else:host,port=rest,None
+    if port is not None and not re.fullmatch(r'[0-9]{1,5}',port):raise ValueError('SSH 端口无效')
+    return dict(zip(('host','port','username'),named_target({'host':host,'port':int(port) if port else None,'username':user})))
+
+
+def _proxy_jumps(settings,name,where):
+    """The jump hosts that a name's ssh config puts in front of it (its ProxyJump), first hop first."""
+    value=settings.get('proxyjump','none')
+    if value.lower()!='none':
+        try:return [jump_spec(spec) for spec in value.split(',')]
+        except ValueError as exc:raise ValueError(f'{where}的 SSH 配置里，“{name}”的 ProxyJump 无效：{exc}') from None
+    if settings.get('proxycommand','none').lower()!='none':
+        raise ValueError(f'“{name}”在{where}上配置了 ProxyCommand，这里不能照着执行；请改用 ProxyJump，或把中间的跳板机逐级填写')
+    return []
+
+
+def resolve_on_jump(client,p,where='跳板机'):
+    """Where ``ssh <name>`` would go from a jump host (``client``; ``where`` names it in messages): its
+    ssh config decides, aliases included. Returns the request with the real host, port and user filled
+    in, and the jump hosts that config puts in front of the name (its ProxyJump; issue #15). With
+    ``p['plain']`` the route to the name was given on the command line: its config's proxy does not count."""
     import paramiko
     name,port,user=named_target(p)
     try:text,failed=_output_of(client,resolve_command(name))
     except (OSError,EOFError,AttributeError,paramiko.SSHException):     # AttributeError: the session is already gone
-        raise ValueError('没能在跳板机上解析目标名称；请重试，或直接填写目标机的地址') from None
+        raise ValueError(f'没能在{where}上解析“{name}”；请重试，或直接填写它的地址') from None
     settings={}
     for line in text.splitlines():
         # ssh -G prints each setting once, and a login script prints before the command runs, so the last
         # value of a setting is ssh's. A line printed after ssh's output would count if it reads as a
         # setting; what was resolved is shown to the user next to the fingerprint, and checked like typed input.
         key,_,value=line.strip().partition(' ');settings[key.lower()]=value.strip()
-    if failed or not settings.get('hostname'):raise ValueError('跳板机上的 ssh 没能解析这个名称（ssh -G 没有给出结果）；请直接填写目标机的地址')
-    if any(settings.get(key,'none').lower()!='none' for key in ('proxyjump','proxycommand')):
-        raise ValueError('这个名称在跳板机上还配置了下一跳（ProxyJump 或 ProxyCommand），不支持多跳')
+    if failed or not settings.get('hostname'):raise ValueError(f'{where}上的 ssh 没能解析“{name}”（ssh -G 没有给出结果）；请直接填写它的地址')
+    proxies=[] if p.get('plain') else _proxy_jumps(settings,name,where)
     try:port=port or int(settings.get('port') or 22)
-    except ValueError:raise ValueError('跳板机的 SSH 配置里，这个名称的端口无效') from None
-    return {**p,'host':settings['hostname'],'port':port,'username':user or settings.get('user',''),'alias':name}
-
-
-def inspect_through_jump(p,jump,secret,resolve=False):
-    """Read the device's host key through a jump host whose own fingerprint is already confirmed.
-    With ``resolve`` the jump host is first asked what the target's name stands for."""
-    client=open_client(jump,jump['auth'],secret,jump['fingerprint'],'jump')
-    try:
-        if resolve:p=resolve_on_jump(client,p)
-        scan=inspect_host(p,open_tunnel(client,p),'device',True)
-        return {**scan,'alias':p['alias']} if resolve else scan
-    finally:client.close()
+    except ValueError:raise ValueError(f'{where}的 SSH 配置里，“{name}”的端口无效') from None
+    resolved={k:v for k,v in p.items() if k not in ('resolve_on','plain')}
+    return {**resolved,'host':settings['hostname'],'port':port,'username':user or settings.get('user',''),'alias':name},proxies
 
 
 def validate_roots(roots):
@@ -308,7 +378,13 @@ def command_request(args):
 
 def secret_values(secret):
     """The saved logins of a connection as plain values: what must never show in anything read from a device."""
-    return [v for v in secret.values() if isinstance(v,str) and v]
+    values=[]
+    for value in secret.values():
+        if isinstance(value,str) and value:values.append(value)
+        elif isinstance(value,list):                      # issue #15: the logins of the jump hosts, one per hop
+            for hop in value:
+                if isinstance(hop,dict):values.extend(secret_values(hop))
+    return values
 
 
 class SSHDevice:
@@ -316,12 +392,13 @@ class SSHDevice:
         self.roots=list(connection['read_roots']);self.stop_event=None
         self.secrets=secret_values(secret)
         self.fingerprint=connection['fingerprint']     # issue #12: the machine this session was opened for
-        jump=connection.get('jump');self.jump=None;sock=None
-        if jump:
-            # Both hops are pinned to the fingerprints the user confirmed; the device session runs inside the tunnel.
-            self.jump=open_client(jump,jump['auth'],jump_secret(secret),jump['fingerprint'],'jump')
-            sock=open_tunnel(self.jump,connection)
-        try:self.client=open_client(connection,connection['auth'],secret,connection['fingerprint'],'device',sock,bool(jump))
+        jumps=jumps_of(connection);self.jump=None;sock=None
+        if jumps:
+            # Every hop is pinned to the fingerprint the user confirmed; the device session runs inside the last tunnel.
+            # ``jump`` holds all of them (issue #15) and closes them together.
+            self.jump=Route(jumps,jump_secrets(secret,len(jumps)))
+            sock=self.jump.tunnel(connection)
+        try:self.client=open_client(connection,connection['auth'],secret,connection['fingerprint'],'device',sock,bool(jumps),total=len(jumps))
         except Exception:
             if self.jump:self.jump.close()
             raise
@@ -399,5 +476,6 @@ class SSHDevice:
         return root
 
     def close(self):
-        self.client.close()
-        if self.jump:self.jump.close()
+        try:self.client.close()
+        finally:
+            if self.jump:self.jump.close()     # whatever closing the device session did, no hop stays connected

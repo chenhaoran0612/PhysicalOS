@@ -1,5 +1,6 @@
 // Turn an ssh command line into connection fields. Pure functions: the command is never
 // executed and nothing is read from this machine (no ~/.ssh/config, no key files).
+// Issue #15: several jump hosts in a row (-J a,b,c, ProxyJump=a,b,c, nested ssh commands).
 
 const SSH_VALUE_OPTIONS = 'BbcDEeFIiJLlmOopQRSWw';     // options followed by a value
 const SSH_FLAG_OPTIONS = '46AaCfGgKkMNnqsTtVvXxYy';    // options without one
@@ -14,6 +15,7 @@ const SSH_ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const SSH_QUOTED_ESCAPES = '"\\$`';                    // what a backslash escapes inside double quotes
 const SSH_DEFAULT_PORT = 22;
 const SSH_MAX_PORT = 65535;
+const SSH_MAX_JUMPS = 5;                               // jump hosts in a row; the backend has the same limit (brainos/ssh_route.py)
 
 // Length of the line break at text[i] (0 if none): a backslash before it continues the line.
 const sshLineBreak = (text, i) => text.startsWith('\r\n', i) ? 2 : text[i] === '\n' ? 1 : 0;
@@ -86,12 +88,10 @@ function sshCheckedEndpoint(host, port, username, label) {
 
 const sshLooksLikeAlias = host => !host.includes('.') && !host.includes(':') && host !== 'localhost';
 
+// -J / ProxyJump: the jump hosts in order, first hop first. null for "none".
 function sshSetJump(found, value) {
   if (found.jump !== undefined) throw Error('命令里指定了两次跳板机（-J 或 ProxyJump），请只保留一个');
-  if (value.toLowerCase() === 'none') { found.jump = null; return; }
-  const hops = value.split(',').length;
-  if (hops > 1) throw Error(`只支持一跳跳板机，这条命令里有 ${hops} 跳`);
-  found.jump = sshEndpointSpec(value);
+  found.jump = value.trim().toLowerCase() === 'none' ? null : value.split(',').map(spec => sshEndpointSpec(spec.trim()));
 }
 
 function sshConfigOption(found, value) {
@@ -171,82 +171,102 @@ function sshScan(tokens) {
   return found;
 }
 
-// The endpoint an invocation names. Without a port the caller decides: 22, or whatever resolves the name.
-function sshEndpointOf(found, label, defaultPort) {
+// The places one ssh invocation names, in the order of the route: its -J hosts, then its destination.
+// `on` is the level of the jump host the invocation runs on (0: this machine). A name given there is
+// resolved there, by that host's ssh config. As with ssh itself, a -J on the command line overrides
+// the ProxyJump that config may have for the destination and for every -J host but the first (`plain`).
+function sshInvocationPlaces(found, on) {
+  if (on && found.hostName) throw Error('嵌套命令里的 -o HostName 不支持：请把内层 ssh 的目标直接写成那个地址');
+  const port = spec => (spec.port === null ? null : sshPortNumber(spec.port));
+  const hops = (found.jump || []).map((spec, index) => ({host: spec.host, port: port(spec), username: spec.username, on, plain: index > 0}));
   const spec = sshEndpointSpec(found.destination);
-  const port = found.port ?? (spec.port === null ? defaultPort : sshPortNumber(spec.port));
-  return {spec, endpoint: sshCheckedEndpoint(found.hostName || spec.host, port, found.user || spec.username, label)};
+  return [...hops, {host: found.hostName || spec.host, port: found.port ?? port(spec), username: found.user || spec.username,
+                    on, plain: found.jump !== undefined, guessedPort: spec.port !== null && !spec.uri && found.port === null}];
+}
+
+// Every place of a command, however deep its ssh commands are nested: `ssh a 'ssh b ssh c'` runs
+// the second ssh on a and the third on b. Returns the places and the invocations they came from.
+function sshCollect(outer) {
+  const places = [], invocations = [];
+  for (let found = outer; ; found = sshScan(found.remote.slice(1))) {
+    places.push(...sshInvocationPlaces(found, places.length));     // it runs on the place named last
+    invocations.push(found);
+    if (!sshIsSshProgram(found.remote[0])) break;
+  }
+  return {places, invocations};
+}
+
+// A place as the form takes it: an address, or a name for the jump host of level `resolveOn` to resolve.
+function sshPlace(place, label) {
+  const checked = sshCheckedEndpoint(place.host, place.on ? place.port : place.port ?? SSH_DEFAULT_PORT, place.username, label);
+  if (!place.on) return checked;
+  return {...checked, resolveOn: place.on, ...(place.plain ? {plain: true} : {})};
 }
 
 function sshSharedNotes(found) {
   const notes = [];
-  if (found.agentForwarding) notes.push('命令里的 -A 已忽略：这里不做 Agent 转发，两跳各自用本机的 SSH Agent 登录。');
+  if (found.agentForwarding) notes.push('命令里的 -A 已忽略：这里不做 Agent 转发，每一跳各自用本机的 SSH Agent 登录。');
   if (found.configFile) notes.push('命令里指定了配置文件（-F）。这里不读取 SSH 配置文件，其中的设置不会生效。');
   if (found.keyFile) notes.push('命令里指定了密钥文件（-i）。这里不读取本机的密钥文件：请先用 ssh-add 把它加入 SSH Agent，或在下面粘贴私钥内容。');
   return notes;
 }
 
-// Options of the inner ssh of a nested command. They apply on the jump host, where nothing logs in from here.
+// Options of an inner ssh of a nested command. They apply on a jump host, where nothing logs in from here.
 function sshInnerNotes(inner) {
   const notes = [];
-  if (inner.keyFile) notes.push('内层 ssh 的密钥文件（-i）是跳板机上的文件，这里用不到：最后一跳在本机登录，请确认本机的 SSH Agent 里有能登录目标机的密钥，或在下面粘贴私钥内容。');
-  if (inner.configFile) notes.push('内层 ssh 指定了配置文件（-F）。解析名称时用的是跳板机上默认的 SSH 配置，那个文件里的设置不会生效；如果名称只写在那个文件里，请直接填写目标机的地址。');
+  if (inner.keyFile) notes.push('内层 ssh 的密钥文件（-i）是跳板机上的文件，这里用不到：每一跳都在本机登录，请确认本机的 SSH Agent 里有能登录的密钥，或在下面粘贴私钥内容。');
+  if (inner.configFile) notes.push('内层 ssh 指定了配置文件（-F）。解析名称时用的是跳板机上默认的 SSH 配置，那个文件里的设置不会生效；如果名称只写在那个文件里，请直接填写地址。');
   if (inner.agentForwarding) notes.push('内层 ssh 的 -A 已忽略：这里不做 Agent 转发。');
   return notes;
 }
 
-// ssh [-J jump] target [command]
-function sshDirectResult(found) {
-  const {spec, endpoint: target} = sshEndpointOf(found, '目标', SSH_DEFAULT_PORT);
-  const jump = found.jump
-    ? sshCheckedEndpoint(found.jump.host, found.jump.port === null ? SSH_DEFAULT_PORT : sshPortNumber(found.jump.port),
-                         found.jump.username, '跳板机')
-    : null;
-  const notes = [];
-  if (!target.username) notes.push('命令里没有写用户名，请在下面补上 SSH 用户名。');
-  if (jump && !jump.username) notes.push('命令里没有写跳板机用户名，请在下面补上。');
-  if (spec.port !== null && !spec.uri) {
-    notes.push(`已按“主机:端口”解析出端口 ${target.port}。ssh 命令本身没有这种写法（它用 -p），请确认端口是对的。`);
+// What the user should know about one place: a missing user, a guessed port, an alias this machine
+// cannot resolve, or the jump host that will resolve its name. `who`: how a jump host is called
+// ('' for the device); `jumpLabel(level)`: how the jump host of a level is called.
+function sshPlaceNotes(place, checked, who, jumpLabel) {
+  const notes = [], isTarget = !who;
+  if (place.on) {
+    const where = jumpLabel(place.on), what = isTarget ? '' : '是跳板机，';
+    notes.push(`“${checked.host}”${what}会按${where}上的 SSH 配置解析，和在那台跳板机上执行 ssh ${checked.host} 一样；` +
+               '解析出的地址、用户名和端口会在确认指纹时显示。' +
+               (place.plain ? '' : '那里的配置如果给这个名称配了 ProxyJump，其中的跳板机会自动加进路线，同样逐个确认指纹。'));
+    return notes;
   }
-  for (const host of [target.host, jump?.host]) {
-    if (host && sshLooksLikeAlias(host)) {
-      notes.push(`“${host}”像是 ~/.ssh/config 里的别名。这里不读取那个文件，请换成能直接访问的主机名或 IP。`);
-    }
+  if (!checked.username) notes.push(isTarget ? '命令里没有写用户名，请在下面补上 SSH 用户名。' : `命令里没有写${who}用户名，请在下面补上。`);
+  if (place.guessedPort) {
+    notes.push(`已按“主机:端口”解析出端口 ${checked.port}。ssh 命令本身没有这种写法（它用 -p），请确认端口是对的。`);
   }
-  notes.push(...sshSharedNotes(found));
-  if (found.remote.length) notes.push('已忽略命令末尾的远程命令。');
-  return {target, jump, notes, resolveOnJump: false};
+  if (sshLooksLikeAlias(checked.host)) {
+    notes.push(`“${checked.host}”像是 ~/.ssh/config 里的别名。这里不读取那个文件，请换成能直接访问的主机名或 IP。`);
+  }
+  return notes;
 }
 
-// ssh jump 'ssh target': the first host is the jump host and, as with ssh itself, the inner
-// name is resolved by the jump host's ssh config (an alias there means nothing on this machine).
-function sshNestedResult(outer) {
-  const inner = sshScan(outer.remote.slice(1));
-  const hops = (outer.jump ? 1 : 0) + (inner.jump ? 1 : 0) + (sshIsSshProgram(inner.remote[0]) ? 1 : 0);
-  if (hops) throw Error(`只支持一跳跳板机，这条命令里有 ${hops + 1} 跳`);
-  // With HostName ssh connects there and does not resolve the name, which this form cannot express.
-  if (inner.hostName) throw Error('嵌套命令里的 -o HostName 不支持：请把内层 ssh 的目标直接写成那个地址');
-  const jump = sshEndpointOf(outer, '跳板机', SSH_DEFAULT_PORT).endpoint;
-  const target = sshEndpointOf(inner, '目标', null).endpoint;
-  const notes = [`“${target.host}”会按跳板机上的 SSH 配置解析，和在跳板机上执行 ssh ${target.host} 一样；` +
-                 '解析出的地址、用户名和端口会在确认指纹时显示。',
-                 '最后一跳在本机登录（本机的 SSH Agent、密钥或密码），不使用跳板机上保存的密钥。'];
-  if (!jump.username) notes.push('命令里没有写跳板机用户名，请在下面补上。');
-  if (sshLooksLikeAlias(jump.host)) {
-    notes.push(`“${jump.host}”像是 ~/.ssh/config 里的别名。这里不读取那个文件，请换成能直接访问的主机名或 IP。`);
-  }
-  notes.push(...sshSharedNotes(outer), ...sshInnerNotes(inner));
-  if (inner.remote.length) notes.push('已忽略内层 ssh 后面的远程命令。');
-  return {target, jump, notes, resolveOnJump: true};
-}
-
+// ssh [-J a,b,c] target [command], and the nested forms where the command is another ssh.
 function sshParse(text) {
-  const found = sshScan(sshArguments(text));
-  return sshIsSshProgram(found.remote[0]) ? sshNestedResult(found) : sshDirectResult(found);
+  const {places, invocations} = sshCollect(sshScan(sshArguments(text)));
+  const total = places.length - 1;
+  if (total > SSH_MAX_JUMPS) throw Error(`跳板机最多 ${SSH_MAX_JUMPS} 级，这条命令里有 ${total} 级`);
+  const jumpLabel = level => (total > 1 ? `第 ${level} 级跳板机` : '跳板机');
+  const label = index => (index === total ? '目标' : jumpLabel(index + 1));
+  const checked = places.map((place, index) => sshPlace(place, label(index)));
+  const last = places[total], nested = invocations.length > 1;
+  // The device first, then the jump hosts in order, then what applies to the whole command.
+  const notes = [...sshPlaceNotes(last, checked[total], '', jumpLabel),
+                 ...places.slice(0, total).flatMap((place, index) =>
+                   sshPlaceNotes(place, checked[index], jumpLabel(index + 1), jumpLabel))];
+  if (last.on) notes.push('每一跳都在本机登录（本机的 SSH Agent、密钥或密码），不使用跳板机上保存的密钥。');
+  notes.push(...sshSharedNotes(invocations[0]), ...invocations.slice(1).flatMap(sshInnerNotes));
+  if (invocations[invocations.length - 1].remote.length) notes.push(nested ? '已忽略内层 ssh 后面的远程命令。' : '已忽略命令末尾的远程命令。');
+  const {resolveOn = null, plain = false, ...target} = checked[total];
+  return {target, jumps: checked.slice(0, total), notes, resolveOn, plain, resolveOnJump: resolveOn !== null};
 }
 
-// {ok: true, target, jump, notes, resolveOnJump} or {ok: false, error}. jump is null for a direct
-// connection; with resolveOnJump the target is a name for the jump host to resolve (its port may be null).
+// {ok: true, target, jumps, notes, resolveOn, plain, resolveOnJump} or {ok: false, error}.
+// jumps: the jump hosts in order, first hop first; empty for a direct connection. A jump host with
+// `resolveOn` is a name for the jump host of that level to resolve (its port may be null), and so is
+// the target when resolveOn is a level (resolveOnJump is then true). `plain`: the route to that name
+// was given on the command line, so a ProxyJump in the resolving host's config does not count.
 function sshParseCommand(text) {
   try {
     return {ok: true, ...sshParse(String(text ?? ''))};

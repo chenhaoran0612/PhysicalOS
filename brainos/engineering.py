@@ -12,6 +12,7 @@ from . import agent_runtime, connector, device_access, device_status
 from .contracts import required_text
 from .service import now, uid
 from . import hardware_init  # issue #2: hardware scan and repair sessions
+from . import ssh_edit, ssh_route  # issue #15: several jump hosts in a row
 
 ACTIVE=('starting','running','waiting_input','cancelling')
 # §5.3: a Codex 0.146.1 request is ~50 KB (instructions + tool schemas); the
@@ -264,22 +265,13 @@ class Engineering:
         return result
 
     def scan(self,p):
-        """Read a host key for the user to confirm. Through a jump host this takes two calls:
-        the jump host's key first (no credentials sent anywhere), then, once that fingerprint is
-        confirmed and the jump login supplied, the device's key through the jump host."""
+        """Read a host key for the user to confirm. Through jump hosts this takes one call per hop
+        (issue #15, ssh_route.scan): the first jump host's key (no credentials sent anywhere), then,
+        each time a fingerprint is confirmed and that hop's login supplied, the key of the next hop
+        through the hops confirmed so far, and the device's key last."""
         self.platform.project(p.get('project_id'))
-        p=self.platform.ssh_edit.prepare(p)   # issue #9: an edit of a robot's connection may keep its saved jump login
-        jump=device_access.jump_target(p);resolve=device_access.check_target(p,jump)
-        if jump and not p.get('jump_check_id'):
-            scan={**device_access.inspect_host(jump,hop='jump'),'stage':'jump'}
-        elif jump:
-            first=self._host_check(p.get('jump_check_id'),p.get('project_id'))
-            if first.get('stage')!='jump' or any(first[k]!=jump[k] for k in jump):raise ValueError('跳板机信息已改变，请重新读取指纹')
-            if p.get('trust_jump_fingerprint')!=first['fingerprint']:raise ValueError('请核对并确认跳板机主机指纹')
-            auth,secret=device_access.credentials(p,'jump_','跳板机 ')
-            jump.update(auth=auth,fingerprint=first['fingerprint'])
-            scan={**device_access.inspect_through_jump(p,jump,secret,resolve),'jump':jump}
-        else:scan=device_access.inspect_host(p)
+        p=self.platform.ssh_edit.prepare(p)   # issue #9: an edit of a robot's connection may keep its saved jump logins
+        scan=ssh_route.scan(self,p)
         scan.update(id=uid('ssh-key'),project_id=p['project_id'],scanned_at=time.time())
         self.store.put('host_key_checks',scan);return scan
 
@@ -297,9 +289,8 @@ class Engineering:
         connection={k:scan[k] for k in ('host','port','username','fingerprint','project_id','alias') if k in scan}
         connection.update(id=uid('connection'),kind='ssh',auth=auth,read_roots=device_access.validate_roots(p.get('read_roots',device_access.DEFAULT_ROOTS)),
                           watch_services=device_status.validate_services(p.get('watch_services',[])),created_at=now())
-        if scan.get('jump'):
-            _,jump_secret=device_access.credentials({**p,'jump_auth':scan['jump']['auth']},'jump_','跳板机 ')
-            connection['jump']=scan['jump'];secret.update({'jump_'+k:v for k,v in jump_secret.items()})
+        jumps=device_access.jumps_of(scan)
+        if jumps:connection['jumps']=jumps;secret['jumps']=ssh_route.connect_logins(p,jumps)   # issue #15: every hop with its own login
         # Test authentication before creating a robot asset. No commands here.
         device=device_access.SSHDevice(connection,secret);device.close()
         if p.get('edit_robot_id'):return self.platform.ssh_edit.apply(p,connection,secret)   # issue #9: change that robot's connection in place
@@ -308,6 +299,7 @@ class Engineering:
         else:
             robot=self.platform.add_robot({'project_id':p['project_id'],'name':p.get('name'),'family':p.get('family','custom')})
             robot=self.store.get('robots',robot['id'])
+        secret=ssh_edit.secret_to_save(connection,secret)   # issue #15: per hop, only what its login method uses is kept
         connection['robot_id']=robot['id'];self.store.put('agent_secrets',{'id':connection['id'],**secret});self.store.put('device_connections',connection)
         replaced=robot.get('connection_id')
         robot.update(connection_id=connection['id'],onboarding_status='connected_for_discovery');self.store.put('robots',robot)

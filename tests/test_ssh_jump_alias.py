@@ -2,6 +2,7 @@
 
 Both ends are local protocol fixtures: nothing here reaches a real machine.
 """
+import secrets
 import time
 from unittest import mock
 
@@ -79,14 +80,39 @@ class JumpAliasTests(base.SshCase):
         self.assertEqual(self.jump.commands, [])
         self.assertEqual(self.jump.transports, [])
 
-    def test_a_name_that_needs_a_further_hop_is_refused(self):
-        for setting in ('proxyjump inner-gate', 'proxycommand ssh -W %h:%p inner-gate'):
-            with self.subTest(setting=setting):
-                self.jump.command_outputs[self.resolve] = self.ssh_config(extra=setting + '\n')
-                with self.assertRaises(ValueError) as caught:
-                    self.scan_both()
-                self.assertIn('多跳', str(caught.exception))
+    def test_a_name_that_needs_a_further_hop_gets_that_hop(self):
+        # Issue #15. Until then this was refused: "more than one hop".
+        inner = self.fixture(username='inner', password=secrets.token_hex(6), forward_to=[('127.0.0.1', self.target.port)])
+        self.jump.forward_to = {('127.0.0.1', inner.port)}             # the robot is only reachable from the inner gate
+        self.jump.command_outputs.update({
+            self.resolve: self.ssh_config(extra='proxyjump inner-gate\n'),
+            device_access.resolve_command('inner-gate'): f'user inner\nhostname 127.0.0.1\nport {inner.port}\n'.encode()})
 
+        second = self.scan_both()
+
+        self.assertEqual((second['stage'], second['level'], second['alias']), ('jump', 2, 'inner-gate'))
+        self.assertEqual(second['expanded'], {'at': 2, 'count': 1, 'by': 1})
+        self.assertEqual(second['fingerprint'], device_access.fingerprint(inner.key))
+        self.assertEqual(inner.auth_attempts, [])                      # found by the look-up, confirmed by a person first
+        self.assertEqual(self.target.transports, [])
+        route = second['route']
+        logins = [{'auth': 'password', 'password': base.JUMP_PASSWORD}, {'auth': 'password', 'password': inner.password}]
+        third = self.engine.scan({'project_id': self.pid, **{k: route['target'][k] for k in ('host', 'port', 'username')},
+                                  'jumps': [{**hop, **login} for hop, login in zip(route['jumps'], logins)],
+                                  'jump_check_id': second['id'], 'trust_jump_fingerprint': second['fingerprint']})
+
+        self.assertEqual((third['alias'], third['port']), (self.ALIAS, self.target.port))
+        self.assertEqual(third['fingerprint'], device_access.fingerprint(self.target.key))
+        self.assertEqual([hop.get('alias') for hop in third['jumps']], [None, 'inner-gate'])
+        self.assertEqual(inner.forwarded, [('127.0.0.1', self.target.port)])
+
+    def test_a_name_behind_a_proxycommand_is_still_refused(self):
+        self.jump.command_outputs[self.resolve] = self.ssh_config(extra='proxycommand ssh -W %h:%p inner-gate\n')
+
+        with self.assertRaises(ValueError) as caught:
+            self.scan_both()
+
+        self.assertIn('ProxyCommand', str(caught.exception))
         self.assertEqual(self.target.transports, [])
 
     def test_a_jump_host_that_cannot_resolve_the_name_says_so(self):
