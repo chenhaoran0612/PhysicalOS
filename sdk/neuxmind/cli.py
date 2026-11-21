@@ -261,6 +261,12 @@ def cmd_whoami(args, cfg, out):
     user = me.get("user") or {}
 
     def text():
+        if me.get("auth") == "api_key":
+            # The cloud shows an API key only itself, not the account that created it.
+            return "\n".join(["凭据：API Key（云平台不向 Key 显示创建者的账户）",
+                              f"当前组织：{me.get('current_org_id')}，Key 创建者的角色：{me.get('role')}",
+                              f"权限：{', '.join(me.get('permissions') or []) or '-'}",
+                              f"云平台：{os.environ.get('NEUXMIND_CLOUD_URL') or cfg.get('cloud_url')}"])
         lines = [f"用户：{user.get('email')}（{user.get('name') or '-'}）",
                  f"当前组织：{me.get('current_org_id')}，角色：{me.get('role')}",
                  "邮箱：已验证" if me.get("email_verified", user.get("email_verified")) else

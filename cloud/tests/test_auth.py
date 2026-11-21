@@ -165,3 +165,57 @@ class ApiKeyTest(CloudTestCase):
         self.error(self.get("/me", headers={"Authorization": "Bearer nx_live_forged"}), 401, "invalid_api_key")
         with self.db.transaction() as s:
             self.assertEqual(s.query(Organization).count(), 0)
+
+
+class MeWithApiKeyTest(CloudTestCase):
+    """``GET /me`` with an API key describes the key, not the person who created it.
+
+    Since issue #26 a key with only ``alerts:report`` sits on the device; whoever reads it off the
+    device must not learn the creator's e-mail, name or other organisations from ``/me``."""
+
+    KEY_FIELDS = {"auth", "current_org_id", "role", "permissions"}
+
+    def setUp(self):
+        super().setUp()
+        self.owner = self.register("fleet-owner@example.com", name="Quill Harrow")
+        self.team = self.register("team-lead@example.com", name="Ostra Vell")
+        self.ok(self.post("/org/members", {"email": "fleet-owner@example.com", "role": "developer"}, self.team))
+
+    def assert_nothing_about_the_creator(self, response, *other_org_ids):
+        for text in ("fleet-owner@example.com", "Quill Harrow", self.owner["user"]["id"], *other_org_ids):
+            self.assertNotIn(text, response.text)
+
+    def test_the_device_key_sees_only_its_own_scope(self):
+        device = self.api_key(self.owner, ["alerts:report"])
+        response = self.get("/me", headers=device["headers"])
+        me = self.ok(response)
+        self.assertEqual(me, {"auth": "api_key", "current_org_id": self.owner["org_id"], "role": "owner",
+                              "permissions": ["alerts:report"]})
+        self.assert_nothing_about_the_creator(response, self.team["org_id"])
+
+    def test_a_key_in_a_shared_org_sees_that_org_and_its_narrowed_permissions(self):
+        headers = {**self.owner["headers"], "X-NeuxMind-Org": self.team["org_id"]}
+        key = self.ok(self.post("/api-keys", {"scopes": ["robots", "usage:read"]}, headers=headers), 201)
+        key_headers = {"Authorization": f"Bearer {key['key']}"}
+        response = self.get("/me", headers=key_headers)
+        me = self.ok(response)
+        self.assertEqual(set(me), self.KEY_FIELDS)
+        self.assertEqual((me["auth"], me["current_org_id"], me["role"], me["permissions"]),
+                         ("api_key", self.team["org_id"], "developer", ["robots", "usage:read"]))
+        self.assert_nothing_about_the_creator(response, self.owner["org_id"])
+        # The org header does not widen what a key may see.
+        response = self.get("/me", headers={**key_headers, "X-NeuxMind-Org": self.owner["org_id"]})
+        self.assertEqual(self.ok(response)["current_org_id"], self.team["org_id"])
+        self.assert_nothing_about_the_creator(response, self.owner["org_id"])
+
+    def test_a_login_session_still_sees_the_account_and_every_org(self):
+        me = self.ok(self.get("/me", self.owner))
+        self.assertEqual(me["auth"], "session")
+        self.assertEqual((me["user"]["email"], me["user"]["name"]), ("fleet-owner@example.com", "Quill Harrow"))
+        self.assertTrue(me["email_verified"])
+        self.assertFalse(me["platform_operator"])
+        self.assertEqual({o["id"]: o["role"] for o in me["organizations"]},
+                         {self.owner["org_id"]: "owner", self.team["org_id"]: "developer"})
+        in_team = self.ok(self.get("/me", headers={**self.owner["headers"], "X-NeuxMind-Org": self.team["org_id"]}))
+        self.assertEqual((in_team["current_org_id"], in_team["role"]), (self.team["org_id"], "developer"))
+        self.assertEqual(len(in_team["organizations"]), 2)
