@@ -312,6 +312,9 @@ def make_handler(application):
                         'library/upload/start':service.library.start,'library/upload/status':service.library.status,
                         'library/upload/complete':service.library.complete,'library/upload/cancel':service.library.cancel,
                         'library/delete':service.library.remove,
+                        # Issue #31: send a usable driver package from the library to a robot and verify it there
+                        'library/deliver/start':service.package_delivery.start,'library/deliver/status':service.package_delivery.status,
+                        'library/deliver/stop':service.package_delivery.stop,'library/deliver/list':service.package_delivery.list,
                         # Issue #4: TokenFans models & compute (the key and password never come back).
                         'model-compute/key':service.model_compute.connect_key,
                         'model-compute/login':service.model_compute.login,

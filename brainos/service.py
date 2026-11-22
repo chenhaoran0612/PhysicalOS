@@ -81,6 +81,8 @@ class Platform:
         self.cloud = CloudAccount(self)
         from .material_library import MaterialLibrary
         self.library = MaterialLibrary(self)        # issue #33: documents and driver packages kept in the cloud
+        from .package_delivery import PackageDelivery
+        self.package_delivery = PackageDelivery(self)   # issue #31: a usable driver package goes from the library to a device, verified there
         from .model_compute import ModelCompute
         self.model_compute = ModelCompute(self)
         from .body_types import BodyTypes
@@ -937,4 +939,5 @@ class Platform:
         self.sims.close()
         self.workflows.close()
         self.engineering.close()
+        self.package_delivery.close()   # issue #31: package deliveries a person started stop before the store is closed
         self.store.close()
