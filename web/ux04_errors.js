@@ -177,6 +177,16 @@ const UX_CODES = {
   device_forward_forbidden: ['state', '机器人的 SSH 服务不允许转发连接，平台到不了机器人本机的管理层服务。这次请求没有发出。', '请管理员在机器人的 sshd 配置里允许转发（AllowTcpForwarding 设为 local 或 yes），并重启 SSH 服务', '然后点“连接检查”'],
   device_link_not_configured: ['state', '这台机器人还没有经 SSH 接入管理层，或者接入已经被移除。', '在机器人卡片上点“接入管理层”'],
   runtime_token_not_found: ['input', '没有在机器人上读到管理层的令牌。标准安装的令牌文件是 ~/neuxmind/edge-token，SSH 登录的账号要能读它。', '确认管理层装在 SSH 登录的这个账号下', '或者在“令牌”里手工填写，再提交'],
+  // ---- issue #19: installing the management layer from the console (brainos/runtime_install.py, runtime_package.py).
+  // Each of these was refused before anything was sent to the robot.
+  install_package_missing: ['service', '这个控制台没有带管理层的安装包，没法安装。', '重新安装桌面应用；在源码里运行时，先运行 scripts/build_device_package.py'],
+  install_package_damaged: ['service', '控制台自带的管理层安装包不完整或被改动过，没有发给机器人。', '重新安装桌面应用'],
+  install_in_progress: ['state', '这台机器人正在安装（或清理）管理层，上一次还没有结束。', '等它结束，或在安装窗口里先停止'],
+  install_body_unsupported: ['input', '这台机器人的本体类型没有对应的仿真本体，管理层装不上。', '在卡片上把本体类型改成四足或机械臂'],
+  install_choice_invalid: ['input', '对设备上已有的管理层，这种处理方式不可用。', '重新打开“安装管理层”，按窗口里列出的方式选择'],
+  install_login_refused: ['network', '机器人（或跳板机）拒绝了 SSH 登录，安装停下了，没有反复重试（以免账号被锁）。', '核对卡片上“配置连接”里的账号、密码或私钥后再安装'],
+  install_unreachable: ['network', '安装途中连不上机器人，等到了时限。设备上已经开始的那一步会在设备上继续做完。', '网络恢复后再点“安装管理层”，会接着已经做完的部分'],
+  install_nothing_to_clean: ['state', '这台机器人没有需要清理的安装记录：上一次安装没有在设备上留下这个控制台的东西。', '不需要清理'],
   // ---- login / account / cloud
   unauthorized: ['account', '登录状态已失效，或访问令牌不对。', '重新登录，或检查访问令牌'],
   not_logged_in: ['account', '还没有登录云平台账户。', '先登录云平台账户'],
