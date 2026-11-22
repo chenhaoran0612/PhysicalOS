@@ -109,6 +109,8 @@ class Platform:
         self.robot_remove = RobotRemoval(self)      # issue #11: delete a robot with its connection and investigations
         from .safety_limits import SafetyLimits
         self.safety_limits = SafetyLimits(self)     # issue #22: safety limits a person fills in per device
+        from .runtime_install import RuntimeInstall
+        self.runtime_install = RuntimeInstall(self)     # issue #19: install the management layer from the console (after runtime_link, robot_remove)
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):
@@ -942,6 +944,7 @@ class Platform:
     def close(self):
         self.heartbeat.close()      # issue #24: the timer, its SSH sessions and its checks end before the store is closed
         self.runtime_link.close()   # issue #17: the SSH sessions of the links to the robots' management layers
+        self.runtime_install.close()   # issue #19: installs under way stop waiting (what a robot does goes on there)
         self.sims.close()
         self.workflows.close()
         self.engineering.close()

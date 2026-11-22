@@ -1,0 +1,49 @@
+/* Issue #19 — installing the management layer from the console (web/runtime_install.js).
+   Uses the shared tokens of style.css; the card line follows .rl-line of runtime_link.css. */
+
+/* On the card, above the tags: an install under way, or one that did not finish. */
+.ri-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px 9px;margin:8px 0 2px;padding:8px 10px;font-size:11px;line-height:1.6;color:#5d6b63;background:#f7f8f4;border:1px dashed #dfe5d9;border-radius:6px}
+.ri-line[hidden]{display:none}
+.ri-label{flex:none;font-weight:600;letter-spacing:.04em;color:#31443a}
+.ri-line .status{font-size:10px;font-weight:550;padding:4px 8px;white-space:normal}
+.ri-line .text-link{margin-left:auto}
+
+/* The dialog: what will happen, the steps as they go, and what is left after a failure. */
+.ri-how{margin:0 0 16px;line-height:1.8}
+.ri-how code,.ri-left code,.ri-found code,.ri-package code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;color:#3f5a45;background:#eef3ea;padding:1px 4px;border-radius:3px;overflow-wrap:anywhere}
+.ri-body-type{display:flex;gap:12px;align-items:baseline;padding:12px 14px;border:1px solid #e3eadc;border-radius:7px;background:#fafcf7;font-size:11px;color:#5c7050;line-height:1.7}
+.ri-body-type b{flex:none;font-weight:600;color:#3f5a45}
+
+.ri-stages{list-style:none;margin:0 0 18px;padding:0;counter-reset:ri}
+.ri-stage{position:relative;display:grid;grid-template-columns:26px 1fr auto;align-items:center;gap:10px;padding:9px 0;font-size:12px;color:#7b8780}
+.ri-stage:not(:last-child):after{content:'';position:absolute;left:12px;top:31px;bottom:-9px;width:1px;background:#e2e8e2}
+.ri-mark{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;border:1px solid #dbe4d6;background:#fff;color:#9aa596;position:relative;z-index:1}
+.ri-stage b{font-weight:550;color:#5f6d64}
+.ri-stage small{font-size:10px;color:#9aa596;font-variant-numeric:tabular-nums;text-align:right}
+.ri-stage.is-done .ri-mark{background:#28674f;border-color:#28674f;color:#fff}
+.ri-stage.is-done b{color:#24332e}
+.ri-stage.is-running .ri-mark{border-color:#5d8293;border-top-color:transparent;animation:ri-turn 1s linear infinite}
+.ri-stage.is-running b,.ri-stage.is-running small{color:#3f6577}
+.ri-stage.is-failed .ri-mark{background:#f9ece9;border-color:#e7c3bd;color:#b44a42}
+.ri-stage.is-failed b,.ri-stage.is-failed small{color:#b44a42}
+.ri-stage.is-stopped .ri-mark{background:#fbf2df;border-color:#eddcb4;color:#9b702a}
+@keyframes ri-turn{to{transform:rotate(1turn)}}
+
+.ri-notes{margin:0 0 16px;padding:0 0 0 18px;font-size:11px;line-height:1.8;color:#6b7c66}
+.ri-failure{padding:14px 16px;border:1px solid #efd4cf;border-left:3px solid #b44a42;border-radius:6px;background:#fdf6f4;margin-bottom:14px;font-size:11px;line-height:1.8;color:#8a4a43}
+.ri-failure.is-stopped{border-color:#eee0bd;border-left-color:#9b702a;background:#fcf9f0;color:#7d6331}
+.ri-failure b{display:block;font-size:12px;margin-bottom:2px}
+.ri-failure p{margin:0;overflow-wrap:anywhere}
+.ri-log{margin-top:10px}
+.ri-log summary{cursor:pointer;font-size:10px;color:#8a5b54}
+.ri-log pre{margin:8px 0 0;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:10px;line-height:1.7;background:#fff;border:1px solid #f0dcd7;border-radius:5px;padding:10px;color:#5d4a46}
+.ri-left{padding:12px 14px;border:1px solid #e3eadc;border-radius:6px;background:#f7faf3;font-size:11px;line-height:1.8;color:#5c7050}
+.ri-left b{display:block;color:#3f5a45;margin-bottom:2px}
+.ri-left ul{margin:4px 0;padding-left:18px}
+.ri-left p{margin:6px 0 0}
+.ri-found{font-size:12px;line-height:1.8;color:#5c7050;margin:0 0 14px}
+.ri-replace{margin-top:12px}
+.ri-package{margin-top:16px}
+.ri-actions{flex-wrap:wrap}
+.ri-stopping{margin-right:auto;align-self:center;font-size:11px;line-height:1.6;color:#7d6331}
+@media(prefers-reduced-motion:reduce){.ri-stage.is-running .ri-mark{animation:none;border-top-color:#5d8293}}

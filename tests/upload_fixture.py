@@ -226,7 +226,37 @@ class UploadDevice:
             local.append(moved)
         return kind, arguments, local
 
+    # --- issue #19 (tests/install_fixture.py): a subclass answers more commands and forwards channels ---
+
+    def handle_early(self, command):
+        """(exit status, stdout, stderr) of a command answered before its standard input is read, or None."""
+        return None
+
+    def handle(self, command, script):
+        """(exit status, stdout, stderr) of a command with its standard input, or None for the transfer scripts."""
+        return None
+
+    def forward(self, chanid, destination):
+        """The answer to a direct-tcpip request; this fixture forwards nothing."""
+        return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+
+    def forwarded(self, channel):
+        """A channel ``forward`` accepted has arrived."""
+
+    def _answer(self, channel, code, out, err):
+        try:
+            channel.sendall(out)
+            channel.sendall_stderr(err)
+            channel.send_exit_status(code)
+        except _NETWORK_ERRORS:
+            pass
+        finally:
+            channel.close()
+
     def run(self, transport, channel, command):
+        early = self.handle_early(command)
+        if early is not None:
+            return self._answer(channel, *early)
         channel.settimeout(5)
         script = bytearray()
         try:
@@ -237,6 +267,9 @@ class UploadDevice:
                 script.extend(block)
         except (socket.timeout, *_NETWORK_ERRORS):
             pass
+        handled = self.handle(command, bytes(script))
+        if handled is not None:
+            return self._answer(channel, *handled)
         accepted = self.accepted(command, script.decode('utf-8', 'replace'))
         if accepted is None:
             self.refused.append(command)
@@ -289,6 +322,9 @@ class UploadDevice:
 
             def check_channel_request(self, kind, chanid):
                 return paramiko.OPEN_SUCCEEDED if kind == 'session' else paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+
+            def check_channel_direct_tcpip_request(self, chanid, origin, destination):
+                return owner.forward(chanid, tuple(destination))
 
             def check_channel_exec_request(self, channel, command):
                 threading.Thread(target=owner.run, args=(transport, channel, command.decode('utf-8', 'replace')), daemon=True).start()
@@ -345,6 +381,8 @@ class UploadDevice:
             transport.start_server(server=Protocol())
             while not self.closed and transport.is_active():
                 channels.append(transport.accept(.2))
+                if channels[-1] is not None:
+                    self.forwarded(channels[-1])
         except _NETWORK_ERRORS:
             pass
         finally:

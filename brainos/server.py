@@ -145,6 +145,8 @@ def make_handler(application):
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #17: the link to a robot's management layer over SSH, likewise.
             extra=extra or {'/runtime_link.js':('runtime_link.js','text/javascript; charset=utf-8'),'/runtime_link.css':('runtime_link.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #19: installing the management layer from the console, likewise.
+            extra=extra or {'/runtime_install.js':('runtime_install.js','text/javascript; charset=utf-8'),'/runtime_install.css':('runtime_install.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #33: the material library page, likewise.
             extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
@@ -294,6 +296,9 @@ def make_handler(application):
                         'robots/runtime-link/remove':service.runtime_link.detach,
                         'robots/runtime-link/state':service.runtime_link.overview,
                         'robots/runtime-link/retry':service.runtime_link.retry,
+                        # Issue #19: install the management layer on a robot over its SSH connection, then link it
+                        'robots/runtime-install/start':service.runtime_install.start,'robots/runtime-install/status':service.runtime_install.status,
+                        'robots/runtime-install/stop':service.runtime_install.stop,'robots/runtime-install/clean':service.runtime_install.clean,
                         'skills/package-preview':service.preview_skill_package,
                         'skills/package-install':service.install_skill_package,
                         'onsite/poll':service.poll_onsite,
