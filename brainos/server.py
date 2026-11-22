@@ -14,6 +14,7 @@ from .errors import error_payload
 from .httpd import FastBindHTTPServer
 from .service import Platform
 from .commerce import Commerce
+from .material_parse import MaterialParse   # issue #34: parsing results of library materials
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -141,6 +142,8 @@ def make_handler(application):
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #33: the material library page, likewise.
             extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #34: parsing results, and the materials of a device in its profile, likewise.
+            extra=extra or {'/material_parse.js':('material_parse.js','text/javascript; charset=utf-8'),'/material_parse.css':('material_parse.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #22: safety limits per device, likewise.
@@ -305,6 +308,9 @@ def make_handler(application):
                         'cloud/overview':service.cloud.overview,
                         'cloud/models':service.cloud.models,
                         'cloud/gateway-models':service.cloud.gateway_models,
+                        # Issue #34: what the cloud parsed out of a material; a person edits and confirms it
+                        'library/parse':MaterialParse(service.library).get,'library/parse/save':MaterialParse(service.library).save,
+                        'library/parse/confirm':MaterialParse(service.library).confirm,'library/parse/retry':MaterialParse(service.library).retry,
                         # Issue #33: materials and driver packages in the cloud library (file bytes go through do_PUT)
                         'library/overview':service.library.overview,'library/list':service.library.list,
                         'library/upload/start':service.library.start,'library/upload/status':service.library.status,

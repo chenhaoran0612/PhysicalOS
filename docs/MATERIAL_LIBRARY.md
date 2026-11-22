@@ -56,7 +56,7 @@
 ## 给后续 issue 的接口
 
 - 给 #34 和 #31 都适用的一条：云端只是认出文件是不是声称的类型（压缩包只看开头），没有打开它。解析和安装时要把内容当作不可信的输入。
-- #34（解析）：`GET /library/materials?status=parsing`、`GET /library/materials/{id}`、`GET /library/materials/{id}/content`；解析完成后用 `neuxmind_cloud.library.set_parse_state(session, material, "parsed" | "failed", detail)` 改状态。`format` 是 `library_types.FORMATS` 里的标识（`docx`、`xlsx`、`doc`、`xls`、`pdf`、`markdown`、`text`、`yaml`、`json`、`xml`、`urdf`、`zip`、`tar.gz`、`tar.xz`、`tar.bz2`、`tar`、`deb`）。
+- #34（解析）：已经做了，见 [MATERIAL_PARSING.md](MATERIAL_PARSING.md)。状态多了 `usable`（可用，人确认后）；资料多了所属设备 `device_id` / `device_name`，列表可以按它过滤。`format` 是 `library_types.FORMATS` 里的标识（`docx`、`xlsx`、`doc`、`xls`、`pdf`、`markdown`、`text`、`yaml`、`json`、`xml`、`urdf`、`zip`、`tar.gz`、`tar.xz`、`tar.bz2`、`tar`、`deb`）。
 - #31（把驱动安装包送到设备）：`GET /library/materials?kind=package&body_type=…&vendor=…&model=…` 找包，`…/content` 取文件（支持 `Range`，响应头 `X-Checksum-SHA256` 和详情里的 `sha256` 是整个文件的摘要），API Key 需要 `library:read`。
 - #32（本体类型清单）：资料上的 `body_type` 存的是类型的标识，云端现在只校验格式；页面的下拉来自 `state.families`。清单定了以后在 `library._upload_fields` 里对照它。
 
@@ -74,7 +74,7 @@ node tests/material_library_browser.cjs CONFIG.json                    # BRAIN_B
 
 ## 没有做的
 
-- 解析（#34）。资料会停在“解析中”。
+- 解析是 #34（[MATERIAL_PARSING.md](MATERIAL_PARSING.md)）：上传完成后自动解析，「资料库」页每行有“解析结果”。按设备上传、查看在设备档案的「资料」标签里。
 - 在页面上下载资料、修改标注。
 - 对象存储：现在只有磁盘卷一种存储。
 - 真机：这个 issue 不涉及设备端。

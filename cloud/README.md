@@ -86,7 +86,8 @@ NEUXMIND_TEST_DATABASE_URL=postgresql+psycopg://user@127.0.0.1/nxtest python3 -m
 | `device_reports` | 设备最近一次上报 | (org, instance_id) 唯一；`last_report_at` 用来判定离线；`pending` 是设备说它还压着没发的条数；`offline_alert_id` 指向当前这次失联的告警，设备在线时为空 |
 | `robots` | 设备群 | (org, instance_id) 唯一；规范化后的 manifest、摘要、能力 ID、`simulated`；`conformance`（JSON，可空，第 04 轮：最新一致性报告摘要，旧库启动时自动加列） |
 | `audit_logs` | 审计 | 注册/登录失败/Key 创建与吊销/购买/支付/webhook 拒绝/调额/核对/改价/机器人登记等 |
-| `library_materials` | 资料库里的一份资料（issue #33） | `org_id`、显示用文件名、`kind`（document / package）、`format`、本体类型标识、厂家、型号、版本、`size`、`sha256`、`status`（parsing / parsed / failed）。同组织内（标注 + 内容）唯一、（标注 + 文件名）唯一 |
+| `library_materials` | 资料库里的一份资料（issue #33） | `org_id`、显示用文件名、`kind`（document / package）、`format`、本体类型标识、厂家、型号、版本、`size`、`sha256`、`status`（parsing / parsed / usable / failed，issue #34）、`device_id` / `device_name`（所属设备，issue #34）。同组织内（标注 + 设备 + 内容）唯一、（标注 + 设备 + 文件名）唯一 |
+| `library_material_parses` | 一份资料的解析任务和结果（issue #34，`material_parse_models.py`） | `material_id`（不设外键，资料删除后由清理删掉）、`stage`、租约、WeKnora 里副本的编号、解析出的 `extracted` 和人改过的 `values`、`not_applicable`、`warnings`、`error`、`revision`、修改人和确认人及时间 |
 | `library_uploads` / `library_upload_chunks` | 进行中的上传与已收到的分片 | 上传属于发起它的用户；`expires_at` 之后连同已收到的数据一起清除 |
 
 余额 = `SUM(ledger_entries.delta)`；可用 = 余额 − 状态为 held 或 reconciliation_required 的预留之和。
@@ -307,20 +308,20 @@ API Key 的 scopes：`gateway`、`catalog:read`、`robots`、`wallet:read`、`us
 
 ### 资料库（issue #33，`library.py`）
 
-机器人的手册、参数表、URDF 和驱动安装包存在云端，按组织隔离；每份资料标明本体类型（先存类型的标识）、厂家、型号和版本。文件存在服务器的磁盘卷上（`NEUXMIND_LIBRARY_DIR`），不进数据库。解析（issue #34）不在这里：上传完成的资料停在 `status: "parsing"`（解析中），解析器用 `library.set_parse_state` 改成 `parsed` 或 `failed`。
+机器人的手册、参数表、URDF 和驱动安装包存在云端，按组织隔离；每份资料标明本体类型（先存类型的标识）、厂家、型号和版本，以及它属于哪台设备（`device_id`、`device_name`，issue #34，可以不填）。文件存在服务器的磁盘卷上（`NEUXMIND_LIBRARY_DIR`），不进数据库。上传完成的资料是 `status: "parsing"`（解析中），由解析线程接着处理，见下一节“资料解析”。
 
 权限：`library:read`（列表、详情、取回文件）四种组织角色都有；`library:write`（上传、取消、删除）owner / admin / developer 有，operator（现场操作员）没有，并且要求邮箱已验证。两者也是 API Key 的权限范围。
 
 | 方法 路径 | 请求 → 响应 |
 |---|---|
 | GET `/library/formats` | → `{formats: [{id, label, kind, extensions[]}], extensions[], supported, limits: {document_bytes, package_bytes, org_quota_bytes, chunk_bytes}}` |
-| POST `/library/uploads` | `{filename, size, sha256, body_type, vendor, model, version, description?}` → 201 上传 `{id, status, resumed, filename, kind, format, size, sha256, chunk_bytes, chunk_count, received[], received_count, received_bytes, expires_at, …}`。同一个人对同一个文件、同一组标注已有未完成的上传时返回 **200** 和那一次上传（`resumed: true`，`received` 是云端已有的分片）：中断后续传就是再发一次这个请求，然后只补缺的分片。已经完成全部分片但卡在最后一步的上传也这样接回来（`status: "assembling"`，直接再调 complete）。拒绝：415 `unsupported_type`（带 `supported` 扩展名列表，文字里写明支持的类型）、413 `file_too_large`（`max_bytes`、`kind`）、409 `material_exists` / `version_exists`（`material_id`）、409 `library_quota_exceeded`（空间：`quota_bytes`、`used_bytes`；份数：`max_materials`）、409 `too_many_uploads`、429 `rate_limited`（被拒绝的请求也计数）、507 `storage_full` |
+| POST `/library/uploads` | `{filename, size, sha256, body_type, vendor, model, version, description?, device_id?, device_name?}` → 201 上传 `{id, status, resumed, filename, kind, format, size, sha256, chunk_bytes, chunk_count, received[], received_count, received_bytes, expires_at, …}`。同一个人对同一个文件、同一组标注已有未完成的上传时返回 **200** 和那一次上传（`resumed: true`，`received` 是云端已有的分片）：中断后续传就是再发一次这个请求，然后只补缺的分片。已经完成全部分片但卡在最后一步的上传也这样接回来（`status: "assembling"`，直接再调 complete）。拒绝：415 `unsupported_type`（带 `supported` 扩展名列表，文字里写明支持的类型）、413 `file_too_large`（`max_bytes`、`kind`）、409 `material_exists` / `version_exists`（`material_id`）、409 `library_quota_exceeded`（空间：`quota_bytes`、`used_bytes`；份数：`max_materials`）、409 `too_many_uploads`、429 `rate_limited`（被拒绝的请求也计数）、507 `storage_full` |
 | GET `/library/uploads/{id}` | → 上传（同上） |
 | PUT `/library/uploads/{id}/chunks/{n}` | 请求体是这一片的原始字节，`Content-Type: application/octet-stream`；除最后一片外每片恰好 `chunk_bytes`。可选 `X-Chunk-SHA256`（与请求体不符时 400 `chunk_digest_mismatch`）→ `{upload_id, index, sha256, received_count, chunk_count, received_bytes}`。分片可以乱序、可以重发。凭据不存在或已失效时，在读取请求体之前就回答 401。400 `invalid_chunk`、415 `octet_stream_required`、429 `chunk_attempts_exceeded`（这次上传不能再继续；再发一次开始请求会换一个新的上传）、507 `storage_full`、413（超过 `chunk_bytes`） |
 | POST `/library/uploads/{id}/complete` | → 201 资料（见下）。核对总长度、SHA-256 和内容类型后才保存。409 `chunks_missing`（`missing[]`，上传仍然开着）、503 `library_busy`（同时核对的文件数到了上限，带 `retry_after`，上传仍然开着）、409 `digest_mismatch`、415 `unsupported_type`、409 `material_exists` / `version_exists`、409 `upload_lost`；后五种会丢弃这次上传。核对要读完整个文件，2 GB 的安装包可能要几十秒到几分钟，前置代理的超时要放够 |
 | DELETE `/library/uploads/{id}` | 取消并释放已收到的数据 → `{cancelled, id}`；已经完成入库的上传回答 404 |
-| GET `/library/materials` | 过滤：`body_type`、`vendor`、`model`、`version`（后三个不分大小写）、`kind`、`format`、`status`、`sha256`、`q`（文件名、厂家、型号里的子串）；`limit`（1–200，默认 50）、`offset` → `{materials[], total, limit, offset}`，新的在前 |
-| GET `/library/materials/{id}` | → `{id, filename, kind, format, body_type, vendor, model, version, description, size, sha256, status, status_detail, created_by, created_at, updated_at}` |
+| GET `/library/materials` | 过滤：`body_type`、`vendor`、`model`、`version`（后三个不分大小写）、`kind`、`format`、`status`、`sha256`、`device_id`、`q`（文件名、厂家、型号里的子串）；`limit`（1–200，默认 50）、`offset` → `{materials[], total, limit, offset}`，新的在前 |
+| GET `/library/materials/{id}` | → `{id, filename, kind, format, body_type, vendor, model, version, description, size, sha256, status, status_detail, device_id, device_name, created_by, created_at, updated_at}` |
 | GET `/library/materials/{id}/content` | 文件内容，支持 `Range`。永远是 `application/octet-stream` + `Content-Disposition: attachment`，带 `X-Checksum-SHA256`（整个文件的摘要）、`X-Content-Type-Options: nosniff`、`Content-Security-Policy: default-src 'none'; sandbox` |
 | DELETE `/library/materials/{id}` | → `{deleted, id}`；同组织里没有别的资料引用这份内容时，文件一并删除 |
 
@@ -339,7 +340,23 @@ API Key 的 scopes：`gateway`、`catalog:read`、`robots`、`wallet:read`、`us
 
 这些判定只是**认出**文件是不是声称的类型，不是对内容的担保：压缩包只看开头，后面可以是任何东西。之后真正打开这些文件的地方（解析 #34、把驱动安装包送到设备 #31）仍然要把内容当作不可信的输入处理。
 
-“同一份资料同一版本不重复收”的含义：同一组织内，标注（本体类型、厂家、型号、版本，后三项不分大小写）相同且内容相同的，拒绝（`material_exists`，文件名不同也算同一份）；标注相同、文件名相同但内容不同的，拒绝并提示改版本号（`version_exists`）。同一内容换一个版本或型号可以再收，磁盘上只存一份。
+“同一份资料同一版本不重复收”的含义：同一组织内，标注（本体类型、厂家、型号、版本，后三项不分大小写）相同且内容相同的，拒绝（`material_exists`，文件名不同也算同一份）；标注相同、文件名相同但内容不同的，拒绝并提示改版本号（`version_exists`）。同一内容换一个版本或型号可以再收，磁盘上只存一份。资料属于一台设备（issue #34）：同一个文件给另一台设备（另一个 `device_id`）上传不算重复。
+
+### 资料解析（issue #34，`material_parse.py`）
+
+上传完成的资料由云平台的解析线程自动解析；结果给人看、可以改，人确认后才是“可用”。做法、状态、提取的项目和不可信内容的处理写在 [docs/MATERIAL_PARSING.md](../docs/MATERIAL_PARSING.md)，这里只列接口和要点。
+
+- 四个状态：`parsing`（解析中）→ `parsed`（待确认）→ `usable`（可用，人确认后）；`failed`（没解析出来，`status_detail` 写明原因或缺哪一项，人填好后确认也变 `usable`）。只有 `usable` 的资料能被后面的流程使用（#31、#30）。
+- 文档（Word、Excel、PDF、文本）交给 WeKnora（`weknora.py`）解析和存储，再经它的问答接口问模型、只限这一份文档。**文档的内容会发给 WeKnora 里配置的模型服务。** 没配 `NEUXMIND_WEKNORA_URL` / `_API_KEY` / `_KB_ID` 时文档标“没解析出来”，可以手工填写后确认。
+- URDF（关节、连杆、每个关节的位置 / 速度 / 力矩上限）和驱动安装包（名称、版本、架构、校验值；内容不解析）在子进程里用规则读（`material_extract.py`，由 `material_sandbox.py` 启动，CPU、内存、时间、输出都有上限）。
+- 权限沿用资料库：读要 `library:read`；改、确认、重新解析要 `library:write` 和已验证的邮箱。
+
+| 方法 路径 | 请求 → 响应 |
+|---|---|
+| GET `/library/materials/{id}/parse` | → `{material, kind (document / urdf / package), fields[], note, stage, status, status_detail, values, not_applicable[], missing[], warnings[], error, retrying, parser, revision, edited_by, edited_at, confirmed_by, confirmed_at, editable}` |
+| PUT `/library/materials/{id}/parse` | `{revision, values, not_applicable?}` → 同上；400 `invalid_parse_values`、409 `parse_changed`（`revision` 不是最新的）、409 `parse_running` |
+| POST `/library/materials/{id}/parse/confirm` | 同上，并确认 → `usable`；409 `parse_incomplete`（`missing[]`） |
+| POST `/library/materials/{id}/parse/retry` | → `parsing`，从头解析 |
 
 ### 运营（`/admin/*`，需要登录会话且是平台运营员）
 `GET/POST /admin/models`、`PATCH /admin/models/{id}`（改价不影响已有预留的价格快照和已结算的账本）、`POST /admin/models/{id}/status {status: published|unlisted}`、`POST /admin/credit-packs`、`POST /admin/wallets/{org_id}/adjust {delta, reason, reference?}`、`GET /admin/reservations?status=&older_than_seconds=`（默认 reconciliation_required；`status=held|settled|released|all`；每项带 `age_seconds`）、`POST /admin/reservations/{id}/resolve {action: settle|release, credits?, evidence_ref?, reason}`（只处理 reconciliation_required，held 返回 409 `reservation_in_flight`）、`POST /admin/maintenance/sweep`（立即清理，返回 `{lost_calls, sessions_closed, orphan_holds}`）、`GET /admin/overages?status=open|waived|charged|all`、`POST /admin/overages/{id}/resolve {action: waive|charge, credits?, reason}`、`GET /admin/orders?status=`、`POST /admin/orders/{id}/confirm {payment_reference, reason}`（manual 渠道）、`GET /admin/audit?action=`。
@@ -447,6 +464,12 @@ token 套餐（法币）
   - 文件所在目录不由任何 Web 服务器提供，文件没有执行位（目录 0700、文件 0440）；取回时固定为二进制下载，带 `nosniff` 和 `sandbox`，不会被当成网页或脚本。
   - 上传开始、入库、拒绝、取消、删除都写审计（`library.*`）。
   - 清理（`maintenance.sweep`，后台线程、`sweep` 命令）：过期的上传连同数据一起清除；没有上传认领的临时文件、没有记录的已存文件（进程在两步之间崩溃留下的）满 1 小时后清除，后一种每个进程最多每小时扫一次。
+- 资料解析（issue #34，细节见 docs/MATERIAL_PARSING.md）把文件、WeKnora 的答复和模型的回答都当作不可信的输入：
+  - 云端进程从不解析上传的文件：URDF 和安装包在子进程里读（`python -I -S`、只用标准库、文件作为标准输入、几乎空的环境），子进程先给自己设 CPU、内存（Linux）、写文件（0）和打开文件数的上限，父进程另有墙钟时间和输出上限，超限杀掉整个进程组；失败只影响这一份资料。
+  - 压缩包只读成员名和必要的一小段，不解压到磁盘，解出的字节、xz 的内存、ZIP 目录的大小都有上限；名字指向包外的成员和链接只报告。XML 一律拒绝 DOCTYPE（没有外部实体，也没有实体膨胀），深度和元素个数有上限。
+  - 有外部引用的 Office 文档不送 WeKnora（关系部件多得不正常的也不送）；有宏的照常送去读文字，结果里注明。zstd 压缩的 deb 由镜像里的 `dpkg-deb` 在同样受限的子进程里读。
+  - 读 WeKnora 的答复有字节和总时间上限；任何一步出了没预料到的错，只让这一份资料变成“没解析出来”。
+  - 模型的回答只当数据：按项目校验类型、长度和条数，去掉控制字符，人确认后才可用；安装步骤从不被执行。
 - TLS 由前置的反向代理或负载均衡终止。
 
 ## 配置（环境变量）
@@ -484,6 +507,11 @@ token 套餐（法币）
 | `NEUXMIND_LIBRARY_ORG_MAX_MATERIALS` | `20000` | 每个组织的资料份数上限 |
 | `NEUXMIND_LIBRARY_MAX_CONCURRENT_COMPLETIONS` | `2` | 每个进程同时核对（完成）的上传数；超过时回答 503 `library_busy` |
 | `NEUXMIND_LIBRARY_MIN_FREE_BYTES` | `1073741824` | 扣掉所有已登记上传还没写完的字节后，卷上至少还要剩这么多，否则 507 `storage_full` |
+| `NEUXMIND_WEKNORA_URL` / `NEUXMIND_WEKNORA_API_KEY` / `NEUXMIND_WEKNORA_KB_ID` | 空 | 解析文档用的 WeKnora（issue #34）：地址、API Key、知识库编号；三项都配了才把文档送去。平台 Key 另配 `NEUXMIND_WEKNORA_TENANT_ID` |
+| `NEUXMIND_WEKNORA_MAX_BYTES` | `52428800` | 超过就不送 WeKnora（与它的 `MAX_FILE_SIZE_MB` 一致） |
+| `NEUXMIND_WEKNORA_PARSE_SECONDS` / `NEUXMIND_WEKNORA_ANSWER_SECONDS` | `1800` / `180` | 等 WeKnora 解析完一份文档 / 一个回答的最长时间 |
+| `NEUXMIND_LIBRARY_PARSE_INTERVAL_SECONDS` / `NEUXMIND_LIBRARY_PARSE_THREADS` | `5` / `2` | 解析线程多久找一次活、几个线程（0 不启动） |
+| `NEUXMIND_LIBRARY_PARSE_WALL_SECONDS` / `_CPU_SECONDS` / `_MEMORY_BYTES` / `_UNPACKED_BYTES` | `120` / `60` / `1073741824` / `8589934592` | 规则解析子进程的墙钟时间、CPU 时间、地址空间（Linux）、解出字节的上限 |
 | `NEUXMIND_SESSION_TTL_SECONDS` | `43200` | |
 | `NEUXMIND_LOGIN_MAX_FAILURES` / `NEUXMIND_LOGIN_WINDOW_SECONDS` | `8` / `60` | 前者现在是每（邮箱, IP）组合的上限 |
 | `NEUXMIND_WEBHOOK_SECRET_<PROVIDER>` | 空 | 例如 `NEUXMIND_WEBHOOK_SECRET_SANDBOX`；sandbox 没有密钥时不可用 |
@@ -531,4 +559,5 @@ docker compose -f cloud/compose.yaml down -v                # 停止并删除数
 6. 授权没有吊销接口，也没有订阅到期机制；退款流程没有实现。
 7. 没有修改邮箱；SMTP 发送器只用 mock 测过；验证、认领、重设令牌都通过 API 提交（没有网页落地页）；被认领停用的旧账户行和它的个人组织保留在库里（不能再登录），没有清理。
 8. API Key 的 `last_used_at` 每次请求都写库，高 QPS 时需要改成批量更新。
-11. 资料库（issue #33）：只做了存文件和上传，解析是 issue #34，所以资料会一直停在“解析中”；存储只有磁盘卷一种实现（`library_store.LibraryStore`，换对象存储是再写一个同样接口的类）；没有病毒扫描；能力库还没有，权限先用组织角色；本体类型只校验标识的格式，没有对照本体类型清单（issue #32）；没有修改标注的接口，标错了要删除后重传；别人开的上传只有本人能取消（组织管理员不能代为取消，最迟 7 天后过期）；配额按资料条数计字节，同一内容标成两个版本算两次；取回文件没有频率限制；下载时文件恰好被删除会得到 500；`.zip` 和压缩的 tar 只看开头，不检查完整性。
+11. 资料库（issue #33）：存储只有磁盘卷一种实现（`library_store.LibraryStore`，换对象存储是再写一个同样接口的类）；没有病毒扫描；能力库还没有，权限先用组织角色；本体类型只校验标识的格式，没有对照本体类型清单（issue #32）；没有修改标注的接口，标错了要删除后重传；别人开的上传只有本人能取消（组织管理员不能代为取消，最迟 7 天后过期）；配额按资料条数计字节，同一内容标成两个版本算两次；取回文件没有频率限制；下载时文件恰好被删除会得到 500；`.zip` 和压缩的 tar 只看开头，不检查完整性。
+12. 资料解析（issue #34）：只用 WeKnora 的替身测过，没有在真的 WeKnora 上跑通；文档的内容会发给 WeKnora 里配置的模型服务；旧格式 Office 文档（`.doc`、`.xls`）按字段代码和函数名查外部引用，不认 Excel 97–2003 的外部工作簿链接；没有 `dpkg-deb` 的环境里读不了 zstd 压缩的 deb（名称、版本、架构由人填）；资料不能改挂到另一台设备；修复助手按需检索文档全文是 issue #30 的事。

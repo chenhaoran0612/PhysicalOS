@@ -41,6 +41,10 @@ LIST_FILTERS = ('body_type', 'vendor', 'model', 'version', 'kind', 'format', 'st
 START_FIELDS = ('filename', 'size', 'sha256', 'body_type', 'vendor', 'model', 'version', 'description')
 MATERIAL_KEYS = ('id', 'filename', 'kind', 'format', 'body_type', 'vendor', 'model', 'version', 'description',
                  'size', 'sha256', 'status', 'status_detail', 'created_at', 'updated_at')
+# Issue #34: a material belongs to one device (a robot of this app), named when it is uploaded.
+LIST_FILTERS += ('device_id',)
+START_FIELDS += ('device_id', 'device_name')
+MATERIAL_KEYS += ('device_id', 'device_name')
 UPLOAD_KEYS = ('id', 'status', 'resumed', 'filename', 'kind', 'format', 'size', 'sha256', 'chunk_bytes',
                'chunk_count', 'received_count', 'received_bytes', 'expires_at')
 CHUNK_KEYS = ('upload_id', 'index', 'received_count', 'chunk_count', 'received_bytes')

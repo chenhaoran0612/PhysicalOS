@@ -14,7 +14,9 @@ from .models import new_id, now
 # What happens to a material after it is stored. Parsing itself is issue #34;
 # a finished upload starts in PARSING and waits there.
 PARSING, PARSED, PARSE_FAILED = "parsing", "parsed", "failed"
-PARSE_STATES = (PARSING, PARSED, PARSE_FAILED)
+# Issue #34: a parsed result a person confirmed (material_parse_models explains all four).
+USABLE = "usable"
+PARSE_STATES = (PARSING, PARSED, PARSE_FAILED, USABLE)
 
 UPLOAD_OPEN, UPLOAD_ASSEMBLING = "open", "assembling"
 
@@ -47,6 +49,9 @@ class Material(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     size: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
+    # Issue #34: the one device (a robot of the desktop app) the material belongs to; "" = none.
+    device_id: Mapped[str] = mapped_column(String(64), default="")
+    device_name: Mapped[str] = mapped_column(String(200), default="")
     status: Mapped[str] = mapped_column(String(20), default=PARSING, index=True)
     status_detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[float] = mapped_column(Float, default=now)
@@ -73,6 +78,8 @@ class MaterialUpload(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     size: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(String(64))
+    device_id: Mapped[str] = mapped_column(String(64), default="")        # issue #34, as on Material
+    device_name: Mapped[str] = mapped_column(String(200), default="")
     chunk_bytes: Mapped[int] = mapped_column(Integer)
     chunk_count: Mapped[int] = mapped_column(Integer)
     # Every chunk request counts, repeated ones too (bounded, see library.MAX_ATTEMPTS).

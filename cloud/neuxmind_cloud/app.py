@@ -164,6 +164,11 @@ def create_app(settings: Settings | None = None, *, provider_factory: Callable[[
     # Issue #33: the material library (/library/*), registered apart from the list above.
     from .routes import library as library_routes
     app.include_router(library_routes.router, prefix=API_PREFIX)
+    # Issue #34: parsing results (/library/materials/{id}/parse) and the worker that parses new materials.
+    from . import material_parse
+    from .routes import material_parse as material_parse_routes
+    app.include_router(material_parse_routes.router, prefix=API_PREFIX)
+    app.state.parse_worker = material_parse.start_worker(db, settings)
 
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes,
                        session_max_bytes=settings.session_max_body_bytes)

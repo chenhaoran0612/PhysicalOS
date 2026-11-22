@@ -106,6 +106,11 @@ const UX_CODES = {
   too_many_uploads: ['state', '本组织同时进行的上传已经达到上限。', '等正在进行的上传完成，或取消不再需要的上传'],
   storage_full: ['service', '云平台的存储空间不足，暂时不能接收文件。', '已经送到的部分保留着，稍后点“继续”', '一直这样请联系平台运营人员'],
   library_busy: ['state', '云平台正在核对其他文件，暂时没有轮到这一个。', '稍等片刻后点“继续”'],
+  // ---- parsing results of the library (issue #34)
+  parse_running: ['state', '这份资料还在解析，解析完才能修改或确认。', '稍等片刻后刷新'],
+  parse_changed: ['state', '这份解析结果刚被修改过（可能是别人，也可能是重新解析），你的修改没有保存。', '刷新后在最新的结果上再改'],
+  parse_incomplete: ['input', '还有必填的项目没有填写，不能确认。', '填写标出的项目，或把不适用的项目标为“不适用”'],
+  invalid_parse_values: ['input', '填写的内容不符合要求，没有保存。', '展开“技术细节”查看是哪一项'],
   invalid_chunk: ['input', '发送的这一片数据和云平台预期的不一致。', '在“资料库”页点“继续”，或取消后重新上传'],
   chunk_digest_mismatch: ['input', '有一片数据在传输途中损坏了，云平台没有收下。', '点“继续”重新发送'],
   chunk_attempts_exceeded: ['state', '这次上传重发数据的次数太多，云平台不再接收。', '取消这次上传后重新上传'],
