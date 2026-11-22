@@ -26,7 +26,7 @@
 - `integration`（工作区 `PhysicalOS-integration/`）的代码是 fefdbd2（0.20.1），之后只有文档提交，已推送到 `origin/integration`；main 仍是 df3a108（0.19.0），合并到 main 要用户确认。
 - 部署：`/Applications/NeuxMind Robot OS.app` 是 0.20.1（build 31），2026-11-21 07:05 替换并启动。部署前的数据目录备份在 `~/Library/Application Support/NeuxMind Robot OS-backup-20261121-070532`。
 - 安装包：`PhysicalOS-integration/dist/NeuxMind-Robot-OS-0.20.1-arm64.dmg`（SHA-256 `e79a1936708cad4a0c7a4bd02ca433f0da7c15d4756988f65cf31fc9a5b05763`）和同名 `.pkg`（`b939a48cd8a12e195a86c750738a0877c675b84fc14de0b0cc41d270addfca66`）；0.20.0 及更早的也在 `PhysicalOS-integration/dist/`。
-- 暂存合并：`refs/integration/staging/next`（合并会话的临时工作区）= `integration` + #31（e574012）+ README 加 PACKAGE_DELIVERY.md 一行（5ff4edf）+ #17（045b4b3）+ #17 的 ROADMAP、README 和文档索引（1d8a14b）+ #16（0a1916a）+ #16 的 README、ROADMAP、安装说明（fda2093）+ #28（241f58b）+ #28 的 README、ROADMAP（3679321）+ #31 的后续提交（e8d76ec）。在上面通过的：#31 和删除机器人、传文件的测试 190 项；#17、#31、心跳、SSH 连接与跳板机的测试 419 项，`runtime_link_logic` 115 项、`robot_remove_logic` 62 项。合进 #16、#28 之后：spec 26 项；#16、#28、#17、#31、心跳、SSH 连接与跳板机、硬件扫描与修复、设备档案、删除机器人的测试 747 项；15 个前端逻辑脚本；全部页面和测试脚本的语法检查。#31 的后续合进之后又跑了 #31、资料库、删除机器人的测试 153 项（1 项按设计跳过）。完整套件、Linux 上的 spec 和 runtime、浏览器验收等全部交付后统一跑（#28 改了 `spec/`）。交付一个合并一个，全部交付后再并入 `integration`，然后回归、打包、部署。
+- 暂存合并：`refs/integration/staging/next`（合并会话的临时工作区）= `integration` + #31（e574012）+ README 加 PACKAGE_DELIVERY.md 一行（5ff4edf）+ #17（045b4b3）+ #17 的 ROADMAP、README 和文档索引（1d8a14b）+ #16（0a1916a）+ #16 的 README、ROADMAP、安装说明（fda2093）+ #28（241f58b）+ #28 的 README、ROADMAP（3679321）+ #31 的后续提交（e8d76ec）+ #19（158fd49）+ #19 的 README、ROADMAP、文档索引、安装说明（127bdec）。在上面通过的：#31 和删除机器人、传文件的测试 190 项；#17、#31、心跳、SSH 连接与跳板机的测试 419 项，`runtime_link_logic` 115 项、`robot_remove_logic` 62 项。合进 #16、#28 之后：spec 26 项；#16、#28、#17、#31、心跳、SSH 连接与跳板机、硬件扫描与修复、设备档案、删除机器人的测试 747 项；15 个前端逻辑脚本；全部页面和测试脚本的语法检查。#31 的后续合进之后又跑了 #31、资料库、删除机器人的测试 153 项（1 项按设计跳过）。#19 合进之后：#19、#17、#16、传文件、#31、心跳、#28、删除机器人、修改 SSH 连接的测试 554 项（跳过的 7 项只在 Linux 上跑真实安装脚本）；16 个前端逻辑脚本；100 个页面和测试脚本的语法检查；打包内容检查（含新的安装包）。完整套件、Linux 上的 spec 和 runtime、浏览器验收等全部交付后统一跑（#28 改了 `spec/`）。交付一个合并一个，全部交付后再并入 `integration`，然后回归、打包、部署。
 - 真机：运行时仍是 0.4.0（`~/neuxmind`，回环 8790，本机手工隧道 18790）。#22、#25、#26 改了运行时，更新真机要用户同意，且脚本和运行时要一起换。
 - 新的 issue 分支请基于 `integration`（0.20.1 的代码是 fefdbd2，之后只加了文档）。浏览器验收经 `tests/gate_helper.cjs` 登录，测试服务端带 `NEUXMIND_MAIL_DEV_ECHO=1`；添加设备的表单要先选本体类型（#32）；界面改动也要在 WebKit 上跑一遍。提交钩子的密钥扫描会把 `password: '<12 个字以上>'` 当成写死的密码，提示文字里的字段名请加引号。
 
@@ -38,20 +38,21 @@
 |---|---|
 | 已在 main（0.19.0），GitHub 上仍开着 | #11、#12、#13 |
 | 在 0.20.1 里（已进 `integration`），等用户验证 | #15、#18（有一处修复在做，见待办 5）、#22、#24、#25、#26、#27、#32、#33 |
-| 已交付，在暂存合并里 | #16、#17、#28、#31 |
-| 正在做 | #14、#19、#21、#29、#30、#34（#34 已提交，还没交付） |
-| 等依赖 | #20（等 #19） |
+| 已交付，在暂存合并里 | #16、#17、#19、#28、#31 |
+| 正在做 | #14、#20、#21、#29、#30、#34（#34 已提交，还没交付） |
+| 等依赖 | 没有了 |
 
 同日关闭的两个：#23（设备接口表）关闭为不做，它的工作区和分支已删除，研发计划会话已把它从 #21 的依赖里去掉（#21 正文现在只依赖 #22，已在 0.20.1 里）；#35（移除设备时处理设备上的内容）关闭为已完成。
 
-#16、#17、#28、#31、#34 由研发计划会话 2026-11-21 启动，基于 `integration` @ 8736aa1（0.20.1），有的已换到更新的 `integration` 上；#14 基于 8dd0705，改动已写完，等用户在那个会话里同意提交；#21 基于 eaa79a7。#19、#29 由研发计划会话 2026-11-22 启动，不基于 `integration`，而是基于各自依赖的已交付分支：#19 基于 `feat/runtime-forward` @ 622d097（#17），#29 基于 `feat/motion-driver-check` @ 72870ca（#28）；#17、#28 以后的修复作为同一分支上的新提交，需要时合进来，不变基。#30 同日启动，基于 #34 的 `feat/material-parsing` @ fa16566（#34 已提交，它的会话还在问用户是否交付），合并要排在 #34 后面。分支名以各会话交付时的说明为准。
+#16、#17、#28、#31、#34 由研发计划会话 2026-11-21 启动，基于 `integration` @ 8736aa1（0.20.1），有的已换到更新的 `integration` 上；#14 基于 8dd0705，改动已写完，等用户在那个会话里同意提交；#21 基于 eaa79a7。#19、#29 由研发计划会话 2026-11-22 启动，不基于 `integration`，而是基于各自依赖的已交付分支：#19 基于 `feat/runtime-forward` @ 622d097（#17），#29 基于 `feat/motion-driver-check` @ 72870ca（#28）；#17、#28 以后的修复作为同一分支上的新提交，需要时合进来，不变基。#30 同日启动，基于 #34 的 `feat/material-parsing` @ fa16566（#34 已提交，它的会话还在问用户是否交付），合并要排在 #34 后面。#20 同日启动，基于 #19 的 `feat/console-install` @ e55b56b，合并要排在 #19 后面；它先问用户管理层按普通用户还是 root 运行。分支名以各会话交付时的说明为准。
 
 | issue | 内容 | 分支 | 工作区 |
 |---|---|---|---|
 | #14 | 配置连接页面修改 | `fix/connection-dialog-layout` | `PhysicalOS-connection-layout/` |
 | #16 | 验证连接（已交付） | `feat/verify-connection` @ b768a1c | `PhysicalOS-verify-connection/` |
 | #17 | 平台转发管理层服务（已交付） | `feat/runtime-forward` @ 622d097 | `PhysicalOS-runtime-forward/` |
-| #19 | 在控制台里安装管理层（基于 #17） | `feat/console-install` | `PhysicalOS-console-install/` |
+| #19 | 在控制台里安装管理层（基于 #17，已交付） | `feat/console-install` @ e55b56b | `PhysicalOS-console-install/` |
+| #20 | 开机自启（基于 #19） | `feat/runtime-autostart` | `PhysicalOS-autostart/` |
 | #21 | 接真实的 ROS 2 Humble | `feat/ros2-humble-adapter` | `PhysicalOS-ros2-humble/` |
 | #28 | 运控驱动检查（已交付） | `feat/motion-driver-check` @ 72870ca | `PhysicalOS-driver-check/` |
 | #29 | 放开修复助手装运控驱动的规则（基于 #28） | `feat/repair-driver-rules` | `PhysicalOS-repair-driver-rules/` |
@@ -78,5 +79,6 @@
 7. #17：弱网（容器，1 Mbit/s、单向 300 ms）下，30% 丢包时接入和小请求能完成，200 KB 的单个请求约 5 分钟后按“结果未知”结束；60% 时请求都报“没有发出”，恢复后约 30 秒自己恢复。令牌由安装步骤生成并直接接入要等 #19；管理层自己的心跳还没有。#17 报告的完整桌面套件里有 1 项在高负载下失败（`test_ux01_sim` 重启后恢复技能），单独跑都通过。
 8. #16：按钮叫“验证 SSH 连接”（需求原文是“验证连接”，为了和 HTTP 的“连接检查”分开；改回是一行）；验证进行中删除机器人不会被拒绝（验证照常结束，不记录、不通知心跳）。只在本机 SSH 协议替身上验证过。
 9. #28：内置修复 Skill 升到 1.2.0（升级检查要看内置 Skill 的更新）；只看话题在不在清单里、不看有没有发布方和订阅方，驱动没运行时也可能把接口算作“在”，#28 的会话向用户提过另开一个 issue，用户还没有表态；修复助手这一轮只排查、不装驱动（等 #29）。
-10. 已交付的仍只在暂存合并里，`integration` 的代码不动，等全部处理完再一起并入。#19、#29、#30 已在依赖的分支上开工（见上），不用先并入 `integration`。#20（等 #19）还没开工。
-11. 以前的待办仍在：#12 留下的问题（机器人连不上时是否也能不经登录测试直接保存）；内置测试账号默认开启待定；`fix/preexisting-test-failures` 的 5 条低级别意见在那个会话里等确认；真实 TokenFans、SMTP、真机上的完整流程还没有验证。
+10. 已交付的仍只在暂存合并里，`integration` 的代码不动，等全部处理完再一起并入。#19（已交付）、#20、#29、#30 都在依赖的分支上开工（见上），不用先并入 `integration`。
+11. #19：打包脚本有改动：`scripts/build_macos.py` 先运行新的 `scripts/build_device_package.py`（离线 `pip wheel`，要打包环境里的 setuptools，已有），把 `.build/device-package`（安装脚本和两个 wheel，约 370 KB）作为 `device-package/` 打进应用，`--check` 也核对它，在暂存合并上已通过。打包时要定的：安装包里的运行时版本仍是 0.4.0、spec 是 1.1.0，而 0.19.0 以后运行时改过 5 次（#22、#25、#26），#28 改过 spec，#21 还要改运行时；版本号不升，控制台送出的包和真机上手工装的旧 0.4.0 版本号相同、内容不同（安装包编号里有内容的校验值，控制台自己分得清）。升级检查：没有新的存储种类，机器人记录多一个可选字段 `runtime_install`。没做的：真机上安装（真机上已有手工装的管理层，控制台会停在“怎么处理”那一步）、R1-03 的“启动自检”状态（R4 的状态机还没有）、原地升级。#19 给 #18 的两点（`resumable` 在第一个字节确认前总是 False；Docker Desktop 绑定挂载上文件的 inode 会变，长传输报 `source_changed`）已转给正在改上传通道的 #18 会话。#17 的 `test_runtime_link_review` 里有一项靠 0.6 秒和 1.5 秒比快慢，高负载下在 #17 自己的分支上也会失败。
+12. 以前的待办仍在：#12 留下的问题（机器人连不上时是否也能不经登录测试直接保存）；内置测试账号默认开启待定；`fix/preexisting-test-failures` 的 5 条低级别意见在那个会话里等确认；真实 TokenFans、SMTP、真机上的完整流程还没有验证。
