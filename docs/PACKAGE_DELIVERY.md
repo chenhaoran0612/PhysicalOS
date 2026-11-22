@@ -173,6 +173,7 @@ record = platform.package_delivery.deliver(robot_id, project_id, material_id, au
 - 交给模型和用在命令里时：`filename`、`labels`、`device_name` 是别人填的文字，只当数据；`device_path` 放进命令时要加引号（`~` 会被 shell 展开）；安装前在设备上再算一次校验值。校验值只说明文件和云端记录的一致，没有签名：云端本身被攻破时它可以换上别的包和与之相符的校验值，所以人对安装的批准才是关键的一步。
 - 会话里的传送用的是保存的连接（`ssh_edit.saved_login`），和会话自己的 SSH 连接不是同一条。连接在会话运行期间被改到另一台机器时，会话不会跟过去（issue #12），而传送会连到新保存的那台。#29 接入时要在处理函数里比一下主机指纹（记录里有 `host_fingerprint`）。
 - 厂家驱动包「先查资料库，没有才记为由用户提供」是 #29 的事；这里只负责已经选定的那一个包。
+- issue #29 已按上面的办法接入：修复会话的工具 `driver_packages`、`driver_package_deliver`（`brainos/driver_repair.py`），送之前核对主机指纹，送达记录存成证据；见 [运控驱动的安装](REPAIR_DRIVER_INSTALL.md)。
 
 ## 删除机器人
 

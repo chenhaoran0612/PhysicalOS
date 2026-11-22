@@ -422,6 +422,7 @@ class Engineering:
             s=self.store.get('agent_sessions',sid);approval=s.get('pending_approval');handle=self.live.get(sid)
             if not approval or not handle or approval['id']!=p.get('approval_id'):raise ValueError('审批已失效，请刷新')
             if p.get('decision') not in ('accept','decline'):raise ValueError('审批决定无效')
+            if s.get('mode')=='repair':self.platform.hardware.driver.approval_check(s,approval,p['decision'])   # issue #29: the driver's start needs someone on site
             if approval['method']=='mcpServer/elicitation/request':
                 response={'action':'accept' if p['decision']=='accept' else 'decline','content':{} if p['decision']=='accept' else None}
             elif 'permissions' in approval['method']:
@@ -742,11 +743,12 @@ class Engineering:
                 if 'id' in event:
                     if method=='item/tool/call':
                         name,args=p.get('tool'),p.get('arguments')
-                        if name in ('device_exec','device_request_scope','device_fix') and connection:
+                        if name in ('device_exec','device_request_scope','device_fix','driver_package_deliver') and connection:
                             try:
                                 if not isinstance(args,dict):raise ValueError('工具参数必须为对象')
                                 if name=='device_exec':request=hardware_init.exec_request(s,args)
                                 elif name=='device_fix':request=self.platform.hardware.fix_request(s,args,connection)
+                                elif name=='driver_package_deliver':request=self.platform.hardware.driver.package_request(s,args,connection)   # issue #29
                                 else:request={'path':device_access.validate_roots([args.get('path')])[0],'purpose':required_text(args.get('purpose'),'读取用途',1000)}
                                 pending_tools[event['id']]=(name,request)
                                 self._queue_request(sid,'approval',{'id':event['id'],'method':name+'/requestApproval',

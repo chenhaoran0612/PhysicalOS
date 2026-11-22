@@ -373,7 +373,7 @@ class RepairRuleTests(Base):
             self.hw.tool(self.s['id'], self.s, 'device_fix', {'command': 'true'}, None)
         self.assertEqual(hardware_init.session_tools({'mode': 'discovery'}, [{'name': 'save_inventory'}]), [{'name': 'save_inventory'}])
         names = [t['name'] for t in hardware_init.session_tools(self.s, [{'name': 'device_probe'}, {'name': 'save_inventory'}])]
-        self.assertEqual(names, ['device_probe', 'hardware_rescan', 'device_fix', 'save_repair_report'])
+        self.assertEqual(names, ['device_probe', 'hardware_rescan', 'device_fix', 'save_repair_report', 'driver_packages', 'driver_package_deliver'])
         self.assertIsNone(hardware_init.session_extensions({'mode': 'discovery'}))
         skill = hardware_init.session_extensions(self.s)['skills'][0]
         self.assertTrue(skill['builtin'])

@@ -876,14 +876,14 @@ class SkillTests(unittest.TestCase):
         for said in ('needs_user', 'hardware_rescan', 'expected'):
             self.assertIn(said, section)
         self.assertRegex(section, '不要.*(启动|安装)')
-        self.assertEqual(hardware_init.skill_info()['version'], '1.2.0', 'the Skill text changed: so does its version')
+        self.assertEqual(hardware_init.skill_info()['version'], '1.3.0', 'the Skill text changed: so does its version')
 
-    def test_the_rules_of_the_repair_are_the_ones_of_before(self):
-        # Installing and starting motion drivers is issue #29: nothing is loosened here.
+    def test_the_rules_of_the_repair_still_refuse_motion(self):
+        # Issue #29 allows installing and starting the motion driver (tests/test_repair_driver_rules.py); motion stays refused.
         text = hardware_init.REPAIR_INSTRUCTIONS
         self.assertIn('发布运动或控制指令', text)
         skill = hardware_init.load_skill()['SKILL.md']
-        self.assertIn('不启动会驱动电机的程序', skill)
+        self.assertIn('不发布运动或控制指令', skill)
 
 
 class TemplateTests(unittest.TestCase):

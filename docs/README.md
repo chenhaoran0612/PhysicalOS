@@ -31,6 +31,7 @@
 | [HARDWARE_INIT.md](HARDWARE_INIT.md) | 连接后的硬件扫描、内置 Skill `hardware-init`、修复命令的审批与限制 |
 | [DEVICE_PROFILE.md](DEVICE_PROFILE.md) | 设备档案：硬件、系统、ROS 2（发行版、节点、话题、动作、服务）和资源占用合成的一份记录，ROS 2 的只读命令 |
 | [MOTION_DRIVER_CHECK.md](MOTION_DRIVER_CHECK.md) | 运控驱动检查：按本体类型核对应有的 ROS 2 话题和动作，缺少时作为一种硬件问题交给修复助手，修复后重新读取 ROS 2 核对 |
+| [REPAIR_DRIVER_INSTALL.md](REPAIR_DRIVER_INSTALL.md) | 修复助手安装并启动运控驱动：资料库里的安装包、产品加载的 ROS 2 环境、启动前的现场确认、仍然拒绝的运动和解锁命令 |
 | [JOB_RECIPES.md](JOB_RECIPES.md) | 训练与仿真任务的可视化配方协议 |
 | [DEVICE_TRANSFER.md](DEVICE_TRANSFER.md) | 向设备传文件的通道：分块、压缩、续传、设备端 SHA-256 核对；允许写到哪里；失败原因一览 |
 | [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md) | 资料库：页面、桌面端后台、云平台三段怎么配合，分片上传与续传 |

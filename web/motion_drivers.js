@@ -19,8 +19,8 @@ const MD_KIND = {topic: '话题', action: '动作'};
 const MD_ACTIONS = ['engine-drivers', 'engine-drivers-recheck', 'engine-drivers-repair'];
 const MD_FOUND_SHOWN = 3;
 const MD_SCOPE = '只核对接口在不在 ROS 2 的清单里：按消息类型认，名称可以不同；不核对是谁在发布或订阅。全程只读，不发布运动指令。';
-// What handing it over leads to today. Installing and starting motion drivers is not allowed to the assistant yet.
-const MD_ASSISTANT = '修复助手目前不会自己安装或启动运控驱动（驱动会带起底盘或电机）：它会查清设备上缺什么、为什么没有运行，并写明需要你提供或在现场处理的事。';
+// What handing it over leads to (issue #29: the assistant installs and starts the driver; the start needs someone on site).
+const MD_ASSISTANT = '修复助手会先查资料库里有没有这台本体的驱动安装包，有就送到设备装上，再启动运控驱动；每一步照你选的方式批准，启动驱动那一步一定要有人在现场确认（驱动启动后本体可能上电或站立）。资料库里没有安装包时，它会写明需要你提供的东西。全程不发运动指令。';
 // The open dialog: {robotId, busy, failure}. null when none is open.
 let mdView = null;
 let mdBaseAction = null;
@@ -208,9 +208,9 @@ function mdProfileBody(html, ui) {
 
 // ---------------------------------------------------------------- the hardware page (issue #2)
 
-// In the list of problems these are not ticked in advance and not called "可远程处理": the assistant only
-// diagnoses them this round. They can still be ticked and handed over.
-const MD_ROW_TAG = '助手只排查，安装要人处理';
+// In the list of problems these are not ticked in advance and not called "可远程处理": starting a motion driver
+// needs someone on site (issue #29), so handing it over is a choice of its own. They can be ticked and handed over.
+const MD_ROW_TAG = '助手可安装，启动时要人在现场';
 function mdIssueRow(html, issue) {
   if (!String(issue.id).startsWith(MD_PREFIX)) return html;
   const value = `value="${h(issue.id)}"`;
