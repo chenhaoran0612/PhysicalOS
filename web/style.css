@@ -255,6 +255,18 @@ dialog.wide{width:min(920px,calc(100% - 32px))}
 #ssh-status h3{font-size:14px;margin-bottom:-4px}
 #ssh-status .contract-line{display:flex;justify-content:space-between;align-items:center;gap:12px}
 #ssh-status .contract-line+.contract-line{margin-top:8px}
+/* Issue #14: the SSH connection form ("通过 SSH 接入本体" and "配置连接"). Every block keeps its distance from
+   the one above it: notes and option boxes follow the rhythm of the fields, and the "高级" fold is not pulled
+   onto the block before it (.page-purpose is made for the top of a page, where it follows the page head). */
+form[data-form="engine-ssh"]{--ssh-form-gap:18px;--ssh-form-gap-tight:10px}
+form[data-form="engine-ssh"] .notice,form[data-form="engine-ssh"] .hardware-confirm{margin-bottom:var(--ssh-form-gap)}
+form[data-form="engine-ssh"] details.page-purpose{margin:0 0 var(--ssh-form-gap)}
+form[data-form="engine-ssh"] details.page-purpose[open]>summary{margin-bottom:var(--ssh-form-gap-tight)}
+form[data-form="engine-ssh"] details.page-purpose>.field:last-child{margin-bottom:5px}
+#ssh-jump>.inline-note{margin:0 0 var(--ssh-form-gap-tight)}
+#ssh-jump>p:not(.inline-note){margin:0 0 var(--ssh-form-gap)}
+.ssh-hop>label.inline-note{display:flex;align-items:flex-start;gap:8px;margin:0}
+.ssh-hop>label.inline-note input{flex-shrink:0;margin:3px 0 0}
 
 /* Issue #4: TokenFans models & compute panel (平台模型与算力). */
 .tkf-panel .panel-body{display:flex;flex-direction:column;gap:4px}
