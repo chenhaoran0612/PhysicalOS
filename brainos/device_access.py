@@ -183,6 +183,12 @@ def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False):
         refused=(isinstance(exc,paramiko.AuthenticationException) or 'authentication' in str(exc).lower()) and not _timed_out(exc)
         if refused:reason='auth'
         elif _timed_out(exc) or time.monotonic()-started>=HANDSHAKE_TIMEOUT:reason='timeout'
+        # Found while checking issue #24 against a real robot: paramiko ends the key exchange at the limit it
+        # was given for dialling, with an error that does not say so. For the hop dialled directly that is
+        # TCP_TIMEOUT, less than the handshake limit above: a call that used it up was late, not misaddressed.
+        # As above, the time is that of the whole call: any failure but a refusal that comes this late reads
+        # as a timeout, and the message for a timeout allows for a wrong address too.
+        elif time.monotonic()-started>=kwargs['timeout']:reason='timeout'
         else:reason='unreachable'
     client.close();raise ConnectError(hop,reason,via_jump) from None
 
