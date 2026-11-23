@@ -108,7 +108,7 @@ includes(body, '缺少', 'missing rows say so');
 includes(body, '停止没有自己的 ROS 2 接口', 'what cannot be checked says why');
 includes(body, '核对不了', 'and is marked as not checked, not as missing');
 includes(body, 'data-action="engine-drivers-repair" data-id="robot-1" >交给修复助手', 'the problems can be handed to the assistant');
-includes(body, '修复助手目前不会自己安装或启动运控驱动', 'what handing it over leads to is said before the click');
+includes(body, '启动驱动那一步一定要有人在现场确认', 'what handing it over leads to is said before the click (issue #29)');
 includes(body, '重新核对', 'and checked again');
 includes(body, '不发布运动指令', 'the dialog says the check is read-only');
 includes(body, 'ROS 2 清单读取于', 'and when the listing was read');
@@ -171,7 +171,7 @@ const scanIssue = (id, changes = {}) => ({id, severity: 'error', category: 'seri
                                          device_id: null, fixable: 'auto', source: 'scan', ...changes});
 let hwRow = page.issueRow(scanIssue('motion-driver:base.velocity', {category: 'motion', source: 'ros2_profile'}), 'robot-1', false);
 excludes(hwRow, ' checked', 'a motion driver problem is not ticked in advance');
-includes(hwRow, '助手只排查，安装要人处理', 'and says what the assistant does with it');
+includes(hwRow, '助手可安装，启动时要人在现场', 'and says what the assistant does with it (issue #29)');
 excludes(hwRow, '可远程处理', 'instead of "可远程处理"');
 excludes(hwRow, 'disabled', 'it can still be ticked');
 hwRow = page.issueRow(scanIssue('serial-perm:/dev/ttyUSB0'), 'robot-1', false);

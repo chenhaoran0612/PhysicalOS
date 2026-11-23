@@ -139,7 +139,7 @@ let failed = async () => {};
   await dialog.locator('[data-action="hardware-scan"]').first().click();
   await dialog.locator('.hw-issue-list').waitFor({timeout: 60000});
   const armProblem = dialog.locator('label.hw-issue', {hasText: '缺少运控接口：机械臂关节位置（arm.joint_position）'});
-  await expectText(armProblem, ['助手只排查，安装要人处理', 'control_msgs/action/FollowJointTrajectory']);
+  await expectText(armProblem, ['助手可安装，启动时要人在现场', 'control_msgs/action/FollowJointTrajectory']);
   check(!(await armProblem.locator('[name=hw-issue]').isChecked()), 'the motion driver problem is ticked in advance');
   check(!(await armProblem.locator('[name=hw-issue]').isDisabled()), 'the motion driver problem cannot be ticked');
   check(await dialog.locator('[name=hw-issue][value="serial-perm:/dev/ttyUSB0"]').isChecked(), 'the hardware problems are no longer ticked');

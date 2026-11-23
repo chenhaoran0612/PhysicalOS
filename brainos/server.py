@@ -138,6 +138,8 @@ def make_handler(application):
             extra=extra or {'/device_profile.js':('device_profile.js','text/javascript; charset=utf-8'),'/device_profile.css':('device_profile.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #28: the motion driver check (the interfaces a body type should have, against the profile), likewise.
             extra=extra or {'/motion_drivers.js':('motion_drivers.js','text/javascript; charset=utf-8'),'/motion_drivers.css':('motion_drivers.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #29: approvals of a repair that installs and starts the motion driver, likewise.
+            extra=extra or {'/repair_driver.js':('repair_driver.js','text/javascript; charset=utf-8'),'/repair_driver.css':('repair_driver.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #24: the connection state and the last heartbeat on the cards and the status page, likewise.
             extra=extra or {'/heartbeat.js':('heartbeat.js','text/javascript; charset=utf-8'),'/heartbeat.css':('heartbeat.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #16: 「验证连接」 of a robot's saved SSH connection, likewise.
@@ -269,6 +271,8 @@ def make_handler(application):
                         'engineering/profile':service.device_profile.saved,'engineering/profile/read':service.device_profile.read,
                         # Issue #13: mark a problem as handled on site; switch a repair between asking and running unasked
                         'engineering/hardware/mark':service.hardware.policy.mark,'engineering/hardware/auto_approve':service.hardware.policy.set_auto,
+                        # Issue #29: a person on site for the motion driver's start waiting for approval
+                        'engineering/hardware/onsite':service.hardware.driver.confirm_onsite,
                         # Issue #6: investigation states, full re-investigation, fix chats from the report
                         'engineering/investigation/restart':service.investigation.restart,
                         'engineering/investigation/fix':service.investigation.start_fix,

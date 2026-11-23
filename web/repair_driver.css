@@ -1,0 +1,21 @@
+/* Issue #29 — approvals of a repair that installs and starts a motion driver. Uses the shared tokens from style.css. */
+:root{--rd-start:#a2462f;--rd-start-soft:#fcf1ec;--rd-start-line:#efcfc2;--rd-env-soft:#f3f6f8;--rd-env-line:#d8e1e8}
+
+/* The product's own lines, under the command they run before. */
+.rd-env{display:grid;gap:4px;margin:10px 0 0;padding:10px 12px;border:1px solid var(--rd-env-line);border-left:3px solid #7d96a8;border-radius:6px;background:var(--rd-env-soft);font-size:11px;line-height:1.7;color:#4f6270}
+.rd-env b{font-size:11px;color:#36505f}
+.rd-env pre{margin:4px 0 0}
+
+/* The start of the motion driver: what the body may do, then the tick. */
+.rd-start{margin:14px 0 0;padding:12px 14px;border:1px solid var(--rd-start-line);border-left:3px solid var(--rd-start);border-radius:7px;background:var(--rd-start-soft);font-size:11px;line-height:1.8;color:#7a3f30}
+.rd-start>b{display:block;font-size:12px;color:var(--rd-start)}
+.rd-start p{margin:4px 0 10px}
+.rd-start .rd-onsite{background:#fff;border-color:var(--rd-start-line);color:#7a3f30}
+.rd-start .rd-onsite:focus-within{outline:2px solid var(--rd-start);outline-offset:2px}
+.rd-start .rd-onsite.needs-confirm{border-color:var(--red);background:#fdf1ee}
+
+/* Long values (a checksum, a path) wrap instead of widening the dialog. */
+.rd-deliver .rd-break{overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:500;font-size:11px}
+
+@media (prefers-reduced-motion:no-preference){.rd-start .rd-onsite.needs-confirm{animation:rd-nudge .3s ease-out}}
+@keyframes rd-nudge{0%{transform:translateX(0)}30%{transform:translateX(-3px)}60%{transform:translateX(3px)}100%{transform:translateX(0)}}

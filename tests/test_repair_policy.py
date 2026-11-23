@@ -283,7 +283,7 @@ class InstructionTests(PolicyBase):
         self.assertIn('## 软件修不了的问题', skill)
         for outcome in repair_policy.STUCK:
             self.assertIn('`' + outcome + '`', skill.split('## 软件修不了的问题')[1])
-        self.assertEqual(hardware_init.skill_info()['version'], '1.2.0', 'the Skill text changed: so does its version')
+        self.assertEqual(hardware_init.skill_info()['version'], '1.3.0', 'the Skill text changed: so does its version')
 
 
 class QueueTests(PolicyBase):
