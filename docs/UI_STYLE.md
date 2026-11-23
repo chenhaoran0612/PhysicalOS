@@ -66,6 +66,12 @@
 
 表单里随输入变化的按钮文字（例如“配置连接”里的“保存”和“读取主机指纹”，`web/ssh_edit.js`）只在文字确实变化时修改，并且原地改文字节点的内容（`button.firstChild.nodeValue`），不要用 `textContent` 或 `innerHTML` 重写。原因：用户改完一个输入框直接点按钮时，输入框失焦的 `change` 事件发生在这次点击的按下和抬起之间；这时如果按钮里的文字节点被换掉，WebKit（桌面应用的 WKWebView）会丢掉这次点击，表现为“第一次点保存没有反应”，Chromium 不会。同样的道理，不要在失焦时显示或隐藏会让按钮移位的内容。这类问题只有在 WebKit 上跑浏览器验收才能发现。
 
+## 表单里的提示框和折叠块（issue #14）
+
+- 提示框（`notice()`）放在它说明的那一项旁边，不要统一堆在表单末尾；决定提交按钮文字的提示放在表单最后、按钮上方。
+- `.page-purpose` 的折叠块带负的上边距（`margin:-8px 0 24px`），是给页面顶部、紧跟页面标题用的。放进表单时，如果前一块没有下边距（例如 `.hardware-confirm`），它会压到前一块上。在表单里用它，要在这张表单的范围内把上边距改回 0，并给前一块留出间隔，写法见 `web/style.css` 里 `form[data-form="engine-ssh"]` 的规则。
+- 不用负边距去调两块之间的距离。块与块之间上下至少留 8 px；SSH 连接表单的验收脚本 `tests/ssh_form_layout_browser.cjs` 按这个数逐块量，并且不允许任何一块带负边距。
+
 ## 测试
 
 - `node tests/readable_logic.cjs`：转换规则（截断 JSON、Python 字典、分类、标签、转义、折叠、Markdown、报错堆栈）。

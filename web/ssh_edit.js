@@ -95,13 +95,18 @@ function sshEditJumpHints(p, saved) {
   });
 }
 
-function sshEditNotes(robot, saved) {
-  const alias = saved.alias
-    ? notice(`接入时，目标机用的是跳板机上的名称“${h(saved.alias)}”；这里显示的是它当时解析出的地址。` +
-             '要按名称重新解析，把主机改回这个名称，并勾选“目标机名称按跳板机上的 SSH 配置解析”。')
-    : '';
-  return alias +
-    '<div id="ssh-edit-route" hidden>' +
+// Issue #14: every note stands next to what it explains. The name the device had on the jump host goes
+// right under the address it was resolved to; '' for a device that was connected by its address.
+function sshEditAliasNote(saved) {
+  if (!saved.alias) return '';
+  return `<div id="ssh-edit-alias">${notice(`接入时，目标机用的是跳板机上的名称“${h(saved.alias)}”；上面显示的是它当时解析出的地址。` +
+    '要按名称重新解析，把主机改回这个名称，并勾选“目标机名称按跳板机上的 SSH 配置解析”。')}</div>`;
+}
+
+// What decides whether the fingerprints are read again stays together at the end of the form, above the
+// button it changes.
+function sshEditNotes(robot) {
+  return '<div id="ssh-edit-route" hidden>' +
     notice('主机或跳板机的地址变了，或者跳板机的级数、顺序变了：保存前要重新读取并确认主机指纹（经跳板机时每一级都要），和新接入时一样。', true) + '</div>' +
     '<label class="hardware-confirm"><input type="checkbox" name="rescan" value="1">' +
     '<span>重新读取并确认主机指纹。地址没变、但设备重装过系统，或提示“指纹与已确认的不一致”时勾选。</span></label>' +
@@ -126,7 +131,8 @@ function sshEditFill(robot, saved) {
   const body = form.querySelector('.dialog-body');
   body.querySelector('.form-error').insertAdjacentHTML('afterend', sshEditRunningNote(robot.id) +
     notice('密码和私钥不会显示在这里。留空就沿用已保存的；已保存的登录信息只会发给指纹和原来一致的那台机器。'));
-  body.insertAdjacentHTML('beforeend', sshEditNotes(robot, saved) +
+  form.elements.host.closest('.field-row').insertAdjacentHTML('afterend', sshEditAliasNote(saved));
+  body.insertAdjacentHTML('beforeend', sshEditNotes(robot) +
                           `<input type="hidden" name="edit_robot_id" value="${h(robot.id)}">`);
   sshEditSync();
 }
