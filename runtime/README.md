@@ -2,7 +2,7 @@
 
 装在机器人（或旁边的 Linux/Jetson 计算机）上的运行时：把本体映射为标准能力，安全地执行可移植技能，并通过 HTTP 网关对桌面控制台（v1 兼容）和 SDK/云（v2）开放。
 
-> 状态：第 04 轮（能力一致性测试套件、适配器脚手架；第 03 轮：Python 3.10 与非 root 运行、端侧模型安装、遥测持久化；第 02 轮：技能进程隔离、异步现场测试、可安装包）。**全部验证均在仿真本体与协议替身上完成；接真实本体的适配器未在任何真机上验证。** 运行时进程本身已在一台真机（Jetson Orin NX，Ubuntu 22.04，Python 3.10.12）上以仿真本体运行过（2026-11-15，见 [§0.4](#04-装到真机用户目录离线)）。 ROS 2 桥接只在 rclpy 测试替身上跑通过一致性测试，从未接触真实 ROS 2。
+> 状态：第 04 轮（能力一致性测试套件、适配器脚手架；第 03 轮：Python 3.10 与非 root 运行、端侧模型安装、遥测持久化；第 02 轮：技能进程隔离、异步现场测试、可安装包）。**运动类验证均在仿真本体与协议替身上完成；没有在任何真机上让本体动过。** 运行时进程本身已在一台真机（Jetson Orin NX，Ubuntu 22.04，Python 3.10.12）上以仿真本体运行过（2026-11-15，见 [§0.4](#04-装到真机用户目录离线)）。 ROS 2 桥接（issue #21）在真实的 ROS 2 Humble 上对 rclpy 节点跑过（容器），并在一台真机上只读接过它自己的 ROS 2（读里程计，不发运动指令），见 [§3.3](#33-接设备自己的-ros-2-humbleissue-21需求-r1-03)。
 
 - 仅依赖 **Python 3.10+** 标准库（Jetson JetPack 6 / Ubuntu 22.04 自带 3.10）；数据结构以 `spec/neuxmind_spec/` 为唯一权威。
 - 测试：`python3 -m unittest discover -s runtime/tests`（仓库根目录）或在 `runtime/` 下 `python3 -m unittest discover -s tests`。
@@ -477,6 +477,47 @@ ROS 2 模板：`base.velocity`（Twist 发布）、`base.odometry`（Odometry）
 
 ROS 2 测试替身：`tests/ros2_double/`（纯 Python 的 rclpy/消息包替身 + 内存话题图 + 一台假差速机器人，发布 `/odom` `/battery_state` `/imu` `/joint_states`，提供 Nav2 式 `navigate_to_pose`），`use_sim_time=true` 因此清单为 `simulated:true`。只在测试中放进 `sys.path`；**通过替身上的一致性测试不说明任何真实 ROS 2 机器人的行为**。
 
+### 3.3 接设备自己的 ROS 2 Humble（issue #21，需求 R1-03）
+
+设备跑 ROS 2 Humble 时，管理层可以直接接它的 ROS 2，不写适配器：内置的 `ros2` 适配器（`adapters/ros2.py`）把底盘速度、里程计、电池、Nav2 导航、停止和健康对到常见的 ROS 2 接口上。**只支持 Humble**：别的发行版、ROS 1、没有 source 过 ROS 的环境，安装和启动都拒绝，并写明读到的是什么。
+
+**安装时选本体。** 用 §0.4 的安装脚本，`install` 时给 `NX_ADAPTER=ros2`（不给就是仿真本体 `sim_quadruped`，原来的行为不变；也可以是 `sim_arm`；别的值拒绝）。选择记在安装目录的 `adapter` 里，`start` 按它启动，不用再给：
+
+```bash
+# 机器人上；设备的节点跑在哪个域、用什么 DDS 配置，就照样给（登录 shell 里往往没有设，可以从正在运行的节点的 /proc/<pid>/environ 里看）
+NX_ADAPTER=ros2 ROS_DOMAIN_ID=… FASTRTPS_DEFAULT_PROFILES_FILE=… bash ~/neuxmind-pkg/device_install.sh install
+bash ~/neuxmind-pkg/device_install.sh start
+```
+
+- `install` 在建任何东西之前，先在一个干净的 shell 里 source `NX_ROS_SETUP`（默认 `/opt/ros/humble/setup.bash`，也可以是叠在 Humble 上的工作区的 `setup.bash`，必须是绝对路径；它和它上面的每一级目录只能由 root 或这个用户写（带粘滞位的公共目录如 `/tmp` 可以），否则拒绝，因为它会以这个用户的身份执行；最多等 60 秒），看它设出来的 `ROS_VERSION` / `ROS_DISTRO` 是不是 `2` / `humble`。文件不在时，会列出同一个目录下装着的别的发行版。不是 Humble 就拒绝（退出码 2），安装目录不会出现。
+- 安装时给的 ROS 设置只认这五个：`ROS_DOMAIN_ID`（0–232）、`ROS_LOCALHOST_ONLY`（0/1）、`RMW_IMPLEMENTATION`（`rmw_…`）、`FASTRTPS_DEFAULT_PROFILES_FILE`（存在的文件的绝对路径）、`CYCLONEDDS_URI`；值不合规矩时拒绝。它们和 setup 文件的路径一起写进安装目录的 `ros2.env`（0600）。
+- 虚拟环境建成能看到系统包的（`--system-site-packages`）：ROS 2 的 Python 消息包要用系统的 numpy。所以 ROS 2 安装的 `pip list` 里会有系统的包，仿真安装不会。`NX_PYTHON` 要用系统的 `python3`（Humble 是给它编译的）。装完在记下的 ROS 环境里检查 `rclpy` 和用到的消息包能导入，不能就整个安装失败并删掉安装目录；同时说明有没有 Nav2（`nav2_msgs`）。
+- `start` 只用记下的环境：先清掉从调用者那里继承来的 ROS 设置、`PYTHONPATH`、`LD_LIBRARY_PATH`、`AMENT_PREFIX_PATH` 等，再 source 记下的 setup 文件、放进记下的设置，再查一次是不是 Humble（设备上的 ROS 被换了时拒绝启动，原因在日志末尾），然后启动运行时（进程号不变，`stop` 照旧认得它）。source 一直没有结束、`start` 等满 60 秒放弃时，会结束这个还没变成运行时的子进程和 setup 文件启动的进程，不会在之后冒出一个 `stop` 看不见的运行时。在仿真安装上 `NX_ADAPTER=ros2 start` 被拒绝：ROS 2 本体要单独装一份。
+- **技能没有网络隔离**（§2.2）：接了真实的 ROS 2 之后，技能进程能直接往设备的 DDS 上发话题、绕开运行时的安全监督。只装自己写的、审过的技能；第三方技能要等网络隔离（§7）。
+- 安装目录里放 `ros2-config.json`（运维写，可选；必须是文件本身，不能是符号链接）时，`start` 把它交给适配器（`NEUXMIND_ROS2_CONFIG`）；从外面继承的 `NEUXMIND_ROS2_CONFIG` 一律不用。没有这个文件就用适配器的默认值。
+
+**配置文件 `ros2-config.json`。** 只写要改的项，其余取 `adapters/ros2.py` 的 `DEFAULT_CONFIG`。话题名就在这里配（没有按设备保存的接口表）：
+
+```json
+{
+  "instance_id": "dog-01",
+  "topics": {"cmd_vel": "/cmd_vel", "odom": "/odom", "battery": null},
+  "qos": {"odom": {"reliability": "reliable", "depth": 5}},
+  "nav2": false,
+  "limits": {"max_vx": 0.8, "max_wz": 1.0}
+}
+```
+
+- `topics`：`cmd_vel` 和 `odom` 必须有；`battery` 为 `null` 表示设备没有电池话题，清单里就没有 `sensor.battery`，健康只看里程计。
+- `qos`：按话题给 `reliability`（`reliable` / `best_effort`）、`durability`（`volatile` / `transient_local`）、`history`（`keep_last` / `keep_all`）、`depth`（1–100），没给的取默认。默认订阅是 `best_effort`：它既能收可靠发布的，也能收传感器 QoS（尽力而为）发布的；订阅设成 `reliable` 而对方是尽力而为发布时一条也收不到（ROS 会报 incompatible QoS，健康里写这个话题没有新数据）。**速度话题的 QoS 是固定的**（`reliable`、`volatile`、`keep_last`、深度 1），写成别的值时启动被拒绝：停止就是这个话题上的一条零速度，它必须可靠送达、不能留给之后才启动的控制器重放（`transient_local` 会把最后一条指令交给它，不一定是零速度）、发布不能等慢的读者（`keep_all`）、落后的读者也要先拿到最新的那条而不是排在一串旧指令后面（深度 1）。
+- `nav2`：`"auto"`（默认，装了 `nav2_msgs` 就声明 `base.navigate_to`）、`false`（不声明）、`true`（没装就拒绝启动）。没有 Nav2 时只是少了导航这一项，别的照常；停止时只发零速度（没有目标可取消），停止路径没有多出任何依赖。写 `false` 时适配器完全不碰 Nav2：设备上别的软件交给 Nav2 的目标，停止时也不会被取消；要让 NeuxMind 的停止连它们一起取消，就保留 `"auto"`。
+- 安装目录里的这个文件不能写 `simulated` 或 `use_sim_time` 为 `true`（`start` 拒绝）：仿真本体不需要安全限值、结果也不算现场证据，而装在设备上的是它真实的 ROS 2。
+- `limits`：本体规格书给的上限，可以不写（§2「设备安全限值」）。**真机（清单 `simulated: false`）没有由人填写安全限值时，管理层照常启动、状态可读、停止可用，但所有运动指令被拒绝**（409 `safety_limits_missing`），接 ROS 2 以后这一条不变。`instance_id` 每台机器人配一个自己的。
+
+**在哪里验证过。** `tests/test_ros2_humble.py`（rclpy 测试替身：QoS 配置及其交给 rclpy 的配置、Nav2 可选、没有电池话题、只认 Humble、真机没填限值时不动但能读能停）；`tests/test_device_install_ros2.py`（Linux：安装时的选择、Humble 检查与拒绝、记下的环境、启动时只用记下的环境，替身扮演“装好的 ROS”）；`tests/ros2_humble/`（**真实的 ROS 2 Humble**：`ros:humble-ros-base-jammy` 容器里，管理层以 `--adapter ros2` 单独起一个进程，对着一个真实的 rclpy 节点经 Fast DDS 读里程计和电池、核对 DDS 图上的 QoS、没填限值时拒绝运动、停止送到零速度、填限值后限幅发布、看门狗、不兼容的 QoS；安装脚本对镜像里真实的 `/opt/ros/humble/setup.bash` 做 Humble 检查。做法和结果见 [tests/ros2_humble/README.md](tests/ros2_humble/README.md)）。真实的 Nav2 没有跑过（镜像里没有）。
+
+**在一台真机上（只读，2026-11-21）。** 一台 Jetson Orin NX（Ubuntu 22.04，ROS 2 Humble，节点跑在非默认的域上、带 Fast DDS 配置文件），用户同意只读后：先只读看话题清单和 QoS（26 个话题，两个里程计话题，都是可靠发布；**没有电池话题，也没有任何速度指令话题**），再在单独的目录和回环端口上用这个安装脚本装了第二个管理层（机器上原来那份安装没有动，当时也没有在运行），`NX_ADAPTER=ros2`，域和 DDS 配置取自正在运行的节点的环境。`ros2-config.json` 把速度话题指到一个没有人订阅的名字、`nav2: false`、`battery: null`，所以连停止和锁存守护发出的零速度也到不了它的控制器（设备上装着 `nav2_msgs`，不关的话会声明导航）。结果：安装通过 Humble 检查，虚拟环境里 rclpy 能导入；启动后 `simulated: false`、`mode: ros2`、`motion_blocked: true`（没有填限值）；启动约 2 秒后从它自己的里程计话题读到位姿和速度，健康 `ok`；`sensor.battery` 没有声明（404）；ROS 图上这个节点只在那个没人订阅的话题上发布，对里程计是尽力而为的订阅。随后 `stop`、`remove`，没有留下进程、ros2 守护进程，机器上原有服务的状态前后一致。没有发任何运动指令，也没有发 `hardware_authorized`。痕迹：每次启动，管理层自己的 ROS 节点会在 `~/.ros/log` 留一个日志文件（`ros2` 命令行每次调用也留一个）。所以在这台机器上，这个适配器现在只能读里程计：读取那一刻它的 ROS 图上没有可以发速度指令的话题，要让它动，先要弄清它的运动接口（必要时写它自己的适配器，§3），并且要在现场、有人值守、硬件急停在手。控制台里从添加设备到“在线”（在控制台里安装是 #19）没有在这台真机上走过。
+
 ## 4. 写技能
 
 技能包 = `skill.json`（`skill.package.v1`）+ 文本文件。示例见 `examples/skills/`：
@@ -657,7 +698,7 @@ EOF
 
 ## 7. 已知限制
 
-- 接真实本体的适配器未在任何真机上运行（运行时进程以仿真本体在一台 Jetson 真机上运行过，见 §0.4）；ROS 2 桥接（含脚手架生成的 ROS 2 适配器）只在 rclpy 测试替身上运行过（内存话题图、同步投递、假机器人），真实 rclpy/DDS/QoS/Nav2 完全未运行。
+- 没有在任何真机上让本体动过（运行时进程以仿真本体在一台 Jetson 真机上运行过，见 §0.4）。内置的 ROS 2 桥接在真实的 ROS 2 Humble 上对 rclpy 节点跑过（容器，经 Fast DDS：读取、QoS、停止、限幅、看门狗），在一台真机上只读接过它的 ROS 2（§3.3）；真实的 Nav2、别的 RMW 没有运行过。脚手架生成的 ROS 2 适配器仍只在 rclpy 测试替身上运行过。
 - 一致性测试：报告自报、与适配器同进程可被篡改（见 §3.1 信任边界）；读数与动作同时伪造、识别测试模式、`hardware_estop` 声明无法发现；适配器仍可从调用栈等识别出正在被测（临时目录已改为通用前缀 `nx-rt-`）。机械臂关节对应只来自清单的 `arm.joint_position.params.joint_names`（v1.1 可选参数）；未声明的本体所有机械臂/joint_position 动作块动态用例 `blocked`。声明本身无法验证：dry 不发机械臂目标；motion 级按声明执行，声明错误时由运动包络在约 0.02 rad 内停下并中止（不是 0）。未声明 `joint_names` 时运行时拒绝 joint_position 动作块（旧适配器须补声明）。每次停止后都会自行恢复运动的驱动，软件停止停不住（报告给出警告）；中止后的观察窗为 5 s，窗外才恢复的驱动报告无法发现——但第 05 轮起运行时的锁存守护在整个锁存期间监视反馈并周期性再停（只能对声明了 `base.odometry`/`joint.state` 的本体生效，且反馈本身可能说谎；每次恢复仍会在被发现前运动约一个采样周期 0.1 s）。dry 通过不说明 `joint_names` 声明正确：机械臂映射只在 motion 级验证（R4c-03）。大幅姿态变化没有自动用例。黑盒 `--mode client` 没有 dry 守卫，依赖拒绝的探测与停止代数 `blocked`，dry 不会判为通过。若操作员的停止与套件自己的停止在同一瞬间发生，锁存原因可能显示为套件的原因（锁存本身与中止不受影响）。
 - 技能沙箱不隔离网络和本机设备，未做 seccomp；非 root 部署时技能与运行时同用户（见 §2.2 剩余信任边界）。每次技能运行多一次 Python 启动（实测约 40 ms）。
 - `base.navigate_to` 的速度由适配器的规划器决定，运行时无法限幅，只能检查目标与工作区；仿真导航忽略目标朝向。
@@ -669,7 +710,7 @@ EOF
 - 仿真本体的 `/v1/evaluate` 如实返回 `passed`，并标注 `simulated=true`、`evidence_kind="simulation"`、`simulation://` 引用；按契约由桌面端拒绝把它当现场证据（桌面端修复由桌面集成 Agent 负责）。
 - `/v1/stop` 会锁存急停；运行时已提供 `/v1/reset`，桌面端“解除急停”入口由桌面集成 Agent 接入。
 - 动作块的单步限速假设适配器按 `dt` 节奏执行；`dt` 与总时长已设上限（见限幅规则），但适配器若忽略 `dt` 一次性执行，仍只能靠逐步限位兜底。厂商扩展 `x.*` 在 spec 与 runtime 中是否算运动能力的判定仍不一致（runtime 一律视为运动并拒绝）。
-- Nav2 停止语义只用替身对象测过，未在真实 ROS 2 上验证。
+- Nav2 停止语义只用替身对象测过，未在真实 Nav2 上验证（ROS 2 Humble 容器里没有 Nav2）。
 - `model.install` 原生实现只做"下载 + 校验 + 原子安装"，不解压、不验证模型能否被推理运行时加载，也没有签名验证（只有 SHA-256，对得上来源由云端授权保证）；https 的真实 CDN/对象存储未验证，测试只用本机 http 镜像与 file://。
 - 遥测（状态和运行数据）只保留 1 小时，且最多 10 万条，更早的事件被淘汰；崩溃时最后约 0.1 s 未落盘的事件会丢失（seq 留缺口）。安全事件、任务结果和操作记录不在此列（§5.4）。
 - 设备上的记录（§5.4）：崩溃或断电时，最后约 0.2 s 还在内存里的记录会丢（停止路径上不做 IO 的代价）；运行时正常关闭的瞬间才结束的运行，任务结果可能来不及写入。保留期按墙钟算：没有实时时钟的板子开机后对时把时间往前拨了一大段，对时之前的状态和运行数据会被当成过期（三类记录不受影响）。运行超过 1 小时的，`/v2/runs/{id}/events` 回放里只剩最近 1 小时的事件。写入既没完成、又撤不回来的那一批（磁盘出错）重试后可能有内容相同、`id` 不同的两条。

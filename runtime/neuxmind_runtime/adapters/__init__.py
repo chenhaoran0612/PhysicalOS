@@ -1,7 +1,8 @@
 """Built-in adapters and adapter loading.
 
 ``sim_quadruped`` and ``sim_arm`` are simulated reference bodies.
-``ros2`` is an unverified bridge skeleton. Vendor adapters are loaded with
+``ros2`` bridges a device's own ROS 2 Humble (what has been run: the header of
+``ros2.py``). Vendor adapters are loaded with
 ``module:Class`` (trusted code installed by the operator).
 """
 from __future__ import annotations

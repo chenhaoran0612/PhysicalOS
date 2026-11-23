@@ -867,6 +867,7 @@ class ConformanceCli(unittest.TestCase):
                 json.dump({"limits": {"max_vx": 0.8, "max_wz": 1.0}}, fh)
             proc = self.run_cli("--adapter", "ros2", "--level", "dry",
                                 env={"NEUXMIND_ROS2_CONFIG": config,
+                                     "ROS_DISTRO": "humble",     # issue #21: the double stands in for a sourced Humble
                                      "PYTHONPATH": os.pathsep.join([str(_support.ROS2_DOUBLE), str(_support.RUNTIME_DIR)])})
             self.assertEqual(proc.returncode, 0, proc.stderr)
             report = json.loads(proc.stdout)
