@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `spec/` | 能力接口标准 v1、manifest v2、技能包 v1、兼容性判定（跨本体的唯一契约） | 各处共用 | [CAPABILITIES_V1](docs/specs/CAPABILITIES_V1.md) · [INTERFACES_V1](docs/specs/INTERFACES_V1.md) |
 | `runtime/` | 端侧运行时：HAL、安全监督（限幅/看门狗/急停锁存/停止代数；真机的安全限值按设备填写，没填不能动）、设备上的记录（安全事件、任务结果、操作记录分开保存，磁盘将满时按序清理；遥测保留 1 小时）、向云平台上报告警、可移植技能运行时、v1+v2 网关、仿真四足与机械臂、ROS 2 桥接骨架 | 机器人 / Jetson / 任意 Linux | [runtime/README](runtime/README.md) |
-| `cloud/` | 云平台：账户/组织/API Key、邮箱验证、token 钱包与账本、模型市场、推理网关、支付接口、设备告警（接收、查看、离线判定）、资料库（文档和驱动安装包分片续传上传） | 服务器 | [cloud/README](cloud/README.md) |
+| `cloud/` | 云平台：账户/组织/API Key、邮箱验证、token 钱包与账本、模型市场、推理网关、支付接口、设备告警（接收、查看、离线判定）、资料库（文档和驱动安装包分片续传上传，按设备归属；上传后自动解析：文档交给 WeKnora，URDF 和安装包按规则读，人确认后才可用） | 服务器 | [cloud/README](cloud/README.md) |
 | `sdk/` | Python SDK 与 `nx` 命令行、技能模板与本地测试工具 | 开发者电脑 | [sdk/README](sdk/README.md) |
 | `brainos/` `web/` `desktop/` | Mac 桌面控制台（原有功能保留；新增仿真证据隔离与"解除急停"） | Mac | 下文 |
 
@@ -195,6 +195,7 @@ brainos/
   safety_limits.py 设备安全限值的读取与填写（存在设备端运行时，填写人取登录账号）
   body_types.py   本体类型清单（内置四足和机械臂；添加、删除、在用检查）
   material_library.py 资料库：把页面的分片上传转发到云平台
+  material_parse.py   资料解析结果的读取、修改、确认和重新解析（转发到云平台）
   skills/          随应用发布的内置 Skill（hardware-init）
   httpd.py        控制台与设备网关共用的 HTTP 服务器（绑定时不做反向 DNS）
   edge.py         设备端网关与幂等请求记录
