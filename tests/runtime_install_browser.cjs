@@ -80,7 +80,8 @@ let failurePage = null, failureShots = 'artifacts';
   // 2. The form: what will happen and where, the standard port, the simulated body; nothing about sudo or autostart is done.
   await openInstall('fresh');
   const formText = await dialog.innerText();
-  for (const part of [`${cfg.robot_user}@127.0.0.1:${cfg.robots.fresh.port}`, '~/neuxmind-pkg/console/', '~/neuxmind', '不用 sudo', '不设开机自启',
+  // Issue #20: autostart is now a box of its own in this form ("开机自启要管理员权限"), not something the install never does.
+  for (const part of [`${cfg.robot_user}@127.0.0.1:${cfg.robots.fresh.port}`, '~/neuxmind-pkg/console/', '~/neuxmind', '不用 sudo', '开机自启要管理员权限',
     '只监听机器人本机', '不会直接覆盖', '仿真四足', '不会让机器人动']) check(formText.includes(part), `The form does not say "${part}"`);
   check(await page.locator('#dialog [name=port]').inputValue() === '8790', 'The standard port is not filled in');
   await page.screenshot({path: `${shots}/runtime-install-form.png`});

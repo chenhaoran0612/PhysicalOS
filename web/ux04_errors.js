@@ -213,6 +213,15 @@ const UX_CODES = {
   install_login_refused: ['network', '机器人（或跳板机）拒绝了 SSH 登录，安装停下了，没有反复重试（以免账号被锁）。', '核对卡片上“配置连接”里的账号、密码或私钥后再安装'],
   install_unreachable: ['network', '安装途中连不上机器人，等到了时限。设备上已经开始的那一步会在设备上继续做完。', '网络恢复后再点“安装管理层”，会接着已经做完的部分'],
   install_nothing_to_clean: ['state', '这台机器人没有需要清理的安装记录：上一次安装没有在设备上留下这个控制台的东西。', '不需要清理'],
+  // ---- issue #20: starting the management layer at boot (brainos/runtime_autostart.py). Nothing ran as root for any of these.
+  autostart_not_installed: ['state', '这台机器人还没有用控制台安装管理层，没有可以开机自启的东西。', '先点“安装管理层”'],
+  autostart_not_console: ['state', '机器人上的管理层不是这个控制台装的，控制台不给它设开机自启。', '要开机自启，点“安装管理层”选“删除后重新安装”'],
+  autostart_nothing_to_remove: ['state', '没有找到这台机器人开机自启的记录，也没有这个控制台装的管理层。', '不需要取消'],
+  autostart_not_waiting: ['state', '现在没有在等你确认开机自启：可能已经超时、被停止，或者已经确认过。', '重新打开窗口看最新的状态'],
+  autostart_plan_changed: ['state', '要执行的内容已经变了，这次确认没有被采用。', '按窗口里最新列出的内容再确认'],
+  autostart_answer_invalid: ['input', '只能选择“确认执行”或“不设开机自启”。', '重新选择'],
+  autostart_password_missing: ['input', '这台机器人的 sudo 需要密码。', '输入这个账号的 sudo 密码（只用这一次，不保存）'],
+  autostart_password_invalid: ['input', 'sudo 密码要是一行字，不能有换行，最长 256 个字符。', '重新输入'],
   // ---- login / account / cloud
   unauthorized: ['account', '登录状态已失效，或访问令牌不对。', '重新登录，或检查访问令牌'],
   not_logged_in: ['account', '还没有登录云平台账户。', '先登录云平台账户'],

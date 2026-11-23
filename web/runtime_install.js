@@ -2,7 +2,8 @@
 // Issue #19 — install the management layer on a robot from the console (brainos/runtime_install.py).
 // A robot reached over SSH gets "安装管理层" on its card: the console checks the robot, sends its own
 // install package, installs and starts it in ~/neuxmind and links it (issue #17). No sudo, no
-// system files, no autostart. A management layer that is already there is not touched until the
+// system files; autostart is a step of its own, listed and confirmed (runtime_autostart.js, issue #20).
+// A management layer that is already there is not touched until the
 // person chooses here what to do with it.
 // The progress changes all the time, so it is asked for on its own (robots/runtime-install/status)
 // and drawn in place, never through the workspace state the page redraws itself from.
@@ -172,7 +173,7 @@ function riForm(robotId, port = null) {
   form('安装管理层', h(r.name),
     `<p class="inline-note ri-how">经这台机器人的 SSH 连接（${h(riConnection(r))}）：先只读检查设备，再把控制台自带的安装包传到 ` +
     '<code>~/neuxmind-pkg/console/</code>，在 <code>~/neuxmind</code> 安装、生成访问令牌并启动，最后接入管理层。' +
-    '不用 sudo，不改系统文件，不设开机自启；管理层只监听机器人本机。设备上已经有管理层时，先问你怎么处理，不会直接覆盖。</p>' +
+    '安装本身不用 sudo、不改系统文件；开机自启要管理员权限，在下面单独勾选。管理层只监听机器人本机。设备上已经有管理层时，先问你怎么处理，不会直接覆盖。</p>' +
     field('管理层端口', `<input name="port" type="number" inputmode="numeric" min="${RI_PORT_MIN}" max="${RI_PORT_MAX}" step="1" value="${h(port ?? RI_DEFAULT_PORT)}" required>`,
       `管理层在机器人本机监听的端口，默认 ${RI_DEFAULT_PORT}。`) +
     `<div class="ri-body-type"><b>本体</b><span>${body ? h(body) + '：不接真实硬件，不会让机器人动' : '这个本体类型没有对应的仿真本体，装不上'}</span></div>`,
@@ -203,6 +204,7 @@ async function riSubmit(p, f) {
       request.confirm_replace = true;
     }
   }
+  if (typeof raInstallRequest === 'function') Object.assign(request, raInstallRequest(p));   // issue #20
   const view = await api('robots/runtime-install/start', request);
   riInstalls = {...riInstalls, [robotId]: view};
   riConfirming.delete(robotId);

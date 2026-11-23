@@ -32,6 +32,16 @@ MIN_FREE_KB = 300 * 1024                  # a venv with the two wheels takes abo
 ADAPTERS = {'quadruped': 'sim_quadruped', 'manipulator': 'sim_arm'}    # see the module text of runtime_install
 FRESH = ('upload', 'install', 'start', 'link')
 SCRIPTED = ('install', 'start', 'remove', 'wait_install')
+AUTOSTART = 'autostart'     # issue #20: only when the person asked for it, and only for this console's own install
+
+
+def with_autostart(steps):
+    """The steps with autostart (issue #20) right before the link: after the start when there is one.
+    ``FRESH`` with it is ('upload', 'install', 'start', 'autostart', 'link')."""
+    steps = list(steps)
+    if AUTOSTART not in steps and 'link' in steps:
+        steps.insert(steps.index('link'), AUTOSTART)
+    return tuple(steps)
 CHOICES = {'use': '接入这个已有的管理层（设备上什么都不改）', 'start': '启动这个已有的管理层并接入',
            'replace': '删除它（连同它的状态目录、日志和令牌）后重新安装'}
 TAKEN = ('设备上的 ~/neuxmind 已经存在，但不是安装脚本建的（或者是一个符号链接）。控制台不动它；'
