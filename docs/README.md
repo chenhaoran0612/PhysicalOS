@@ -27,6 +27,7 @@
 | 文档 | 内容 |
 |---|---|
 | [USER_EXPERIENCE.md](USER_EXPERIENCE.md) | 用户目的、页面如何服务用户、各版本的交互约定 |
+| [UI_STYLE.md](UI_STYLE.md) | 界面样式：下拉框、悬停与可读的展示内容（issue #7），表单里的提示框和折叠块（issue #14） |
 | [ENGINEERING_ENGINE.md](ENGINEERING_ENGINE.md) | 内置工程引擎（Codex app-server）、SSH 接入与本体调查、工程扩展、云网关计费、本体适配 |
 | [HARDWARE_INIT.md](HARDWARE_INIT.md) | 连接后的硬件扫描、内置 Skill `hardware-init`、修复命令的审批与限制 |
 | [DEVICE_PROFILE.md](DEVICE_PROFILE.md) | 设备档案：硬件、系统、ROS 2（发行版、节点、话题、动作、服务）和资源占用合成的一份记录，ROS 2 的只读命令 |
