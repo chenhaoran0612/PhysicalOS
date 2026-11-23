@@ -144,6 +144,8 @@ def make_handler(application):
             extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #34: parsing results, and the materials of a device in its profile, likewise.
             extra=extra or {'/material_parse.js':('material_parse.js','text/javascript; charset=utf-8'),'/material_parse.css':('material_parse.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #30: what a repair session found in the library, likewise.
+            extra=extra or {'/repair_materials.js':('repair_materials.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #22: safety limits per device, likewise.

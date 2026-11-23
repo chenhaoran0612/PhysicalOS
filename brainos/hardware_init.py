@@ -22,6 +22,7 @@ from . import device_access, hardware_scan
 from . import repair_policy     # issue #13: 默认允许执行, problems software cannot fix
 from .contracts import required_text
 from .service import digest, now, uid
+from . import repair_materials      # issue #30: the library's usable materials of the device, as reference
 
 SKILL_NAME = 'hardware-init'
 SKILL_VERSION = '1.1.0'      # issue #13: software-level fixes only; what software cannot fix is reported, not retried
@@ -159,7 +160,7 @@ def instructions(s, default):
     if s.get('mode') != 'repair':
         return default
     chat = CHAT_INSTRUCTIONS if (s.get('hardware') or {}).get('chat') else ''      # issue #6: fix chat
-    return REPAIR_INSTRUCTIONS + chat + repair_policy.instructions(s)               # issue #13: software only, 默认允许执行
+    return REPAIR_INSTRUCTIONS + chat + repair_policy.instructions(s) + repair_materials.instructions(s)   # issue #13; issue #30: the library
 
 
 def repair_limits(p, billing):
@@ -481,6 +482,7 @@ class HardwareInit:
                                     'selected_issues': [i for i in scan['issues'] if i['id'] in selected]}, ensure_ascii=False, indent=2))
         info = s['hardware']['skill']
         self.platform.engineering.event(s['id'], 'extensions', f"使用内置 Skill {info['name']} v{info['version']}", skills=[info['name']], mcp=[])
+        repair_materials.prepare(self.platform, s, work)       # issue #30: LIBRARY_MATERIALS.json and what was found
 
     def fix_request(self, s, args, connection):
         """Validate a proposed change before it is shown to the user, or run unasked (issue #13).
