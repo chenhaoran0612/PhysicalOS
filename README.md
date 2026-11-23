@@ -184,6 +184,7 @@ brainos/
   ros2_profile.py ROS 2 的只读命令（从机器人节点进程取 ROS 设置）与解析
   motion_drivers.py 运控驱动检查：按本体类型核对 ROS 2 话题和动作，缺少的接口成为硬件问题，修复后重读 ROS 2 核对
   driver_repair.py 修复助手安装并启动运控驱动的规则：产品加载的 ROS 2 环境、启动前的现场确认、资料库安装包的查与送、仍然拒绝的运动和解锁命令
+  repair_materials.py 修复会话读这台设备可用的资料（只取人确认过的解析结果），写进会话工作目录
   device_transfer*.py 向设备传文件：分块、压缩、续传、设备端 SHA-256 核对（给安装和升级用，没有界面）
   runtime_install.py 在控制台里安装管理层（检查、上传、安装、启动、接入、清理）
   runtime_package.py 随控制台发布的管理层安装包

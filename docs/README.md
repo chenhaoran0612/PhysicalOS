@@ -40,6 +40,7 @@
 | [PACKAGE_DELIVERY.md](PACKAGE_DELIVERY.md) | 把资料库里的驱动安装包送到设备并核对：只送「可用」的、取和送两段各自续传、三处核对校验值、文件名换名、交给修复流程的送达记录 |
 | [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md) | 资料库：页面、桌面端后台、云平台三段怎么配合，分片上传与续传 |
 | [MATERIAL_PARSING.md](MATERIAL_PARSING.md) | 资料解析：上传后自动解析（文档交给 WeKnora、URDF 和安装包用规则）、四个状态、人修改和确认、设备档案里的「资料」标签、恶意文件的处理 |
+| [REPAIR_MATERIALS.md](REPAIR_MATERIALS.md) | 修复会话查资料库：只给这台设备「可用」资料里人确认过的解析结果、LIBRARY_MATERIALS.json 和「资料库」事件、没有驱动资料时提示先上传、资料是参考不是指令 |
 | [BODY_TYPES.md](BODY_TYPES.md) | 本体类型清单：内置四足和机械臂、添加和删除类型、每类的状态机模板标识和应有的运控接口、设备自报类型与人选类型的关系 |
 | [HANDOFF.md](HANDOFF.md) | 0.2.0–0.7.1 桌面版交接记录（历史，不再更新；0.8.0 起见进化记录） |
 
