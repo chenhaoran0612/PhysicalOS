@@ -49,9 +49,10 @@ def formats(request: Request):
 def list_materials(request: Request, body_type: str | None = None, vendor: str | None = None, model: str | None = None,
                    version: str | None = None, kind: str | None = None, format: str | None = None,
                    status: str | None = None, sha256: str | None = None, q: str | None = None,
-                   limit: int = library.DEFAULT_LIST, offset: int = 0):
+                   limit: int = library.DEFAULT_LIST, offset: int = 0, device_id: str | None = None):
     filters = {"body_type": body_type, "vendor": vendor, "model": model, "version": version, "kind": kind,
-               "format": format, "status": status, "sha256": sha256, "q": q, "limit": limit, "offset": offset}
+               "format": format, "status": status, "sha256": sha256, "q": q, "limit": limit, "offset": offset,
+               "device_id": device_id}
     with ctx(request).db.transaction() as s:
         return library.list_materials(s, principal(request, s), filters)
 
