@@ -93,7 +93,8 @@ function uxRealResetHowTo(robot) {
   ];
   return `<section class="reset-howto" data-reset-howto="real"><h4>真机：复位一直不返回时怎么办</h4><ol>` +
     steps.map(([t, d], i) => `<li><b>${h(t)}</b><span>${h(d)}</span>` +
-      (i === 2 ? `<code class="mono howto-cmd">sudo systemctl restart neuxmind-runtime</code>` : '') + `</li>`).join('') +
+      // Issue #20: the command that fits this robot (its autostart service, or the install script); there was no such service before.
+      (i === 2 ? (typeof raRestartHint === 'function' ? raRestartHint(robot) : '') : '') + `</li>`).join('') +
     `</ol>${robot ? `<div class="button-row">${button('连接检查', 'robot-connect', 'secondary small', robot.id)}</div>` : ''}</section>`;
 }
 

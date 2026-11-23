@@ -333,7 +333,8 @@ function writeSkill() {
   const howto = await dlg('[data-reset-howto="real"]').innerText();
   assert(await dlg('[data-reset-howto="real"] ol > li').count() === 5, '真机应给出 5 个编号步骤');
   assert(await dlg('[data-action="simlive-stop"]').count() === 1, '真机也应能按“停止”取消那次复位');
-  assert(howto.includes('192.168.1.20') && howto.includes('sudo systemctl restart neuxmind-runtime') && howto.includes('硬件急停'), '步骤应具体：' + howto);
+  // Issue #20: no command for a service that does not exist; this robot's management layer is not one the console installed.
+  assert(howto.includes('192.168.1.20') && !howto.includes('systemctl restart') && howto.includes('不是这个控制台装的') && howto.includes('硬件急停'), '步骤应具体：' + howto);
   const realText = await dlg('.reset-outcome').innerText();
   assert(realText.includes('已经执行了 48 秒') && realText.includes('机器人的提示'), '应带上复位时长与运行时的提示：' + realText);
   await shot('17-real-reset-howto');

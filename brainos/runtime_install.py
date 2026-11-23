@@ -38,6 +38,7 @@ import threading
 import time
 
 from . import connector, device_access, device_transfer, runtime_package
+from . import runtime_autostart
 from . import runtime_install_device as dev
 from . import runtime_install_plan as planning
 from .errors import CodedError
@@ -48,10 +49,12 @@ from .service import now
 LOG = logging.getLogger(__name__)
 
 STAGES = (('check', '检查设备'), ('upload', '上传安装包'), ('remove', '删除原有的管理层'), ('install', '安装'),
-          ('start', '启动'), ('link', '接入并检查'))
+          ('start', '启动'), ('autostart', '开机自启'), ('link', '接入并检查'))     # autostart: issue #20, only when asked for
 LABELS = dict(STAGES, wait_install='安装', clean='清理')
+LABELS.update(runtime_autostart.LABELS)
 BUDGETS = {'check': 180, 'upload': 2700, 'remove': 180, 'install': 1200, 'start': 300, 'link': 300, 'clean': 180,
            'look': 45}                     # the last read-only look after a failure: what is left
+BUDGETS.update(runtime_autostart.BUDGETS)   # issue #20: its stages, and how long it waits for a person
 POLL_SECONDS = 2
 RETRY_WAITS = (2, 5, 10, 20, 30)
 ADAPTERS = planning.ADAPTERS
@@ -106,6 +109,11 @@ class Job:
         self.left, self.cleanup, self.can_clean = [], '', False
         self.created_install = bool(self.previous.get('created_install')) if mode == 'clean' else False
         self.uploaded = False
+        self.autostart = runtime_autostart.Step(self)                  # issue #20
+        self.console_install = bool(self.previous.get('console_install')) if mode == 'clean' else False
+        if mode in runtime_autostart.MODES:
+            self.steps = list(runtime_autostart.MODES[mode])
+            self.stage = self.steps[0]
         self.started_at, self.finished_at = now(), None
         self.session = dev.DeviceSession(self._login, self.stop_event, waits=service.waits)
         self.thread = threading.Thread(target=self.run, daemon=True, name='runtime-install-' + self.robot_id)
@@ -126,6 +134,7 @@ class Job:
                 'package': self.package.summary(), 'package_dir': PACKAGE_DIR % self.package.id,
                 'choice': self.choice, 'failure': self.failure, 'notes': list(self.notes), 'left': list(self.left),
                 'cleanup': self.cleanup, 'can_clean': self.can_clean, 'created_install': self.created_install,
+                'autostart': self.autostart.view(),
                 'started_at': self.started_at, 'finished_at': self.finished_at}
 
     def outcome(self, state):
@@ -135,6 +144,8 @@ class Job:
         result = {key: view[key] for key in keep}
         result.update(state=state, package_id=self.package.id, runtime_version=self.package.runtime_version,
                       package_files=[entry['name'] for entry in self.package.files])
+        # Issue #20: whether ~/neuxmind is this console's own install (made now, or found from this package).
+        result['console_install'] = self.console_install and not (self.mode == 'clean' and 'clean' in self.done)
         return result
 
     # ------------------------------------------------------------------ running
@@ -170,7 +181,8 @@ class Job:
     def run(self):
         final = 'failed'
         try:
-            final = self._clean() if self.mode == 'clean' else self._install()
+            final = (self._clean() if self.mode == 'clean' else runtime_autostart.run_mode(self)
+                     if self.mode in runtime_autostart.MODES else self._install())
         except Failure as failure:
             self._failed(failure)
         except Changed:
@@ -202,7 +214,8 @@ class Job:
             values.append(self.platform.store.get('robots', self.robot_id).get('token') or '')
         except (ValueError, TypeError, AttributeError):
             pass
-        return [value for value in values if isinstance(value, str) and len(value) >= 4]
+        # Issue #20: a typed sudo password, while it is in use, whatever happened above and however short it is.
+        return [value for value in values if isinstance(value, str) and len(value) >= 4] + self.autostart.hidden()
 
     def _shown(self, text, limit=300):
         text = device_access.redact(text)
@@ -224,6 +237,7 @@ class Job:
         port_state = self.session.port_state(self.port, deadline)
         self.service._heard(self.connection_id)
         decision = planning.plan(probe, port_state, self.package, self.port, self.existing, self.confirm)
+        self.console_install = decision.creates_install or decision.found.get('console_package') == self.package.id
         self.done.add('check')
         if decision.kind == 'refuse':
             raise Failure('check', decision.code, decision.message)
@@ -232,11 +246,17 @@ class Job:
             self.choice = {'options': [{'id': option, 'label': planning.CHOICES[option]} for option in decision.options],
                            'found': decision.found}
             return 'needs_choice'
+        if self.autostart.wanted:                  # issue #20: only for this console's own install
+            if self.console_install:
+                decision.steps = planning.with_autostart(decision.steps)
+            else:
+                self.autostart.refuse('not_console')
         self.port, self.notes = decision.port, decision.notes
         self.steps = ['check', *decision.steps]
         self.created_install = decision.creates_install
         steps = {'upload': self._upload, 'remove': self._remove, 'install': self._install_step,
                  'wait_install': self._wait_install, 'start': self._start, 'link': self._link}
+        steps[runtime_autostart.ON] = self.autostart.turn_on
         for step in decision.steps:
             steps[step]()
             self.done.add(step)
@@ -279,6 +299,7 @@ class Job:
 
     def _remove(self):
         self._enter('remove')
+        self.autostart.off_first('remove')         # issue #20: its service goes with it
         self._job('remove')
 
     def _install_step(self):
@@ -352,6 +373,7 @@ class Job:
         """What this attempt left on the robot and how to take it away, from one last read-only look."""
         try:
             self._look()
+            self.autostart.leftovers()              # issue #20: a service file it may have written
         except Exception:                          # whatever the robot answered, the job ends with a report
             LOG.exception('looking at what an install left on %s failed', self.robot_id)
             self.left, self.can_clean = [{'path': None, 'what': '没能确认设备上留下了什么'}], self.uploaded or self.created_install
@@ -359,6 +381,9 @@ class Job:
 
     def _look(self):
         package_dir, left = PACKAGE_DIR % self.package.id, []
+        if self.mode in runtime_autostart.MODES:   # issue #20: its own jobs leave only what Step.leftovers finds
+            self.left, self.can_clean, self.cleanup = [], False, ''
+            return
         if self.mode == 'install' and self.stage == 'check':      # the check only reads
             self.left, self.can_clean, self.cleanup = [], False, '设备上没有留下任何东西。'
             return
@@ -416,6 +441,7 @@ class Job:
             if 'device_install.sh' not in files:
                 raise Failure('clean', 'install_clean_failed', '设备上找不到这次的安装脚本，没法删除 %s；请在设备上运行 '
                               'device_install.sh remove' % INSTALL_DIR)
+            self.autostart.off_first('clean')      # issue #20: its service goes with it
             self.service._unlink(self)
             self._job('remove')
         word, keys, _ = self.session.run('clean', self.package.id, seconds=60, deadline=deadline)
@@ -431,6 +457,7 @@ class Job:
         self.created_install = False
         kept = keys.get('kept', '')
         self.notes = ['设备上 %s 里还有不是这个控制台放进去的文件，没有删：%s' % (PACKAGE_DIR % self.package.id, kept[:200])] if kept else []
+        self.notes = [*self.autostart.notes, *self.notes]
         return 'succeeded'
 
 
@@ -488,6 +515,7 @@ class RuntimeInstall:
                 if self._jobs.get(robot['id']) is not None and self._jobs[robot['id']].state in ACTIVE:
                     raise CodedError(BUSY, 'install_in_progress')
                 job = Job(self, robot, connection, package, port, adapter, existing, p.get('confirm_replace') is True)
+                job.autostart.wanted = p.get('autostart') is True      # issue #20: listed and confirmed on the way
                 self._jobs[robot['id']] = job
         self.platform.audit('robot.runtime_install_started', {'robot_id': robot['id'], 'package': package.id, 'port': port,
                                                               'adapter': adapter, 'existing': existing}, robot['project_id'])
@@ -516,6 +544,18 @@ class RuntimeInstall:
         self.platform.audit('robot.runtime_install_clean', {'robot_id': robot['id'], 'package': package.id}, robot['project_id'])
         job.thread.start()
         return job.view()
+
+    def autostart(self, p):
+        """``robots/runtime-install/autostart``: start the management layer this console installed at boot (issue #20)."""
+        return runtime_autostart.start_mode(self, p, 'autostart')
+
+    def autostart_off(self, p):
+        """``robots/runtime-install/autostart-off``: no longer start it at boot (issue #20)."""
+        return runtime_autostart.start_mode(self, p, 'autostart_off')
+
+    def answer(self, p):
+        """``robots/runtime-install/answer``: confirm or decline what an autostart step listed (issue #20)."""
+        return runtime_autostart.answer(self, p)
 
     def stop(self, p):
         """``robots/runtime-install/stop``: stop waiting. What the robot does already goes on there. Returns within
@@ -557,6 +597,9 @@ class RuntimeInstall:
 
     def _ended(self, job, state):
         """Save the outcome on the robot (the page shows it after a restart too)."""
+        runtime_autostart.ended(self, job, state)  # issue #20
+        if job.mode in runtime_autostart.MODES:    # the install's own outcome stays as it was
+            return
         if state == 'needs_choice':
             return
         try:
