@@ -38,7 +38,7 @@
 |---|---|
 | 在 0.20.1 里（已进 `integration`），等用户验证 | #15、#18（有一处修复在做，见待办 5）、#22、#24、#25、#26、#27、#32、#33 |
 | 已交付，在暂存合并里 | #16、#17、#19、#28、#31 |
-| 正在做 | #14、#20、#21、#29、#30、#34（#34 已提交，还没交付） |
+| 正在做 | #20（在问用户问题，还没开始改）；#14、#18 的修复、#21、#30 已改完测完，等用户在各自会话里同意提交；#29、#34 已提交，等用户同意交付 |
 | 等依赖 | 没有了 |
 
 同日关闭的两个：#23（设备接口表）关闭为不做，它的工作区和分支已删除，研发计划会话已把它从 #21 的依赖里去掉（#21 正文现在只依赖 #22，已在 0.20.1 里）；#35（移除设备时处理设备上的内容）关闭为已完成。
@@ -54,7 +54,7 @@
 | #20 | 开机自启（基于 #19） | `feat/runtime-autostart` | `PhysicalOS-autostart/` |
 | #21 | 接真实的 ROS 2 Humble | `feat/ros2-humble-adapter` | `PhysicalOS-ros2-humble/` |
 | #28 | 运控驱动检查（已交付） | `feat/motion-driver-check` @ 72870ca | `PhysicalOS-driver-check/` |
-| #29 | 放开修复助手装运控驱动的规则（基于 #28） | `feat/repair-driver-rules` | `PhysicalOS-repair-driver-rules/` |
+| #29 | 放开修复助手装运控驱动的规则（基于 #28；已提交，未交付） | `feat/repair-driver-rules` @ bda39d4 | `PhysicalOS-repair-driver-rules/` |
 | #30 | 修复会话能查资料库（基于 #34） | `feat/repair-materials` | `PhysicalOS-repair-materials/` |
 | #31 | 安装包送到设备并核对（已交付） | `feat/driver-package-delivery` @ 0734381 | `PhysicalOS-package-delivery/` |
 | #34 | 资料解析（已提交，未交付） | `feat/material-parsing` @ fa16566 | `PhysicalOS-material-parsing/` |
@@ -65,7 +65,7 @@
 - #28 和 #31 都在修复流程附近：`brainos/hardware_init.py`。#28 把「标准接口对应哪种 ROS 2 话题或动作、消息类型」放进了标准 `spec/neuxmind_spec/ros2_interfaces.py`（#23 已关闭，这是唯一的一份）。
 - #34 改云平台的共享文件（`app.py`、`config.py`、`db.py`、`maintenance.py`、`auth.py`）和 `web/material_library.js`；#31 按 #34 定的资料状态取值判断。
 - #19 在 #17 的分支上做，会动同一片连接层和安装步骤（#17 的令牌要由 #19 的安装步骤生成）；#29 在 #28 的分支上做，会改修复流程和内置修复 Skill（#28 已升到 1.2.0）。两个都要排在依赖后面合并：暂存合并里已经有 #17、#28 的同一批提交，所以它们可以直接合进暂存合并。
-- #29 和 #30 都改修复会话这一片：`brainos/hardware_init.py`、`docs/HARDWARE_INIT.md`、硬件初始化 Skill 的文件。研发计划会话请 #30 在这些地方只做插入、改得少，交付时附上和 #29 的三方试合并结果。合并顺序：#28 → #29，#34 → #30。
+- #29 和 #30 都改修复会话这一片：`brainos/hardware_init.py`、`docs/HARDWARE_INIT.md`、硬件初始化 Skill 的文件。研发计划会话请 #30 在这些地方只做插入、改得少，交付时附上和 #29 的三方试合并结果。合并顺序：#28 → #29，#34 → #30。#29 已提交 bda39d4，它的分支里先合了 #31 的 `feat/driver-package-delivery` @ 0734381（9c0ee9f），内置修复 Skill 升到 1.3.0；#30 报告和 bda39d4 试合并没有冲突。
 
 ## 待办
 
