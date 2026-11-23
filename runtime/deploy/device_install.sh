@@ -14,6 +14,19 @@
 # Environment: NX_ROOT (install directory, default ~/neuxmind), NX_PORT (8790),
 # NX_ADAPTER (sim_quadruped), NX_PYTHON (python3).
 #
+# The body (issue #21): "install" takes NX_ADAPTER = sim_quadruped (the default), sim_arm or ros2 and
+# records it; "start" runs what was recorded (NX_ADAPTER there still overrides, but ros2 only on a
+# ros2 install). With ros2 the runtime is connected to this device's own ROS 2:
+#   * install refuses, before it creates anything, unless NX_ROS_SETUP (default
+#     /opt/ros/humble/setup.bash, may be a workspace on top of it) is ROS 2 Humble, and says what it found;
+#   * the venv sees the system's packages (ROS 2's Python messages need the system numpy), and install
+#     fails and cleans up unless rclpy and the message packages import there;
+#   * the ROS settings given to install (ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY, RMW_IMPLEMENTATION,
+#     FASTRTPS_DEFAULT_PROFILES_FILE, CYCLONEDDS_URI) are checked and kept in ros2.env; start runs the
+#     runtime with that setup file and those settings only, checks for Humble again, and passes on
+#     ros2-config.json (topic names, QoS, nav2, limits; README §3) when the operator put one into the
+#     install directory. The device's nodes often run on a domain the login shell does not set.
+#
 # A robot runs other software under the same user, so the script keeps to these rules:
 #   * It creates, changes and deletes nothing outside the install directory, which must resolve
 #     (symlinks followed) to a place below $HOME. A directory counts as made by this script only when
@@ -33,8 +46,14 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SELF="$HERE/$(basename "$0")"
 PORT="${NX_PORT:-8790}"
-ADAPTER="${NX_ADAPTER:-sim_quadruped}"
+ADAPTER="${NX_ADAPTER:-}"                # empty: install takes sim_quadruped, start what install recorded
 PY="${NX_PYTHON:-python3}"
+ROS_SETUP_DEFAULT=/opt/ros/humble/setup.bash
+ROS_KEYS="ROS_DOMAIN_ID ROS_LOCALHOST_ONLY RMW_IMPLEMENTATION FASTRTPS_DEFAULT_PROFILES_FILE CYCLONEDDS_URI"
+ROS_CLEARED="AMENT_PREFIX_PATH COLCON_PREFIX_PATH CMAKE_PREFIX_PATH PYTHONPATH LD_LIBRARY_PATH ROS_DISTRO ROS_VERSION ROS_PYTHON_VERSION
+  RMW_FASTRTPS_USE_QOS_FROM_XML RMW_FASTRTPS_PUBLICATION_MODE ROS_AUTOMATIC_DISCOVERY_RANGE ROS_STATIC_PEERS"
+MAX_DOMAIN_ID=232                         # the largest ROS_DOMAIN_ID ROS 2 accepts on Linux
+ROS_SETUP_TIMEOUT_S=60                    # install: how long sourcing the setup file may take
 START_POLLS=120           # x 0.5 s: how long start waits for the gateway to answer
 STOP_POLLS=20             # x 0.5 s: how long stop waits before SIGKILL
 KILL_POLLS=10             # x 0.2 s: how long stop waits after SIGKILL
@@ -172,19 +191,237 @@ with socket.socket() as probe:
 PY
 }
 
+# ------------------------------------------------------------------ the body (issue #21)
+built_in() {  # built_in <name>: a body this script installs
+  case "$1" in
+    sim_quadruped|sim_arm|ros2) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+recorded_adapter() {  # prints the body this install was made for; an install from before the choice is simulated
+  local name=sim_quadruped
+  if [ -f "$ADAPTER_FILE" ]; then
+    read -r name < "$ADAPTER_FILE" || true
+  fi
+  built_in "$name" || fail 2 "refusing: $ADAPTER_FILE names '$name', not sim_quadruped, sim_arm or ros2"
+  echo "$name"
+}
+
+only_ours_can_write() {  # only_ours_can_write <path> [dir]: owned by root or this user, and no one else can write it
+  local owner mode                     # (a directory may be world-writable if sticky, like /tmp: others cannot move its entries)
+  read -r owner mode <<< "$(stat -L -c '%u %a' -- "$1" 2>/dev/null)" || return 1
+  [ "$owner" = 0 ] || [ "$owner" = "$(id -u)" ] || return 1
+  [ $(( 8#${mode:-777} & 8#022 )) -eq 0 ] && return 0
+  [ "${2:-}" = dir ] && [ $(( 8#${mode} & 8#1000 )) -ne 0 ]
+}
+
+setup_file_ok() {  # setup_file_ok <file>: the file and every directory above it can be changed only by root or this user
+  local path
+  path="$(realpath -e -- "$1" 2>/dev/null)" || return 1
+  only_ours_can_write "$path" || return 1
+  while [ "$path" != / ]; do
+    path="$(dirname "$path")"
+    only_ours_can_write "$path" dir || return 1
+  done
+}
+
+descendants() {  # descendants <pid>: the pids of its children, their children, ... (reads /proc, signals nothing)
+  local queue=("$1") parent entry pid stat fields
+  while [ "${#queue[@]}" -gt 0 ]; do
+    parent="${queue[0]}"
+    queue=("${queue[@]:1}")
+    for entry in /proc/[0-9]*; do
+      pid="${entry#/proc/}"
+      read -r stat 2>/dev/null < "$entry/stat" || continue
+      read -r -a fields <<< "${stat##*) }"              # [0] state, [1] parent
+      if [ "${fields[1]:-}" = "$parent" ]; then
+        echo "$pid"
+        queue+=("$pid")
+      fi
+    done
+  done
+}
+
+ros_value_ok() {  # ros_value_ok <key> <value>: a ROS setting this script passes on, holding what it may hold
+  [[ "$2" != *$'\n'* ]] || return 1
+  case "$1" in
+    ROS_SETUP) [[ "$2" == /* ]] && [ -f "$2" ] && setup_file_ok "$2" ;;
+    ROS_DOMAIN_ID) [[ "$2" =~ ^[0-9]{1,3}$ ]] && [ "$((10#$2))" -le "$MAX_DOMAIN_ID" ] ;;
+    ROS_LOCALHOST_ONLY) [[ "$2" =~ ^[01]$ ]] ;;
+    RMW_IMPLEMENTATION) [[ "$2" =~ ^rmw_[a-z0-9_]+$ ]] ;;
+    FASTRTPS_DEFAULT_PROFILES_FILE) [[ "$2" == /* ]] && [ -f "$2" ] && [ -r "$2" ] ;;
+    CYCLONEDDS_URI) [ -n "$2" ] ;;
+    *) return 1 ;;
+  esac
+}
+
+ros_distro_of() {  # ros_distro_of <setup file>: prints "<ROS_VERSION> <ROS_DISTRO>" it sets, in a clean shell
+  env -i HOME="$HOME" PATH="$PATH" timeout -k 5 "$ROS_SETUP_TIMEOUT_S" bash --noprofile --norc -c \
+    'set +u; . "$1" > /dev/null 2>&1; printf "%s %s\n" "${ROS_VERSION:-?}" "${ROS_DISTRO:-?}"' _ "$1"
+}
+
+ros2_precheck() {  # sets ROS_SETUP; refuses (nothing created yet) unless it is ROS 2 Humble and the settings are usable
+  local version distro key value candidate others=""
+  ROS_SETUP="${NX_ROS_SETUP:-$ROS_SETUP_DEFAULT}"
+  [[ "$ROS_SETUP" == /* ]] || fail 2 "refusing: NX_ROS_SETUP must be an absolute path, got '$ROS_SETUP'"
+  if [ ! -f "$ROS_SETUP" ]; then
+    shopt -s nullglob
+    for candidate in "$(dirname "$(dirname "$ROS_SETUP")")"/*/setup.bash; do
+      others="$others $(basename "$(dirname "$candidate")")"
+    done
+    shopt -u nullglob
+    [ -z "$others" ] || fail 2 "refusing: ROS 2 Humble not found ($ROS_SETUP does not exist); found${others}, but only ROS 2 Humble is supported"
+    fail 2 "refusing: ROS 2 Humble not found ($ROS_SETUP does not exist)"
+  fi
+  ros_value_ok ROS_SETUP "$ROS_SETUP" \
+    || fail 2 "refusing: $ROS_SETUP or a directory above it is writable by others than root and $(id -un); it would run as $(id -un)"
+  read -r version distro <<< "$(ros_distro_of "$ROS_SETUP")" || true
+  version="${version:-?}"
+  distro="${distro:-?}"
+  if [ "$version" != 2 ] || [ "$distro" != humble ]; then
+    fail 2 "refusing: $ROS_SETUP sets up ROS $version $distro; only ROS 2 Humble is supported"
+  fi
+  for key in $ROS_KEYS; do
+    value="${!key-}"
+    [ -n "$value" ] || continue
+    ros_value_ok "$key" "$value" || fail 2 "refusing: $key='$value' is not a usable value"
+  done
+}
+
+ros2_settings() {  # the ROS settings given to install, one KEY=VALUE per line
+  local key
+  for key in $ROS_KEYS; do
+    if [ -n "${!key-}" ]; then
+      echo "$key=${!key}"
+    fi
+  done
+}
+
+enter_ros2() {  # in a subshell: this install's ROS 2 Humble environment, nothing inherited; messages to stderr
+  local line key value setup="" settings=()
+  # shellcheck disable=SC2086  # word lists
+  unset NEUXMIND_ROS2_CONFIG $ROS_CLEARED $ROS_KEYS
+  while IFS= read -r line || [ -n "$line" ]; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$line" in
+      *=*) ;;
+      *) echo "refusing: $ROS_ENV holds a line that is not KEY=VALUE" >&2; exit 1 ;;
+    esac
+    case " ROS_SETUP $ROS_KEYS " in
+      *" $key "*) ;;
+      *) echo "refusing: $ROS_ENV holds an unknown line" >&2; exit 1 ;;
+    esac
+    if ! ros_value_ok "$key" "$value"; then
+      echo "refusing: $ROS_ENV: $key='$value' is not usable (a setup file must exist and be writable only by root or $(id -un))" >&2
+      exit 1
+    fi
+    if [ "$key" = ROS_SETUP ]; then setup="$value"; else settings+=("$key=$value"); fi
+  done < "$ROS_ENV"
+  [ -n "$setup" ] || { echo "refusing: $ROS_ENV names no ROS setup file" >&2; exit 1; }
+  set +eu +o pipefail                     # the ROS setup files are not written for errexit or nounset
+  # shellcheck disable=SC1090
+  . "$setup" > /dev/null
+  set -eu -o pipefail
+  if [ "${ROS_VERSION:-}" != 2 ] || [ "${ROS_DISTRO:-}" != humble ]; then
+    echo "refusing: $setup now sets up ROS ${ROS_VERSION:-?} ${ROS_DISTRO:-?}; only ROS 2 Humble is supported" >&2
+    exit 1
+  fi
+  if [ "${#settings[@]}" -gt 0 ]; then
+    export "${settings[@]}"
+  fi
+  if [ -f "$ROS2_CONFIG" ] && [ ! -L "$ROS2_CONFIG" ]; then
+    export NEUXMIND_ROS2_CONFIG="$ROS2_CONFIG"
+  fi
+}
+
+ros2_record() {  # install, ros2: keep the setup file and settings, then check rclpy imports in that environment
+  ( umask 077; { echo "ROS_SETUP=$ROS_SETUP"; ros2_settings; } > "$ROS_ENV" ) \
+    && ( enter_ros2; cd "$ROOT"; exec "$VENV/bin/python" - <<'PY'
+import importlib
+import os
+import sys
+
+missing = []
+for name in ("rclpy", "rclpy.qos", "geometry_msgs.msg", "nav_msgs.msg", "sensor_msgs.msg"):
+    try:
+        importlib.import_module(name)
+    except Exception as error:            # ImportError, or a compiled module built for another Python
+        missing.append(f"{name}: {error}")
+if missing:
+    sys.stderr.write(f"rclpy and the message packages do not import with Python {sys.version.split()[0]} "
+                     "in this ROS environment (ROS 2 Humble is built for the system python3):\n  "
+                     + "\n  ".join(missing) + "\n")
+    sys.exit(1)
+from neuxmind_runtime.adapters.ros2 import check_distro
+
+check_distro(os.environ)
+try:
+    importlib.import_module("nav2_msgs.action")
+    print("navigation: nav2_msgs found, base.navigate_to is declared (ros2-config.json \"nav2\": false turns it off)")
+except ImportError:
+    print("navigation: nav2_msgs not installed, so there is no base.navigate_to; everything else works")
+PY
+    )
+}
+
+ros2_config_check() {  # start, ros2: the operator's device configuration, when there is one, is a plain file here
+  if [ -L "$ROS2_CONFIG" ]; then
+    fail 1 "refusing: $ROS2_CONFIG is a symbolic link; put the file itself into the install directory"
+  fi
+  [ -e "$ROS2_CONFIG" ] || return 0
+  [ -f "$ROS2_CONFIG" ] || fail 1 "refusing: $ROS2_CONFIG is not a regular file"
+  # A simulated body is never device evidence and skips the safety-limit requirement (issue #22): an
+  # install on a device is for its real ROS 2. (Other mistakes in the file stop the adapter itself.)
+  "$VENV/bin/python" -I - "$ROS2_CONFIG" <<'PY' || exit 1
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        config = json.load(fh)
+except (OSError, ValueError):
+    sys.exit(0)                          # the adapter reports it, with the reason, when the runtime starts
+flags = [key for key in ("simulated", "use_sim_time") if isinstance(config, dict) and config.get(key) is True]
+if flags:
+    sys.stderr.write(f"refusing: {sys.argv[1]} sets {' and '.join(flags)}: a simulated body skips the safety limits "
+                     "and is not device evidence; this install is for the device's own ROS 2\n")
+    sys.exit(1)
+PY
+  echo "ROS 2 device configuration: $ROS2_CONFIG"
+}
+
 populate() {  # populate <spec wheel> <runtime wheel>; every step must succeed; the marker says "installed" last
+  local venv_options=()
+  if [ "$ADAPTER" = ros2 ]; then
+    venv_options=(--system-site-packages)  # ROS 2's Python messages import the system numpy
+  fi
   echo "state=installing" > "$MARKER" \
     && mkdir -m 700 -- "$STATE" \
-    && "$PY" -m venv "$VENV" \
+    && "$PY" -m venv ${venv_options[@]+"${venv_options[@]}"} "$VENV" \
     && "$VENV/bin/pip" install --quiet --isolated --no-cache-dir --no-index --no-deps --disable-pip-version-check "$1" "$2" \
     && ( umask 077; "$VENV/bin/python" -c 'import secrets; print(secrets.token_urlsafe(36))' > "$TOKEN_FILE" ) \
+    && echo "$ADAPTER" > "$ADAPTER_FILE" \
+    && { [ "$ADAPTER" != ros2 ] || ros2_record; } \
     && "$VENV/bin/python" -c 'import sys, neuxmind_runtime; print("python", sys.version.split()[0]); print("installed", neuxmind_runtime.__file__)' \
     && echo "state=installed" > "$MARKER.next" \
     && mv -f -- "$MARKER.next" "$MARKER"
 }
 
 install() {
-  local spec runtime parent
+  local spec runtime parent settings
+  ADAPTER="${ADAPTER:-sim_quadruped}"
+  built_in "$ADAPTER" || fail 2 "refusing: NX_ADAPTER=$ADAPTER; install takes sim_quadruped, sim_arm or ros2"
+  if [ "$ADAPTER" = ros2 ]; then
+    ros2_precheck
+    settings="$(ros2_settings | tr '\n' ' ')"
+    echo "body: ros2, ROS 2 humble ($ROS_SETUP)"
+    echo "ROS settings: ${settings:-none given (ROS defaults: domain 0, the default RMW)}"
+    if [ -z "${ROS_LOCALHOST_ONLY-}" ]; then
+      echo "note: ROS_LOCALHOST_ONLY is not set, so the runtime's ROS node is discoverable on the device's networks, like its other nodes"
+    fi
+  fi
   spec="$(one_wheel neuxmind_spec)"
   runtime="$(one_wheel neuxmind_runtime)"
   if [ -e "$ROOT" ]; then
@@ -208,12 +445,20 @@ install() {
 }
 
 start() {
-  local pid child
+  local pid child installed_as nohup_bin setsid_bin
   if pid="$(running_pid)"; then
     echo "already running: pid $pid"
     return 0
   fi
   is_install || fail 2 "not installed: run '$SELF install' first"
+  installed_as="$(recorded_adapter)" || exit 2
+  ADAPTER="${ADAPTER:-$installed_as}"
+  if [ "$ADAPTER" = ros2 ] && [ "$installed_as" != ros2 ]; then
+    fail 2 "refusing: this install is for $installed_as; a ROS 2 body needs an install of its own (NX_ADAPTER=ros2 $SELF install)"
+  fi
+  if [ "$ADAPTER" = ros2 ]; then
+    ros2_config_check
+  fi
   rm -f -- "$PID_FILE"
   if port_in_use; then
     fail 1 "127.0.0.1:$PORT is already in use; the runtime was not started"
@@ -224,10 +469,15 @@ start() {
     echo "alert reports: $CLOUD_CONFIG"
   fi
   cd "$ROOT"
-  BRAIN_EDGE_TOKEN="$(cat "$TOKEN_FILE")" nohup setsid "$ENTRY" serve \
-    --adapter "$ADAPTER" --host 127.0.0.1 --port "$PORT" --state-dir "$STATE" \
-    --log-file "$LOG" \
-    >> "$LOG" 2>&1 < /dev/null 9<&- &
+  nohup_bin="$(command -v nohup)"         # looked up here: the ROS setup file changes PATH
+  setsid_bin="$(command -v setsid)"
+  # A subshell that enters the ROS 2 environment when the body is ros2, then becomes the runtime (exec
+  # keeps its pid); a refusal on the way ends up in the log, which a failed start prints.
+  ( if [ "$ADAPTER" = ros2 ]; then enter_ros2; fi
+    BRAIN_EDGE_TOKEN="$(cat "$TOKEN_FILE")" exec "$nohup_bin" "$setsid_bin" "$ENTRY" serve \
+      --adapter "$ADAPTER" --host 127.0.0.1 --port "$PORT" --state-dir "$STATE" \
+      --log-file "$LOG"
+  ) >> "$LOG" 2>&1 < /dev/null 9<&- &
   child=$!
   echo "$child" > "$PID_FILE"
   # Right after the fork the child is still this script, not yet the runtime, so only its presence is
@@ -240,6 +490,17 @@ start() {
     fi
     sleep 0.5
   done
+  # Still the subshell (sourcing the ROS setup took too long): it would become the runtime later, unseen
+  # by stop. It is this script's own child and was alive a moment ago (bash reaps it only once it has
+  # exited), so the pid is still its. Freeze it first (no exec, no new children), then end it together
+  # with whatever the setup file started (found through /proc, children of children included).
+  if still_there "$child" && ! is_runtime "$child"; then
+    kill -s STOP -- "$child" 2>/dev/null || true
+    for pid in $(descendants "$child") "$child"; do
+      kill -s KILL -- "$pid" 2>/dev/null || true
+    done
+    echo "the ROS 2 environment was not ready within $(( START_POLLS / 2 )) s" >> "$LOG"
+  fi
   stop >/dev/null
   echo "runtime did not come up; last log lines:" >&2
   tail -n 30 "$LOG" >&2
@@ -266,6 +527,7 @@ try:
     summary["sandbox"] = {key: sandbox.get(key) for key in ("level", "mode", "privilege_drop", "python_usable", "pids_cgroup")}
     report = status.get("alert_report") or {}
     summary["alert_report"] = {key: report.get(key) for key in ("enabled", "url", "unsent", "last_error", "reason")}
+    summary["motion_blocked"] = (status.get("safety_limits") or {}).get("motion_blocked")   # issue #22
 except (ValueError, AttributeError) as error:     # something else answered on this port
     sys.stderr.write(f"the answer was not a runtime status: {error}\n")
     sys.exit(1)
@@ -330,6 +592,9 @@ PID_FILE="$ROOT/runtime.pid"
 LOG="$ROOT/runtime.log"
 MARKER="$ROOT/.neuxmind-device-install"
 CLOUD_CONFIG="$ROOT/cloud-report.json"   # optional, written by the operator: where alerts are reported
+ADAPTER_FILE="$ROOT/adapter"             # the body install was made for (issue #21)
+ROS_ENV="$ROOT/ros2.env"                 # ros2: the setup file and ROS settings start uses, written by install
+ROS2_CONFIG="$ROOT/ros2-config.json"     # ros2, optional, written by the operator: topics, QoS, nav2, limits
 
 case "$1" in
   install) lock; install ;;
