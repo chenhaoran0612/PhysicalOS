@@ -17,7 +17,7 @@ unmodified path.
   ``simulated: true`` and the desktop shows the 仿真 badge.
 
 Also here: the read-only live status used by the status panel, and running an
-installed skill — on simulated robots only, after explicit authorization.
+installed skill after explicit authorization (on a real robot too: issue #42).
 """
 import json
 import os
@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from . import connector, robot_caps, runtime_bridge
+from . import connector, robot_caps, runtime_bridge, skill_run
 from .contracts import required_text
 from .errors import CodedError, refusal_fields
 
@@ -555,11 +555,11 @@ def live(platform, p):
 
 # ---------------------------------------------------------------- running a skill
 def run_skill(platform, p):
-    """POST /v2/skills/<id>/run on a simulated robot, after explicit authorization.
+    """POST /v2/skills/<id>/run on a connected robot, after explicit authorization.
 
     ``request_id`` is idempotent here (same id → recorded outcome, never sent
-    twice) and on the device (ledger). Real robots run skills through
-    applications and on-site tests, not from this shortcut.
+    twice) and on the device (ledger). A real robot also needs the on-site
+    confirmation (issue #42, :mod:`brainos.skill_run`).
     """
     if p.get('hardware_authorized') is not True:
         raise CodedError('运行技能会让机器人运动，需要先勾选现场安全确认并授权', 'authorization_required')
@@ -573,8 +573,7 @@ def run_skill(platform, p):
     robot = platform.store.get('robots', p.get('robot_id'))
     if p.get('project_id') and robot.get('project_id') != p['project_id']:
         raise ValueError('该机器人不属于当前项目')
-    if not robot.get('sim'):
-        raise CodedError('直接运行技能目前只对仿真机器人开放；真机请在“机器人应用”中完成现场测试后部署', 'simulated_only')
+    facts = skill_run.require_confirmations(robot, p)     # issue #42: a real robot needs the on-site confirmation too
     skill_id = required_text(p.get('skill_id'), '技能', 100)
     parameters = p.get('parameters', {})
     if isinstance(parameters, str):
@@ -594,7 +593,7 @@ def run_skill(platform, p):
     if decls:
         parameters = robot_caps.typed_parameters(decls, parameters, device_decls=True)   # the device's own declaration
     op = {'id': op_id, 'project_id': robot['project_id'], 'robot_id': robot['id'], 'kind': 'skill_run',
-          'skill_id': skill_id, 'parameters': parameters, 'status': 'dispatching', 'created_at': now()}
+          'skill_id': skill_id, 'parameters': parameters, 'status': 'dispatching', 'created_at': now(), **facts}
     platform.store.put('operations', op)
     try:
         response = connector.call(robot['endpoint'], '/v2/skills/' + quote(skill_id, safe='') + '/run',
@@ -618,7 +617,7 @@ def run_skill(platform, p):
             op.update(status='unknown', error=f'{exc}；运行结果未知，不会自动重试，请看实时状态')
     platform.store.put('operations', op)
     platform.audit('skill.run', {'operation_id': op_id, 'robot_id': robot['id'], 'skill': skill_id,
-                                 'status': op['status']}, robot['project_id'])
+                                 'status': op['status'], **facts}, robot['project_id'])
     return op
 
 

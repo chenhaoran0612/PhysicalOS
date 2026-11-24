@@ -23,6 +23,8 @@ const UX_CODES = {
   safety_rejected: ['safety', '机器人的安全监督器拒绝了这个动作（例如目标超出允许的工作区，或速度、步数超过上限）。这是安全保护，不是故障，原样重试也会被拒绝。', '展开“技术细节”看是哪一项超限', '修改参数，让动作落在允许范围内后再运行'],
   hardware_not_authorized: ['auth', '这个操作会让机器人运动，需要现场授权。', '确认机器人周围安全后，勾选“我确认……授权”再提交'],
   authorization_required: ['auth', '这个操作会让机器人运动（或可以再次运动），需要你在现场确认安全并授权。', '勾选表单下方的现场安全确认后再提交'],
+  // Issue #42: a real robot runs an installed skill only after the on-site confirmation (brainos/skill_run.py).
+  onsite_confirmation_required: ['auth', '这是一台真实的机器人，运行技能会让它真的运动。运行前需要确认现场有人看着它。', '确认现场有人看着机器人、周围没有人和障碍物、急停按钮够得着', '勾选表单下方的两项确认后再提交'],
   operator_required: ['auth', '这个操作需要平台运营人员的权限。', '请联系平台运营方'],
   // ux05 (Q6-11): the desktop's own record of a reset that was sent while the previous one still hangs. Not a
   // refusal (it may yet complete), so it must not say "被拒绝".

@@ -86,7 +86,7 @@ function simGalleryCard(x, robot, installed) {
   const other = others.length ? `<p class="inline-note">其他机器人：${others.map(c =>
     h(c.robot_name) + (c.compatible ? ' ✓ 可用' : ' ✗ 不可用')).join('；')}</p>` : '';
   const action = isInstalled
-    ? (robot.sim ? button('运行', 'sim-run', 'small', robot.id + '|' + s.id) : '') + badge('已安装', 'good')
+    ? skillRunButton(robot, {id: s.id, compatible: !mine || mine.compatible}) + badge('已安装', 'good')   // issue #42: real robots too
     : button('安装到这台机器人', 'skillpkg-example', 'small', robot.id + '|' + x.example, !mine || !mine.compatible);
   return `<article class="gallery-item" data-example="${h(x.example)}"><div class="section-head"><h3>${h(s.title)}</h3>${verdict}</div>` +
     `<p>${h(x.note || s.summary || s.description)}</p><div class="tags">` +
@@ -130,12 +130,10 @@ async function simRunForm(robotId, skillId, installedNote = false) {
   const title = installed?.title || g?.skill.title || skillId;
   const about = g?.note || installed?.summary || installed?.description || '';
   return form('运行技能', h(robot.name) + ' · ' + h(title),
-    (installedNote ? `<section class="plan-review ok"><h3>技能已安装</h3><p>现在可以让机器人运行它。也可以先关闭，之后在“实时状态”或“能力与技能”里运行。</p></section>` : '') +
+    (installedNote ? skillRunInstalledNote(robot) : '') +
     (about ? `<p class="subtitle">${h(about)}</p>` : '') +
     skillParamsForm(decls, g ? g.preset : null) +
-    notice('<b>仿真</b> 这是仿真机器人：运动发生在虚拟环境中。授权规则与真机相同，运行中随时可以按“停止”。') +
-    `<label class="hardware-confirm"><input type="checkbox" name="hardware_authorized" required>` +
-    `<span>我确认机器人周围安全，授权它执行这个技能（技能可能让机器人运动）。</span></label>`,
+    skillRunConfirmHtml(robot),      // issue #42: a real robot is asked for the on-site confirmation too (web/skill_run.js)
     'sim-run', '授权并运行',
     `data-robot="${h(robotId)}" data-skill="${h(skillId)}" data-request="${h(newRequestId())}" data-project="${h(projectId)}"`);
 }
@@ -276,7 +274,7 @@ function simLiveBody(v) {
   const proc = v.process ? `${badge((simStateNames[v.process.state] || [v.process.state])[0], (simStateNames[v.process.state] || [])[1] || '')}` : '';
   if (!v.reachable) {
     const down = v.process && ['stopped', 'failed', 'exited'].includes(v.process.state);
-    return `<div class="detail-meta"><div><b>机器人</b>${h(v.name)} ${v.simulated ? simBadge() : ''}</div><div><b>仿真进程</b>${proc || '—'}</div></div>` +
+    return `<div class="detail-meta"><div><b>机器人</b>${h(v.name)} ${v.simulated ? simBadge() : ''}</div>${v.process ? `<div><b>仿真进程</b>${proc || '—'}</div>` : ''}</div>` +
       notice(h(v.error || '暂时读不到状态'), true) +
       `<div class="button-row">${down ? button('启动仿真', 'sim-start', '', robotId) : ''}${button('请求停止', 'simlive-stop', 'danger', robotId)}</div>`;
   }
@@ -410,7 +408,7 @@ async function simSubmit(kind, p, f) {
   if (kind === 'sim-run') {
     const parameters = skillParamsCollect(f);
     const result = await api('robots/run-skill', {robot_id: f.dataset.robot, skill_id: f.dataset.skill, parameters,
-      hardware_authorized: f.elements.hardware_authorized.checked, request_id: f.dataset.request, project_id: projectId})
+      ...skillRunConfirmations(f), request_id: f.dataset.request, project_id: projectId})
       .catch(err => { f.dataset.request = newRequestId(); throw err; });
     // ux04: keep the device's code and field (e.g. param_out_of_range on loops) for the explanation.
     if (result.status !== 'accepted') { f.dataset.request = newRequestId(); throw uxOpError(result, '设备没有接受运行请求'); }

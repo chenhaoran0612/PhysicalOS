@@ -56,7 +56,7 @@ function capabilitySection(caps) {
 
 function installedSkillsSection(robot, skills) {
   const head = `<div class="section-head" id="robot-skills"><h3>已安装技能包 <span class="badge-count">${skills.items.length}</span></h3>` +
-    `<div class="button-row">${robot.sim ? button('实时状态', 'sim-live', 'secondary small', robot.id) : ''}` +
+    `<div class="button-row">${skillRunStatusButton(robot)}` +
     button('安装技能包', 'skillpkg-open', 'small', robot.id, !skills.available) + '</div></div>';
   if (!skills.available) return head + notice(h(skills.error || '暂不能读取已安装技能'));
   if (!skills.items.length) {
@@ -65,9 +65,9 @@ function installedSkillsSection(robot, skills) {
   return head + skills.items.map(s =>
     `<div class="contract-line"><div class="section-head"><b>${h(s.title)} <span class="mono skill-key">${h(s.id)}@${h(s.version)}</span>` +
     `${s.compatible ? '' : ' ' + badge('与当前本体不兼容', 'bad')}</b>` +
-    `${robot.sim ? button('运行', 'sim-run', 'small', robot.id + '|' + s.id, !s.compatible) : ''}</div>` +
+    `${skillRunButton(robot, s)}</div>` +
     `<p>${h(s.summary || s.description || '')}</p><div class="tags">${s.requires.map(r => `<span class="tag">${h(r.title)}</span>`).join('')}</div></div>`
-  ).join('') + (robot.sim ? '' : `<p class="inline-note">真机上的技能通过“机器人应用”完成现场测试后部署运行。</p>`);
+  ).join('') + (skillRunIsSim(robot) ? '' : `<p class="inline-note">在真机上运行技能前要确认现场安全；要反复执行或交付的工作，请编排成“机器人应用”，完成现场测试后部署。</p>`);
 }
 
 function robotDetailRender(d) {
@@ -193,8 +193,7 @@ function skillInstallResult(result, robotId) {
   const [head, text] = messages[result.status] || ['安装结果', result.error || ''];
   if (result.status === 'succeeded') {
     toast(`${head}：${result.skill_id}@${result.version}`);
-    if (find('robots', robotId)?.sim) return simRunForm(robotId, result.skill_id, true);
-    return robotDetailOpen(robotId, 'skills');
+    return simRunForm(robotId, result.skill_id, true);      // issue #42: a real robot can run it at once too
   }
   dialog('安装技能包', h(result.skill_id) + '@' + h(result.version),
     `<div class="dialog-body"><section class="plan-review blocked"><h3>${h(head)}</h3><p>${h(text)}</p></section>` +

@@ -248,14 +248,14 @@ class SimRobotTests(unittest.TestCase):
         self.assertEqual(len(moving['state']['joints']), 6)
         self.assertIn('opening', moving['state']['gripper'])
 
-    def test_run_shortcut_is_for_simulated_robots_only(self):
+    def test_run_shortcut_asks_a_real_robot_for_the_on_site_confirmation(self):      # issue #42
         gateway = Gateway(DeviceFixture(), 'test-only-token-123456789000', self.tmp.name + '/edge')
         edge = Server(edge_handler(gateway))
         try:
             project = self.app.add_project({'name': 'P', 'objective': 'O'})
             real = self.app.add_robot({'project_id': project['id'], 'name': 'real', 'family': 'quadruped',
                                        'endpoint': edge.url, 'token': 'test-only-token-123456789000'})
-            with self.assertRaisesRegex(ValueError, '只对仿真机器人开放'):
+            with self.assertRaisesRegex(ValueError, '真实的机器人'):
                 self.run_skill(real['id'], 'patrol', 'x1')
         finally:
             edge.close()

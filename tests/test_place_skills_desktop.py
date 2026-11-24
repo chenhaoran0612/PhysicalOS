@@ -3,7 +3,7 @@
 Starts a real ``neuxmind_runtime serve`` child with the simulated body (made-up places, a stand-in
 wander) and goes through what a user does: find the skill in the gallery, install it, run it with
 the values the form starts with, watch it end. Nothing touches real hardware; a real robot runs the
-same skills through an application (现场测试 → 部署 → 启动), which the run shortcut refuses.
+same skills after an on-site confirmation (issue #42, tests/test_skill_run.py) or through an application.
 """
 import sys
 import tempfile
