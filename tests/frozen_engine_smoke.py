@@ -19,7 +19,7 @@ from test_discovery import DiscoveryModel,COMMAND,ROOT,FILE
 
 root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as tmp:
-    process=subprocess.Popen([str(root/'dist/NeuxMind Robot OS.app/Contents/Resources/backend/brainos-server'),'--port','0','--state-dir',tmp],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'NEUXMIND_MAIL_DEV_ECHO':'1'})
+    process=subprocess.Popen([str(root/'dist/NeuxMind Robot OS.app/Contents/Resources/backend/brainos-server'),'--port','0','--state-dir',tmp],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,env={**os.environ,'NEUXMIND_MAIL_DEV_ECHO':'1','NEUXMIND_CLOUD_AUTO_LOGIN':'0'})   # issue #36: the test account must not be signed into (or registered in) a cloud on this computer
     ssh=SSHFixture();model=Server(ResponsesFixture);mcp=Server(MCPFixture);ext_model=Server(ExtensionModel);flow_model=Server(WorkflowModel);recipe_service=Server(RecipeFixture)
     deep_model=Server(DiscoveryModel);deep_ssh=SSHFixture(files={FILE:b'# fixture\n'+b'x'*48000+b'\nprotocol: fixture-bus\n'},command_outputs={COMMAND:b'ExecStart=/home/robot/vendor_ws/driver.py\n'})
     gateway=Gateway(DeviceFixture(),'frozen-edge-token-123456789',tmp+'/edge');edge=Server(edge_handler(gateway))
