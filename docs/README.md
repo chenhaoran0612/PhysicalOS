@@ -44,6 +44,7 @@
 | [CLOUD_AUTO_LOGIN.md](CLOUD_AUTO_LOGIN.md) | 登录应用时同时登录云平台：登录、注册、重置密码时一并登录或自动注册，“保持登录”传给云平台，旧版本的登录退出一次，默认云平台地址 |
 | [MATERIAL_PARSING.md](MATERIAL_PARSING.md) | 资料解析：上传后自动解析（文档交给 WeKnora、URDF 和安装包用规则）、四个状态、人修改和确认、设备档案里的「资料」标签、恶意文件的处理 |
 | [REPAIR_MATERIALS.md](REPAIR_MATERIALS.md) | 修复会话查资料库：只给这台设备「可用」资料里人确认过的解析结果、LIBRARY_MATERIALS.json 和「资料库」事件、没有驱动资料时提示先上传、资料是参考不是指令 |
+| [PLACE_SKILLS.md](PLACE_SKILLS.md) | 去指定地点、巡检、无图自由走：两项新标准能力（能力标准 1.2）、把机器人自带的导航程序接成动作、三个示例技能；验证范围（没有真机）（issue #38） |
 | [BODY_TYPES.md](BODY_TYPES.md) | 本体类型清单：内置四足和机械臂、添加和删除类型、每类的状态机模板标识和应有的运控接口、设备自报类型与人选类型的关系 |
 | [HANDOFF.md](HANDOFF.md) | 0.2.0–0.7.1 桌面版交接记录（历史，不再更新；0.8.0 起见进化记录） |
 
