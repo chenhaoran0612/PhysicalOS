@@ -162,6 +162,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         else if url.scheme == "https" || url.scheme == "http" { NSWorkspace.shared.open(url); decisionHandler(.cancel) }
         else { decisionHandler(.cancel) }
     }
+    // <input type="file">: on macOS a WKWebView opens no file panel by itself, the host has to (issue #40).
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.prompt = "选择"
+        panel.beginSheetModal(for: window) { result in completionHandler(result == .OK ? panel.urls : nil) }
+    }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         // Only the local console may open the picker; the chosen path goes back to that page only.
         guard message.name == "nxPickFolder", let local = localURL else { return }
