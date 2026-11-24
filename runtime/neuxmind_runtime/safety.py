@@ -105,6 +105,17 @@ def is_motion(cap_id: str) -> bool:
     return spec_caps.get(cap_id).safety == "motion"
 
 
+def _refused(handle) -> bool:
+    """True when an action handle already reports that nothing was started (``poll`` is cheap and
+    non-blocking by the adapter contract). Anything unclear counts as started."""
+    if handle is None:
+        return False
+    try:
+        return handle.poll().state == "failed"
+    except Exception:
+        return False
+
+
 def _all_finite(value: Any) -> bool:
     if isinstance(value, bool):
         return True
@@ -512,6 +523,46 @@ class SafetySupervisor:
                         self._reject(cap, f"目标 {axis}={value} 超出允许工作区 {bounds}")
         return args
 
+    def _bound_program_speed(self, cap: str, args: dict, notes: list, ctx: dict) -> None:
+        """``max_speed`` of an on-body program (issue #38): always set, never above what the body
+        declares or what was filled in for this device. The body's own navigation does the driving, so
+        this number is the only handle the supervisor has on its speed; with no bound at all, refuse."""
+        filled = ctx[_DEVICE_LIMITS] if _DEVICE_LIMITS in ctx else self._device_limits
+        bounds = []
+        if filled is not None:
+            bounds.append(float(filled["base"]["max_linear_speed"]))
+        for declared in (self.limits.get("max_linear_speed"), self.params.get("base.velocity", {}).get("max_vx")):
+            if isinstance(declared, (int, float)) and not isinstance(declared, bool) and declared > 0:
+                bounds.append(float(declared))
+        if not bounds:
+            self._reject(cap, "没有可用的速度上限（清单未声明，现场也未填写），拒绝无限制运动")
+        limit = min(bounds)
+        requested = args.get("max_speed")
+        if requested is None:
+            args["max_speed"] = limit
+            return
+        applied = min(float(requested), limit)
+        if applied != requested:
+            notes.append({"field": "max_speed", "requested": requested, "applied": applied, "limit": limit})
+        args["max_speed"] = applied
+
+    def _limit_base_navigate_to_place(self, args: dict, notes: list, ctx: dict) -> dict:
+        cap = "base.navigate_to_place"
+        places = self._param(cap, "places")
+        if args["place"] not in places:
+            self._reject(cap, f"本体不认识地点 {args['place']}，认识 {list(places)}")
+        self._bound_program_speed(cap, args, notes, ctx)
+        return args
+
+    def _limit_base_explore(self, args: dict, notes: list, ctx: dict) -> dict:
+        cap = "base.explore"
+        for name, pname, unit in (("duration_s", "max_duration_s", "s"), ("radius", "max_radius", "m")):
+            ceiling = self.params.get(cap, {}).get(pname)
+            if name in args and ceiling is not None and args[name] > ceiling:
+                self._reject(cap, f"{name}={args[name]} 超出本体允许的 {ceiling} {unit}")
+        self._bound_program_speed(cap, args, notes, ctx)
+        return args
+
     def _limit_arm_ee_pose(self, args: dict, notes: list, _ctx: dict) -> dict:
         cap = "arm.ee_pose"
         reach = self._param(cap, "reach")
@@ -617,9 +668,12 @@ class SafetySupervisor:
         if cap_id == "base.velocity":
             moving = any(abs(args.get(k, 0.0)) > 0.0 for k in ("vx", "vy", "wz"))
             self._velocity_deadline = (self._clock.now() + args["timeout_s"]) if moving else None
-        elif cap_id == "base.navigate_to":
-            # Navigation supersedes any streamed velocity setpoint.
-            self._velocity_deadline = None
+        elif cap_id in ("base.navigate_to", "base.navigate_to_place", "base.explore"):
+            # Navigation supersedes any streamed velocity setpoint -- if it started. An adapter may
+            # answer with a handle that has already failed (a refusal: busy, too slow a bound, ...);
+            # nothing took over then, and a setpoint still in force keeps its watchdog (issue #38).
+            if not _refused(handle):
+                self._velocity_deadline = None
 
     # --------------------------------------------------------- watchdog
     def watchdog_tick(self) -> bool:

@@ -33,11 +33,20 @@ is false, so the runtime treats it like a real body (`simulated: false`).
   refused with `safety_limits_missing` and nothing is published; `/v1/stop` answers and a zero Twist
   reaches the base; after filling the limits and a reset, a velocity command arrives clamped to them;
   the watchdog sends a zero Twist within the command timeout; SIGTERM ends the process cleanly.
+- A third runtime with on-body programs (issue #38). The "program" is a stand-in that is itself a real
+  rclpy node driving on `/cmd_vel`: a place is refused before limits are filled and nothing is started;
+  after filling them the program runs to its end at the speed bound the runtime gave it (seen on the
+  real topic) and the run succeeds; during a long walk health says `ros2:program`, `/v1/stop` ends the
+  program within its grace period and the last commands on the topic are zero; a program written so
+  that it cannot publish its own zero (signal handler installed before `rclpy.init()`, which then shuts
+  the context down first) is cancelled and the bridge's zero reaches the base; and when the runtime is
+  killed with SIGKILL the kernel's SIGTERM reaches the program, which stops the base and exits.
 - A second runtime configured with a reliable `/odom` subscription: the QoS reaches DDS, the reader gets
   nothing from the best-effort publisher (health names `odom`, the battery stays fresh), and ROS logs the
   incompatible QoS.
 
-**Result** (2026-11-21, branch `feat/ros2-humble-adapter`): 31 passed, 0 failed.
+**Result** (2026-11-21, branch `feat/ros2-humble-adapter`): 31 passed, 0 failed. With the on-body
+programs part (2026-11-24, branch `feat/l2u-skills`): 46 passed, 0 failed.
 
 **Not covered here:** a real Nav2 stack, other RMWs, a robot. A container is not a robot: reports
 based on this say "not run on the real machine".

@@ -35,6 +35,8 @@
 | `joint.state` | 关节状态 | 状态 | 无 | — | `names`: object<br>`position`: floats (rad)<br>`velocity`: floats (rad/s)?<br>`effort`: floats (N·m)? | `dof`: int |
 | `base.velocity` | 底盘速度 | 命令 | 运动 | `vx`: float (m/s)<br>`vy`: float (m/s)?<br>`wz`: float (rad/s)<br>`timeout_s`: float (s)? | `accepted`: bool | `max_vx`: float (m/s)<br>`max_vy`: float (m/s)<br>`max_wz`: float (rad/s)<br>`holonomic`: bool |
 | `base.navigate_to` | 导航到目标 | 动作 | 运动 | `goal`: pose<br>`frame`: str?<br>`tolerance`: float (m)? | `reached`: bool<br>`final_pose`: pose? | `planner`: str? |
+| `base.navigate_to_place` | 去指定地点（v1.2，issue #38） | 动作 | 运动 | `place`: str<br>`max_speed`: float (m/s)? | `reached`: bool<br>`place`: str?<br>`final_pose`: pose? | `places`: object（地点名列表，必填） |
+| `base.explore` | 无图自由走（v1.2，issue #38） | 动作 | 运动 | `duration_s`: float (s)<br>`radius`: float (m)?<br>`max_distance`: float (m)?<br>`max_speed`: float (m/s)? | `completed`: bool<br>`travelled`: float (m)?<br>`final_pose`: pose? | `max_duration_s`: float (s)?<br>`max_radius`: float (m)? |
 | `legged.posture` | 足式姿态 | 命令 | 运动 | `posture`: enum | `accepted`: bool | `supported`: object |
 | `arm.joint_position` | 机械臂关节位置 | 动作 | 运动 | `position`: floats (rad)<br>`max_velocity`: float (rad/s)? | `reached`: bool<br>`position`: floats (rad) | `dof`: int<br>`lower`: floats (rad)<br>`upper`: floats (rad)<br>`max_velocity`: float (rad/s)<br>`joint_names`: strs?（v1.1） |
 | `arm.ee_pose` | 末端位姿 | 动作 | 运动 | `pose`: pose<br>`frame`: str?<br>`max_velocity`: float (m/s)? | `reached`: bool<br>`pose`: pose | `frame`: str<br>`reach`: float (m)<br>`payload`: float (kg) |

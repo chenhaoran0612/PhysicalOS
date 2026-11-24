@@ -165,5 +165,78 @@ class ResetExpected(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     mf.validate_manifest_v2(self._m(bad))
 
+
+class NamedPlacesAndExplore(unittest.TestCase):
+    """Issue #38 (spec 1.2): go to a place the body knows by name, and walk without a map."""
+
+    def _m(self, *capabilities):
+        return {"schema": "robot.adapter.v2", "instance_id": "dog-1", "name": "Dog", "adapter_version": "0.1.0",
+                "family": "quadruped",
+                "capabilities": [{"id": "safety.stop", "params": {"hardware_estop": False}},
+                                 {"id": "system.health"}, *capabilities]}
+
+    def test_spec_version_is_1_2(self):
+        self.assertEqual(caps.SPEC_VERSION, "1.2")
+
+    def test_both_are_motion_actions(self):
+        for cap_id in ("base.navigate_to_place", "base.explore"):
+            with self.subTest(cap_id=cap_id):
+                cap = caps.get(cap_id)
+                self.assertEqual((cap.kind, cap.safety, cap.major), ("action", "motion", 1))
+                self.assertTrue(mf.is_motion(cap_id))
+
+    def test_place_payloads(self):
+        caps.validate_payload("base.navigate_to_place", {"place": "会议室"})
+        caps.validate_payload("base.navigate_to_place", {"place": "会议室", "max_speed": 0.5})
+        caps.validate_payload("base.navigate_to_place", {"reached": True, "place": "会议室"}, "outputs")
+        for bad in ({}, {"place": 3}, {"place": "会议室", "goal": [0, 0, 0, 0, 0, 0, 1]},
+                    {"place": "会议室", "max_speed": 0}, {"place": "会议室", "max_speed": float("nan")}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    caps.validate_payload("base.navigate_to_place", bad)
+
+    def test_explore_payloads(self):
+        caps.validate_payload("base.explore", {"duration_s": 60.0})
+        caps.validate_payload("base.explore", {"duration_s": 60, "radius": 5.0, "max_distance": 20.0, "max_speed": 0.4})
+        caps.validate_payload("base.explore", {"completed": True, "travelled": 12.5}, "outputs")
+        for bad in ({}, {"duration_s": 0}, {"duration_s": -5}, {"duration_s": 60, "radius": 0},
+                    {"duration_s": 60, "max_distance": -1}, {"duration_s": "60"}, {"duration_s": 60, "speed": 1}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    caps.validate_payload("base.explore", bad)
+
+    def test_manifest_declares_its_places(self):
+        out = mf.validate_manifest_v2(self._m(
+            {"id": "base.navigate_to_place", "params": {"places": ["会议室", "二楼"]}},
+            {"id": "base.explore", "params": {"max_duration_s": 600.0, "max_radius": 10.0}}))
+        declared = {c["id"]: c["params"] for c in out["capabilities"]}
+        self.assertEqual(declared["base.navigate_to_place"]["places"], ["会议室", "二楼"])
+
+    def test_places_must_be_a_list_of_distinct_names(self):
+        for bad in (None, [], "会议室", ["会议室", "会议室"], ["会议室", ""], ["会议室", 3], {"会议室": [0, 0]},
+                    ["  "], ["x" * 101], ["a\nb"]):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    mf.validate_manifest_v2(self._m({"id": "base.navigate_to_place", "params": {"places": bad}}))
+
+    def test_a_place_capability_without_places_is_refused(self):
+        with self.assertRaises(ValueError):
+            mf.validate_manifest_v2(self._m({"id": "base.navigate_to_place"}))
+
+    def test_explore_limits_fail_closed(self):
+        for params in ({"max_duration_s": 0}, {"max_duration_s": float("inf")}, {"max_radius": -1.0}, {"warp": 1}):
+            with self.subTest(params=params):
+                with self.assertRaises(ValueError):
+                    mf.validate_manifest_v2(self._m({"id": "base.explore", "params": params}))
+
+    def test_skill_can_require_them(self):
+        skill = mf.validate_skill_package({
+            "schema": "skill.package.v1", "id": "goto-place", "version": "0.1.0", "title": "去指定地点",
+            "entry": "skill.py:run", "requires": [{"id": "base.navigate_to_place"}, {"id": "safety.stop"}]})
+        with_places = self._m({"id": "base.navigate_to_place", "params": {"places": ["会议室"]}})
+        self.assertTrue(mf.check_compatibility(skill, with_places)["compatible"])
+        self.assertFalse(mf.check_compatibility(skill, self._m())["compatible"])
+
+
 if __name__ == "__main__":
     unittest.main()

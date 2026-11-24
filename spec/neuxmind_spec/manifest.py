@@ -41,6 +41,23 @@ def _check_joint_limits(cid: str, params: dict) -> None:
         raise ValueError(f"{cid}.params 每个关节须满足 lower < upper")
 
 
+PLACE_NAME_MAX = 100
+
+
+def _check_places(cid: str, params: dict) -> None:
+    """``places`` (v1.2): the names this body can be sent to -- a non-empty list of distinct,
+    non-blank, single-line strings. A body that declares the capability must say where it can go."""
+    names = params.get("places")
+    if not isinstance(names, list) or not names:
+        raise ValueError(f"{cid}.params.places 须为非空的地点名列表")
+    for name in names:
+        if (not isinstance(name, str) or not name.strip() or len(name) > PLACE_NAME_MAX
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)):
+            raise ValueError(f"{cid}.params.places 里的地点名须为不超过 {PLACE_NAME_MAX} 个字符的一行文字")
+    if len(set(names)) != len(names):
+        raise ValueError(f"{cid}.params.places 不得重复")
+
+
 def _check_joint_names(cid: str, params: dict) -> None:
     """Optional ``joint_names`` (v1.1): unique non-empty strings, one per ``dof``."""
     if "joint_names" not in params:
@@ -190,6 +207,8 @@ def validate_manifest_v2(m: dict) -> dict:
             _check_joint_limits(cid, params)
             if cid == "arm.joint_position":
                 _check_joint_names(cid, params)
+            if cid == "base.navigate_to_place":
+                _check_places(cid, params)
         seen[cid] = {"id": cid, "major": major, "params": params}
     missing = [x for x in MANDATORY if x not in seen]
     if missing:

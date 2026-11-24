@@ -1,0 +1,15 @@
+{
+  "schema": "skill.package.v1",
+  "id": "goto_place",
+  "version": "0.1.0",
+  "title": "去指定地点",
+  "description": "走到本体自己认识的一个地点（会议室或二楼）。路线、避障、上下楼由本体自带的导航完成；任何提供 base.navigate_to_place 并认识这个地点的本体都能运行。",
+  "entry": "skill.py:run",
+  "requires": [{"id": "base.navigate_to_place"}, {"id": "safety.stop"}],
+  "optional": [{"id": "sensor.battery"}],
+  "parameters": [
+    {"name": "place", "type": "str", "required": true, "title": "去哪里", "description": "要去的地点", "options": [{"value": "会议室", "label": "会议室"}, {"value": "二楼", "label": "二楼"}]},
+    {"name": "max_speed", "type": "float", "required": false, "title": "最快速度", "description": "这一次最快走多快；不填时用本体和现场限值允许的速度", "unit": "m/s", "min": 0.1, "max": 1.5}
+  ],
+  "timeout_s": 1800
+}

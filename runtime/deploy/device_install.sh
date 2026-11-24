@@ -22,7 +22,7 @@
 #   * the venv sees the system's packages (ROS 2's Python messages need the system numpy), and install
 #     fails and cleans up unless rclpy and the message packages import there;
 #   * the ROS settings given to install (ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY, RMW_IMPLEMENTATION,
-#     FASTRTPS_DEFAULT_PROFILES_FILE, CYCLONEDDS_URI) are checked and kept in ros2.env; start runs the
+#     FASTRTPS_DEFAULT_PROFILES_FILE, CYCLONEDDS_URI, ZENOH_SESSION_CONFIG_URI) are checked and kept in ros2.env; start runs the
 #     runtime with that setup file and those settings only, checks for Humble again, and passes on
 #     ros2-config.json (topic names, QoS, nav2, limits; README §3) when the operator put one into the
 #     install directory. The device's nodes often run on a domain the login shell does not set.
@@ -49,7 +49,7 @@ PORT="${NX_PORT:-8790}"
 ADAPTER="${NX_ADAPTER:-}"                # empty: install takes sim_quadruped, start what install recorded
 PY="${NX_PYTHON:-python3}"
 ROS_SETUP_DEFAULT=/opt/ros/humble/setup.bash
-ROS_KEYS="ROS_DOMAIN_ID ROS_LOCALHOST_ONLY RMW_IMPLEMENTATION FASTRTPS_DEFAULT_PROFILES_FILE CYCLONEDDS_URI"
+ROS_KEYS="ROS_DOMAIN_ID ROS_LOCALHOST_ONLY RMW_IMPLEMENTATION FASTRTPS_DEFAULT_PROFILES_FILE CYCLONEDDS_URI ZENOH_SESSION_CONFIG_URI"
 ROS_CLEARED="AMENT_PREFIX_PATH COLCON_PREFIX_PATH CMAKE_PREFIX_PATH PYTHONPATH LD_LIBRARY_PATH ROS_DISTRO ROS_VERSION ROS_PYTHON_VERSION
   RMW_FASTRTPS_USE_QOS_FROM_XML RMW_FASTRTPS_PUBLICATION_MODE ROS_AUTOMATIC_DISCOVERY_RANGE ROS_STATIC_PEERS"
 MAX_DOMAIN_ID=232                         # the largest ROS_DOMAIN_ID ROS 2 accepts on Linux
@@ -252,6 +252,7 @@ ros_value_ok() {  # ros_value_ok <key> <value>: a ROS setting this script passes
     RMW_IMPLEMENTATION) [[ "$2" =~ ^rmw_[a-z0-9_]+$ ]] ;;
     FASTRTPS_DEFAULT_PROFILES_FILE) [[ "$2" == /* ]] && [ -f "$2" ] && [ -r "$2" ] ;;
     CYCLONEDDS_URI) [ -n "$2" ] ;;
+    ZENOH_SESSION_CONFIG_URI) [[ "$2" == /* ]] && [ -f "$2" ] && [ -r "$2" ] ;;   # issue #38: a body on rmw_zenoh_cpp
     *) return 1 ;;
   esac
 }

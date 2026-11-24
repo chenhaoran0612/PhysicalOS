@@ -628,11 +628,17 @@ EXAMPLE_PRESETS = {
     'patrol': {'waypoints': [[1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]], 'loops': 1},
     'wave': {'cycles': 2, 'amplitude': 0.6},
     'status_report': {},
+    'goto_place': {'place': '会议室'},
+    'patrol_places': {'places': '二楼、会议室', 'return_to': '出发点', 'loops': 1},
+    'free_walk': {'duration_s': 60, 'radius': 2.0},
 }
 EXAMPLE_NOTES = {
     'patrol': '让四足机器人依次走到 4 个航点，绕一个 1 米见方的正方形回到原点。',
     'wave': '让机械臂抬起、左右摆动并开合夹爪，最后回到零位。',
     'status_report': '只读取机器人状态（电量、位置、关节等）并生成报告，不会让机器人运动。',
+    'goto_place': '让机器人走到它认识的一个地点：会议室或二楼。怎么走由机器人自带的导航决定。',
+    'patrol_places': '巡检：先去二楼，再去会议室，最后回到出发点；有一处没到就停下。',
+    'free_walk': '不用地图，让机器人在附近自己走动并避障，到时间为止。',
 }
 
 

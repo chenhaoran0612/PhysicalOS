@@ -44,6 +44,8 @@ USER_DOES = {
     'joint.state': '读取每个关节的角度和速度。',
     'base.velocity': '按指定速度前进、后退、横移或转向。',
     'base.navigate_to': '自己走到你指定的目标位置。',
+    'base.navigate_to_place': '自己走到它认识的一个地点（按名字选，比如会议室、二楼）。',
+    'base.explore': '不用地图，在附近自己走动并避开障碍，到时间为止。',
     'legged.posture': '站起来、趴下或坐下。',
     'arm.joint_position': '把机械臂的各个关节转到指定角度。',
     'arm.ee_pose': '把机械臂末端移动到空间中的指定位置和朝向。',

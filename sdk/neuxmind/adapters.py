@@ -44,7 +44,9 @@ LEVELS = ("static", "dry", "motion")
 # character set, bounded length. Anything else is refused before the scaffold runs — a robot's
 # manifest is not trusted input (a tampered robot could otherwise plant code in the package).
 _SAFE_TEXT = re.compile(r"^[0-9A-Za-z\u4e00-\u9fff][0-9A-Za-z\u4e00-\u9fff _.+,()/:\-]{0,99}$")
-_SAFE_PARAM = re.compile(r"^[0-9A-Za-z_][0-9A-Za-z_./:\-]{0,127}$")
+# Issue #38: place names (base.navigate_to_place.params.places) are often Chinese. Ideographs cannot
+# end a string literal, and the scaffold writes parameter values with json.dumps, never raw.
+_SAFE_PARAM = re.compile(r"^[0-9A-Za-z_\u4e00-\u9fff][0-9A-Za-z_./:\-\u4e00-\u9fff]{0,127}\Z")
 _SAFE_ID = re.compile(r"^[a-z0-9][a-z0-9_.\-]{0,99}$")
 
 
@@ -144,7 +146,7 @@ def check_scaffold_input(spec: dict, source: str | None = None) -> None:
     def walk(value: Any, where: str) -> None:
         if isinstance(value, str):
             if not _SAFE_PARAM.match(value):
-                raise _unsafe(where, value, source, "参数中的文本须为 1–128 个字母、数字或 _ . / : -")
+                raise _unsafe(where, value, source, "参数中的文本须为 1–128 个字母、数字、汉字或 _ . / : -")
         elif isinstance(value, list):
             for i, item in enumerate(value):
                 walk(item, f"{where}[{i}]")

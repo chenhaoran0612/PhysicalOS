@@ -56,6 +56,9 @@ MAX_RUN_EVENTS = 300
 # ``timeout_s``, never extend it.
 ACTION_DEFAULT_TIMEOUT_S = {
     "base.navigate_to": 600.0,
+    "base.navigate_to_place": 1800.0,    # issue #38: the body's own route, stairs included
+    "base.explore": 4500.0,              # above the longest walk a body may declare (3600 s) plus its
+                                         # program's margin, so a full-length walk is not cut at its end
     "arm.joint_position": 60.0,
     "arm.ee_pose": 60.0,
     "gripper.position": 30.0,
