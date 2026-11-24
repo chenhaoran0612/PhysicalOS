@@ -4,6 +4,7 @@ const fs=require('fs');
 (async()=>{
  const cfg=JSON.parse(fs.readFileSync('/tmp/neuxmind-delivery-qa.json'));
  const browser=await chromium.launch({executablePath:process.env.BRAIN_CHROMIUM_PATH}),page=await browser.newPage({viewport:{width:1440,height:930}}),errors=[];
+ require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
  page.on('pageerror',e=>errors.push(e.message));
  const click=async a=>{const d=page.locator(`#dialog[open] [data-action="${a}"]`);await (await d.count()?d:page.locator(`[data-action="${a}"]`)).first().click();};
  const fill=(k,v)=>page.locator(`#dialog [name="${k}"]`).fill(String(v));

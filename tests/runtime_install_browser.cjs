@@ -19,6 +19,7 @@ let failurePage = null, failureShots = 'artifacts';
   fs.mkdirSync(shots, {recursive: true});
   const browser = await engine.launch(engine.name() === 'chromium' ? {executablePath: process.env.BRAIN_CHROMIUM_PATH} : {});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}}), errors = [], answers = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   failurePage = page; failureShots = shots;
   page.on('pageerror', e => errors.push(e.message));
   const sent = [];
@@ -73,7 +74,9 @@ let failurePage = null, failureShots = 'artifacts';
 
   // 1. A robot added over SSH: its card offers the install next to linking, and says nothing about an install yet.
   await addRobot('fresh');
-  const buttons = await card('fresh').locator('.button').allInnerTexts();
+  await require('./robots_page_helper.cjs').openRobotMenu(card('fresh'));                    // issue #41: both are in the card's 更多功能 list
+  const buttons = await card('fresh').locator('.robot-menu-item').allInnerTexts();
+  await page.keyboard.press('Escape');
   check(buttons.indexOf('安装管理层') === buttons.indexOf('接入管理层') + 1, 'The install is not next to 接入管理层: ' + buttons);
   check(await card('fresh').locator('.ri-line:not([hidden])').count() === 0, 'A line about an install is shown before there is one');
 
@@ -120,7 +123,9 @@ let failurePage = null, failureShots = 'artifacts';
   await closeDialog();
   await card('fresh').locator('.rl-line', {hasText: '已连通'}).waitFor({timeout: 30000});
   await card('fresh').locator('.hb-line', {hasText: '在线'}).waitFor({timeout: 30000});
+  await require('./robots_page_helper.cjs').openRobotMenu(card('fresh'));                    // issue #41: plain facts are in the card's 更多功能 list
   check((await card('fresh').innerText()).includes('控制通道：已连接'), 'The card does not say the control channel is connected');
+  await page.keyboard.press('Escape');
   check(await card('fresh').locator('.ri-line:not([hidden])').count() === 0, 'The install line stays after a success');
   const fresh = await control('/seen');
   check(JSON.stringify(fresh.runs) === JSON.stringify([['install', '8790', 'sim_quadruped'], ['start', '8790', 'sim_quadruped']]),

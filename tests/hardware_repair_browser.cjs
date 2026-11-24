@@ -25,6 +25,7 @@ let failed = async () => {};
   fs.mkdirSync(shots, {recursive: true});
   const browser = await engine.launch(engine.name() === 'chromium' ? {executablePath: process.env.BRAIN_CHROMIUM_PATH} : {});
   const page = await browser.newPage({viewport: WIDE}), errors = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   page.on('pageerror', e => errors.push(e.message));
   failed = async () => {
     await page.screenshot({path: path.join(shots, 'hardware-repair-failure.png')}).catch(() => {});

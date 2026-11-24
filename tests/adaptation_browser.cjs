@@ -9,6 +9,7 @@ const fs=require('fs'),path=require('path');
  const browser=await chromium.launch({executablePath:process.env.BRAIN_CHROMIUM_PATH});
  const WIDE={width:1440,height:930},SMALL={width:900,height:640};
  const page=await browser.newPage({viewport:WIDE}),errors=[],taken=[];
+ require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
  page.on('pageerror',e=>errors.push(e.message));
  page.on('console',m=>{if(m.type()==='error'&&!m.text().startsWith('Failed to load resource'))errors.push(m.text());});
  const shot=async(name,both=false)=>{await page.waitForTimeout(200);await page.screenshot({path:path.join(shots,name+'-1440.png')});taken.push(name+'-1440.png');
@@ -19,7 +20,7 @@ const fs=require('fs'),path=require('path');
   await page.locator('#dialog [name=decision]').selectOption('approve');await page.locator('#dialog [name=note]').fill(note);await submit();await page.locator('#workflow-live').waitFor();};
  const expectText=async(sel,text)=>{await page.locator(sel).filter({hasText:text}).first().waitFor({timeout:20000});};
  const login=await page.request.post(cfg.url+'/api/login',{data:{email:cfg.email,password:cfg.password}});if(!login.ok())throw Error('login '+login.status());
- await page.goto(cfg.url+'/#robots');await page.locator(`[data-action="engine-inventory"][data-id="${cfg.robot_id}"]`).waitFor();
+ await page.goto(cfg.url+'/#robots');await page.locator(`[data-action="engine-inventory"][data-id="${cfg.robot_id}"]`).waitFor({state:'attached'});
  // 1. the inventory page offers the one-click template
  await click('engine-inventory',cfg.robot_id);await page.locator('#dialog [data-action="engine-flow-adapt"]').waitFor();
  await page.locator('#dialog [data-action="engine-flow-adapt"]').scrollIntoViewIfNeeded();await shot('01-inventory-adapt-entry');

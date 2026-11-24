@@ -19,6 +19,7 @@ const ROBOT = '巡检机器人', OLD_ROBOT = '只填了服务地址的机器人'
   fs.mkdirSync(shots, {recursive: true});
   const browser = await engine.launch(engine.name() === 'chromium' ? {executablePath: process.env.BRAIN_CHROMIUM_PATH} : {});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}}), errors = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   page.on('pageerror', e => errors.push(e.message));
   await page.clock.install();                         // the page's clock moves with the fixture's
   const reads = [];                                   // every status read the page asks for

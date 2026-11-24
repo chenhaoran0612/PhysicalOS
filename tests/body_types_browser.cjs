@@ -27,6 +27,7 @@ let failed = async () => {};
   fs.mkdirSync(shots, {recursive: true});
   const browser = await engine.launch(engine.name() === 'chromium' ? {executablePath: process.env.BRAIN_CHROMIUM_PATH} : {});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}}), errors = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   page.on('pageerror', e => errors.push(e.message));
   const shot = name => page.screenshot({path: path.join(shots, `body-types-${name}.png`)});
   failed = async () => { await shot('failure').catch(() => {}); console.error('page errors:', errors); };
@@ -144,7 +145,9 @@ let failed = async () => {};
   const plain = robots.find(r => r.name === PLAIN_ROBOT), overSsh = robots.find(r => r.name === SSH_ROBOT);
   must(plain?.family === added.id && overSsh?.family === added.id, 'The devices were not registered with the added type');
   for (const robot of [plain, overSsh]) {
-    await expectText(card(robot.id), [robot.name, TYPE, '修改类型']);
+    await require('./robots_page_helper.cjs').openRobotMenu(card(robot.id));                 // issue #41: changing the type is in the card's 更多功能 list
+    await expectText(card(robot.id), [robot.name, TYPE, '修改本体类型']);
+    await page.keyboard.press('Escape');
     must(await card(robot.id).locator('.body-type-flag').count() === 0, `${robot.name} is flagged although its type is listed`);
   }
   await shot('3-cards');

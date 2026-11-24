@@ -42,6 +42,7 @@ function writeSkill() {
   const skillDir = writeSkill();
   const browser = await chromium.launch({executablePath: process.env.BRAIN_CHROMIUM_PATH});
   const page = await browser.newPage({viewport: {width: 1440, height: 900}});
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   page.setDefaultTimeout(20000);
   globalThis.__page = page;
   const errors = [];

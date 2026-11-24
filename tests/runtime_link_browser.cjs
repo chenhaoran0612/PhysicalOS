@@ -18,6 +18,7 @@ const ROBOT = '巡检机器人';
   fs.mkdirSync(shots, {recursive: true});
   const browser = await engine.launch(engine.name() === 'chromium' ? {executablePath: process.env.BRAIN_CHROMIUM_PATH} : {});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}}), errors = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   page.on('pageerror', e => errors.push(e.message));
   const sent = [];                                    // everything the page sends about the link
   page.on('request', r => { if (r.url().includes('/api/robots/runtime-link')) sent.push([r.url(), r.postDataJSON()]); });
@@ -118,7 +119,9 @@ const ROBOT = '巡检机器人';
   let text = await lineSays(['管理层', '已连通', `到机器人本机 ${cfg.layer_port} 端口`], 'After linking');
   check(await line().locator('.status.good').count() === 1, 'A link that is up is not shown in green');
   check(await line().locator('[data-action="engine-runtime-link-retry"]').count() === 0, 'A retry is offered while the link is up');
+  await require('./robots_page_helper.cjs').openRobotMenu(card());                           // issue #41: plain facts are in the card's 更多功能 list
   const cardText = await card().innerText();
+  await page.keyboard.press('Escape');
   check(cardText.includes('控制通道：已连接'), 'The card does not say the control channel is connected: ' + cardText);
   check(/\d+ 项设备能力/.test(cardText), 'The capabilities the layer reported are not on the card');
   check(!cardText.includes('ssh-forward'), 'The card shows the internal name of the link');
@@ -196,6 +199,7 @@ const ROBOT = '巡检机器人';
   await toastSays('协议连接检查通过');
 
   // 11. Keyboard: the button on the card opens the form, Escape closes it, the focus is not lost.
+  await require('./robots_page_helper.cjs').openRobotMenu(card());                           // issue #41: the entry is in the card's 更多功能 list
   await card().locator('[data-action="engine-runtime-link"]').focus();
   await page.keyboard.press('Enter');
   await dialog.getByText('管理层设置', {exact: true}).first().waitFor();
