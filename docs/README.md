@@ -45,6 +45,8 @@
 | [MATERIAL_PARSING.md](MATERIAL_PARSING.md) | 资料解析：上传后自动解析（文档交给 WeKnora、URDF 和安装包用规则）、四个状态、人修改和确认、设备档案里的「资料」标签、恶意文件的处理 |
 | [REPAIR_MATERIALS.md](REPAIR_MATERIALS.md) | 修复会话查资料库：只给这台设备「可用」资料里人确认过的解析结果、LIBRARY_MATERIALS.json 和「资料库」事件、没有驱动资料时提示先上传、资料是参考不是指令 |
 | [PLACE_SKILLS.md](PLACE_SKILLS.md) | 去指定地点、巡检、无图自由走：两项新标准能力（能力标准 1.2）、把机器人自带的导航程序接成动作、三个示例技能；验证范围（没有真机）（issue #38） |
+| [CLOUD_SKILLS.md](CLOUD_SKILLS.md) | 技能在云端：技能库、程序和场景数据（资料库 `bundle` 类型）、机器人管理层向云端取调用、第三方开放接口 `/open/*`、权限范围、验证范围和已知限制（issue #43） |
+| [CLOUD_SKILLS_CONSOLE.md](CLOUD_SKILLS_CONSOLE.md) | 控制台的「云端技能」页面，机器人页面的「远程调用」「程序和场景数据」两节（issue #43） |
 | [SKILL_RUN.md](SKILL_RUN.md) | 直接运行已装技能，真机也可以：运行表单、真机运行前的现场确认和授权、`onsite_confirmation_required`、记录里写什么（issue #42） |
 | [TASK_WORKBENCH.md](TASK_WORKBENCH.md) | 任务工作台：入口是任务概览（数量、名称、瀑布流卡片），一个任务的步骤页在 `#task`；删除任务会带走什么、什么情况不能删（issue #44） |
 | [ROBOTS_PAGE.md](ROBOTS_PAGE.md) | 「我的机器人」页面：页面跟着状态走，卡片只留下一步和实时状态，其余收进「更多功能」；以后往这个页面加内容要加在哪里（issue #41） |
