@@ -199,6 +199,15 @@ class DocumentParseTest(ParseCase):
         self.assertEqual(self.fake.sessions_open, set())
         self.assertIn("大模型", result["note"])
 
+    def test_questions_wait_until_the_service_has_finished_with_the_document(self):
+        # A real WeKnora (0.6.3, 2026-11-23) says "finalizing" while it still makes the summary; the first
+        # question, asked then, got "no document attached" and the driver's name and version stayed empty.
+        self.fake.polls_finalizing = 2
+        result = self.upload_parsed("manual.md", b"# demo_motion_driver 1.4.0\n\nhow to install it\n")
+        self.assertEqual((result["status"], result["values"]["driver_name"]), ("parsed", "demo_motion_driver"))
+        self.assertEqual(len(self.fake.questions), 3)
+        self.assertEqual({tuple(q["knowledge_status"]) for q in self.fake.questions}, {("completed",)})
+
     def test_items_the_document_does_not_state_are_named(self):
         self.fake.answer = answer_by_question({**DOC_ANSWERS, "driver_name": {
             **DOC_ANSWERS["driver_name"], "ros2_distro": None, "source": "资料中未提及"}})

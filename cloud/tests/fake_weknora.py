@@ -28,6 +28,9 @@ class FakeWeKnora:
         self.counter = 0
         # Hooks a test may replace.
         self.polls_until_ready = 1                   # GETs that still say "processing"
+        # GETs after those that say "finalizing": WeKnora 0.6.3 still makes the summary then, and a question
+        # asked in that stage does not find the document (answered as if none were attached).
+        self.polls_finalizing = 0
         self.fail_parse = lambda upload: ""          # non-empty: parsing fails with this message
         self.answer = lambda question, knowledge_ids: "{}"
         self.status_override: int | None = None      # every request answered with this HTTP status
@@ -132,8 +135,11 @@ class FakeWeKnora:
                             fake.knowledge.pop(knowledge_id, None)
                     if any(k not in fake.knowledge for k in payload.get("knowledge_ids", [])):
                         return self._send(404, {"success": False, "message": "knowledge not found"})
-                    fake.questions.append({"session": session_id, **payload})
+                    statuses = [fake.knowledge[k]["status"] for k in payload.get("knowledge_ids", [])]
+                    fake.questions.append({"session": session_id, "knowledge_status": statuses, **payload})
                 text = fake.answer(payload.get("query", ""), payload.get("knowledge_ids", []))
+                if "finalizing" in statuses:
+                    text = "您好！当前对话中并未附带任何文档或文件，请先上传资料。"
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Connection", "close")
@@ -157,8 +163,10 @@ class FakeWeKnora:
                     if knowledge is None:
                         return self._send(404, {"success": False, "message": "not found"})
                     knowledge["polls"] += 1
-                    if knowledge["polls"] > fake.polls_until_ready:
+                    if knowledge["polls"] > fake.polls_until_ready + fake.polls_finalizing:
                         knowledge["status"] = "failed" if knowledge["error"] else "completed"
+                    elif knowledge["polls"] > fake.polls_until_ready and not knowledge["error"]:
+                        knowledge["status"] = "finalizing"
                     else:
                         knowledge["status"] = "processing"
                     record = fake._record(knowledge)

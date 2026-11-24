@@ -40,8 +40,10 @@ API = "/api/v1"
 MAX_JSON = 2 * 1024 * 1024
 MAX_STREAM = 8 * 1024 * 1024
 MAX_ANSWER = 64 * 1024
-READY = ("completed", "finalizing")
-PENDING = ("pending", "processing")
+# "finalizing" is not ready: WeKnora 0.6.3 still makes the summary then, and a question asked in that stage
+# does not find the document (2026-11-23, a real WeKnora: the first question got "no document attached").
+READY = ("completed",)
+PENDING = ("pending", "processing", "finalizing")
 FAILED = ("failed", "cancelled")
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")      # never "." or "..": it goes into a URL path
 
