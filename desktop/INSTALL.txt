@@ -1,4 +1,4 @@
-NeuxMind Robot OS 0.21.0 — macOS Apple Silicon 开发预览
+NeuxMind Robot OS 0.21.1 — macOS Apple Silicon 开发预览
 
 要求：Apple Silicon（M1 或更新），macOS 13 或更新。
 安装：将 NeuxMind Robot OS.app 拖入 Applications，然后打开。
@@ -10,6 +10,7 @@ NeuxMind Robot OS 0.21.0 — macOS Apple Silicon 开发预览
 此版本尚未验证 Intel Mac；Windows 版后续处理。
 
 首次打开先显示登录 / 注册页：注册要填邮件里的 6 位验证码，登录后可创建项目；以前注册的账号直接登录。
+登录应用时会同时登录云平台（资料库要用），云平台上没有这个账户时会自动注册；从旧版本升级后第一次打开会退出一次登录，重新登录即可。应用里改密码不会改云平台的密码。
 没有配置邮件服务时验证码不会发出，而是写在本机的 mail-outbox.txt 里，注册页会显示它的位置。
 没有真机也能马上试用：在“我的机器人”点“添加仿真机器人”（四足或机械臂），
 从“安装技能包”里的示例技能安装巡逻或挥手，授权后运行并在“实时状态”里观察；不需要终端。
