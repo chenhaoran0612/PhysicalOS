@@ -82,6 +82,7 @@ _PATH = re.compile(r"[A-Za-z0-9._~/%-]*")
 _LABEL = r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
 _HOST = re.compile(rf"{_LABEL}(?:\.{_LABEL})*\.?")                  # a DNS name or an IPv4 address
 _CONFIG_KEYS = ("url", "key", "ca_file")
+_CONFIG_KEYS += ("link",)       # issue #43: "link": false keeps cloud_link.py off; alert reports ignore it
 
 
 class ConfigError(ValueError):
@@ -167,6 +168,7 @@ class ReportConfig:
     ca_file: str | None = None
     interval_s: float = INTERVAL_S
     timeout_s: float = TIMEOUT_S
+    link: bool = True               # issue #43: whether cloud_link.py may use this configuration
 
     def __post_init__(self):
         object.__setattr__(self, "url", check_url(self.url))
@@ -208,6 +210,10 @@ def load_config(path: str | Path) -> ReportConfig:
     if unknown:
         shown = "、".join(k if re.fullmatch(r"[A-Za-z_]{1,30}", k) else "…" for k in unknown[:5])
         raise ConfigError(f"上报配置里有未知的项：{shown}（只认 url、key、ca_file）")
+    if "link" in data:              # issue #43
+        if not isinstance(data["link"], bool):
+            raise ConfigError("上报配置里的 link 须为 true 或 false")
+        return ReportConfig(url=data.get("url"), key=data.get("key"), ca_file=data.get("ca_file"), link=data["link"])
     return ReportConfig(url=data.get("url"), key=data.get("key"), ca_file=data.get("ca_file"))
 
 

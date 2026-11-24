@@ -32,6 +32,8 @@ from .ledger import Ledger
 from .models import CAPABILITY as MODEL_INSTALL, ModelConfig, ModelStore
 from .records import CLASSES as RECORD_CLASSES, CLEANUP as CLEANUP_LOG, DeviceRecords, RecordsConfig
 from .records import classify_operation, clean_operator
+from .remote_access import RemoteAccess
+from .remote_calls import RemoteCalls
 from .runner import ACTIVE, SUCCEEDED, Runner
 from .safety import is_motion
 from .sandbox import SandboxConfig, Sandboxes
@@ -79,6 +81,7 @@ def json_digest(value) -> str:
 
 class EdgeRuntime:
     alert_report = None     # issue #26: the alert reporter of a served runtime (alert_report.for_serve)
+    cloud_link = None       # issue #43: the link to the cloud of a served runtime (cloud_link.for_serve)
 
     def __init__(self, adapter: RobotAdapter, state_dir: str | Path, *, start_monitor: bool = True,
                  sandbox: str | SandboxConfig = "process", models: ModelConfig | None = None,
@@ -172,6 +175,10 @@ class EdgeRuntime:
                 pass
         unknown_evaluations = self.evaluations.recover_after_restart()
         self.conformance.recover_after_restart()
+        # Issue #43: the owner's remote switches and the book of remote calls (a call that was under
+        # way before a restart is closed here as failed, never run again).
+        self.remote_access = RemoteAccess(self)
+        self.remote_access.calls = RemoteCalls(self, self.remote_access)
         latch = self.store.get("safety", "latch")
         if latch and latch.get("latched"):
             self.supervisor.restore_latch(latch.get("reason") or "重启前已锁存")
@@ -458,6 +465,7 @@ class EdgeRuntime:
         except Exception as exc:
             out["adapter"] = {"error": str(exc)}
         out["alert_report"] = self._alert_report_view()     # issue #26
+        out["cloud_link"] = self._cloud_link_view()         # issue #43
         return out
 
     # ------------------------------------------------------------ stop path
@@ -986,3 +994,8 @@ class EdgeRuntime:
             return reporter.describe()
         except Exception as exc:
             return {"enabled": False, "reason": f"告警上报状态读不到：{str(exc)[:200]}"}
+
+    def _cloud_link_view(self) -> dict:
+        """``/v1/status.cloud_link`` (issue #43): cached values of the link to the cloud; a runtime
+        without one, or a broken one, reads as off."""
+        return self.remote_access.link_view()

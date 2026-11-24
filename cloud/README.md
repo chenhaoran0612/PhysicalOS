@@ -89,6 +89,10 @@ NEUXMIND_TEST_DATABASE_URL=postgresql+psycopg://user@127.0.0.1/nxtest python3 -m
 | `library_materials` | 资料库里的一份资料（issue #33） | `org_id`、显示用文件名、`kind`（document / package）、`format`、本体类型标识、厂家、型号、版本、`size`、`sha256`、`status`（parsing / parsed / usable / failed，issue #34）、`device_id` / `device_name`（所属设备，issue #34）。同组织内（标注 + 设备 + 内容）唯一、（标注 + 设备 + 文件名）唯一 |
 | `library_material_parses` | 一份资料的解析任务和结果（issue #34，`material_parse_models.py`） | `material_id`（不设外键，资料删除后由清理删掉）、`stage`、租约、WeKnora 里副本的编号、解析出的 `extracted` 和人改过的 `values`、`not_applicable`、`warnings`、`error`、`revision`、修改人和确认人及时间 |
 | `library_uploads` / `library_upload_chunks` | 进行中的上传与已收到的分片 | 上传属于发起它的用户；`expires_at` 之后连同已收到的数据一起清除 |
+| `skill_releases` | 云端技能库里的一个版本（issue #43，`skill_models.py`） | (org, `skill_id`, `version`) 唯一，内容不可变；`digest` 与机器人安装时算出的一致；`spec`（校验过的 `skill.package.v1`，不含文件）、`files`（{路径: 文本}，只在下载时读出）、`file_index`、`size`、`motion`、`notes`、`created_by` |
+| `device_links` | 和云端保持同步的机器人（issue #43） | (org, `instance_id`) 唯一，`id` 即开放平台的 `device_id`（`dlk_…`）；最近一次同步报来的名称、类型、版本、三个安全状态、已安装技能和每个技能的远程开关（`skills`，变了才重写）、`last_seen_at`（判定在线）、每分钟同步次数的计数 |
+| `skill_calls` | 第三方发起的一次调用（issue #43） | (org, `request_id`) 唯一 = 幂等；`device_id`、技能、版本和下单时的 `digest`、参数、`status`、进度、结果、错误、`dispatched_at` / `started_at` / `finished_at`、`reported_at`（机器人最近一次提到它，没提到过就一直重发）、`cancel_requested_at` |
+| `device_stops` | 第三方要求的一次停止（issue #43） | `device_id`、原因、`delivered_at`（第一次放进同步的回答）、`acknowledged_at`（机器人回报已执行）、`expired_at`（一直没被取走） |
 
 余额 = `SUM(ledger_entries.delta)`；可用 = 余额 − 状态为 held 或 reconciliation_required 的预留之和。
 
@@ -118,6 +122,7 @@ NEUXMIND_TEST_DATABASE_URL=postgresql+psycopg://user@127.0.0.1/nxtest python3 -m
 API Key 的 scopes：`gateway`、`catalog:read`、`robots`、`wallet:read`、`usage:read`。Key 实际拥有的权限 = scopes ∩ 创建者当前角色的权限（创建者被降级或移出组织后，Key 立即收窄或失效；有测试 `test_demoting_creator_narrows_key_scopes`）。API Key 不能管理 Key、不能购买、不能访问 `/admin`；通过 Key 调用网关时检查的是**创建者**的邮箱是否已验证。
 
 另有 `alerts:report`（issue #26）：给放在设备上的 Key 用，凭它只能调 `POST /device-reports`；不在默认范围里；四种角色都持有它，所以上面“创建者被降级后收窄”对它不起作用。见“设备告警”。
+issue #43 又加了四个权限范围，都不在默认范围里（见“云端技能库”“机器人连到云端”“开放平台”）：`skills:read`（四种角色都有）、`skills:write`（owner / admin / developer）管云端技能库；`skills:invoke`（owner / admin / developer）是第三方经开放平台调用机器人技能用的；`device:link` 给机器人上的 Key 用，凭它只能调 `POST /device-link/sync`，和 `alerts:report` 一样四种角色都持有，同一把 Key 可以两个都带。
 
 ### 邮箱验证（修复 C-01）
 
@@ -358,6 +363,100 @@ API Key 的 scopes：`gateway`、`catalog:read`、`robots`、`wallet:read`、`us
 | POST `/library/materials/{id}/parse/confirm` | 同上，并确认 → `usable`；409 `parse_incomplete`（`missing[]`） |
 | POST `/library/materials/{id}/parse/retry` | → `parsing`，从头解析 |
 
+### 程序和场景数据（资料库的 `bundle` 类型，issue #43，`library_bundle.py`）
+
+有的机器人靠自己电脑上的程序行走，这些程序和它们用的场景数据（地点标记、参考地图）是一个目录，打成一个 `.tar.gz` 存进资料库，沿用上面的分片上传、校验、配额和下载。约定见 [docs/CLOUD_SKILLS.md](../docs/CLOUD_SKILLS.md) §2。
+
+- `POST /library/uploads` 多一个可选字段 `kind`。不填时和以前一样（按后缀是文档或驱动安装包）；填 `"bundle"` 时文件必须是 `.tar.gz` / `.tgz`（否则 415 `unsupported_type`），并且必须带 `device_id` 和 `device_name`（否则 400 `bundle_needs_device`）：场景数据只对那一台机器人的那个场地有意义。填了别的值而与文件类型不符：400 `invalid_request`。
+- 大小上限单独一项：`NEUXMIND_LIBRARY_MAX_BUNDLE_BYTES`（默认 64 MiB），超出 413 `file_too_large`（`kind: "bundle"`）。
+- 同一个文件、同一组标注已经有一次没完成的上传而类型不同（一次是驱动安装包，一次是 `bundle`）时不续传：409 `upload_kind_conflict`（带 `upload_id`、`kind`），先完成或取消那一次。
+- `bundle` 不解析：入库后 `status` 直接是 `usable`，不会生成解析任务；四个解析接口对它都回答 409 `not_parsed_kind`。
+- `GET /library/materials?kind=bundle` 只列这一类（可以和 `device_id=` 一起用）；`kind=package` 不含它。
+- 云端不解开它。内容只是被认出是 tar.gz；在机器人上解开它的一方要把它当作不可信的输入。
+
+### 云端技能库（issue #43，`skill_store.py`、`routes/skills.py`）
+
+技能包（`skill.package.v1`，含文件）按组织存在云端，只在本组织内可见。一条记录是某个技能的某个版本，内容不可变。约定见 [docs/CLOUD_SKILLS.md](../docs/CLOUD_SKILLS.md) §1。
+
+权限：`skills:read`（四种角色）读；`skills:write`（owner / admin / developer）发布和删除，并且要求邮箱已验证。两者都可以作为 API Key 的权限范围。别的组织的技能对调用者不存在（404 `skill_not_found`）。
+
+| 方法 路径 | 请求 → 响应 |
+|---|---|
+| POST `/skills/releases` | `{package: skill.package.v1（含 files: {路径: 文本}）, notes?}` → 201 `Release`。同一个 `id@version` 内容相同 → 200 原记录并带 `existing: true`（`notes` 以第一次为准）；内容不同 → 409 `skill_version_exists`（带已有的 `digest`）。400 `invalid_skill_package`；409 `skill_quota_exceeded`。这个路径的请求体上限是 `NEUXMIND_SKILL_RELEASE_MAX_BODY_BYTES`（默认 3 MiB），只给凭证有效的调用者，其他人在读请求体之前就得到 401 |
+| GET `/skills` | → `{skills: [{id, title, description, latest: Release, versions: [版本…]}]}`，按 `id` 排序；`versions` 新的在前，按版本号的大小排（`0.10.0` 在 `0.9.0` 之后），`latest` 是其中最新的 |
+| GET `/skills/{skill_id}` | → `{id, releases: [Release…]}`（新的在前）；没有 → 404 `skill_not_found` |
+| GET `/skills/{skill_id}/releases/{version}` | → `Release` |
+| GET `/skills/{skill_id}/releases/{version}/package` | → `{release: Release, package: skill.package.v1（含 files）}`。`package` 是校验后的规范形式加上文件；把它原样交给机器人安装，得到的 `digest` 就是 `release.digest` |
+| DELETE `/skills/{skill_id}/releases/{version}` | → `{deleted: true}`（已经装到机器人上的不受影响；删掉之后同一个版本号可以重新发布） |
+
+`Release` = `{skill_id, version, title, description, digest, requires: [能力 id…], optional: [能力 id…], parameters: [原样], motion, timeout_s, files: [{path, size}], size, notes, created_by, created_at}`。`created_by` 是 `user:<id>` 或 `key:<id>`。
+
+- **校验。** 用 `spec` 的 `validate_skill_package`，再加上机器人安装时的同一套检查：文件最多 200 个、单个 512 KiB、合计 1536 KiB（`runtime/neuxmind_runtime/skills.py`、`sdk/neuxmind/package.py` 的同一组数，有测试盯着两边一致）；路径不能是绝对路径、不能含 `..`、反斜杠或控制字符，不能既是文件又是目录；入口文件必须在包里；参数声明里的 `min`/`max`、`choices`/`options`、长度、默认值要能被执行（机器人安装时会拒绝的，这里先拒绝）。另外拒绝数据库存不了或下游不该处理的内容：空字符、半个代理对、NaN / 无穷大、嵌套超过 64 层、`skill.json` 部分超过 256 KiB、版本号的数字超过 9 位或后缀超过 40 个字符。文件只是文本，被保存和原样交回；云端不运行、不导入技能包。
+- **`digest`。** 和机器人安装时记下的一样：对 `{"package": 校验后的包, "files": 文件}` 按键排序写成 JSON 后取 SHA-256。测试 `test_the_digest_is_the_one_the_robot_computes_when_it_installs_the_package` 拿仓库里的示例技能 `goto_place` 发布到云端，再用管理层的 `SkillStore.install` 真装一次，比较两个值；也比较了从云端下载回来的包再装一次的值。注意它和控制台预检时显示的摘要（`brainos/skill_packages.py:package_digest`，对原始文件夹内容算）不是同一个数。
+- **`motion`。** `requires` 和 `optional` 里只要有一项在能力标准里是运动类，或者是厂家扩展（`x.*`，效果未知，按运动类算），就为真。
+- **上限。** 每个组织最多 `NEUXMIND_SKILL_ORG_MAX_RELEASES`（默认 500）条。
+- **审计。** `skill.release.create`、`skill.release.delete`（目标是 `id@version`，带 `digest`）。
+
+### 机器人连到云端（issue #43，`device_link.py`、`routes/device_link.py`）
+
+机器人上的管理层每隔一两秒主动来同步一次（云端从不连向机器人）：带来它装了哪些技能、每个技能主人是否允许远程调用、安全状态、它知道的远程调用的状态；带走要开始的调用、要取消的调用和停止。约定见 [docs/CLOUD_SKILLS.md](../docs/CLOUD_SKILLS.md) §3。
+
+| 接口 | 说明 |
+|---|---|
+| POST `/device-link/sync` | `{schema: "neuxmind.device_link.v1", device: {instance_id, name?, family?, simulated?, runtime_version?}, state: {estop_latched, busy, motion_blocked}, skills: [{id, version, digest, title?, description?, parameters?, requires?, motion?, timeout_s?, remote: {allowed, set_by?, set_at?}}], calls: [{call_id, status, run_id?, progress?, detail?, result?, error?: {code, message}}], stops: [stop_id…]}` → `{accepted: true, device_id, poll_after_s, calls: [{call_id, skill_id, version, digest, parameters, timeout_s}], cancel: [call_id…], stop: {stop_id, reason} \| null, settled: [call_id…], rejected_skills: [{index, id, error}], rejected_skills_total, server_time}`。只接受带 `device:link` 的 API Key（登录会话 403 `api_key_required`），并且 Key 的创建者邮箱已验证 |
+
+- **重复是安全的。** 一个调用在机器人的 `calls` 里出现之前，每次同步都会再放进回答（机器人按 `call_id` 去重，同一个调用最多执行一次）；机器人对一个终态一直报到回答的 `settled` 里出现它；停止一直带到机器人在 `stops` 里回报。`settled` 里也包括不属于这台机器人的 `call_id`（让它别再报了）。
+- **什么时候不下发。** 排队的调用只在这一次同步里再核对一遍之后才下发：技能还在、版本和 `digest` 没变、远程开关还开着、没有急停锁存；任何一项不满足，调用记为 `rejected`（错误码 `skill_not_installed` / `version_mismatch` / `remote_not_allowed` / `estop_latched`），不下发。有停止还没执行完时不下发新调用；一台机器人同一时间只下发一个调用。
+- **机器人不出声意味着什么。** 已下发但机器人从没提到过的调用：被取消的，不再重发，只放在 `cancel` 里，机器人连续 `NEUXMIND_SKILL_CALL_PICKUP_TIMEOUT_SECONDS`（默认 30 秒）的同步都不认识它，就记为 `cancelled`（没有送达）；没被取消的，只在下发后的 30 秒内重发；过了这个时间不再重发（调用不会迟到很久才开始），改为放进 `cancel`（万一它其实收到了），到 `NEUXMIND_SKILL_CALL_LOST_AFTER_SECONDS`（默认 120 秒）机器人还没提到它就记为 `lost`。提到过、后来不再提的调用，120 秒后记为 `lost`。机器人整个不同步 120 秒，它名下没结束的调用记为 `lost`。`lost` 和上面那个 `cancelled` 是云端的推断：机器人之后再报这个调用，以机器人说的为准。一个调用超过自己的 `timeout_s` 再加 120 秒还没结束，云端替调用方请求取消（审计 `skill.call.timeout`）。
+- **机器人说的话不直接信。** `instance_id` 须为 1–200 个字符、不含控制字符；名称、类型、版本、技能标题和说明只是显示用，里面的控制字符被替换、超长的截断。`state` 的三个标志只有明确是 `false` 才算“否”，缺了或不是布尔值都按“是”算（宁可拒绝调用）。`remote.allowed` 只有明确是 `true` 才算允许。`motion` 不只听机器人的：`requires` 里有运动类能力或云端不认识的能力，就是运动类。技能最多 200 个，单个写出来不超过 8 KiB，参数声明要能被检查；不合格的单个技能放进 `rejected_skills` 并说明原因（回答里最多列 20 个，每条说明不超过 120 个字符，总数在 `rejected_skills_total`），其余照收；同一个技能报了两个版本的留新的。`calls`、`stops` 各最多 50 项，格式不对的项忽略；结果超过 16 KiB 的不保存（状态照记）；错误码不合格式的换成状态名。整份同步格式不对（`schema`、`device.instance_id`、列表超长）返回 400 `invalid_sync`。
+- **只对自己组织、自己这台机器人。** 调用和停止都按（组织, 机器人）查：别的组织的 Key、同组织另一台机器人，报别人的 `call_id` 或 `stop_id` 都不起作用。
+- **上限。** 请求体 `NEUXMIND_DEVICE_LINK_MAX_BODY_BYTES`（默认 2 MiB，只给有效的 API Key；200 个技能放得下）；每台机器人每分钟 `NEUXMIND_DEVICE_LINK_MAX_SYNCS_PER_MINUTE`（默认 240）次，超出 429 `rate_limited`；每个组织 `NEUXMIND_DEVICE_LINK_MAX_DEVICES`（默认 1000）台，超出 409 `too_many_devices`（30 天没同步、名下没有未结束调用的机器人由清理任务移除）。
+- **回答的大小。** 管理层会丢掉超过 64 KB 的回答（连同里面的停止），所以回答保持很小：`calls` 一次最多一个（参数最多 16 KiB），`cancel` 最多 50 个编号，`settled` 最多 50 个，`rejected_skills` 最多 20 条短说明。有测试按最坏情况拼出回答并要求小于 48 KB。
+- **`poll_after_s`。** 平时 `NEUXMIND_DEVICE_LINK_POLL_SECONDS`（默认 2），这台机器人有未结束的调用时 `NEUXMIND_DEVICE_LINK_POLL_BUSY_SECONDS`（默认 1）。
+- **审计。** `device_link.first_sync`、`device_link.remote_changed`（哪些技能的远程开关开了、关了）、`skill.call.finished`（机器人报的终态，或云端自己结束的）、`skill.stop.acknowledged`。
+- **限制。** 机器人自报 `instance_id`，Key 是组织级的：持有一把 `device:link` 的 Key 就能以本组织任意一台机器人的名义同步（进不了别的组织），包括改云端看到的远程开关、回报别的机器人的停止已执行、把那台机器人每分钟的同步次数用完。机器人自己仍然按它本机的开关和安全状态把关，但每台机器人单独的凭证还没有做。云端这一侧只在 SQLite 上跑过测试；没有在 PostgreSQL 上、也没有和真实的管理层连起来验证过。
+
+### 开放平台：第三方调用（issue #43，`skill_calls.py`、`routes/open_platform.py`）
+
+第三方用带 `skills:invoke` 的 API Key 让本组织的一台机器人运行一个技能。约定和 curl 例子见 [docs/CLOUD_SKILLS.md](../docs/CLOUD_SKILLS.md) §4。**只接受 API Key**：登录会话（包括 owner 的）403 `api_key_required`，没有这个范围的 Key 403 `scope_missing`。只看得到、动得了本组织的机器人和调用。
+
+| 方法 路径 | 请求 → 响应 |
+|---|---|
+| GET `/open/robots` | → `{robots: [{device_id, instance_id, name, family, simulated, online, estop_latched, busy, motion_blocked, runtime_version, last_seen_at, skills: 个数}]}`。`online`：最近 `NEUXMIND_DEVICE_LINK_OFFLINE_SECONDS`（默认 60）秒内同步过 |
+| GET `/open/robots/{device_id}/skills` | → `{device_id, online, skills: [{id, version, title, description, parameters, requires, motion, timeout_s, remote_allowed}]}`；404 `device_not_found` |
+| POST `/open/robots/{device_id}/skills/{skill_id}/calls` | `{request_id, parameters?: {}, timeout_s?, version?}` → 202 `{call: Call}`；同一个 `request_id`、同样的内容再发一次 → 200 和原来那个调用（不再检查机器人现在的状态，也不会再执行）；同一个 `request_id` 内容不同 → 409 `request_id_reused`（带 `call_id`）。`timeout_s` 只能比技能自己的时限短；`version` 可选，与机器人上装的不同则 409 `version_mismatch` |
+| GET `/open/calls/{call_id}` | → `{call: Call}`；404 `call_not_found` |
+| GET `/open/calls?device_id=&status=&limit=&before=` | → `{calls: [Call…], more, next_before}`，新的在前；`limit` 1–200（默认 50） |
+| POST `/open/calls/{call_id}/cancel` | → `{call: Call}`。还在排队的直接 `cancelled`；已下发的等机器人下一次同步时取消（`cancel_requested: true`，状态由机器人回报）；因为机器人失联而记为 `lost` 的也一样记下取消，机器人回来后如果它还在跑，取消会送到；确知已结束的原样返回 |
+| POST `/open/robots/{device_id}/stop` | `{reason?}` → 202 `{stop_id, delivered, device_id, online}`。机器人下一次同步时停止并锁存。排队的调用立刻记为 `stopped`，已下发的（包括失联后记为 `lost` 的）同时请求取消。停止还没执行完时再请求一次，返回同一个 `stop_id`。机器人显示离线时也接受。**这是经网络的尽力而为，不能代替现场急停** |
+| GET `/open/stops/{stop_id}` | → `{stop: {stop_id, device_id, status: pending \| delivered \| acknowledged \| expired, reason, delivered, created_by, created_at, delivered_at, acknowledged_at}}`；404 `stop_not_found` |
+
+`Call` = `{id, device_id, skill_id, version, parameters, status, progress, detail, result, error: {code, message} | null, request_id, created_by, created_at, dispatched_at, started_at, finished_at, cancel_requested}`。`status`：`queued` → `dispatched` → `running` → `succeeded` / `failed` / `cancelled` / `stopped`；另有 `rejected`（机器人拒绝，或下发前云端核对没过）、`expired`（`NEUXMIND_SKILL_CALL_PICKUP_TIMEOUT_SECONDS` 内没被取走，之后不会再执行）、`lost`（机器人失联，结果未知，不是失败）。
+
+发起调用时云端按下面的顺序检查（不代替机器人自己的检查）：
+
+| 情况 | 回答 |
+|---|---|
+| 调用太频繁（每个 Key 每分钟 `NEUXMIND_SKILL_CALL_RATE_PER_MINUTE`，默认 60 次；被拒绝的和重复的也算） | 429 `rate_limited` |
+| Key 的创建者邮箱没验证 | 403 `email_unverified` |
+| 没有这台机器人 / 不是本组织的 | 404 `device_not_found` |
+| `request_id` 不是 1–100 个字母、数字或 `_ . : -`；`timeout_s`、`version` 类型不对 | 400 `invalid_request` |
+| `parameters` 不是对象、超过 16 KiB、嵌套超过 16 层、含空字符 / NaN / 存不了的字符 | 400 `invalid_parameters` |
+| 机器人离线 | 409 `device_offline` |
+| 技能没装在这台机器人上 | 409 `skill_not_installed` |
+| 指定的 `version` 不是装着的那个 | 409 `version_mismatch`（带 `installed`） |
+| 主人没有打开远程调用 | 403 `remote_not_allowed` |
+| 急停锁存中 | 409 `estop_latched` |
+| 有一个停止还没执行完 | 409 `stop_pending` |
+| 参数不符合技能的声明 | 400 `invalid_parameters`，带 `problems: [{name, problem, message}]`；`problem` 是 `param_unknown` / `param_required` / `param_type` / `param_choice` / `param_out_of_range` / `param_length` / `param_declaration_invalid`（和管理层用的名字一样） |
+| `timeout_s` 超过技能自己的时限 | 400 `invalid_request` |
+| 这台机器人已经有一个没结束的远程调用 | 409 `call_in_progress`，带 `call_id` |
+
+- **停止。** 没被机器人取走的停止 `NEUXMIND_SKILL_STOP_TTL_SECONDS`（默认 120 秒）后作废（`expired`）：离线很久的机器人恢复之后不会被一个旧的停止锁住。**例外：**这台机器人名下还有可能在执行的调用（已下发、运行中，或者下发之后因为失联记为 `lost` 而机器人还没报过结局）时，停止不作废，不管多久，机器人一回来同步就交给它。已经交给机器人的停止一直有效（每次同步都带、期间不接受新调用），直到机器人回报已执行。
+- **保留。** 调用记录保留 `NEUXMIND_SKILL_CALL_RETENTION_DAYS`（默认 30）天，每个组织最多 `NEUXMIND_SKILL_CALL_ORG_KEEP`（默认 100000）条，超出时先删最早结束的。记录删掉之后，同一个 `request_id` 会被当成新的调用。
+- **审计。** `skill.call.create`（机器人、技能、版本、是否运动类、`request_id`、参数的 SHA-256，不记参数本身）、`skill.call.cancel`、`skill.stop.request`（原因、受影响的调用）、`skill.call.expired`、`skill.call.lost`、`skill.call.timeout`、`skill.stop.expired`。
+- **清理。** 过期、失联的判定在有人读调用、发起调用、取消、停止和机器人同步时就地做，后台清理（`sweep`）里也做一遍，结果多出 `calls_expired`、`calls_lost`、`stops_expired`、`calls_deleted`、`devices_forgotten`。
+
 ### 运营（`/admin/*`，需要登录会话且是平台运营员）
 `GET/POST /admin/models`、`PATCH /admin/models/{id}`（改价不影响已有预留的价格快照和已结算的账本）、`POST /admin/models/{id}/status {status: published|unlisted}`、`POST /admin/credit-packs`、`POST /admin/wallets/{org_id}/adjust {delta, reason, reference?}`、`GET /admin/reservations?status=&older_than_seconds=`（默认 reconciliation_required；`status=held|settled|released|all`；每项带 `age_seconds`）、`POST /admin/reservations/{id}/resolve {action: settle|release, credits?, evidence_ref?, reason}`（只处理 reconciliation_required，held 返回 409 `reservation_in_flight`）、`POST /admin/maintenance/sweep`（立即清理，返回 `{lost_calls, sessions_closed, orphan_holds}`）、`GET /admin/overages?status=open|waived|charged|all`、`POST /admin/overages/{id}/resolve {action: waive|charge, credits?, reason}`、`GET /admin/orders?status=`、`POST /admin/orders/{id}/confirm {payment_reference, reason}`（manual 渠道）、`GET /admin/audit?action=`。
 
@@ -512,6 +611,16 @@ token 套餐（法币）
 | `NEUXMIND_WEKNORA_PARSE_SECONDS` / `NEUXMIND_WEKNORA_ANSWER_SECONDS` | `1800` / `180` | 等 WeKnora 解析完一份文档 / 一个回答的最长时间 |
 | `NEUXMIND_LIBRARY_PARSE_INTERVAL_SECONDS` / `NEUXMIND_LIBRARY_PARSE_THREADS` | `5` / `2` | 解析线程多久找一次活、几个线程（0 不启动） |
 | `NEUXMIND_LIBRARY_PARSE_WALL_SECONDS` / `_CPU_SECONDS` / `_MEMORY_BYTES` / `_UNPACKED_BYTES` | `120` / `60` / `1073741824` / `8589934592` | 规则解析子进程的墙钟时间、CPU 时间、地址空间（Linux）、解出字节的上限 |
+| `NEUXMIND_SKILL_ORG_MAX_RELEASES` / `NEUXMIND_SKILL_RELEASE_MAX_BODY_BYTES` | `500` / `3145728` | 云端技能库（issue #43）：每个组织的版本数；`POST /skills/releases` 的请求体上限 |
+| `NEUXMIND_LIBRARY_MAX_BUNDLE_BYTES` | `67108864` | 资料库里一份程序和场景数据（`kind: bundle`）的大小上限 |
+| `NEUXMIND_DEVICE_LINK_MAX_BODY_BYTES` | `2097152` | `POST /device-link/sync` 的请求体上限 |
+| `NEUXMIND_DEVICE_LINK_POLL_SECONDS` / `NEUXMIND_DEVICE_LINK_POLL_BUSY_SECONDS` | `2` / `1` | 告诉机器人多久同步一次：平时 / 有远程调用没结束时 |
+| `NEUXMIND_DEVICE_LINK_OFFLINE_SECONDS` | `60` | 机器人这么久没同步就算离线 |
+| `NEUXMIND_DEVICE_LINK_MAX_DEVICES` / `NEUXMIND_DEVICE_LINK_MAX_SYNCS_PER_MINUTE` | `1000` / `240` | 每个组织连到云端的机器人数；每台机器人每分钟的同步次数 |
+| `NEUXMIND_SKILL_CALL_PICKUP_TIMEOUT_SECONDS` / `NEUXMIND_SKILL_CALL_LOST_AFTER_SECONDS` | `30` / `120` | 排队的调用多久没被取走算 `expired`；机器人多久不同步（或不再提一个调用）算 `lost` |
+| `NEUXMIND_SKILL_CALL_RATE_PER_MINUTE` | `60` | 每个 API Key 每分钟发起调用的次数 |
+| `NEUXMIND_SKILL_CALL_RETENTION_DAYS` / `NEUXMIND_SKILL_CALL_ORG_KEEP` | `30` / `100000` | 调用记录保留的天数；每个组织保留的条数 |
+| `NEUXMIND_SKILL_STOP_TTL_SECONDS` | `120` | 没被机器人取走的停止多久作废 |
 | `NEUXMIND_SESSION_TTL_SECONDS` | `43200` | |
 | `NEUXMIND_SESSION_REMEMBER_TTL_SECONDS` | `2592000` | 登录或注册时带 `remember: true` 的会话有效期（桌面应用的“保持登录”，issue #36） |
 | `NEUXMIND_LOGIN_MAX_FAILURES` / `NEUXMIND_LOGIN_WINDOW_SECONDS` | `8` / `60` | 前者现在是每（邮箱, IP）组合的上限 |
@@ -562,3 +671,4 @@ docker compose -f cloud/compose.yaml down -v                # 停止并删除数
 8. API Key 的 `last_used_at` 每次请求都写库，高 QPS 时需要改成批量更新。
 11. 资料库（issue #33）：存储只有磁盘卷一种实现（`library_store.LibraryStore`，换对象存储是再写一个同样接口的类）；没有病毒扫描；能力库还没有，权限先用组织角色；本体类型只校验标识的格式，没有对照本体类型清单（issue #32）；没有修改标注的接口，标错了要删除后重传；别人开的上传只有本人能取消（组织管理员不能代为取消，最迟 7 天后过期）；配额按资料条数计字节，同一内容标成两个版本算两次；取回文件没有频率限制；下载时文件恰好被删除会得到 500；`.zip` 和压缩的 tar 只看开头，不检查完整性。
 12. 资料解析（issue #34）：除了 WeKnora 的替身，只在本机 Docker 里的 WeKnora 0.6.3 上跑通过一次（2026-11-23，模型经 TokenFans；要注意的几点见 docs/MATERIAL_PARSING.md）；文档的内容会发给 WeKnora 里配置的模型服务；旧格式 Office 文档（`.doc`、`.xls`）按字段代码和函数名查外部引用，不认 Excel 97–2003 的外部工作簿链接；没有 `dpkg-deb` 的环境里读不了 zstd 压缩的 deb（名称、版本、架构由人填）；资料不能改挂到另一台设备；修复助手按需检索文档全文是 issue #30 的事。
+13. 云端技能（issue #43）：技能库、机器人同步和开放平台只在 SQLite 上跑过测试，没有在 PostgreSQL 上跑过，也没有和真实的管理层、真实的机器人连起来验证过。`device:link` 的 Key 是组织级的，没有每台机器人单独的凭证（见“机器人连到云端”的限制）。开放平台没有回调（webhook），调用方要自己轮询 `GET /open/calls/{id}`。调用的结果、错误信息、技能的标题和说明是机器人给的文字，展示它们的界面要自己转义。

@@ -39,6 +39,7 @@ from sqlalchemy.orm import Session
 
 from . import audit, library, weknora
 from . import material_fields as fields
+from . import library_bundle      # issue #43: a bundle is never parsed
 from .config import Settings
 from .db import Database
 from .errors import ApiError, bad_request, conflict
@@ -624,6 +625,7 @@ def view(material: Material, job: MaterialParse | None) -> dict:
 def get_result(session: Session, p, material_id: str) -> dict:
     p.require(library.READ)
     material = library._own_material(session, p, material_id)
+    library_bundle.refuse_parse(material)
     return view(material, _job(session, material_id))
 
 
@@ -631,6 +633,7 @@ def _edit(session: Session, p, material_id: str, payload) -> tuple[Material, Mat
     if not isinstance(payload, dict):
         raise bad_request("请求须为对象")
     material = library._own_material(session, p, material_id)
+    library_bundle.refuse_parse(material)
     job = _job(session, material_id, lock=True)
     if job is None or job.stage != DONE:
         raise conflict("这份资料还在解析，解析完才能修改或确认", code="parse_running")
@@ -688,6 +691,7 @@ def retry(db: Database, who, material_id: str) -> dict:
     with db.transaction() as s:
         p = library._writer(who(s))
         material = library._own_material(s, p, material_id)
+        library_bundle.refuse_parse(material)
         job = _job(s, material_id, lock=True)
         if job is not None and job.stage != DONE:
             raise conflict("这份资料正在解析", code="parse_running")

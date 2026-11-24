@@ -112,6 +112,12 @@ class Platform:
         self.safety_limits = SafetyLimits(self)     # issue #22: safety limits a person fills in per device
         from .runtime_install import RuntimeInstall
         self.runtime_install = RuntimeInstall(self)     # issue #19: install the management layer from the console (after runtime_link, robot_remove)
+        from .cloud_skills import CloudSkills
+        self.cloud_skills = CloudSkills(self)       # issue #43: skill packages kept in the cloud; publish, download, install on a robot
+        from .remote_calls import RemoteCalls
+        self.remote_calls = RemoteCalls(self)       # issue #43: the owner's "允许远程调用" switch per installed skill
+        from .robot_bundle import RobotBundles
+        self.robot_bundle = RobotBundles(self)      # issue #43: a robot's programs and scene data, to the cloud and back
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):
@@ -952,4 +958,5 @@ class Platform:
         self.workflows.close()
         self.engineering.close()
         self.package_delivery.close()   # issue #31: package deliveries a person started stop before the store is closed
+        self.robot_bundle.close()       # issue #43: collecting or installing a bundle stops before the store is closed
         self.store.close()

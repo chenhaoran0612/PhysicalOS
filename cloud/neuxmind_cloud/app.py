@@ -18,6 +18,7 @@ from .db import Database
 from .errors import ApiError
 from .library import guard_body as library_body_limit
 from .mailer import EmailSender, build_sender
+from .skill_body import guard_body as skill_body_limit      # issue #43
 from .upstream import build_provider
 
 log = logging.getLogger("neuxmind_cloud")
@@ -59,6 +60,11 @@ class BodySizeLimitMiddleware:
         # Issue #33: one chunk of a material upload (binary, PUT) has its own bound, granted only to a
         # caller whose credential exists; anyone else is answered 401 there, before the body is read.
         limit = await library_body_limit(scope, send, limit)
+        if limit is None:
+            return
+        # Issue #43: publishing a skill package and a robot's sync carry more than the general limit;
+        # granted the same way (skill_body.py).
+        limit = await skill_body_limit(scope, send, limit)
         if limit is None:
             return
         for name, value in scope.get("headers", []):
@@ -169,6 +175,11 @@ def create_app(settings: Settings | None = None, *, provider_factory: Callable[[
     from .routes import material_parse as material_parse_routes
     app.include_router(material_parse_routes.router, prefix=API_PREFIX)
     app.state.parse_worker = material_parse.start_worker(db, settings)
+    # Issue #43 (docs/CLOUD_SKILLS.md): the skill store (/skills), the robots' link (/device-link/sync)
+    # and the open platform for third parties (/open/*).
+    from .routes import device_link as device_link_routes, open_platform as open_platform_routes, skills as skill_routes
+    for module in (skill_routes, device_link_routes, open_platform_routes):
+        app.include_router(module.router, prefix=API_PREFIX)
 
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes,
                        session_max_bytes=settings.session_max_body_bytes)

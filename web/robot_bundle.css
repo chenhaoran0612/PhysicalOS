@@ -1,0 +1,28 @@
+/* Issue #43: the 程序和场景数据 section of a robot's page (web/robot_bundle.js).
+   The section's frame is shared with 远程调用 (web/remote_calls.css). */
+:root{--bundle-track:#edf1e8;--bundle-move:.25s}
+
+.bundle-actions{margin:0 0 12px}
+
+/* What is running, or how the last one ended: the bar grows with a transform (no layout work per tick). */
+.bundle-job{padding:12px 14px;border:1px solid #e3ebd8;border-radius:6px;background:#fafcf7;margin:0 0 12px}
+.bundle-job b{display:block;font-size:12px;color:var(--ink);overflow-wrap:anywhere}
+.bundle-progress{height:6px;border-radius:3px;background:var(--bundle-track);overflow:hidden;margin:10px 0 8px}
+.bundle-progress i{display:block;height:100%;background:var(--green);transform-origin:left center;transition:transform var(--bundle-move) ease-out}
+.bundle-job-foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 16px;margin-top:4px}
+.bundle-job-state{flex:1 1 260px;font-size:11px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.bundle-job.good .bundle-job-state{color:#557a41}
+.bundle-job.warn .bundle-job-state{color:var(--amber)}
+.bundle-job.bad .bundle-job-state{color:var(--red)}
+.bundle-job .bundle-warning{margin:8px 0 0;color:var(--amber)}
+
+#bundle-list td{vertical-align:top}
+#bundle-list .cell-main{overflow-wrap:anywhere}
+#bundle-list .cell-sub{font-family:inherit}
+#bundle-list .bundle-origin{display:block;overflow-wrap:anywhere}
+#bundle-list .bundle-origin.foreign{color:var(--amber)}
+.bundle-empty{margin:0}
+.bundle-history{margin-top:12px}
+.bundle-history p{margin:6px 0 0;font-size:11px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+
+@media(prefers-reduced-motion:reduce){.bundle-progress i{transition:none}}

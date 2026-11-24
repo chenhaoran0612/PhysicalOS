@@ -334,6 +334,8 @@ bash ~/neuxmind-pkg/device_install.sh status      # 进程和 /v1/status 摘要�
 
 issue #26，需求 R7-08。除按需下载模型（[§5.2](#52-端侧模型安装modelinstall)）外，这是运行时**唯一会主动向外发数据**的地方，默认关闭：没有配置文件就不发任何东西，设备照常完全离线工作。代码在 `alerts.py`（告警和设备上的告警库）和 `alert_report.py`（上报）。
 
+issue #43 起，同一份配置文件还会打开云端连接（[§2.4](#24-云端连接机器人自己向云端取第三方的调用)），那是运行时第二个会主动向外发数据的地方；只要告警上报、不要云端连接，在配置文件里加一项 `"link": false`。
+
 **做什么。** `serve` 启动后有一个独立线程（`nx-alert-report`）：
 
 - 每 5 分钟向配置的云平台发一次上报（`neuxmind.device_report.v1`）：云平台还没收到的告警；没有告警时发一份空的，云平台靠它知道设备还在（连续 3 次没收到算离线）。启动后先发一次。控制台开没开都一样，都是设备向外发。
@@ -385,6 +387,54 @@ issue #26，需求 R7-08。除按需下载模型（[§5.2](#52-端侧模型安�
 - 没有在真机和真实的云平台之间验证过。测试用的是仿真本体和本机带临时证书的替身云端（`tests/test_alert_report.py`、`test_alert_refusals.py`、`test_alert_book.py`、`test_alert_report_https.py`、`test_device_install_cloud.py`，最后一个只在 Linux 上运行）。弱网（高丢包、高时延）下只靠“下一次再发”，没有专门测过。
 - 设备的时钟不准时，告警的 `ts` 跟着不准；云平台另记收到的时间。
 - 告警还不能在设备上逐条查看或标“已处理”（`/v1/status` 只有数量），标记在云平台上做。急停解除之后不会再发一条“已解除”。
+
+## 2.4 云端连接：机器人自己向云端取第三方的调用
+
+issue #43，约定见 [`docs/CLOUD_SKILLS.md`](../docs/CLOUD_SKILLS.md) 第 3 节。第三方经云平台的开放接口调用这台机器人上的技能时，调用不是推给机器人的：管理层自己隔几秒向云平台问一次“有没有给我的调用”，只出不进，桌面应用不开也一样。代码在 `cloud_link.py`（和云平台之间的收发）、`remote_calls.py`（调用在设备上怎么执行）和 `remote_access.py`（主人的开关）。
+
+**什么时候开启。** 用的就是告警上报那份配置文件（[§2.3](#23-告警上报设备主动向云平台发)）：文件能用、里面没有写 `"link": false`，`serve` 启动后就多一个线程（`nx-cloud-link`）。key 要带 `device:link` 权限范围（同一个 key 可以同时带 `alerts:report`）；没带时云平台答复 403 `scope_missing`，状态里显示 `error` 和原因，每 30 秒再试一次，告警上报不受影响。只要告警上报、不要云端连接，就在配置里写 `"link": false`。没有配置文件时什么都不发。
+
+**主人的开关。** 一个技能能不能被远程调用，由机器人主人在设备上按技能打开（`POST /v2/remote/skills`，控制台里的“允许远程调用”）：
+
+- 打开要 `hardware_authorized: true`（人在控制台里确认）、填写人 `set_by`，还要带上确认时看到的那份内容的 `digest`（`GET /v2/remote` 里这个技能的 `digest`）：和机器人上现在装着的不一样（比如看的是 0.1.0，点确认之前又装了 0.2.0），或者没带，就答复 409 `skill_changed`，什么都不改。关闭什么都不需要，随时可以。
+- 开关绑定技能的内容（`digest`）。一个技能的开关指的是它已安装的最新版本；装了新版本（内容不同）以后开关自动失效（`invalidated: true`），要由人重新打开。
+- 关闭立刻生效：先改内存，接着写盘，然后取消这个技能正在进行的远程调用（它以 `cancelled` 结束，原因码 `remote_not_allowed`）；取消时出了意外也不影响已经写下的关闭。关闭之后才到的调用被拒绝（`remote_not_allowed`）。关闭的请求不走 `request_id` 的幂等记录，每次都真的执行；打开的请求带同一个 `request_id` 重发时不会再执行一次（关掉之后迟到的重试不会把它又打开）。
+- 开关存在状态目录里，重启后还在。存下来的记录读不出来、格式不对，或者某一项不是这里写出来的样子（比如打开了却没有填写人），都按关闭处理。打开时先写盘再生效，写不进去就不打开（500 `remote_not_saved`）。
+- **关闭写不进存储时按关闭处理到底。** 答复仍是 500 `remote_not_saved`（文字说明已经关闭、还没写进去），内存里保持关闭，之后每一轮同步和每次例行检查（30 秒一次）都再写一次，写进去为止（`GET /v2/remote` 的 `unsaved` 为真表示还没写进去）。为了重启后不变回打开，管理层另外在状态目录里留一个小文件 `remote-switches.off.json`，写明哪些技能已经关闭；连这个文件也写不了时，删掉状态目录里的标记文件 `remote-switches.armed`（删除不占空间）。启动时：小文件里列出的技能按关闭处理；小文件读不出来，或者存储里有打开的开关而标记文件不在，**所有开关都按关闭处理**（`invalid` 写明原因），由人重新打开需要的。存储、小文件、标记文件三样都动不了的盘（只读）上，关闭只保持到重启。
+- 每次打开和关闭在操作记录里留一条（`operation: "remote.switch"`）。
+
+**一次调用在设备上怎么走。** 云平台的答复是能让机器人动起来的外来输入，所以先按大小、数量、类型和编号的格式卡一遍，再由设备自己重新判断：
+
+- 答复最多 64 KB，必须是 JSON 对象并且 `accepted: true`；一次最多 10 个调用、50 个取消；调用编号、停止编号、设备编号要是 `cal_…`、`stp_…`、`dlk_…` 的样子，参数最多 16 KB。整体不合要求的答复整个不用，算一次同步失败；列表里编号不对的项直接忽略；编号对、别的字段不对的调用被拒绝（`invalid_parameters`），不会执行。
+- 调用带着云平台记的发出时间（`created_at`，没有时用 `dispatched_at`）、答复带着 `server_time` 时，机器人自己再算一次年龄：按云平台自己的钟超过 150 秒的调用不执行，拒绝，原因码 `expired`（机器人的时钟不参与）。**现在的云平台在下发的调用里不带这两个时间，这一条目前不起作用**；云平台自己会在 30 秒没被取走后不再下发。
+- 拒绝一个调用的原因码：`estop_latched`（急停锁存中，任何技能都拒绝）、`skill_not_installed`、`version_mismatch`（版本或内容和装着的不一样）、`remote_not_allowed`、`device_busy`（已有一个远程调用没结束，或者运动正被本机的运行占着、一致性测试正在进行）、`invalid_parameters`（参数不符合技能的声明）、`not_authorized`。
+- **最多执行一次。** 调用编号先写进状态目录，写成功了才开始运行；写不进去就不开始（报告 `failed`，原因码 `state_not_saved`）。见过的编号再来只报告、不重跑，重启之后也一样。设备记住最近 2000 个编号和最近 50 个调用的结果。启动运行用的是和 `POST /v2/skills/{id}/run` 同一个入口，`request_id` 是 `remote-<调用编号>`，所以幂等记录也会挡住第二次。
+- 重启时正在进行的调用不会重跑：它的运行在重启前已经记下结果的，报告那个结果；否则报告 `failed`，原因码 `runtime_restarted`（结果未知，请现场核对）。
+- **同一时间只跑一个远程调用。** 它以 `hardware_authorized = true` 运行，依据就是主人打开的开关；其余和本机运行完全一样：参数在设备端校验，安全监督器照常把关（没填安全限值、不认识的地点、速度上限照样拒绝或限幅），运行有自己的超时。云平台连不上时，已经开始的调用照常跑完，结果等连上了再报。
+- 报告的状态：`running`（带 `progress` 和技能最近一次 `ctx.progress` 的文字）、`succeeded`（带 `result`，超过 16 KB 的结果不带，改成 `{omitted: true, reason}`）、`failed`（`run_failed` / `timeout` / `runtime_restarted` / `state_not_saved` / `start_failed` / `outcome_unknown`）、`cancelled`、`stopped`、`rejected`。终态一直报告到云平台在答复的 `settled` 里列出它，最多 10 分钟。
+- 每个远程调用结束（包括被拒绝）时在操作记录里留一条（`operation: "remote.call"`）：调用编号、技能、版本和 `digest`、谁打开的开关（`switch_set_by`）、参数摘要（`parameters_summary` 最多 300 个字符，另有 `parameters_digest`）、运行编号、结果和原因码。运行本身照常有任务结果记录和安全事件记录（[§5.4](#54-设备上的记录安全事件任务结果操作记录)）。
+
+**停止。** 云平台答复里的 `stop` 和 `POST /v1/stop` 是同一个停止：停下、锁存，解除要在现场。它在这份答复里最先执行，先停机器人，再记账；答复的其余部分不合要求（整份答复因此不用）时也照样执行，因为停下来是安全的方向。同一个 `stop_id` 只执行一次（编号存在状态目录里，重启后仍然有效；现场解除之后，云平台重发的旧停止不会把它再锁上），并在之后的同步里用 `stops` 回报，直到云平台不再发它。操作记录里是一条 `stop`，操作者写 `cloud-link`。**经网络的停止是尽力而为，网络不通时到不了，不能代替现场急停。**
+
+**不挡别的事。**
+
+- 连接线程只读安全状态（急停是否锁存、有没有运行、安全限值填没填），只调用 HTTP 网关也在调用的那几个入口（运行技能、取消运行、停止）。停止路径不调用它、不拿它的锁、不等它的磁盘和网络。
+- 连不上、云平台不应答、答复不是 JSON 或过大、key 不对、磁盘写不进，结果都只是“没连上”：`/v1/status.cloud_link.state` 为 `error`，`last_error` 写原因，过一会儿再试（连续失败时间隔 2、4、8、16、30 秒；401 / 403 固定 30 秒；**有远程调用在跑时不论失败多少次都不超过 2 秒**，免得云平台的停止和取消晚到）。
+- 关闭管理层时先关连接：关闭的标记和“接下一个调用”用同一把锁，所以一个调用要么在关闭之前已经接下，要么不会被接下（云平台那边它仍在等待，过期后记为没被取走）。关闭时正卡在网络上的那次同步，答复回来后只执行其中的停止，别的都不做；万一有运行恰好在这一瞬间启动，立刻被取消。`tick()` 不抛异常。一次请求连接和每次读写 5 秒，合计最多 15 秒。
+- 多久同步一次听云平台的（答复里的 `poll_after_s`，限制在 1–30 秒，默认 2 秒）；有远程调用在跑时每秒一次。
+- 向哪里发、带什么和告警上报相同：只向配置的地址，只走 HTTPS 并校验证书和主机名，不跟随重定向，不用环境变量里的代理；请求里有云平台的 key、这台设备的 `instance_id` / 名称 / 类型 / 是否仿真 / 管理层版本、三个状态（急停锁存、有运行、因没填限值不能运动）、已安装技能的说明（编号、版本、`digest`、标题、说明、参数声明、需要的能力、是否运动类、超时）和每个技能的开关、没结清的远程调用的状态。网关令牌、状态目录路径、技能的代码都不在其中。
+
+`/v1/status.cloud_link`（`GET /v2/remote` 的 `link` 相同）：`configured`（给了能用的配置文件）、`enabled`、`state`（`off` 没开启 / `connecting` 还没同步成功过 / `online` / `error`）、`reason`（没有开启的原因）、`host`、`last_sync_at`、`last_attempt_at`、`last_error`、`device_id`（云平台给这台机器人的编号）、`poll_after_s`、`syncs`、`consecutive_failures`、`active_call`、`skills_trimmed`、`skills_rejected`。60 秒没有同步成功就不算 `online`。
+
+云平台对同步里的每个技能说明有 8 KiB 的上限。超出时管理层不丢掉这个技能，而是缩短给人看的文字（先是技能说明，再是各参数的说明，最后去掉参数的标题和单位），调用要用来校验的部分（参数名、类型、范围、选项）不动；被缩短的技能列在 `skills_trimmed` 里。云平台仍然不收的技能（答复里的 `rejected_skills`）连同原因列在 `skills_rejected` 里（最多 20 个，总数在 `skills_rejected_total`），这样的技能第三方看不到，也调用不了。
+
+**限制。**
+
+- key 是组织级的，设备的名字是自报的（和告警上报相同的限制）：拿到这把 key 的人可以冒充这台机器人取走给它的调用（调用就不会被执行），但不能让机器人做任何事——让机器人动的只有云平台的答复，而云平台是谁由 HTTPS 证书决定。
+- 云平台（或能冒充它的人）可以让机器人执行主人已经打开开关的技能，参数在技能声明的范围之内；开关没打开的技能、声明之外的参数、锁存期间的任何调用它都发动不了。所以运动类技能的开关只在愿意让第三方随时让机器人运动时才打开。
+- 只在仿真本体和本机带临时证书的替身云端上验证过（`tests/test_cloud_link.py`、`test_remote_access.py`、`test_cloud_link_https.py`），另有一个把管理层的连接直接接到云平台应用上的测试（`tests/test_cloud_link_real_cloud.py`，同一个进程里，不经网络；没装云平台依赖的环境里跳过）。没有在真机和部署出来的云平台之间验证过。弱网下没有专门测过。
+- 一个技能装了多个版本时，远程只能调用最新的那个。技能不能卸载，所以没有“卸载后开关怎么办”的问题。
+- 远程调用没有设备上的排队：云平台一次交来几个，第一个开始，其余的被拒绝（`device_busy`）。
 
 ## 3. 写适配器：把本体接进来
 
@@ -597,6 +647,8 @@ SkillContext：`call(cap, **args)`、`read(cap)`、`check_stop()`、`sleep(s)`�
 | GET | `/v2/conformance` / `/v2/conformance/{id}` | 列表 `{conformance:[{id, status, level, static_ok, dry_ok, motion_ok, simulated}]}` / `{id, status: running|completed|failed|unknown, level, progress, report?（conformance.report.v1）, error?}`；重启时未结束的为 `unknown`（不重跑）；未知 id 404 `conformance_not_found` |
 | GET | `/v2/safety/limits` | 这台设备的安全限值（issue #22，§2「设备安全限值」）→ `{schema: "neuxmind.device_limits.v1", required, filled, motion_blocked, reason, limits: {base: {max_linear_speed, max_angular_speed, command_timeout_s}} \| null, set_by, set_at, revision, effective, bounds: {base: {<项>: {unit, min, min_exclusive, max, platform_max, body_max}}}, groups: ["base"], history: [{revision, limits, set_by, set_at}]（新的在前，最多 20 条）, invalid}`；`/v1/status` 的 `safety_limits` 带其中的 `{required, filled, motion_blocked, reason, limits, set_by, set_at}` |
 | POST | `/v2/safety/limits` | `{limits: {base: {max_linear_speed, max_angular_speed, command_timeout_s}}, set_by, request_id?}` → `{accepted: true, ...同 GET}`；三项都要填。拒绝：400 `limits_invalid` / `limits_out_of_range` / `set_by_required`（这三种在记录 `request_id` 之前答复，改正后可用同一个 id 重发），409 `runs_active` / `conformance_running`，500 `limits_not_saved` |
+| GET | `/v2/remote` | 和云平台的连接、每个已安装技能的远程开关、最近的远程调用（issue #43，[§2.4](#24-云端连接机器人自己向云端取第三方的调用)）→ `{schema: "neuxmind.remote_access.v1", link: {configured, enabled, state: off \| connecting \| online \| error, reason, host, last_sync_at, last_attempt_at, last_error, device_id, poll_after_s, syncs, consecutive_failures, active_call, skills_trimmed, skills_rejected}, skills: {<id>: {allowed, digest, set_by, set_at, invalidated, version, title, motion}}, calls: [最近 50 个远程调用的 {call_id, skill_id, version, status, run_id, started_at, finished_at, error: {code, message} \| null}]（新的在前）, invalid（存下来的开关没被采用的原因，正常为 null）, unsaved（有一次关闭还没写进存储）}`；`/v1/status` 的 `cloud_link` 就是其中的 `link` |
+| POST | `/v2/remote/skills` | `{skill_id, allowed: bool, digest, set_by, hardware_authorized, request_id?}` → `{accepted: true, ...同 GET}`（总是当前状态）。打开要 `hardware_authorized: true`、非空的 `set_by` 和确认时看到的 `digest`；关闭都不需要，并且不做 `request_id` 幂等。拒绝：400 `bad_request`（`skill_id` / `allowed` 不对，`set_by` 过长或含控制字符）/ `set_by_required`，403 `hardware_not_authorized`，404 `skill_not_found`（没安装），409 `skill_changed`（打开时没带 `digest`，或和装着的内容不一样）/ `conflict`（开关超过 500 个），500 `remote_not_saved`（没写进存储：打开的不生效；关闭的已经生效并会继续重试写入，重启后仍按关闭处理，见 §2.4） |
 | DELETE ★ | `/v2/models/{sha256 或唯一的目录 ID}` | `{hardware_authorized:true, request_id?}` → `{deleted, model_id: <sha256>}`；目录 ID 对应多个版本时 409 `model_ambiguous`；运行中技能用着时 409 `model_in_use`（带 `runs`）；未安装 404 `model_not_found` |
 
 ### 5.1 异步现场测试

@@ -64,6 +64,7 @@ class Database:
         from . import models  # noqa: F401  (register tables)
         from . import library_models  # noqa: F401  (issue #33: the material library's tables)
         from . import material_parse_models  # noqa: F401  (issue #34: parsing the library's materials)
+        from . import skill_models  # noqa: F401  (issue #43: skill store, device links, calls, stops)
         Base.metadata.create_all(self.engine)
         self._add_missing_columns()
 

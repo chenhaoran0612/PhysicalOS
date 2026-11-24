@@ -1,0 +1,40 @@
+/* Issue #43: the 云端技能 page (web/cloud_skills.js) and the second dialog it shares with the
+   robot page's sections. Colours are the tokens of style.css. */
+
+/* A skill card: the id and version line is quieter than the description under it. */
+.cloud-skill-card h3{overflow-wrap:anywhere}
+.cloud-skill-card .cloud-skill-key{font-size:10px;color:var(--muted);margin:0 0 8px;overflow-wrap:anywhere}
+.cloud-skill-card .card-body>p{overflow-wrap:anywhere}
+
+/* The app's own examples and the result of publishing them: one row each, the state at the right. */
+.cloud-skill-examples{padding:4px 20px 12px}
+.cloud-skill-example{display:flex;justify-content:space-between;align-items:flex-start;gap:8px 16px;padding:12px 0;border-top:1px solid var(--line)}
+.cloud-skill-example:first-child{border-top:0}
+.cloud-skill-example>div{min-width:0;flex:1 1 auto}
+.cloud-skill-example b{font-size:12px;color:var(--ink);overflow-wrap:anywhere}
+.cloud-skill-example .cell-sub{display:block;font-family:inherit;overflow-wrap:anywhere}
+.cloud-skill-example p{margin:4px 0 0;font-size:11px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.cloud-skill-example .status{flex:0 0 auto}
+.dialog-body .cloud-skill-examples{padding:0}
+
+/* Versions of one skill: the buttons stay on the title's line, the notes keep their line breaks. */
+.cloud-skill-release{display:block}
+.cloud-skill-release .section-head{flex-wrap:wrap;margin-bottom:6px}
+.cloud-skill-release p{margin:0;overflow-wrap:anywhere}
+.cloud-skill-release .cloud-skill-notes{margin-top:6px;color:var(--ink);white-space:pre-line}
+form[data-cloudskill-form] .page-purpose.cloud-skill-files,.dialog-body .cloud-skill-files{margin:12px 0}
+form[data-cloudskill-form] .form-error:empty{display:none}
+/* The one-line summary of a skill sits between the facts above it and the verdict below it. */
+form[data-cloudskill-form] p.subtitle,.dialog-body p.subtitle:has(+ [data-cloudskill-state]){margin:0 0 14px}
+
+/* The second dialog (confirmations asked from a robot's page, which is a dialog itself). */
+#sub-dialog{width:min(560px,calc(100% - 32px))}
+#sub-dialog .hardware-confirm{margin:14px 0 0}
+#sub-dialog .hardware-confirm.needs-confirm{border-color:var(--red);background:#fdf1ee;color:#8c3d36}
+#sub-dialog .hardware-confirm input{width:auto;min-height:0;margin-top:5px;flex:0 0 auto}
+#sub-dialog .inline-note{margin:12px 0 0}
+#sub-dialog .detail-meta{margin-bottom:14px}
+
+@media(max-width:600px){
+  .cloud-skill-example{flex-direction:column}
+}

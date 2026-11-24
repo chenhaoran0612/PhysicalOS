@@ -44,6 +44,7 @@ from starlette.responses import JSONResponse
 
 from . import audit
 from . import library_types as types
+from . import library_bundle      # issue #43: kind "bundle"
 from .auth import Principal, _throttle, bearer_token
 from .config import Settings
 from .db import Database, advisory_lock
@@ -173,12 +174,15 @@ def _upload_fields(payload, settings: Settings) -> dict:
         raise bad_request(str(exc)) from None
     if fmt is None:
         raise unsupported(f"不支持这种文件类型（{filename}）")
+    fmt = library_bundle.requested_format(payload, fmt)          # issue #43: kind "bundle"
     size = payload.get("size")
     if isinstance(size, bool) or not isinstance(size, int) or size < 1:
         raise bad_request("size 须为文件的字节数（正整数）")
     limit = settings.library_max_package_bytes if fmt.kind == types.PACKAGE else settings.library_max_document_bytes
+    limit = library_bundle.size_limit(fmt, settings, limit)
     if size > limit:
         what = "驱动安装包" if fmt.kind == types.PACKAGE else "文档"
+        what = library_bundle.label(fmt, what)
         raise ApiError(413, "file_too_large", f"文件太大：{what}最大 {limit} 字节，这个文件 {size} 字节",
                        max_bytes=limit, kind=fmt.kind)
     sha256 = payload.get("sha256")
@@ -190,6 +194,7 @@ def _upload_fields(payload, settings: Settings) -> dict:
     vendor, model = _label(payload.get("vendor"), "厂家", 100), _label(payload.get("model"), "型号", 100)
     version = _label(payload.get("version"), "版本", 50)
     device_id, device_name = _device(payload)
+    library_bundle.require_device(fmt, device_id, device_name)
     labels = (body_type, vendor.casefold(), model.casefold(), version.casefold())
     # Issue #34: a material of one device is not a duplicate of the same file kept for another device.
     label_key = _digest(*labels, "device", device_id) if device_id else _digest(*labels)
@@ -409,6 +414,7 @@ def _open_upload(session: Session, p: Principal, payload, settings: Settings, st
         _drop_upload(session, existing.id)
         store.discard(existing.id)
         existing = None
+    library_bundle.refuse_other_kind(existing, fields)          # issue #43: never continue an upload of the other kind
     if existing is not None:
         existing.expires_at = max(existing.expires_at, _keep_until(existing, settings))
         existing.description = fields["description"]
@@ -578,6 +584,7 @@ def _store_material(db: Database, store: LibraryStore, staging, upload_id: str, 
             return refusal
         material = Material(org_id=org_id, created_by=user_id, status=PARSING, **fields)
         s.add(material)
+        library_bundle.on_stored(material)                       # issue #43: a bundle is usable at once
         try:
             s.flush()                               # the unique constraints speak before the file moves
         except IntegrityError:

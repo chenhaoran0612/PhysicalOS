@@ -125,6 +125,13 @@ def sweep(db: Database, settings: Settings, at: float | None = None) -> dict:
     # Issue #33: uploads nobody continued, and files on the library volume that no record knows.
     from . import library
     counts.update(library.sweep(db, settings))
+    # Issue #43: remote calls nobody fetched (expired) or whose robot went silent (lost), stops never
+    # fetched, and calls / robots past their retention. A failure here is logged and stops nothing else.
+    try:
+        from . import skill_calls
+        counts.update(skill_calls.sweep(db, settings, at))
+    except Exception:
+        log.exception("cloud skills sweep failed")
     if any(counts.values()):
         log.info("sweep: %s", counts)
     return counts

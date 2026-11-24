@@ -27,6 +27,15 @@ def _list(name: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+# Issue #43: the cloud-skills settings, each a positive integer read from NEUXMIND_<NAME IN UPPER CASE>.
+CLOUD_SKILL_SETTINGS = (
+    "skill_org_max_releases", "skill_release_max_body_bytes", "library_max_bundle_bytes",
+    "device_link_max_body_bytes", "device_link_poll_seconds", "device_link_poll_busy_seconds",
+    "device_link_offline_seconds", "device_link_max_devices", "device_link_max_syncs_per_minute",
+    "skill_call_pickup_timeout_seconds", "skill_call_lost_after_seconds", "skill_call_rate_per_minute",
+    "skill_call_retention_days", "skill_call_org_keep", "skill_stop_ttl_seconds")
+
+
 @dataclass
 class Settings:
     """All tunables of the cloud service. Construct with ``Settings.from_env()``."""
@@ -144,6 +153,23 @@ class Settings:
     library_parse_memory_bytes: int = 1024 ** 3
     library_parse_unpacked_bytes: int = 8 * 1024 ** 3
 
+    # --- cloud skills (issue #43, docs/CLOUD_SKILLS.md) ------------------
+    skill_org_max_releases: int = 500                     # releases in the skill store per organisation
+    skill_release_max_body_bytes: int = 3 * 1024 * 1024   # body of POST /skills/releases
+    library_max_bundle_bytes: int = 64 * 1024 * 1024      # a robot's programs and scene data (library kind "bundle")
+    device_link_max_body_bytes: int = 2 * 1024 * 1024     # body of POST /device-link/sync (up to 200 skills)
+    device_link_poll_seconds: int = 2                     # how often a robot is told to sync ...
+    device_link_poll_busy_seconds: int = 1                # ... while a remote call is under way
+    device_link_offline_seconds: int = 60                 # no sync for this long: the robot is offline
+    device_link_max_devices: int = 1000                   # robots (instance ids) that may link per organisation
+    device_link_max_syncs_per_minute: int = 240           # per robot
+    skill_call_pickup_timeout_seconds: int = 30           # a queued call nobody fetched becomes "expired"
+    skill_call_lost_after_seconds: int = 120              # an unfinished call of a silent robot becomes "lost"
+    skill_call_rate_per_minute: int = 60                  # calls placed per API key
+    skill_call_retention_days: int = 30                   # finished calls (and robots never seen again) are kept this long
+    skill_call_org_keep: int = 100_000                    # calls kept per organisation
+    skill_stop_ttl_seconds: int = 120                     # a stop the robot never fetched is dropped after this
+
     # --- password hashing (C-07) ----------------------------------------
     scrypt_log_n: int = 17
 
@@ -159,6 +185,9 @@ class Settings:
                 raise ValueError(f"NEUXMIND_{name.upper()} 须为正整数")
         if self.device_offline_grace_seconds < 0:
             raise ValueError("NEUXMIND_DEVICE_OFFLINE_GRACE_SECONDS 不能为负")
+        for name in CLOUD_SKILL_SETTINGS:                                      # issue #43
+            if getattr(self, name) < 1:
+                raise ValueError(f"NEUXMIND_{name.upper()} 须为正整数")
         if self.scrypt_log_n < 17 and not self.is_test_env:
             raise ValueError("NEUXMIND_SCRYPT_LOG_N 低于 17 只允许在 dev/test 环境使用")
         if not 10 <= self.scrypt_log_n <= 20:
@@ -282,5 +311,6 @@ class Settings:
             library_parse_memory_bytes=_int("NEUXMIND_LIBRARY_PARSE_MEMORY_BYTES", cls.library_parse_memory_bytes),
             library_parse_unpacked_bytes=_int("NEUXMIND_LIBRARY_PARSE_UNPACKED_BYTES", cls.library_parse_unpacked_bytes),
             scrypt_log_n=_int("NEUXMIND_SCRYPT_LOG_N", cls.scrypt_log_n),
+            **{name: _int(f"NEUXMIND_{name.upper()}", getattr(cls, name)) for name in CLOUD_SKILL_SETTINGS},   # issue #43
             operator_allowlist_enabled=({"1": True, "0": False}.get(os.environ.get("NEUXMIND_OPERATOR_ALLOWLIST", "").strip())),
         )
