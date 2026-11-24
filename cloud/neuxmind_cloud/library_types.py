@@ -28,6 +28,9 @@ from dataclasses import dataclass
 
 DOCUMENT, PACKAGE = "document", "package"
 KINDS = (DOCUMENT, PACKAGE)
+# Issue #43: a robot's programs and scene data: a tar.gz that is stored and never parsed (library_bundle.py).
+BUNDLE = "bundle"
+KINDS = (*KINDS, BUNDLE)
 
 
 @dataclass(frozen=True)

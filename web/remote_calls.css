@@ -1,0 +1,40 @@
+/* Issue #43: the 远程调用 section of a robot's page (web/remote_calls.js). */
+:root{--remote-track:#d5ddd0;--remote-on:var(--green);--remote-move:.16s}
+
+.remote-section,.bundle-section{margin:22px 0 12px;padding-top:18px;border-top:1px solid var(--line)}
+.remote-section>.section-head,.bundle-section>.section-head{margin-bottom:8px;align-items:baseline}
+.remote-section>.inline-note,.bundle-section>.inline-note{margin:0 0 12px}
+
+/* The link to the cloud: a state and one line of detail. */
+.remote-link{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 14px;border:1px solid #e3ebd8;border-radius:6px;background:#fafcf7}
+.remote-link-detail{font-size:11px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere;min-width:0}
+
+/* One row per installed skill: what it is at the left, the switch at the right. */
+.remote-skills{margin:10px 0 4px}
+.remote-skill{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;padding:12px 2px;border-top:1px solid var(--line)}
+.remote-skill:first-child{border-top:0}
+.remote-skill-text{min-width:0;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+.remote-skill-text b{color:var(--ink)}
+.remote-skill-note{margin:0;font-size:10px;line-height:1.7;color:var(--muted)}
+.remote-skill-note:empty{display:none}
+
+.remote-switch{display:inline-flex;align-items:center;gap:9px;flex:0 0 auto;border:0;background:none;padding:6px 4px;border-radius:6px;color:var(--muted);font-size:11px}
+.remote-switch-track{position:relative;display:block;width:34px;height:20px;border-radius:10px;background:var(--remote-track);transition:background-color var(--remote-move)}
+.remote-switch-track i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform var(--remote-move)}
+.remote-switch[aria-checked="true"]{color:var(--green)}
+.remote-switch[aria-checked="true"] .remote-switch-track{background:var(--remote-on)}
+.remote-switch[aria-checked="true"] .remote-switch-track i{transform:translateX(14px)}
+.remote-switch:hover .remote-switch-track{box-shadow:0 0 0 3px #28674f1c}
+.remote-switch:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.remote-switch:disabled{opacity:.55;cursor:default}
+
+.remote-calls-title{margin:16px 0 8px;font-size:12px;color:var(--ink)}
+.remote-empty{margin:0}
+#remote-call-list td{vertical-align:top;overflow-wrap:anywhere;white-space:normal}
+#remote-call-list table{width:100%;table-layout:fixed}
+#remote-call-list th:nth-child(1){width:18%}#remote-call-list th:nth-child(2){width:26%}#remote-call-list th:nth-child(3){width:16%}
+
+@media(max-width:600px){
+  .remote-skill{flex-direction:column;align-items:flex-start}
+}
+@media(prefers-reduced-motion:reduce){.remote-switch-track,.remote-switch-track i{transition:none}}

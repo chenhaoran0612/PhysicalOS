@@ -304,6 +304,8 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 return {"conformance": runtime.conformance.list()}
             if path == "/v2/safety/limits":       # issue #22: this device's filled safety limits
                 return runtime.device_limits.view()
+            if path == "/v2/remote":              # issue #43: the link to the cloud and the remote switches
+                return runtime.remote_access.view()
             m = _CONFORMANCE.match(path)
             if m:
                 return runtime.get_conformance(unquote(m.group(1)))
@@ -431,6 +433,8 @@ def make_handler(runtime: EdgeRuntime, token: str):
                 return runtime.start_conformance(payload)
             if path == "/v2/safety/limits":       # issue #22: fill them in (who and when are recorded)
                 return runtime.device_limits.write(payload)
+            if path == "/v2/remote/skills":       # issue #43: allow or disallow remote calls of one skill
+                return runtime.remote_access.set(payload)
             m = _CAP_INVOKE.match(path)
             if m:
                 return runtime.invoke(unquote(m.group(1)), payload)

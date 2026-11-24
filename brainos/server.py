@@ -173,6 +173,8 @@ def make_handler(application):
             extra=extra or {'/task_workbench.js':('task_workbench.js','text/javascript; charset=utf-8'),'/task_workbench.css':('task_workbench.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #22: safety limits per device, likewise.
             extra=extra or {'/safety_limits.js':('safety_limits.js','text/javascript; charset=utf-8'),'/safety_limits.css':('safety_limits.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #43: skills kept in the cloud, remote calls of a robot's skills, its programs and scene data, likewise.
+            extra=extra or {'/cloud_skills.js':('cloud_skills.js','text/javascript; charset=utf-8'),'/cloud_skills.css':('cloud_skills.css','text/css; charset=utf-8'),'/remote_calls.js':('remote_calls.js','text/javascript; charset=utf-8'),'/remote_calls.css':('remote_calls.css','text/css; charset=utf-8'),'/robot_bundle.js':('robot_bundle.js','text/javascript; charset=utf-8'),'/robot_bundle.css':('robot_bundle.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
@@ -370,6 +372,18 @@ def make_handler(application):
                         # Issue #31: send a usable driver package from the library to a robot and verify it there
                         'library/deliver/start':service.package_delivery.start,'library/deliver/status':service.package_delivery.status,
                         'library/deliver/stop':service.package_delivery.stop,'library/deliver/list':service.package_delivery.list,
+                        # Issue #43: the cloud skill library (list, publish a local folder or the bundled examples, install a release on a robot)
+                        'cloud-skills/overview':service.cloud_skills.overview,'cloud-skills/detail':service.cloud_skills.detail,
+                        'cloud-skills/publish-preview':service.cloud_skills.publish_preview,'cloud-skills/publish':service.cloud_skills.publish,
+                        'cloud-skills/publish-examples':service.cloud_skills.publish_examples,'cloud-skills/delete':service.cloud_skills.remove,
+                        'cloud-skills/install-preview':service.cloud_skills.install_preview,'cloud-skills/install':service.cloud_skills.install,
+                        # Issue #43: the owner's switch for remote calls per installed skill; the signed-in account is recorded as who
+                        'robots/remote':service.remote_calls.state,
+                        'robots/remote/skill':lambda p:service.remote_calls.set_skill(p,user),
+                        # Issue #43: a robot's programs and scene data go to the cloud library and come back (both confirmed by a person)
+                        'robots/bundles':service.robot_bundle.overview,'robots/bundles/collect':service.robot_bundle.start_collect,
+                        'robots/bundles/install':service.robot_bundle.start_install,'robots/bundles/status':service.robot_bundle.status,
+                        'robots/bundles/stop':service.robot_bundle.stop,
                         # Issue #4: TokenFans models & compute (the key and password never come back).
                         'model-compute/key':service.model_compute.connect_key,
                         'model-compute/login':service.model_compute.login,

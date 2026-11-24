@@ -102,6 +102,20 @@ ALERT_REPORT_SCOPE = "alerts:report"
 API_KEY_SCOPES = (*API_KEY_SCOPES, ALERT_REPORT_SCOPE)
 ROLE_PERMISSIONS = {role: permissions | {ALERT_REPORT_SCOPE} for role, permissions in ROLE_PERMISSIONS.items()}
 
+# Issue #43 (docs/CLOUD_SKILLS.md) -- cloud skills. All four are API-key scopes, none is in a default.
+# * skills:read / skills:write: the organisation's skill store; a field operator reads only.
+# * skills:invoke: the open platform (/open/*): a third party makes a robot of the organisation run a
+#   skill. Owner, admin and developer may hold it and issue keys with it; a field operator may not.
+# * device:link: the one thing the key on a robot does for the link (POST /device-link/sync). Like
+#   alerts:report, every role may hold it; one key may carry both.
+DEVICE_LINK_SCOPE, SKILL_INVOKE_SCOPE = "device:link", "skills:invoke"
+SKILL_PERMISSIONS = {"owner": {"skills:read", "skills:write", SKILL_INVOKE_SCOPE},
+                     "admin": {"skills:read", "skills:write", SKILL_INVOKE_SCOPE},
+                     "developer": {"skills:read", "skills:write", SKILL_INVOKE_SCOPE}, "operator": {"skills:read"}}
+API_KEY_SCOPES = (*API_KEY_SCOPES, "skills:read", "skills:write", SKILL_INVOKE_SCOPE, DEVICE_LINK_SCOPE)
+ROLE_PERMISSIONS = {role: permissions | SKILL_PERMISSIONS[role] | {DEVICE_LINK_SCOPE}
+                    for role, permissions in ROLE_PERMISSIONS.items()}
+
 
 # ---------------------------------------------------------------- helpers
 def _email(value) -> str:

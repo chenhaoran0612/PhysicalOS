@@ -528,6 +528,8 @@ try:
     summary["sandbox"] = {key: sandbox.get(key) for key in ("level", "mode", "privilege_drop", "python_usable", "pids_cgroup")}
     report = status.get("alert_report") or {}
     summary["alert_report"] = {key: report.get(key) for key in ("enabled", "url", "unsent", "last_error", "reason")}
+    link = status.get("cloud_link") or {}                                                   # issue #43
+    summary["cloud_link"] = {key: link.get(key) for key in ("enabled", "state", "host", "last_error", "reason")}
     summary["motion_blocked"] = (status.get("safety_limits") or {}).get("motion_blocked")   # issue #22
 except (ValueError, AttributeError) as error:     # something else answered on this port
     sys.stderr.write(f"the answer was not a runtime status: {error}\n")

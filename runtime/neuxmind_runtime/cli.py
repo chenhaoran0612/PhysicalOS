@@ -117,12 +117,15 @@ def _serve(args) -> int:
         if box.get("python_note"):
             print("警告：" + box["python_note"], flush=True)
     reporter = _start_alert_report(runtime, args.cloud_config)     # issue #26
+    link = _start_cloud_link(runtime, args.cloud_config)           # issue #43
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         # Stop motion and runs on shutdown without latching the next boot.
+        if link is not None:
+            link.close()             # first: no new remote call while shutting down
         runtime.runner.stop_all("runtime shutdown")
         runtime.supervisor.halt_motion("runtime shutdown")
         server.close()
@@ -151,6 +154,29 @@ def _start_alert_report(runtime, config_path):
         if reporter is not None:
             reporter.close()
         runtime.alert_report = None
+        return None
+
+
+def _start_cloud_link(runtime, config_path):
+    """Issue #43: connect out to the cloud and fetch remote calls (``--cloud-config``, unless it says
+    ``"link": false``). Whatever goes wrong here, the runtime serves: the status says why."""
+    from . import cloud_link
+    link = None
+    try:
+        link = cloud_link.for_serve(runtime, config_path)
+        view = link.describe()
+        if view["enabled"]:
+            print(f"云端连接：向 {view['host']} 取第三方的调用（只出不进）；每个技能要先由主人打开“允许远程调用”",
+                  flush=True)
+        elif config_path is not None:
+            print("云端连接未开启：" + str(view["reason"]), flush=True)
+        return link.start()
+    except Exception as exc:
+        print(f"警告：云端连接没有启动（其余功能不受影响）：{type(exc).__name__}: {exc}", flush=True)
+        if link is not None:
+            link.close()
+        runtime.cloud_link = None
+        runtime.remote_access.link = None
         return None
 
 

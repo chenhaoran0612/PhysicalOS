@@ -332,6 +332,9 @@ class Serve(HttpsCase):
         with tempfile.TemporaryDirectory() as home:
             config = self.write_config(home, {"url": cloud.url, "key": CLOUD_KEY, "ca_file": str(CERTS["ca"])})
             self.assertEqual(load_config(config).url, cloud.url)
+            # Issue #43: the same file also turns the cloud link on; this test is about the reports alone.
+            config = self.write_config(home, {"url": cloud.url, "key": CLOUD_KEY, "ca_file": str(CERTS["ca"]),
+                                              "link": False})
             _proc, url = self.serve(str(Path(home) / "state"), "--cloud-config", config)
             wait_until(lambda: len(cloud.reports()) >= 1, timeout=30)    # nobody asked: the runtime started it
             first = cloud.reports()[0]
