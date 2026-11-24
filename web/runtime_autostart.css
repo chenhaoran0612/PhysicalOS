@@ -1,0 +1,35 @@
+/* Issue #20 — starting the management layer at boot (web/runtime_autostart.js).
+   Follows web/runtime_install.css: the card line sits next to .ri-line, the dialog uses its type scale. */
+
+/* On the card, above the tags: is it on, and when not, why. */
+.ra-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px 9px;margin:6px 0 2px;padding:7px 10px;font-size:11px;line-height:1.6;color:#5d6b63;background:#fbfcf9;border:1px solid #e6ebe1;border-radius:6px}
+.ra-line .status{font-size:10px;font-weight:550;padding:4px 8px;white-space:normal}
+.ra-detail{color:#6b7c66;overflow-wrap:anywhere}
+.ra-line .text-link{margin-left:auto}
+
+/* The install form: one more box. */
+.ra-install{margin-top:14px}
+.ra-install b{font-weight:600;color:#31443a}
+
+/* The confirmation: who, how, what runs, the file it writes, and the password only when sudo needs one. */
+.ra-intro{margin:0 0 12px;font-size:12px;line-height:1.8;color:#31443a}
+.ra-error{margin:0 0 12px;padding:10px 12px;border:1px solid #efd4cf;border-left:3px solid #b44a42;border-radius:6px;background:#fdf6f4;font-size:11px;line-height:1.7;color:#8a4a43}
+.ra-h{margin:14px 0 6px;font-size:11px;font-weight:600;letter-spacing:.04em;color:#3f5a45}
+.ra-commands{margin:0;padding:0 0 0 20px;font-size:11px;line-height:1.7;color:#5c7050}
+.ra-commands li{margin:0 0 8px}
+.ra-commands code,.ra-unit summary code{display:inline-block;font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;color:#24332e;background:#eef3ea;padding:2px 6px;border-radius:4px;overflow-wrap:anywhere;user-select:all}
+.ra-commands span{display:block;margin-top:2px}
+.ra-unit,.ra-script{margin:12px 0 0;border:1px solid #e3eadc;border-radius:6px;background:#fafcf7}
+.ra-unit summary,.ra-script summary{cursor:pointer;padding:8px 12px;font-size:11px;color:#3f5a45}
+.ra-unit pre,.ra-script pre{margin:0;font-family:ui-monospace,SFMono-Regular,monospace;padding:10px 12px;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:10px;line-height:1.6;color:#31443a;border-top:1px solid #e3eadc;background:#fff;border-radius:0 0 6px 6px}
+.ra-not{margin:12px 0;font-size:11px;line-height:1.8;color:#6b7c66}
+.ra-decline{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:12px}
+.ra-decline small{font-size:10px;line-height:1.6;color:#8a978d;flex:1 1 220px}
+
+/* The card's own dialog. */
+.ra-state{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:12px}
+.ra-state p{margin:0;font-size:12px;line-height:1.7;color:#31443a;flex:1 1 240px}
+
+/* ux04's restart hint when there is no command to give. */
+.howto-cmd-note{display:block;margin-top:4px;font-size:11px;line-height:1.7;color:#6b7c66}
+.reset-howto .howto-cmd + .howto-cmd{margin-left:6px}

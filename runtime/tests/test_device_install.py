@@ -412,6 +412,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(listen_addresses(self.device.port), {"0100007F"})
 
     def test_started_runtime_needs_the_token_and_has_no_hardware(self):
+        # The default install (no NX_ADAPTER) is the simulated body; a ROS 2 install: test_device_install_ros2.
         self.device.start()
 
         refused, _ = http(self.device.url, "/v1/status", token=None)

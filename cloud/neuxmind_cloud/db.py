@@ -63,6 +63,7 @@ class Database:
         from . import alert_models  # noqa: F401  (issue #26: the device alert tables)
         from . import models  # noqa: F401  (register tables)
         from . import library_models  # noqa: F401  (issue #33: the material library's tables)
+        from . import material_parse_models  # noqa: F401  (issue #34: parsing the library's materials)
         Base.metadata.create_all(self.engine)
         self._add_missing_columns()
 
@@ -111,6 +112,11 @@ ADDED_COLUMNS = (
     ("gateway_sessions", "overage_calls", "INTEGER NOT NULL DEFAULT 0"),
     ("gateway_sessions", "overage_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("robots", "conformance", "JSON"),
+    # Issue #34: the device a material belongs to.
+    ("library_materials", "device_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ("library_materials", "device_name", "VARCHAR(200) NOT NULL DEFAULT ''"),
+    ("library_uploads", "device_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
+    ("library_uploads", "device_name", "VARCHAR(200) NOT NULL DEFAULT ''"),
 )
 
 

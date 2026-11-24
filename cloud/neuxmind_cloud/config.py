@@ -122,6 +122,26 @@ class Settings:
     # New uploads are refused when the volume would be left with less than this.
     library_min_free_bytes: int = 1024 ** 3
 
+    # --- material parsing (issue #34) ------------------------------------
+    # The knowledge service (WeKnora) that reads documents and answers questions about them with
+    # the model configured there. Without URL, key and knowledge base, documents end as
+    # 「没解析出来」 (to be filled in by hand); URDF files and packages are parsed by rules anyway.
+    weknora_url: str = ""
+    weknora_api_key: str = field(default="", repr=False)
+    weknora_kb_id: str = ""
+    weknora_tenant_id: str = ""                  # only for a platform key (X-Tenant-ID)
+    weknora_max_bytes: int = 50 * 1024 * 1024    # WeKnora's own default upload limit (MAX_FILE_SIZE_MB=50)
+    weknora_parse_seconds: int = 1800            # how long WeKnora may take to parse one document
+    weknora_answer_seconds: int = 180            # one answer of its model
+    # The parse worker: how often it looks for work; 0 = no thread (tests call material_parse.run_pending).
+    library_parse_interval_seconds: int = 0
+    library_parse_threads: int = 2
+    # The rules parser's child process (material_sandbox).
+    library_parse_wall_seconds: int = 120
+    library_parse_cpu_seconds: int = 60
+    library_parse_memory_bytes: int = 1024 ** 3
+    library_parse_unpacked_bytes: int = 8 * 1024 ** 3
+
     # --- password hashing (C-07) ----------------------------------------
     scrypt_log_n: int = 17
 
@@ -243,6 +263,20 @@ class Settings:
                                                     cls.library_max_concurrent_completions),
             library_uploads_per_hour=_int("NEUXMIND_LIBRARY_UPLOADS_PER_HOUR", cls.library_uploads_per_hour),
             library_min_free_bytes=_int("NEUXMIND_LIBRARY_MIN_FREE_BYTES", cls.library_min_free_bytes),
+            weknora_url=os.environ.get("NEUXMIND_WEKNORA_URL", "").strip(),                     # issue #34
+            weknora_api_key=os.environ.get("NEUXMIND_WEKNORA_API_KEY", "").strip(),
+            weknora_kb_id=os.environ.get("NEUXMIND_WEKNORA_KB_ID", "").strip(),
+            weknora_tenant_id=os.environ.get("NEUXMIND_WEKNORA_TENANT_ID", "").strip(),
+            weknora_max_bytes=_int("NEUXMIND_WEKNORA_MAX_BYTES", cls.weknora_max_bytes),
+            weknora_parse_seconds=_int("NEUXMIND_WEKNORA_PARSE_SECONDS", cls.weknora_parse_seconds),
+            weknora_answer_seconds=_int("NEUXMIND_WEKNORA_ANSWER_SECONDS", cls.weknora_answer_seconds),
+            # The server process looks for materials to parse every 5 s by default (tests: 0 = off).
+            library_parse_interval_seconds=_int("NEUXMIND_LIBRARY_PARSE_INTERVAL_SECONDS", 5),
+            library_parse_threads=_int("NEUXMIND_LIBRARY_PARSE_THREADS", cls.library_parse_threads),
+            library_parse_wall_seconds=_int("NEUXMIND_LIBRARY_PARSE_WALL_SECONDS", cls.library_parse_wall_seconds),
+            library_parse_cpu_seconds=_int("NEUXMIND_LIBRARY_PARSE_CPU_SECONDS", cls.library_parse_cpu_seconds),
+            library_parse_memory_bytes=_int("NEUXMIND_LIBRARY_PARSE_MEMORY_BYTES", cls.library_parse_memory_bytes),
+            library_parse_unpacked_bytes=_int("NEUXMIND_LIBRARY_PARSE_UNPACKED_BYTES", cls.library_parse_unpacked_bytes),
             scrypt_log_n=_int("NEUXMIND_SCRYPT_LOG_N", cls.scrypt_log_n),
             operator_allowlist_enabled=({"1": True, "0": False}.get(os.environ.get("NEUXMIND_OPERATOR_ALLOWLIST", "").strip())),
         )

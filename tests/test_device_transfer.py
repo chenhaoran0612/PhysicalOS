@@ -14,6 +14,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from brainos import device_access, device_transfer
 from upload_fixture import HASH_TOOLS, FlakyLink, UploadDevice
@@ -296,6 +297,123 @@ class Resume(TransferCase):
         self.assertEqual(self.device.read(ARRIVED), data)
         self.assertEqual((result['attempts'], result['verified']), (6, True))
         self.assertLess(self.device.received, len(data) + 5 * 2 * CHUNK)       # each break costs at most the chunk in flight
+
+
+def chunks_by_connection(seen):
+    """The sizes of the chunks each connection got confirmed, in order: one list per connection."""
+    runs, position = [[]], 0
+    for event in seen:
+        if event['stage'] == 'retrying':
+            runs.append([])
+        elif event['stage'] == 'sending':
+            runs[-1].append(event['sent'] - position)
+        position = event['sent']
+    return runs
+
+
+class Pace(TransferCase):
+    """After a broken connection the chunks start small, so little is in flight if it breaks again,
+    and grow back while the device confirms them quickly."""
+    LARGE = 128 * 1024
+    SMALL = device_transfer.CAREFUL_CHUNK_BYTES
+    DATA = random.Random(19).randbytes(600_000)
+
+    def test_after_a_break_the_chunks_start_small_and_grow_back_while_the_device_confirms_quickly(self):
+        self.device.drops = [200_000]                                          # in the second chunk
+        seen = []
+        with mock.patch.object(device_transfer, 'QUICK_SECONDS', 60):
+            result = self.send(self.source(self.DATA), chunk_bytes=self.LARGE, on_progress=seen.append)
+
+        first, second = chunks_by_connection(seen)
+        self.assertEqual(first, [self.LARGE])
+        self.assertEqual(second[:4], [self.SMALL, 2 * self.SMALL, 4 * self.SMALL, self.LARGE])
+        self.assertEqual(max(second), self.LARGE)                              # never larger than the caller asked for
+        self.assertEqual(sum(first) + sum(second), len(self.DATA))
+        self.assertEqual(self.device.read(ARRIVED), self.DATA)
+        self.assertEqual((result['attempts'], result['verified']), (2, True))
+
+    def test_after_a_break_the_chunks_stay_small_while_the_device_is_slow_to_confirm(self):
+        data = self.DATA[:150_000]
+        self.device.drops, self.device.answer_seconds = [50_000], .05         # every write takes longer than "quickly"
+        seen = []
+        with mock.patch.object(device_transfer, 'QUICK_SECONDS', .02):
+            result = self.send(self.source(data), chunk_bytes=self.LARGE, on_progress=seen.append)
+
+        first, second = chunks_by_connection(seen)
+        self.assertEqual(first, [])                                            # the first chunk was cut off
+        self.assertEqual(set(second[:-1]), {self.SMALL})
+        self.assertEqual(sum(second), len(data))
+        self.assertEqual(self.device.read(ARRIVED), data)
+        self.assertTrue(result['verified'])
+
+    def test_chunks_that_grew_back_shrink_again_once_the_device_gets_slow_to_confirm(self):
+        self.device.drops = [50_000]                                           # in the first chunk
+        seen = []
+
+        def progress(event):
+            seen.append(event)
+            if event['stage'] == 'sending' and chunks_by_connection(seen)[-1][-1:] == [self.LARGE]:
+                device_transfer.QUICK_SECONDS = 0                              # from here on nothing counts as quick
+
+        with mock.patch.object(device_transfer, 'QUICK_SECONDS', 60):
+            result = self.send(self.source(self.DATA), chunk_bytes=self.LARGE, on_progress=progress)
+
+        first, second = chunks_by_connection(seen)
+        self.assertEqual(first, [])
+        # Up to the size asked for; the chunk after that one is the first to be found slow, and from
+        # there each is half the one before, down to the small size and no further.
+        self.assertEqual(second[:9], [self.SMALL, 2 * self.SMALL, 4 * self.SMALL, self.LARGE, self.LARGE,
+                                      4 * self.SMALL, 2 * self.SMALL, self.SMALL, self.SMALL])
+        self.assertEqual(set(second[9:-1]), {self.SMALL})
+        self.assertEqual(sum(second), len(self.DATA))
+        self.assertEqual(self.device.read(ARRIVED), self.DATA)
+        self.assertTrue(result['verified'])
+
+    def test_compressed_chunks_grow_back_the_same_way(self):
+        data = TEXT * 3                                                        # a chunk of LARGE packs to about 15 KB
+        self.device.drops = [23_000]                                           # in the second chunk
+        seen = []
+        with mock.patch.object(device_transfer, 'QUICK_SECONDS', 60):
+            result = self.send(self.source(data), chunk_bytes=self.LARGE, on_progress=seen.append)
+
+        first, second = chunks_by_connection(seen)
+        self.assertEqual(first, [self.LARGE])
+        self.assertEqual(second[:4], [self.SMALL, 2 * self.SMALL, 4 * self.SMALL, self.LARGE])
+        self.assertEqual(sum(first) + sum(second), len(data))                  # counted in bytes of the file, not of the wire
+        self.assertEqual((result['encoding'], result['attempts'], result['verified']), ('gzip', 2, True))
+        self.assertEqual(self.device.read(ARRIVED), data)
+        self.assertEqual(self.device.names(DIRECTORY), ['payload.bin'])
+
+    def test_every_new_break_starts_small_again(self):
+        # The fixture counts every byte it stored, the cut-off chunks too: the first cut comes in the
+        # second chunk of LARGE, the second in the chunk of LARGE that follows 16 + 32 + 64 KB.
+        self.device.drops = [200_000, 420_000]
+        seen = []
+        with mock.patch.object(device_transfer, 'QUICK_SECONDS', 60):
+            result = self.send(self.source(self.DATA), chunk_bytes=self.LARGE, on_progress=seen.append)
+
+        first, second, third = chunks_by_connection(seen)
+        self.assertEqual(second, [self.SMALL, 2 * self.SMALL, 4 * self.SMALL])    # the large one after them was cut off
+        self.assertEqual(third[:4], [self.SMALL, 2 * self.SMALL, 4 * self.SMALL, self.LARGE])
+        self.assertEqual(sum(first) + sum(second) + sum(third), len(self.DATA))
+        self.assertEqual(self.device.read(ARRIVED), self.DATA)
+        self.assertEqual((result['attempts'], result['verified']), (3, True))
+
+    def test_an_unbroken_transfer_keeps_the_chunk_size_it_was_given_however_slow_the_device_is(self):
+        seen = []
+        with mock.patch.object(device_transfer, 'QUICK_SECONDS', 0):          # nothing counts as quick
+            self.send(self.source(self.DATA), chunk_bytes=self.LARGE, on_progress=seen.append)
+        (only,) = chunks_by_connection(seen)
+        self.assertEqual(set(only[:-1]), {self.LARGE})
+
+    def test_a_chunk_size_below_the_small_one_is_kept_after_a_break(self):
+        for quick_seconds in (60, 0):                                          # whether the device is found quick or slow
+            with self.subTest(quick_seconds=quick_seconds), mock.patch.object(device_transfer, 'QUICK_SECONDS', quick_seconds):
+                self.device.drops = [self.device.received + 50_000]
+                seen = []
+                self.send(self.source(NOISE[::-1] if quick_seconds else NOISE), on_progress=seen.append)    # chunks of CHUNK
+                first, second = chunks_by_connection(seen)
+                self.assertEqual(set(first) | set(second[:-1]), {CHUNK})
 
 
 class Stopping(TransferCase):

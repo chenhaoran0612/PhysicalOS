@@ -570,6 +570,12 @@ class Heartbeat:
                 pass
         return self.links([robot], connections).get(robot_id)
 
+    def first_check_running(self, connection):
+        """Issue #16: True while the first check of this save of the connection since the start is queued
+        or running (its login has not ended yet). Never waits for a device and never touches the store."""
+        with self._guard:
+            return connection['id'] in self._busy and self._attempted.get(connection['id']) != _revision(connection)
+
     def snapshot(self):
         """For ``Platform.snapshot``. The workspace is being shown, so the timer starts. Only the rhythm is
         part of the state: the page redraws itself whenever its state changes, and a heartbeat a minute

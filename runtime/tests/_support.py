@@ -238,7 +238,15 @@ class ros2_double:
     robot running) for the block only; afterwards the modules are purged, so ``import rclpy``
     fails again for tests that check the "no ROS 2" error. NOT ROS 2 (see ros2_double/README.md)."""
 
+    def __init__(self, nav2: bool = True):
+        self.nav2 = nav2                 # False: nav2_msgs is not installed (issue #21)
+
     def __enter__(self):
+        # Issue #21: the double stands in for a sourced ROS 2 Humble, whose setup sets ROS_DISTRO.
+        self._distro = os.environ.get("ROS_DISTRO")
+        os.environ["ROS_DISTRO"] = "humble"
+        if not self.nav2:                # an import of a None entry raises ImportError
+            sys.modules["nav2_msgs"] = sys.modules["nav2_msgs.action"] = None
         sys.path.insert(0, str(ROS2_DOUBLE))
         import rclpy._graph as graph
         graph.ensure_robot()
@@ -255,6 +263,10 @@ class ros2_double:
                 del sys.modules[name]
         while str(ROS2_DOUBLE) in sys.path:
             sys.path.remove(str(ROS2_DOUBLE))
+        if self._distro is None:
+            os.environ.pop("ROS_DISTRO", None)
+        else:
+            os.environ["ROS_DISTRO"] = self._distro
         return False
 
 

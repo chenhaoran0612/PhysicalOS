@@ -96,7 +96,8 @@ class WhatGoesTests(RemoveCase):
         self.assertEqual(result['deleted'], {'device_connections': 1, 'agent_sessions': 2, 'device_evidence': 1,
                                              'robot_inventories': 1, 'hardware_scans': 1, 'hardware_repairs': 1,
                                              'hardware_issue_marks': 1,      # issue #13's marks
-                                             'device_profiles': 1})          # issue #27's device profile
+                                             'device_profiles': 1,           # issue #27's device profile
+                                             'package_deliveries': 1})       # issue #31's delivery records
 
     def test_what_its_sessions_wrote_on_this_computer_is_deleted(self):
         connection = self.connect_directly()

@@ -59,6 +59,8 @@ READ, WRITE = "library:read", "library:write"
 
 MATERIAL_ID = re.compile(r"mat_[0-9a-f]{20}")
 _BODY_TYPE = re.compile(r"[a-z0-9][a-z0-9_.\-]{0,63}")
+# Issue #34: the device (a robot of the desktop app) a material belongs to, as that app names it.
+DEVICE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:\-]{0,63}")
 # The one route whose body is a chunk. Written out in full (prefix as app.API_PREFIX, id as
 # library_store.UPLOAD_ID) and matched as a whole, so nothing else gets the larger body bound.
 CHUNK_ROUTE = re.compile(r"/api/v1/library/uploads/upl_[0-9a-f]{20}/chunks/[0-9]{1,9}")
@@ -187,14 +189,29 @@ def _upload_fields(payload, settings: Settings) -> dict:
         raise bad_request("body_type 须为本体类型的标识（小写字母、数字、点、下划线、连字符，最多 64 个字符）")
     vendor, model = _label(payload.get("vendor"), "厂家", 100), _label(payload.get("model"), "型号", 100)
     version = _label(payload.get("version"), "版本", 50)
+    device_id, device_name = _device(payload)
+    labels = (body_type, vendor.casefold(), model.casefold(), version.casefold())
+    # Issue #34: a material of one device is not a duplicate of the same file kept for another device.
+    label_key = _digest(*labels, "device", device_id) if device_id else _digest(*labels)
     return {"filename": filename, "filename_key": _digest(filename.casefold()), "kind": fmt.kind, "format": fmt.id,
-            "body_type": body_type, "vendor": vendor, "model": model, "version": version,
-            "label_key": _digest(body_type, vendor.casefold(), model.casefold(), version.casefold()),
-            "description": _description(payload.get("description")), "size": size, "sha256": sha256.lower()}
+            "body_type": body_type, "vendor": vendor, "model": model, "version": version, "label_key": label_key,
+            "description": _description(payload.get("description")), "size": size, "sha256": sha256.lower(),
+            "device_id": device_id, "device_name": device_name}
+
+
+def _device(payload: dict) -> tuple[str, str]:
+    """``(device id, device name)`` of the device the file is uploaded for (issue #34); empty strings for none."""
+    device_id = payload.get("device_id")
+    if device_id in (None, ""):
+        return "", ""
+    if not isinstance(device_id, str) or not DEVICE_ID.fullmatch(device_id):
+        raise bad_request("device_id 须为设备的编号（字母、数字、点、下划线、冒号、连字符，最多 64 个字符）")
+    name = payload.get("device_name")
+    return device_id, ("" if name in (None, "") else _label(name, "设备名称", 200))
 
 
 _SHARED_COLUMNS = ("filename", "filename_key", "kind", "format", "body_type", "vendor", "model", "version", "label_key",
-                   "description", "size", "sha256")
+                   "description", "size", "sha256", "device_id", "device_name")
 
 
 # ------------------------------------------------------------------ views
@@ -202,6 +219,7 @@ def material_view(m: Material) -> dict:
     return {"id": m.id, "filename": m.filename, "kind": m.kind, "format": m.format, "body_type": m.body_type,
             "vendor": m.vendor, "model": m.model, "version": m.version, "description": m.description,
             "size": m.size, "sha256": m.sha256, "status": m.status, "status_detail": m.status_detail,
+            "device_id": m.device_id, "device_name": m.device_name,
             "created_by": m.created_by, "created_at": m.created_at, "updated_at": m.updated_at}
 
 
@@ -217,6 +235,7 @@ def upload_view(session: Session, u: MaterialUpload, *, resumed: bool = False) -
     return {"id": u.id, "status": u.status, "resumed": resumed, "filename": u.filename, "kind": u.kind,
             "format": u.format, "body_type": u.body_type, "vendor": u.vendor, "model": u.model, "version": u.version,
             "description": u.description, "size": u.size, "sha256": u.sha256, "chunk_bytes": u.chunk_bytes,
+            "device_id": u.device_id, "device_name": u.device_name,
             "chunk_count": u.chunk_count, "received": [index for index, _ in received],
             "received_count": len(received), "received_bytes": sum(size for _, size in received),
             "created_at": u.created_at, "expires_at": u.expires_at}
@@ -661,6 +680,8 @@ def list_materials(session: Session, p: Principal, filters: dict) -> dict:
         query = query.where(Material.body_type == filters["body_type"])
     if filters.get("sha256") is not None:
         query = query.where(Material.sha256 == filters["sha256"].lower())
+    if filters.get("device_id") is not None:                       # issue #34: the materials of one device
+        query = query.where(Material.device_id == filters["device_id"])
     for column in ("vendor", "model", "version"):
         if filters.get(column) is not None:
             query = query.where(func.lower(getattr(Material, column)) == filters[column].strip().lower())

@@ -1,4 +1,4 @@
-"""ROS 2 bridge adapter — NOT VERIFIED ON ANY ROBOT OR REAL ROS 2 INSTALL.
+"""ROS 2 bridge adapter for a device that runs ROS 2 Humble (only Humble is accepted).
 
 Maps NeuxMind standard capabilities onto common ROS 2 interfaces:
 
@@ -10,34 +10,63 @@ base.odometry          subscribe   /odom               nav_msgs/msg/Odometry
 sensor.battery         subscribe   /battery_state      sensor_msgs/msg/BatteryState
 base.navigate_to       action      navigate_to_pose    nav2_msgs/action/NavigateToPose
 safety.stop            —           zero Twist on /cmd_vel + cancel all Nav2 goals
-system.health          —           node alive + freshness of subscribed topics
+system.health          —           freshness of the subscribed topics
 =====================  ==========  ===============================================
 
-What is real here: the mapping table, the manifest builder (limits are never
-guessed: see "Limits" below) and the pure message-conversion
-functions, which are unit-tested with stand-in objects. Since round 04 the
-whole adapter (``Ros2Bridge`` plumbing, publishers, subscriptions, Nav2 goal
-handling, stop) also passes the conformance suite's ``static`` and ``dry``
-levels against a pure-Python **rclpy test double** (``runtime/tests/ros2_double``,
-an in-memory graph with a fake robot). What is NOT verified: real rclpy / DDS,
-QoS, executor threading, a real Nav2 stack and any robot. Treat it as a
-starting point for an integration engineer.
+``sensor.battery`` is declared only when ``topics.battery`` is a name (null: the
+device has no battery topic), ``base.navigate_to`` only when Nav2 is there
+(see "Nav2"). Topic names come from :data:`DEFAULT_CONFIG` and the JSON file
+that ``NEUXMIND_ROS2_CONFIG`` names; there is no per-device interface table.
+
+What has been run (issue #21): the pure converters and the manifest builder
+with stand-in objects; the whole adapter through the conformance suite on a
+pure-Python **rclpy test double** (``runtime/tests/ros2_double``); and the
+adapter in a separate runtime process against **real rclpy nodes on ROS 2
+Humble** (Fast DDS, ``runtime/tests/ros2_humble``: reads, the QoS seen on the
+DDS graph, refusal without safety limits, stop, clamped velocity, watchdog,
+an incompatible QoS). On one real robot (a Jetson Orin NX running ROS 2
+Humble, 2026-11-21, read-only): installed with ``device_install.sh``, odometry
+read from the robot's own odometry topic with health ok, motion refused for
+want of filled limits; the velocity topic was pointed at a name nothing
+subscribes to and Nav2 was off, so nothing reached its controller. What has
+not been run: a real Nav2 stack, and any motion on a robot.
 
 ``Ros2Bridge`` (node, private context, executor thread, typed publishers and
 subscriptions with freshness, Nav2 clients) and the converters are reused by
-adapters generated with ``neuxmind_runtime.scaffold`` for ``ros2:`` mappings.
+adapters generated with ``neuxmind_runtime.scaffold`` for ``ros2:`` mappings;
+the Humble check is the adapter's, not the bridge's.
 
-Usage (on a machine with ROS 2 sourced)::
+Usage (on a machine with ROS 2 Humble sourced; ``runtime/deploy/device_install.sh``
+with ``NX_ADAPTER=ros2`` does this for a device)::
 
-    BRAIN_EDGE_TOKEN=... python3 -m neuxmind_runtime serve \\
-        --adapter neuxmind_runtime.adapters.ros2:Ros2Adapter
+    BRAIN_EDGE_TOKEN=... python3 -m neuxmind_runtime serve --adapter ros2
 
 Configuration is read from ``NEUXMIND_ROS2_CONFIG`` (JSON file), see
 :data:`DEFAULT_CONFIG`.
 
+QoS
+---
+``qos`` holds, per topic key of ``topics``, any of ``reliability``
+(reliable / best_effort), ``durability`` (volatile / transient_local),
+``history`` (keep_last / keep_all) and ``depth`` (1–100); the rest comes
+from :data:`DEFAULT_QOS`. Subscriptions default to best effort, which receives
+from reliable and best-effort publishers alike; a reliable subscription gets
+nothing from a best-effort publisher (ROS logs "incompatible QoS" and health
+reports the topic as stale). The velocity publisher is fixed: reliable,
+volatile, keep last 1, because the stop is a zero Twist on it (see
+``COMMAND_QOS_FIXED``).
+
+Nav2
+----
+``nav2`` is ``"auto"`` (default: navigation is declared when ``nav2_msgs``
+imports), ``false`` (never) or ``true`` (refuse to start without it). Without
+Nav2 nothing else changes; ``stop()`` then only publishes the zero Twist. With
+``false`` the bridge does not talk to Nav2 at all, so ``stop()`` also does not
+cancel goals that other software on the device gave to a Nav2 running there;
+keep ``"auto"`` when NeuxMind's stop should end those too.
+
 TODO (before any field use)
 ---------------------------
-* QoS: /odom and /battery_state are often BEST_EFFORT sensor QoS; match the robot.
 * Frames: Nav2 goals are in ``map``; odometry is in ``odom``. Expose
   ``localization.pose`` from TF (map→base_link) instead of guessing.
 * Velocity watchdog: many base controllers have their own cmd timeout; keep
@@ -100,6 +129,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "family": "mobile",
     "node_name": "neuxmind_runtime",
     "topics": {"cmd_vel": "/cmd_vel", "odom": "/odom", "battery": "/battery_state"},
+    # Issue #21: per topic (same keys as "topics"), any of reliability / durability / history / depth;
+    # what is not given comes from DEFAULT_QOS. See "QoS" above.
+    "qos": {},
+    # Issue #21: "auto" declares base.navigate_to when nav2_msgs is installed, false never, true
+    # refuses to start without it. See "Nav2" above.
+    "nav2": "auto",
     "nav2_action": "navigate_to_pose",
     "map_frame": "map",
     # What the body itself allows, from its datasheet; never guessed. May stay null: nothing moves
@@ -115,6 +150,26 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # Keys and bounds: neuxmind_spec.manifest.LATCH_GUARD_FIELDS (validated + clamped at start-up).
     "latch_guard": {},
 }
+
+SUPPORTED_DISTRO = "humble"          # R1: the device runs ROS 2 Humble; nothing else is accepted
+ADAPTER_VERSION = "0.1.0"            # 0.0.1-skeleton until issue #21
+
+# Issue #21. Subscriptions default to best effort: that receives from reliable and from best-effort
+# (sensor QoS) publishers alike. The command publisher is reliable, which reaches both kinds of readers.
+DEFAULT_QOS: dict[str, dict] = {
+    "cmd_vel": {"reliability": "reliable", "durability": "volatile", "history": "keep_last", "depth": 1},
+    "odom": {"reliability": "best_effort", "durability": "volatile", "history": "keep_last", "depth": 10},
+    "battery": {"reliability": "best_effort", "durability": "volatile", "history": "keep_last", "depth": 10},
+}
+QOS_CHOICES = {"reliability": ("reliable", "best_effort"), "durability": ("volatile", "transient_local"),
+               "history": ("keep_last", "keep_all")}
+QOS_MAX_DEPTH = 100                  # only the newest message of a subscription is ever used
+# The stop is a zero Twist on the command publisher. It must arrive (reliable), must not be replayed
+# to a controller that starts later (volatile: transient local would hand it the last command, which
+# may not be the zero one), publishing must never wait for a slow reader (keep last), and a reader that
+# lags behind must get the newest command first, not a queue of older ones ahead of the zero (depth 1;
+# found in review, the depth used to be 10).
+COMMAND_QOS_FIXED = {"reliability": "reliable", "durability": "volatile", "history": "keep_last", "depth": 1}
 
 
 # ---------------------------------------------------------------- converters
@@ -194,7 +249,72 @@ def is_simulated(config: dict, use_sim_time_param: bool = False) -> bool:
     return bool(config.get("simulated") or config.get("use_sim_time") or use_sim_time_param)
 
 
-def build_manifest(config: dict, use_sim_time_param: bool = False) -> dict:
+def check_distro(environ) -> None:
+    """Raise RuntimeError (with what was found) unless ``environ`` is a sourced ROS 2 Humble."""
+    distro, version = environ.get("ROS_DISTRO"), environ.get("ROS_VERSION")
+    if not distro:
+        raise RuntimeError("没有 ROS 环境（ROS_DISTRO 未设置）：ROS 2 适配器只支持 ROS 2 Humble，"
+                           "请先 source /opt/ros/humble/setup.bash")
+    if distro != SUPPORTED_DISTRO or (version not in (None, "", "2")):
+        raise RuntimeError(f"这台设备的 ROS 是 {distro}（ROS {version or '?'}），ROS 2 适配器只支持 ROS 2 Humble")
+
+
+def nav2_mode(config: dict):
+    """``"auto"``, ``True`` or ``False`` (ValueError otherwise)."""
+    value = config.get("nav2", "auto")
+    if value == "auto" or value is True or value is False:
+        return value
+    raise ValueError(f"ROS 2 配置 nav2 须为 \"auto\"、true 或 false，收到 {value!r}")
+
+
+def qos_settings(config: dict) -> dict[str, dict]:
+    """The QoS of every topic: :data:`DEFAULT_QOS` with the configuration's ``qos`` laid over it, checked."""
+    given = config.get("qos") or {}
+    if not isinstance(given, dict):
+        raise ValueError("ROS 2 配置 qos 须为对象：{话题: {reliability, durability, history, depth}}")
+    unknown = sorted(set(given) - set(DEFAULT_QOS))
+    if unknown:
+        raise ValueError(f"ROS 2 配置 qos 里有不认识的话题 {unknown}；可用 {sorted(DEFAULT_QOS)}")
+    settings = {}
+    for topic, defaults in DEFAULT_QOS.items():
+        fields = given.get(topic, {})
+        if not isinstance(fields, dict):
+            raise ValueError(f"ROS 2 配置 qos.{topic} 须为对象")
+        extra = sorted(set(fields) - set(defaults))
+        if extra:
+            raise ValueError(f"ROS 2 配置 qos.{topic} 里有不支持的项 {extra}；可用 {sorted(defaults)}")
+        merged = {**defaults, **fields}
+        for name, choices in QOS_CHOICES.items():
+            if merged[name] not in choices:
+                raise ValueError(f"ROS 2 配置 qos.{topic}.{name} 须为 {' / '.join(choices)}，收到 {merged[name]!r}")
+        depth = merged["depth"]
+        if isinstance(depth, bool) or not isinstance(depth, int) or not 1 <= depth <= QOS_MAX_DEPTH:
+            raise ValueError(f"ROS 2 配置 qos.{topic}.depth 须为 1–{QOS_MAX_DEPTH} 的整数，收到 {depth!r}")
+        settings[topic] = merged
+    for name, required in COMMAND_QOS_FIXED.items():
+        if settings["cmd_vel"][name] != required:
+            raise ValueError(f"ROS 2 配置 qos.cmd_vel.{name} 只能是 {required}：停止是这个话题上的一条零速度，"
+                             "它必须送达、不能被重放给之后才启动的控制器、不能排在旧指令后面，发布也不能等待读者")
+    return settings
+
+
+def topic_names(config: dict) -> dict:
+    """``topics`` checked: ``cmd_vel`` and ``odom`` are required, ``battery`` may be null (no battery topic)."""
+    topics = config.get("topics")
+    if not isinstance(topics, dict):
+        raise ValueError("ROS 2 配置 topics 须为对象")
+    for key in ("cmd_vel", "odom", "battery"):
+        name = topics.get(key)
+        if key == "battery" and name is None:
+            continue                     # issue #21: a device without a battery topic has no sensor.battery
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"ROS 2 配置 topics.{key} 须为话题名" + ("（可为 null：没有电池话题）" if key == "battery" else ""))
+    return topics
+
+
+def build_manifest(config: dict, use_sim_time_param: bool = False, navigation: bool | None = None) -> dict:
+    """``navigation``: whether Nav2 is there (the adapter probes it); ``None`` follows the configuration."""
+    topics = topic_names(config)
     limits = config["limits"]
     # Issue #22: a limit that is not configured is not declared (and not replaced by a default).
     # The supervisor refuses all motion on a chassis without declared or filled limits.
@@ -207,19 +327,25 @@ def build_manifest(config: dict, use_sim_time_param: bool = False) -> dict:
     if config.get("latch_guard"):
         normalize_latch_guard(config["latch_guard"], "ROS 2 配置 latch_guard")   # fail fast (raises ValueError)
         safety["latch_guard"] = dict(config["latch_guard"])
+    qos_settings(config)                                                        # fail fast (raises ValueError)
+    if navigation is None:
+        navigation = nav2_mode(config) is not False
+    capabilities = [
+        {"id": "safety.stop", "params": {"hardware_estop": bool(config["hardware_estop"])}},
+        {"id": "system.health"},
+        {"id": "base.velocity", "params": velocity},
+        {"id": "base.odometry", "params": {"frame": "odom"}},
+    ]
+    if topics.get("battery") is not None:
+        capabilities.append({"id": "sensor.battery"})
+    if navigation:                       # issue #21: without Nav2 there is no navigation, nothing else changes
+        capabilities.append({"id": "base.navigate_to", "params": {"planner": "nav2"}})
     return {
         "schema": "robot.adapter.v2", "spec_version": "1.1",
         "instance_id": config["instance_id"], "name": config["name"],
         "vendor": config["vendor"], "model": config["model"], "family": config["family"],
-        "adapter_version": "0.0.1-skeleton", "simulated": simulated,
-        "capabilities": [
-            {"id": "safety.stop", "params": {"hardware_estop": bool(config["hardware_estop"])}},
-            {"id": "system.health"},
-            {"id": "base.velocity", "params": velocity},
-            {"id": "base.odometry", "params": {"frame": "odom"}},
-            {"id": "sensor.battery"},
-            {"id": "base.navigate_to", "params": {"planner": "nav2"}},
-        ],
+        "adapter_version": ADAPTER_VERSION, "simulated": simulated,
+        "capabilities": capabilities,
         "model_runtimes": [],
         "safety": safety,
     }
@@ -361,6 +487,15 @@ class Ros2Bridge:
                 "ROS 2 适配器需要 ROS 2 环境（rclpy 与所用消息包）；请先 source ROS 2 安装目录。"
                 f"导入失败：{exc}") from None
 
+    @staticmethod
+    def importable(module: str) -> bool:
+        import importlib
+        try:
+            importlib.import_module(module)
+        except ImportError:
+            return False
+        return True
+
     def __init__(self, node_name: str, stale_after_s: float = 1.0):
         self.require()
         import rclpy
@@ -382,15 +517,24 @@ class Ros2Bridge:
         self._spin.start()
 
     # ---------------------------------------------------------- topics
-    def publisher(self, msg_type: str, topic: str, qos: int = 10):
+    @staticmethod
+    def qos_profile(qos):
+        """An int (history depth, rclpy's shorthand) as it is; a :func:`qos_settings` entry as a QoSProfile."""
+        if not isinstance(qos, dict):
+            return qos
+        from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
+        return QoSProfile(history=getattr(HistoryPolicy, qos["history"].upper()), depth=qos["depth"],
+                          reliability=getattr(ReliabilityPolicy, qos["reliability"].upper()),
+                          durability=getattr(DurabilityPolicy, qos["durability"].upper()))
+
+    def publisher(self, msg_type: str, topic: str, qos=10):
         """``msg_type`` like ``"geometry_msgs.msg:Twist"``; returns ``(publisher, message class)``."""
         cls = _import(msg_type)
-        return self.node.create_publisher(cls, topic, qos), cls
+        return self.node.create_publisher(cls, topic, self.qos_profile(qos)), cls
 
-    def subscribe(self, key: str, msg_type: str, topic: str, qos: int = 10) -> None:
-        # TODO(field): sensor topics are often BEST_EFFORT; match the robot's QoS profile.
+    def subscribe(self, key: str, msg_type: str, topic: str, qos=10) -> None:
         cls = _import(msg_type)
-        self.node.create_subscription(cls, topic, lambda m, key=key: self._store(key, m), qos)
+        self.node.create_subscription(cls, topic, lambda m, key=key: self._store(key, m), self.qos_profile(qos))
 
     def _store(self, key: str, msg) -> None:
         self._latest[key] = (time.monotonic(), msg)   # atomic dict assignment, no lock
@@ -461,23 +605,37 @@ class Ros2Adapter(RobotAdapter):
     """ROS 2 bridge. Requires ``rclpy`` and the message packages listed above."""
 
     def __init__(self, config: dict | None = None):
-        Ros2Bridge.require(("geometry_msgs.msg", "nav_msgs.msg", "sensor_msgs.msg", "nav2_msgs.action"))
+        Ros2Bridge.require(("geometry_msgs.msg", "nav_msgs.msg", "sensor_msgs.msg"))
+        check_distro(os.environ)             # issue #21: only ROS 2 Humble, before any node exists
         self.clock = RealClock()
         self.config = config or load_config()
         build_manifest(self.config)            # fail fast on a bad configuration before touching ROS
+        qos = qos_settings(self.config)
+        # Issue #21: Nav2 is optional. Without it there is no base.navigate_to; stop() then only
+        # publishes the zero Twist (it has no goal to cancel), so the stop path gains no dependency.
+        mode = nav2_mode(self.config)
+        self.navigation = mode is not False and Ros2Bridge.importable("nav2_msgs.action")
+        if mode is True and not self.navigation:
+            raise RuntimeError("ROS 2 配置 nav2=true，但这台设备没有装 Nav2（nav2_msgs 不能导入）")
+        self._nav = self._NavigateToPose = self._cancel_all = self._CancelGoal = None
+        self._nav_handles: set[Ros2NavHandle] = set()
+        self._fresh_keys: tuple[str, ...] = ("odom",)    # topics whose freshness makes system.health
         self._bridge = Ros2Bridge(self.config["node_name"], self.config["stale_after_s"])
         try:
-            self._manifest = build_manifest(self.config, self._bridge.use_sim_time)
+            self._manifest = build_manifest(self.config, self._bridge.use_sim_time, navigation=self.navigation)
             topics = self.config["topics"]
-            self._cmd_pub, self._Twist = self._bridge.publisher("geometry_msgs.msg:Twist", topics["cmd_vel"])
-            self._bridge.subscribe("odom", "nav_msgs.msg:Odometry", topics["odom"])
-            self._bridge.subscribe("battery", "sensor_msgs.msg:BatteryState", topics["battery"])
-            self._nav, self._NavigateToPose, self._cancel_all, self._CancelGoal = \
-                self._bridge.nav2_client(self.config["nav2_action"])
+            self._cmd_pub, self._Twist = self._bridge.publisher("geometry_msgs.msg:Twist", topics["cmd_vel"],
+                                                                qos["cmd_vel"])
+            self._bridge.subscribe("odom", "nav_msgs.msg:Odometry", topics["odom"], qos["odom"])
+            if topics.get("battery") is not None:
+                self._bridge.subscribe("battery", "sensor_msgs.msg:BatteryState", topics["battery"], qos["battery"])
+                self._fresh_keys = ("odom", "battery")
+            if self.navigation:
+                self._nav, self._NavigateToPose, self._cancel_all, self._CancelGoal = \
+                    self._bridge.nav2_client(self.config["nav2_action"])
         except BaseException:
             self._bridge.close()
             raise
-        self._nav_handles: set[Ros2NavHandle] = set()
 
     def _fresh(self, key: str):
         return self._bridge.fresh(key)
@@ -487,11 +645,11 @@ class Ros2Adapter(RobotAdapter):
 
     def read(self, cap_id: str) -> dict:
         if cap_id == "system.health":
-            errors = self._bridge.freshness_errors(("odom", "battery"))
+            errors = self._bridge.freshness_errors(self._fresh_keys)
             return {"ok": not errors, "mode": "ros2", "errors": errors}
         if cap_id == "base.odometry":
             return odometry_outputs(self._fresh("odom"))
-        if cap_id == "sensor.battery":
+        if cap_id == "sensor.battery" and "battery" in self._fresh_keys:
             return battery_outputs(self._fresh("battery"))
         raise ValueError(f"Ros2Adapter 不能读取 {cap_id}")
 
@@ -507,6 +665,8 @@ class Ros2Adapter(RobotAdapter):
     def start_action(self, cap_id: str, args: dict) -> ActionHandle:
         if cap_id != "base.navigate_to":
             raise ValueError(f"Ros2Adapter 不支持动作 {cap_id}")
+        if self._nav is None:
+            raise ValueError("Ros2Adapter 不支持动作 base.navigate_to：这台设备没有 Nav2，或配置里关掉了（nav2=false）")
         handle = send_nav_goal(self._bridge, self._nav, self._NavigateToPose, args, self.config["map_frame"],
                                on_done=self._nav_handles.discard)
         self._nav_handles.add(handle)

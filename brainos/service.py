@@ -81,6 +81,8 @@ class Platform:
         self.cloud = CloudAccount(self)
         from .material_library import MaterialLibrary
         self.library = MaterialLibrary(self)        # issue #33: documents and driver packages kept in the cloud
+        from .package_delivery import PackageDelivery
+        self.package_delivery = PackageDelivery(self)   # issue #31: a usable driver package goes from the library to a device, verified there
         from .model_compute import ModelCompute
         self.model_compute = ModelCompute(self)
         from .body_types import BodyTypes
@@ -91,16 +93,24 @@ class Platform:
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         from .device_profile import DeviceProfile
         self.device_profile = DeviceProfile(self)   # issue #27: hardware, system, ROS 2 and resources in one record
+        from .motion_drivers import MotionDrivers
+        self.motion_drivers = MotionDrivers(self)   # issue #28: the motion interfaces a body type should have, against the profile
         from .investigation import Investigation
         self.investigation = Investigation(self)    # issue #6: investigation states, full re-runs, fix chats
         from .heartbeat import Heartbeat
         self.heartbeat = Heartbeat(self)            # issue #24: a heartbeat a minute over SSH; 未接入 / 接入中 / 在线 / 离线
+        from .connection_verify import ConnectionVerify
+        self.connection_verify = ConnectionVerify(self)     # issue #16: 「验证连接」 logs in over the saved SSH connection, hop by hop
         from .ssh_edit import ConnectionEdit
         self.ssh_edit = ConnectionEdit(self)        # issue #9: change the SSH connection of a connected robot
+        from .runtime_link import RuntimeLinks
+        self.runtime_link = RuntimeLinks(self)      # issue #17: the management layer over the robot's SSH connection, no tunnel by hand
         from .robot_remove import RobotRemoval
         self.robot_remove = RobotRemoval(self)      # issue #11: delete a robot with its connection and investigations
         from .safety_limits import SafetyLimits
         self.safety_limits = SafetyLimits(self)     # issue #22: safety limits a person fills in per device
+        from .runtime_install import RuntimeInstall
+        self.runtime_install = RuntimeInstall(self)     # issue #19: install the management layer from the console (after runtime_link, robot_remove)
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):
@@ -132,10 +142,11 @@ class Platform:
                 obj['sim'] = self.sims.process_view(obj)
         result['sim_kinds'] = self.sims.kinds()
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
-                      system={'version': '0.20.1', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
+                      system={'version': '0.21.0', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
         result.update(self.hardware.snapshot())
         result.update(self.heartbeat.snapshot())    # issue #24: the workspace is shown, so its heartbeat runs; the states are asked for apart
+        result.update(self.connection_verify.snapshot(result['robots'], result['agent_sessions']))    # issue #16: robots being onboarded, where 「验证连接」 is not offered
         result.update(self.investigation.snapshot())
         result.update(self.workflows.snapshot())
         # The cloud session token stays in the credential file; only a summary is shown.
@@ -144,6 +155,7 @@ class Platform:
         result['model_compute'] = self.model_compute.summary()
         result.update(self.body_types.snapshot())   # issue #32: the list of body types and the interfaces a type can name
         result.update(self.device_profile.snapshot())   # issue #27: which robots have a device profile (for the deletion)
+        result.update(self.motion_drivers.snapshot())   # issue #28: per SSH robot, which motion interfaces of its type are missing
         return result
 
     def add_project(self, p):
@@ -931,7 +943,10 @@ class Platform:
 
     def close(self):
         self.heartbeat.close()      # issue #24: the timer, its SSH sessions and its checks end before the store is closed
+        self.runtime_link.close()   # issue #17: the SSH sessions of the links to the robots' management layers
+        self.runtime_install.close()   # issue #19: installs under way stop waiting (what a robot does goes on there)
         self.sims.close()
         self.workflows.close()
         self.engineering.close()
+        self.package_delivery.close()   # issue #31: package deliveries a person started stop before the store is closed
         self.store.close()

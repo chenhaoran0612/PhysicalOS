@@ -48,7 +48,8 @@ from . import device_transfer_target as target
 from .device_transfer_target import DEFAULT_ROOTS, SCRIPTS, TransferError  # noqa: F401  (part of this module's interface)
 
 CHUNK_BYTES = 256 * 1024
-CAREFUL_CHUNK_BYTES = 16 * 1024         # after a broken connection: less in flight, confirmed more often
+CAREFUL_CHUNK_BYTES = 16 * 1024         # the first chunks after a broken connection: less in flight, confirmed more often
+QUICK_SECONDS = 3                       # after a break: a chunk confirmed within this long doubles the next one, a slower one halves it
 MIN_CHUNK_BYTES = 1024
 PIECE_BYTES = 32768                     # one SFTP write request
 MAX_FILE_BYTES = 4 * 1024 ** 3
@@ -463,15 +464,25 @@ class _Transfer:
         return remote, wire
 
     def _send_chunks(self, remote, wire, encoding, guard):
-        size = self.source['size']
-        limit = min(self.options['chunk_bytes'], CAREFUL_CHUNK_BYTES) if self.careful else self.options['chunk_bytes']
+        size, most = self.source['size'], self.options['chunk_bytes']
+        # After a broken connection the chunks start small: if it breaks again, little was in flight.
+        # From there the size follows the link: a chunk the device confirms quickly lets the next be
+        # twice as large, a slow one makes it half, between the small size and what the caller asked
+        # for. A link that carries them gets its speed back, and what one more break can cost stays
+        # a few seconds of sending.
+        least = min(most, CAREFUL_CHUNK_BYTES)
+        limit = least if self.careful else most
         while self.sent < size:
             self._check_stop()
             raw = self._local(self.sent, min(size - self.sent, limit))
             if not raw:
                 raise _SourceChanged()        # the same size, yet nothing to read: not the file it was
             data = gzip.compress(raw, 6, mtime=0) if encoding == 'gzip' else raw
+            began = time.monotonic()
             _write_confirmed(remote, wire, data)
+            if self.careful:
+                quick = time.monotonic() - began < QUICK_SECONDS
+                limit = min(most, limit * 2) if quick else max(least, limit // 2)
             wire += len(data)
             self.wire_bytes += len(data)
             self.sent += len(raw)

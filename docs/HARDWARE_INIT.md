@@ -31,6 +31,7 @@
 | `rootfs-full` | 根分区使用率 ≥ 90% | 是 |
 | `unit:<服务>` | systemd 服务处于失败状态 | 是 |
 | `log-*` | 本次启动以来的内核日志：固件缺失、驱动探测失败、USB 枚举失败、过流、欠压、存储 I/O 错误、NVRM | 视类型 |
+| `motion-driver:<能力编号>` | 按本体类型应有的运控接口（ROS 2 话题或动作）不在设备档案的 ROS 2 清单里，或消息类型不对。**不是扫描命令读出来的**：来自保存的设备档案，读过档案后的扫描记录才有；这类问题是否消失由重新读取 ROS 2 判定，不由扫描判定（issue #28，见 [MOTION_DRIVER_CHECK.md](MOTION_DRIVER_CHECK.md)） | 是（这一轮助手只做只读排查，结论多为需要现场处理） |
 
 内核日志是历史：日志提到的设备如果现在有问题，日志并入该问题；如果设备存在且正常，日志被略过（在说明中计数）；只有设备不存在或无法识别时才单列。所以修好设备后重新扫描，不会因为旧日志冒出“新问题”。
 
@@ -41,8 +42,8 @@
 ## 修复会话
 
 - 会话 `mode='repair'`，复用工程引擎的调查会话机制（运行时、预算、停止、继续、云端/平台计量）。设备只读工具（`device_overview`、`device_probe`、`device_evidence`、`device_config`、`device_exec`、`device_request_scope`）照常可用，`save_inventory` 不提供；新增 `hardware_rescan`、`device_fix`、`save_repair_report`。
-- 内置 Skill 位于 `brainos/skills/hardware-init/`（`SKILL.md` 与 `references/playbooks.md`），随应用版本发布，会话记录其名称、版本和摘要；调查会话仍不能加载项目 Skill 或 MCP，只放行产品内置 Skill（`agent_runtime.AgentProcess` 中的 `builtin` 标记）。
-- 工作目录中写入 `HARDWARE_SCAN.json`（基线扫描、待处理问题）与 `DEVICE_CONTEXT.json`。
+- 内置 Skill 位于 `brainos/skills/hardware-init/`（`SKILL.md` 与 `references/playbooks.md`），随应用版本发布，会话记录其名称、版本和摘要；调查会话仍不能加载项目 Skill 或 MCP，只放行产品内置 Skill（`agent_runtime.AgentProcess` 中的 `builtin` 标记）。外部资料只有一条路（issue #30）：资料库里这台设备「可用」的资料，只取人确认过的解析结果，作为参考材料交给修复助手；没有可用的驱动资料时，会话提示先上传。会话仍然不联网、不能网页搜索。见 [REPAIR_MATERIALS.md](REPAIR_MATERIALS.md)。
+- 工作目录中写入 `HARDWARE_SCAN.json`（基线扫描、待处理问题）、`DEVICE_CONTEXT.json` 与 `LIBRARY_MATERIALS.json`（资料库里这台设备可用的资料，issue #30）。
 - 模型：选择的模型；不选时用工作空间默认模型 `Engineering.resolve_model(project_id, None)`（issue #4 TokenFans）。没有连接 TokenFans 或没有默认模型时，直接显示 #4 给出的提示。修复表单的模型选择框默认选中 TokenFans 默认模型。
 - **不限 Token 和运行时间（issue #10）**：“让助手修复硬件问题”表单不再有“Token 观察限额”“最长运行时间”两项，请求里也不带 `max_tokens`、`max_minutes`；会话的这两个字段为空，运行不会因用量或时间被停止，由用户在会话中停止；是否逐条批准由“默认允许执行”决定（issue #13，见下）。规则与调查（issue #5）相同：接口调用方（测试、脚本）仍可传入限额（1000–1000000 Tokens、1–120 分钟），照旧校验，达到后照旧停止；按会话预留点数的网关模型（云平台 `cloud`、平台付费 `platform`，界面已不提供）没有预算无法开启会话，未传限额时仍按修复一直使用的 200000 Tokens、30 分钟。规则在 `brainos/hardware_init.py` 的 `repair_limits`（复用 `brainos/engineering.py` 的 `discovery_limits`、`run_deadline`、`over_token_limit`），测试为 `tests/test_repair_limits.py`。
 
@@ -51,6 +52,7 @@
 - 逐条批准的会话里，用户批准前不执行；被拒绝的命令不会执行。批准绑定在已展示的那一条命令上，执行的就是展示的内容。默认允许执行的会话见下文 issue #13：产品限制照旧，只是不再等人批准。参数校验失败或命中禁止规则的命令直接退回给模型，并在会话记录“工具反馈”中显示。
 - **产品会拒绝常见的危险命令，但不能替代用户的逐条审批**：shell 写法太多，规则不可能穷尽。规则在原命令和去掉引号/反斜杠后的命令上各匹配一次，同样作用于修复会话里的 `device_exec`。
 - 拒绝的类别：命令里写 `sudo`/`pkexec`；重启、关机、`telinit`、`systemctl isolate/rescue/emergency`；格式化、改分区、写块设备（重定向、`cp`/`tee`/`dd of=`）；sysrq；递归删除根目录、系统目录或主目录；修改 `/boot`、引导配置、切换启动分区或刷写固件；修改或停止 SSH 服务（`ssh`/`sshd` 两种服务名，`status` 等只读查询除外）、`/etc/ssh`、`authorized_keys`；修改密码、删除/锁定账号或设置过期；修改防火墙（只允许查看）；整体升级或自动清理软件包；下载或解码后直接执行脚本；`eval`、`sh -c`、`python -c` 等内联脚本、`source`、以变量开头拼出命令；发布运动/控制指令。
+- issue #29（[运控驱动的安装](REPAIR_DRIVER_INSTALL.md)）：命令里出现 `cmd_vel` 不再一律拒绝，只拒绝发布、调用服务、发送动作目标、改参数或生命周期等控制动作，`ros2` 只能做只读查询或在标明 `starts_motion_driver` 的命令里启动节点；碰设备上 NeuxMind 运行时（急停锁存）的命令一律拒绝；ROS 2 Humble 的环境由产品加（`ros2_env`、`ros2_workspace`）；`build_step` 的编译或安装命令最长 3600 秒；启动运控驱动的命令要有人在现场确认，默认允许执行时也停下等人。
 - 网络只允许“启用”方向的改动：关闭网卡（CAN 接口除外，改波特率需要先关闭）、删除地址或路由、`nmcli … down/disconnect/delete`、`rfkill block` 一律拒绝；不依赖能否识别出 SSH 所用网卡。
 - 命令只能是可见的普通文本：拒绝控制字符、零宽字符和双向排版字符，最多 10 行。审批框完整展开命令，并显示行数和字符数。
 - 附加风险提示：重启网络服务（SSH 可能短暂中断）、安装或移除软件包（需要软件源）、用户组变更（新登录生效）、关闭网络接口或连接、包含命令替换/eval/编码内容。
@@ -94,6 +96,7 @@
 - 不做重启、刷机、BIOS/安全启动设置；需要重启才能生效的改动由用户安排后再扫描。
 - 没有串口/CAN 总线上的设备级探测（只看到串口设备节点与 CAN 网卡）。
 - ROS 2 不在这条扫描命令的范围内：`SCAN_COMMAND` 不加载 ROS 环境、不运行 `ros2`（`tests/test_hardware_scan.py` 断言如此，issue #27 没有改它）。ROS 2 的发行版、正在运行的节点、话题与消息类型、动作、服务由**设备档案**用另一条固定的只读命令读取，并和这里的硬件、系统信息合成一份记录，见 [DEVICE_PROFILE.md](DEVICE_PROFILE.md)。话题上的数据（传感器读数、底盘状态）仍然不读。
+- 运控驱动检查（issue #28，见 [MOTION_DRIVER_CHECK.md](MOTION_DRIVER_CHECK.md)）也没有改扫描命令。保存的设备档案显示缺运控接口时，扫描（手动、连接后、修复会话的 `hardware_rescan`）在扫描命令之后再执行一次设备档案的那条 ROS 2 只读命令，用它判定 `motion-driver:*` 问题是否还在；没有这类问题的机器人，到达设备的仍然只有扫描命令。内置 Skill 为此升到 1.2.0（`references/playbooks.md` 多了一节）。
 - 内核日志需要权限（`dmesg` 受限且账号不在 systemd-journal 组时读不到），这时会在说明中提示。
 
 ## 默认允许执行与等待现场处理的问题（issue #13）

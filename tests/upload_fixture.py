@@ -26,6 +26,7 @@ import stat
 import subprocess
 import tempfile
 import threading
+import time
 
 import paramiko
 
@@ -86,6 +87,7 @@ class UploadDevice:
         self.key = HOST_KEY
         self.offline, self.offline_after_drop, self.sftp, self.hide_modes = False, False, True, False
         self.drops, self.stall_after, self.stall_seconds = [], None, 20
+        self.answer_seconds = 0                                  # how long every write takes to be answered
         self.full_after, self.corrupt_at, self.banner = None, None, b''
         self.lose_answer, self.before_script = set(), None
         self.received, self.connections = 0, 0
@@ -175,6 +177,8 @@ class UploadDevice:
         return '/' + os.path.relpath(real, self.root).replace(os.sep, '/') if real.startswith(self.root + os.sep) else posixpath.normpath(path)
 
     def wrote(self, handle, offset, data):
+        if self.answer_seconds:
+            time.sleep(self.answer_seconds)
         with self.lock:
             if self.full_after is not None and self.received + len(data) > self.full_after:
                 return paramiko.SFTP_FAILURE
@@ -197,9 +201,22 @@ class UploadDevice:
                 self.drops.pop(0)
                 self.offline = self.offline or self.offline_after_drop
         if cut:
-            handle.transport.close()
+            self.cut(handle.transport)
             return paramiko.SFTP_FAILURE
         return paramiko.SFTP_OK
+
+    @staticmethod
+    def cut(transport):
+        """End a connection so that the client sees it end: the end of the stream first, then the
+        close. Closing alone, while more of the client's data is still arriving, resets the
+        connection instead, and now and then that reset never reaches the client (seen on macOS
+        when a chunk of several requests was cut): it would wait on a connection that is gone until
+        its own time limit. A peer that goes silent is what ``stall_after`` is for."""
+        try:
+            transport.sock.shutdown(socket.SHUT_WR)
+        except OSError:
+            pass        # already closed
+        transport.close()
 
     def confined(self, path):
         """Where a device path lies in the temporary directory, or None if it could lead out of it."""
@@ -226,7 +243,37 @@ class UploadDevice:
             local.append(moved)
         return kind, arguments, local
 
+    # --- issue #19 (tests/install_fixture.py): a subclass answers more commands and forwards channels ---
+
+    def handle_early(self, command):
+        """(exit status, stdout, stderr) of a command answered before its standard input is read, or None."""
+        return None
+
+    def handle(self, command, script):
+        """(exit status, stdout, stderr) of a command with its standard input, or None for the transfer scripts."""
+        return None
+
+    def forward(self, chanid, destination):
+        """The answer to a direct-tcpip request; this fixture forwards nothing."""
+        return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+
+    def forwarded(self, channel):
+        """A channel ``forward`` accepted has arrived."""
+
+    def _answer(self, channel, code, out, err):
+        try:
+            channel.sendall(out)
+            channel.sendall_stderr(err)
+            channel.send_exit_status(code)
+        except _NETWORK_ERRORS:
+            pass
+        finally:
+            channel.close()
+
     def run(self, transport, channel, command):
+        early = self.handle_early(command)
+        if early is not None:
+            return self._answer(channel, *early)
         channel.settimeout(5)
         script = bytearray()
         try:
@@ -237,6 +284,9 @@ class UploadDevice:
                 script.extend(block)
         except (socket.timeout, *_NETWORK_ERRORS):
             pass
+        handled = self.handle(command, bytes(script))
+        if handled is not None:
+            return self._answer(channel, *handled)
         accepted = self.accepted(command, script.decode('utf-8', 'replace'))
         if accepted is None:
             self.refused.append(command)
@@ -251,7 +301,7 @@ class UploadDevice:
             code, out, err = done.returncode, self.banner + done.stdout, done.stderr
             if kind in self.lose_answer:
                 self.lose_answer.discard(kind)
-                transport.close()
+                self.cut(transport)
                 return
         try:
             channel.sendall(out)
@@ -289,6 +339,9 @@ class UploadDevice:
 
             def check_channel_request(self, kind, chanid):
                 return paramiko.OPEN_SUCCEEDED if kind == 'session' else paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
+
+            def check_channel_direct_tcpip_request(self, chanid, origin, destination):
+                return owner.forward(chanid, tuple(destination))
 
             def check_channel_exec_request(self, channel, command):
                 threading.Thread(target=owner.run, args=(transport, channel, command.decode('utf-8', 'replace')), daemon=True).start()
@@ -345,6 +398,8 @@ class UploadDevice:
             transport.start_server(server=Protocol())
             while not self.closed and transport.is_active():
                 channels.append(transport.accept(.2))
+                if channels[-1] is not None:
+                    self.forwarded(channels[-1])
         except _NETWORK_ERRORS:
             pass
         finally:

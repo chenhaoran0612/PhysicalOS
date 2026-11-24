@@ -14,6 +14,7 @@ from .errors import error_payload
 from .httpd import FastBindHTTPServer
 from .service import Platform
 from .commerce import Commerce
+from .material_parse import MaterialParse   # issue #34: parsing results of library materials
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -135,12 +136,28 @@ def make_handler(application):
             extra=extra or {'/live_status.js':('live_status.js','text/javascript; charset=utf-8'),'/live_status.css':('live_status.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #27: the device profile (hardware, system, ROS 2, resources), likewise.
             extra=extra or {'/device_profile.js':('device_profile.js','text/javascript; charset=utf-8'),'/device_profile.css':('device_profile.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #28: the motion driver check (the interfaces a body type should have, against the profile), likewise.
+            extra=extra or {'/motion_drivers.js':('motion_drivers.js','text/javascript; charset=utf-8'),'/motion_drivers.css':('motion_drivers.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #29: approvals of a repair that installs and starts the motion driver, likewise.
+            extra=extra or {'/repair_driver.js':('repair_driver.js','text/javascript; charset=utf-8'),'/repair_driver.css':('repair_driver.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #24: the connection state and the last heartbeat on the cards and the status page, likewise.
             extra=extra or {'/heartbeat.js':('heartbeat.js','text/javascript; charset=utf-8'),'/heartbeat.css':('heartbeat.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #16: 「验证连接」 of a robot's saved SSH connection, likewise.
+            extra=extra or {'/connection_verify.js':('connection_verify.js','text/javascript; charset=utf-8'),'/connection_verify.css':('connection_verify.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #9: its own static file, likewise.
             extra=extra or {'/ssh_edit.js':('ssh_edit.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #17: the link to a robot's management layer over SSH, likewise.
+            extra=extra or {'/runtime_link.js':('runtime_link.js','text/javascript; charset=utf-8'),'/runtime_link.css':('runtime_link.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #19: installing the management layer from the console, likewise.
+            extra=extra or {'/runtime_install.js':('runtime_install.js','text/javascript; charset=utf-8'),'/runtime_install.css':('runtime_install.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #20: autostart (the confirmation, the card line), likewise.
+            extra=extra or {'/runtime_autostart.js':('runtime_autostart.js','text/javascript; charset=utf-8'),'/runtime_autostart.css':('runtime_autostart.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #33: the material library page, likewise.
             extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #34: parsing results, and the materials of a device in its profile, likewise.
+            extra=extra or {'/material_parse.js':('material_parse.js','text/javascript; charset=utf-8'),'/material_parse.css':('material_parse.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #30: what a repair session found in the library, likewise.
+            extra=extra or {'/repair_materials.js':('repair_materials.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #22: safety limits per device, likewise.
@@ -153,7 +170,7 @@ def make_handler(application):
                 filename,mime=files[path]
                 return self.respond((ROOT/'web'/filename).read_bytes(),mime=mime)
             if path=='/api/health':
-                return self.respond({'status':'ok','version':'0.20.1'})
+                return self.respond({'status':'ok','version':'0.21.0'})
             if path=='/api/me':
                 me=application.identity.user(self.token())
                 if not me:
@@ -244,6 +261,8 @@ def make_handler(application):
                         'engineering/ssh/links':service.heartbeat.overview,'engineering/ssh/heartbeat':service.heartbeat.check,
                         # Issue #9: change the SSH connection of a robot that is already connected
                         'engineering/ssh/update':service.ssh_edit.update,
+                        # Issue #16: log in to every hop of a robot's saved SSH connection once; read the system and the architecture
+                        'engineering/ssh/verify':service.connection_verify.verify,
                         'engineering/start':service.engineering.start,'engineering/resume':service.engineering.resume,
                         'engineering/work':service.engineering.start_work,'engineering/approve':service.engineering.approve,
                         'engineering/artifact':service.engineering.artifact,
@@ -256,6 +275,8 @@ def make_handler(application):
                         'engineering/profile':service.device_profile.saved,'engineering/profile/read':service.device_profile.read,
                         # Issue #13: mark a problem as handled on site; switch a repair between asking and running unasked
                         'engineering/hardware/mark':service.hardware.policy.mark,'engineering/hardware/auto_approve':service.hardware.policy.set_auto,
+                        # Issue #29: a person on site for the motion driver's start waiting for approval
+                        'engineering/hardware/onsite':service.hardware.driver.confirm_onsite,
                         # Issue #6: investigation states, full re-investigation, fix chats from the report
                         'engineering/investigation/restart':service.investigation.restart,
                         'engineering/investigation/fix':service.investigation.start_fix,
@@ -281,6 +302,18 @@ def make_handler(application):
                         # Round 02 (INTERFACES 4.1, 4.5)
                         'robots/detail':service.robot_detail,
                         'robots/stop':service.stop_robot,
+                        # Issue #17: reach a robot's management layer over its SSH connection (no tunnel, no address)
+                        'robots/runtime-link':service.runtime_link.attach,
+                        'robots/runtime-link/remove':service.runtime_link.detach,
+                        'robots/runtime-link/state':service.runtime_link.overview,
+                        'robots/runtime-link/retry':service.runtime_link.retry,
+                        # Issue #19: install the management layer on a robot over its SSH connection, then link it
+                        'robots/runtime-install/start':service.runtime_install.start,'robots/runtime-install/status':service.runtime_install.status,
+                        'robots/runtime-install/stop':service.runtime_install.stop,'robots/runtime-install/clean':service.runtime_install.clean,
+                        # Issue #20: start the management layer at boot (listed, then confirmed; sudo password only on stdin)
+                        'robots/runtime-install/autostart':service.runtime_install.autostart,
+                        'robots/runtime-install/autostart-off':service.runtime_install.autostart_off,
+                        'robots/runtime-install/answer':service.runtime_install.answer,
                         'skills/package-preview':service.preview_skill_package,
                         'skills/package-install':service.install_skill_package,
                         'onsite/poll':service.poll_onsite,
@@ -305,11 +338,17 @@ def make_handler(application):
                         'cloud/overview':service.cloud.overview,
                         'cloud/models':service.cloud.models,
                         'cloud/gateway-models':service.cloud.gateway_models,
+                        # Issue #34: what the cloud parsed out of a material; a person edits and confirms it
+                        'library/parse':MaterialParse(service.library).get,'library/parse/save':MaterialParse(service.library).save,
+                        'library/parse/confirm':MaterialParse(service.library).confirm,'library/parse/retry':MaterialParse(service.library).retry,
                         # Issue #33: materials and driver packages in the cloud library (file bytes go through do_PUT)
                         'library/overview':service.library.overview,'library/list':service.library.list,
                         'library/upload/start':service.library.start,'library/upload/status':service.library.status,
                         'library/upload/complete':service.library.complete,'library/upload/cancel':service.library.cancel,
                         'library/delete':service.library.remove,
+                        # Issue #31: send a usable driver package from the library to a robot and verify it there
+                        'library/deliver/start':service.package_delivery.start,'library/deliver/status':service.package_delivery.status,
+                        'library/deliver/stop':service.package_delivery.stop,'library/deliver/list':service.package_delivery.list,
                         # Issue #4: TokenFans models & compute (the key and password never come back).
                         'model-compute/key':service.model_compute.connect_key,
                         'model-compute/login':service.model_compute.login,

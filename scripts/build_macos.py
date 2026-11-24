@@ -28,12 +28,14 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 BUILD=ROOT/'.build'
 DIST=ROOT/'dist'
 APP=DIST/'NeuxMind Robot OS.app'
-VERSION='0.20.1'
+VERSION='0.21.0'
 
 # (source, destination inside the bundle). Destinations mirror the source tree so that
 # brainos finds them at the same place relative to itself (brainos/runtime_bridge.py).
 DATA=[(ROOT/'web','web'),(ROOT/'runtime'/'examples'/'skills','runtime/examples/skills'),
       (ROOT/'brainos'/'skills','brainos/skills')]     # issue #2: built-in hardware-init Skill (text files)
+# Issue #19: the management layer's install package (scripts/build_device_package.py), sent to robots from the console.
+DATA+=[(BUILD/'device-package','device-package')]
 PATHS=[ROOT,ROOT/'spec',ROOT/'runtime']
 PACKAGES=['brainos','neuxmind_spec','neuxmind_runtime']
 # Imported lazily (inside functions or by name) and therefore named explicitly.
@@ -58,9 +60,19 @@ def pyinstaller_args(distpath,workpath,specpath):
     return args+['--distpath',distpath,'--workpath',workpath,'--specpath',specpath,ROOT/'desktop/launcher.py']
 
 
+def build_device_package():
+    """Issue #19: (re)build the install package the console sends to robots, into .build/device-package."""
+    # Its summary goes to stderr: --check prints only its own JSON report on stdout.
+    subprocess.run([sys.executable,str(ROOT/'scripts/build_device_package.py'),'--out',str(BUILD/'device-package')],cwd=ROOT,check=True,stdout=sys.stderr)
+
+
 def check():
     """Linux-runnable: everything the bundle is built from exists and imports cleanly."""
     problems=[]
+    if not (BUILD/'device-package'/'package.json').is_file():build_device_package()   # issue #19
+    try:
+        sys.path.insert(0,str(ROOT));from brainos import runtime_package;runtime_package.load(BUILD/'device-package')
+    except Exception as exc:problems.append(f'管理层安装包不可用：{exc}')   # issue #19
     for source,_ in DATA:
         if not source.is_dir():
             problems.append(f'缺少数据目录 {source}')
@@ -138,6 +150,7 @@ def freeze_check(out=None):
     """Freeze the backend with the same arguments as the Mac build (current OS) and smoke-test it."""
     out=pathlib.Path(out or tempfile.mkdtemp(prefix='neuxmind-freeze-'))
     out.mkdir(parents=True,exist_ok=True)
+    build_device_package()   # issue #19: the bundle carries the install package
     run([sys.executable,'-m','PyInstaller','--log-level','WARN',*pyinstaller_args(out/'dist',out/'work',out)])
     backend=out/'dist'/'brainos-server'/'brainos-server'
     with tempfile.TemporaryDirectory(prefix='neuxmind-freeze-state-') as state:
@@ -162,6 +175,7 @@ def main():
 
 def build_app():
     DIST.mkdir(exist_ok=True)
+    build_device_package()   # issue #19: always from the tree being built, never an older .build copy
     if not check()['ok']:
         raise SystemExit('打包内容检查未通过')
     run([sys.executable,ROOT/'scripts/prepare_agent_runtime.py','--verify-only'])

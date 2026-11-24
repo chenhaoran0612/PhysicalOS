@@ -1,0 +1,44 @@
+/* Issue #28 — the motion driver check (web/motion_drivers.js). The dialog also carries .live-status, so the
+   bar, tags and tables of the status page (web/live_status.css) and the name and type chips of the device
+   profile (web/device_profile.css) apply; only what is new is here. */
+
+.motion-drivers .notice{margin:14px 0 0}
+.motion-drivers .table-wrap{margin-top:16px;border:1px solid var(--line);border-radius:8px}
+.motion-drivers td{vertical-align:top;white-space:normal}
+.motion-drivers .md-wrap{min-width:0;overflow-wrap:anywhere}
+.motion-drivers .md-wrap .status{margin-right:6px}
+.motion-drivers .md-none{display:block;max-width:44ch;color:var(--muted);font-size:11px;line-height:1.7}
+.motion-drivers .md-found{display:block;margin-top:6px;font-family:inherit}
+.motion-drivers .md-waiting{margin-right:6px;border-color:#eee4ca;background:#fbf7ed;color:var(--amber)}
+/* The rows that need attention carry a rule on the left, like the problems of the hardware page. */
+.motion-drivers .md-missing td:first-child,.motion-drivers .md-wrong_type td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+.motion-drivers .md-unverified td,.motion-drivers .md-unchecked td{color:#8b9687}
+.motion-drivers .md-actions{margin-top:18px}
+
+/* On the hardware page: the tag of a motion driver problem, which the assistant only diagnoses. */
+.hw-issue .md-row-tag{border-color:#eee4ca;background:#fbf7ed;color:var(--amber)}
+
+/* In the device profile: one line above the tabs. */
+.md-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin:14px 0 0;padding:10px 14px;
+  border:1px solid var(--line);border-left:4px solid #b9cbb3;border-radius:8px;background:#fafcf8;font-size:11px;line-height:1.7;color:#5f705a}
+.md-banner-text{flex:1 1 320px;min-width:0;overflow-wrap:anywhere}
+.md-banner b{margin-right:10px;font-weight:650;color:#234c39}
+.md-banner.md-ok{border-left-color:var(--green)}
+.md-banner.md-missing{border-left-color:var(--red);background:#fdf6f4}
+.md-banner.md-missing b{color:#8f3f38}
+.md-banner.md-unknown,.md-banner.md-unlisted_type{border-left-color:#d1a54c}
+
+/* Narrow screens: one block per interface, its state right under its name, nothing to scroll sideways for. */
+@media(max-width:700px){
+ .motion-drivers thead{display:none}
+ .motion-drivers table,.motion-drivers tbody{display:block}
+ .motion-drivers tr{display:flex;flex-direction:column;gap:8px;padding:13px 14px;border-bottom:1px solid #eef1eb}
+ .motion-drivers tr:last-child{border-bottom:0}
+ .motion-drivers td{display:block;padding:0;border:0}
+ .motion-drivers td:nth-child(3){order:2}
+ .motion-drivers td:nth-child(2){order:3}
+ .motion-drivers tr.md-missing,.motion-drivers tr.md-wrong_type{box-shadow:inset 3px 0 0 var(--red)}
+ .motion-drivers .md-missing td:first-child,.motion-drivers .md-wrong_type td:first-child{box-shadow:none}
+ .motion-drivers .md-none{max-width:none}
+ .md-banner{padding:10px 12px}
+}

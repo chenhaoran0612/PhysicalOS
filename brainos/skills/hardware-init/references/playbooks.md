@@ -63,7 +63,22 @@
 - 检查：`systemctl status <服务> --no-pager`、`journalctl -u <服务> -b -n 120 --no-pager`。
 - 只处理设备守护进程类的服务（相机守护进程如 `nvargus-daemon`、网络、蓝牙、GPU）。根因是缺设备或驱动时先修复设备，再 `systemctl restart <服务>`（回退：`systemctl stop <服务>`）。
 - **机器人自身的应用、启动或导航服务（可能带起底盘、电机或运动程序）一律不要启动或重启**，记为 `needs_user` 并说明失败原因；与硬件无关的服务记为 `skipped`。
+- 例外只有一个：缺运控驱动（`motion-driver:*`）时启动运控驱动本身，按下面 motion-driver 那一节做，那一条命令 `starts_motion_driver=true`，要人在现场确认。
 - 不要 `systemctl disable` 或 `mask` 服务来“消除”失败。
+
+## motion-driver:<能力编号> — 缺少运控接口（运控驱动没有安装，或没有在运行）
+
+- 这类问题不是硬件扫描发现的：产品按本体类型列出运控驱动应提供的 ROS 2 话题或动作，和只读读取到的 ROS 2 清单对照。`selected_issues` 里这一条的 `expected` 写着应有的接口：`kind`（`topic` 话题 / `action` 动作）、`name`（惯用名，设备上可以不同）、`types`（消息类型，必须对得上）。
+- 整个过程不发运动指令，安全状态保持锁定：不发布话题、不调用服务、不发送动作目标、不改参数，不碰急停和设备上的 NeuxMind 运行时（产品会拒绝）。只读查询可以，例如 `ros2 topic info /cmd_vel`、`ros2 node list`。
+- 1. 检查（只读）：`ls /opt/ros` 看装了哪个 ROS 发行版；`dpkg -l` 的输出里找 `ros-humble-` 开头的包和厂商的驱动包；`systemctl list-units --type=service --all --no-pager` 找本体的驱动或启动服务，再用 `systemctl status <服务> --no-pager`、`journalctl -u <服务> -n 80 --no-pager` 看它是没有安装、没有启动还是启动失败。要用 `ros2` 命令时把 `ros2_env` 设为 true（产品加载 ROS 2 Humble，命令里不要写 `source`），例如 `device_exec` 执行 `ros2 pkg list`。
+- 2. 驱动已经装好、只是没有运行：直接到第 4 步启动它。
+- 3. 驱动没有装：先用 `driver_packages` 查资料库。挑 `usable` 为 true、本体类型和厂家型号对得上的安装包，用 `driver_package_deliver` 送到设备（这一步要批准），它返回设备上的路径 `device_path` 和 `sha256`。可以先用 `sha256sum '<device_path>'` 再核对一次，然后用 `device_fix` 安装：
+   - `.deb`：`DEBIAN_FRONTEND=noninteractive apt-get install -y '<device_path>'`（needs_root=true，build_step=true，依赖要从软件源下载时设备要能联网）。
+   - 源码包：解压到 `~/neuxmind-pkg/build/<名字>` 这样的新目录，`ros2_env=true` 后在工作空间里 `colcon build`（build_step=true，最长 3600 秒）；之后的命令用 `ros2_workspace` 指向这个工作空间。
+   - 资料库里没有可用的安装包（或 `available` 为 false）：不要从网上找来装，标为 `needs_user`，`followups` 写明请用户把厂家驱动安装包上传到资料库（解析并确认为可用后才能送到设备），或在现场安装。
+- 4. 启动驱动：优先用驱动自带的服务，例如 `systemctl start <驱动服务>`（needs_root=true）；没有服务的源码驱动可以 `nohup ros2 launch <包> <launch 文件> > ~/neuxmind-pkg/motion-driver.log 2>&1 &`（ros2_env=true，必要时 ros2_workspace）。**这一条命令把 `starts_motion_driver` 设为 true**：驱动启动后本体可能自己上电、站立或收腿，产品会停下来，等人勾选“我在现场”后批准才执行，即使开了“默认允许执行”。`rollback` 写怎么停掉它（`systemctl stop <驱动服务>`，或按 launch 命令结束进程）。不要启动遥控（teleop）节点，也不要启动导航、建图等与驱动无关的程序。
+- 5. 验证：调用 `hardware_rescan`。它会重新读取 ROS 2 的清单，结果里的 `motion_drivers.reverified` 为 true 表示这次读到了，`resolved_since_baseline` 里有这个问题才算接口已经出现。不要用发布话题、调用服务、发送动作目标的办法去试接口。
+- 结果：执行过安装或启动、且最后一次重新扫描后接口已出现的标 `fixed`；装了但接口仍没出现的标 `not_fixed`，`actions` 写清做了什么、日志里看到了什么；需要用户提供安装包、在现场处理或决定的标 `needs_user`。
 
 ## rootfs-full — 根分区空间不足
 

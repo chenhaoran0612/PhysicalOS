@@ -20,9 +20,11 @@ import hashlib
 import re
 
 from . import device_access
+from . import driver_repair      # issue #29
 from .service import now
 
 AUTO_METHODS = ('device_fix/requestApproval', 'device_exec/requestApproval')
+AUTO_METHODS += (driver_repair.DELIVER_METHOD,)      # issue #29: sending a library package follows the session's mode too
 # Unattended commands in a row before the next one waits; the user's "go on" starts the count again.
 AUTO_RUN_LIMIT = 60
 _REST = r'[^\n;|&]*'       # the rest of one simple command
@@ -47,6 +49,7 @@ ASK_FIRST = [
                 r'\bid_(?:rsa|dsa|ecdsa|ed25519)(?!\S*\.pub\b)|\.(?:pem|key|p12|pfx)\b', re.I),
      '涉及存放密钥或凭据的位置'),
 ]
+ASK_FIRST += driver_repair.ASK_FIRST      # issue #29: what hides the program it runs, /opt and workspace programs, containers
 # Report outcomes that mean the assistant cannot get further without a person.
 STUCK = ('needs_user', 'not_fixed', 'pending_reboot')
 RESOLVED = ('fixed', 'not_reproduced')
@@ -81,6 +84,9 @@ def auto_allowed(s):
 
 def ask_first(request):
     """Why this device command waits for a person even in a session that runs without asking; '' when it may run."""
+    held = driver_repair.hold_reason(request)      # issue #29: the motion driver's start waits for someone on site, always
+    if held:
+        return held
     command = str(request.get('command', ''))
     plain = re.sub(r'["\'\\]', '', command)      # 'cu'rl, r"m" -rf, \curl
     for pattern, reason in ASK_FIRST:
@@ -115,6 +121,8 @@ def describe(scan, marks):
 def auto_message(pending):
     """The session record of a command that ran without a question: what it was, in full view."""
     request = pending.get('request') or {}
+    if pending['method'] == driver_repair.DELIVER_METHOD:      # issue #29: a package, not a command
+        return f"默认允许执行，未询问：送安装包“{request.get('purpose', '')}”\n{request.get('filename', '')} → {request.get('device_target', '')}"
     purpose = request.get('purpose', '')
     command = str(request.get('command', ''))
     shown = command if len(command) <= COMMAND_CHARS else command[:COMMAND_CHARS] + '…（完整命令见这一步的依据）'
