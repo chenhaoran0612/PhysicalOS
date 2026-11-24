@@ -273,6 +273,7 @@ async function pagesHaveNoCode(page, base) {
   const shots = process.argv[3] || '';
   const browser = onWebkit ? await playwright.webkit.launch() : await playwright.chromium.launch({executablePath: process.env.BRAIN_CHROMIUM_PATH});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}});
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   await page.emulateMedia({reducedMotion: 'reduce'});
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));

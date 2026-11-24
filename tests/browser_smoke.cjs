@@ -4,6 +4,7 @@ const path=require('path');
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.BRAIN_CHROMIUM_PATH});
  const page=await browser.newPage({viewport:{width:1440,height:1040}});const errors=[];
+ require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
  page.on('pageerror',e=>errors.push(e.message));
  const base=process.env.BRAIN_QA_URL||'http://127.0.0.1:8789';
  const device=process.env.BRAIN_QA_DEVICE;if(!device)throw Error('Set BRAIN_QA_DEVICE to the test-only browser_fixture.py endpoint');

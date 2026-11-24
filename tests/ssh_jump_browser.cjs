@@ -16,6 +16,7 @@ const fs = require('fs');
   const cfg = JSON.parse(fs.readFileSync(process.argv[2] || process.env.BRAIN_QA_CONFIG || '/tmp/neuxmind-ssh-jump-ui.json'));
   const browser = await engine.launch({executablePath: process.env.BRAIN_CHROMIUM_PATH});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}}), errors = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   let step = 'start';
   page.on('pageerror', e => errors.push(`${e.message} (during: ${step})`));
   const dialog = page.locator('#dialog');

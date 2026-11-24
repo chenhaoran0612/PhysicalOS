@@ -20,6 +20,7 @@ let failurePage = null, failureShots = 'artifacts';
   fs.mkdirSync(shots, {recursive: true});
   const browser = await engine.launch(engine.name() === 'chromium' ? {executablePath: process.env.BRAIN_CHROMIUM_PATH} : {});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}}), errors = [], answers = [], sent = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   failurePage = page; failureShots = shots;
   page.on('pageerror', e => errors.push(e.message));
   page.on('request', r => { if (r.url().includes('/api/')) sent.push([r.url(), r.postData() || '']); });

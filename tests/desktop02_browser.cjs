@@ -17,6 +17,7 @@ const SMALL = {width: 900, height: 640};
   fs.mkdirSync(shots, {recursive: true});
   const browser = await chromium.launch({executablePath: process.env.BRAIN_CHROMIUM_PATH});
   const page = await browser.newPage({viewport: WIDE});
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   // Expected HTTP refusals (401 before login, 400 for refused requests) are not JS errors.

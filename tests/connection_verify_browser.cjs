@@ -21,6 +21,7 @@ const WIDTHS = [320, 768, 1024, 1440];
   fs.mkdirSync(shots, {recursive: true});
   const browser = await engine.launch(engine.name() === 'chromium' ? {executablePath: process.env.BRAIN_CHROMIUM_PATH} : {});
   const page = await browser.newPage({viewport: {width: 1440, height: 1000}}), errors = [];
+  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   page.on('pageerror', e => errors.push(e.message));
   const sent = [];                                    // every verification the page asks for
   page.on('request', r => { if (r.url().endsWith(VERIFY_API)) sent.push(r.postDataJSON()); });

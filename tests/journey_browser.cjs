@@ -6,6 +6,7 @@ const {connectTokenFans}=require('./tokenfans_browser.cjs');
  const cfg=JSON.parse(fs.readFileSync(process.argv[2]||process.env.BRAIN_QA_CONFIG||'/tmp/neuxmind-engineering-qa.json'));
  const browser=await chromium.launch({executablePath:process.env.BRAIN_CHROMIUM_PATH});
  const page=await browser.newPage({viewport:{width:1440,height:930}}),errors=[];
+ require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
  page.on('pageerror',e=>errors.push(e.message));
  const click=async action=>{const inside=page.locator(`#dialog[open] [data-action="${action}"]`);await (await inside.count()?inside:page.locator(`[data-action="${action}"]`)).first().click();};
  const fill=async(name,value)=>page.locator(`#dialog [name="${name}"]`).fill(String(value));
@@ -21,7 +22,7 @@ const {connectTokenFans}=require('./tokenfans_browser.cjs');
  await page.goto(cfg.url+'/#agents');await click('journey-prepare');await page.locator('[name=objective]').waitFor();if(!(await page.locator('#dialog [name=model_id]').inputValue()).startsWith('agent-model-tokenfans-'))throw Error('Plan does not use the TokenFans model');if(!(await page.locator('[name=objective]').inputValue()).includes('检查仓库通道'))throw Error('Task goal was lost');await submit();await page.getByRole('heading',{name:'启动 仓库异常巡检 · 工程准备',exact:true}).waitFor();
  const state=await page.evaluate(()=>api('state'));if(state.workflow_runs.length||state.agent_sessions.length)throw Error('Plan unexpectedly started paid execution');if(state.engineering_workflows[0].stages.length!==4)throw Error('Missing default roles');await click('close');
  for(const route of ['robots','models','skills','agents','extensions','workflows','simulation','harness','deployment','training','datasets','resources','billing','services']){
-  await page.goto(cfg.url+'/#'+route);await page.locator('#main > .page-purpose > summary').first().click();await page.locator('#main > .page-purpose').first().getByText('需要准备',{exact:true}).waitFor();await page.locator('#main > .page-purpose').first().getByText('完成后得到',{exact:true}).waitFor();
+  await page.goto(cfg.url+'/#'+route);await page.locator('#main .page-purpose:has(.purpose-grid) > summary').first().click();await page.locator('#main .page-purpose:has(.purpose-grid)').first().getByText('需要准备',{exact:true}).waitFor();await page.locator('#main .page-purpose:has(.purpose-grid)').first().getByText('完成后得到',{exact:true}).waitFor();
  }
  // UI progression must not count unrelated or superseded evidence as delivery.
  const progress=await page.evaluate(()=>{
