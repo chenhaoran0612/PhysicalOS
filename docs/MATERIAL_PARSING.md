@@ -107,11 +107,18 @@ python3 tests/material_parse_browser_fixture.py CONFIG.json &                   
 node tests/material_parse_browser.cjs CONFIG.json                                   # BRAIN_BROWSER=webkit 换成 WebKit
 ```
 
-测试里的文件都是测试自己生成的；WeKnora 用替身（`cloud/tests/fake_weknora.py`，只模仿它的五个接口），**没有在真的 WeKnora 上验证过**。
+测试里的文件都是测试自己生成的；WeKnora 用替身（`cloud/tests/fake_weknora.py`，只模仿它的五个接口）。2026-11-23 在本机 Docker 里的 WeKnora 0.6.3 上跑通过：对话模型 `qwen3.6-plus`、向量模型 `Qwen3-Embedding-4B`（都经 TokenFans），一份 Markdown 的驱动说明经云平台解析，8 项全部读出、状态「待确认」。
+
+对真的 WeKnora 要注意：
+
+- WeKnora 说 `finalizing`（还在做摘要）时文档还检索不到，这时提问得到的是「对话中并未附带任何文档」。云平台只在 `completed` 之后提问（9a34c46；替身里的 `polls_finalizing` 模拟这一段）。
+- 会思考的模型（如千问 3.x）要让 WeKnora 能关掉思考：千问的服务商设成 `aliyun`，WeKnora 才会传 `enable_thinking: false`。按 `generic` 接时，第一个问题想了 6000 多字，正文为空。
+- 云平台删除资料后约一分钟才删 WeKnora 里的副本；这段时间里再传同样内容的文件，WeKnora 回 409（重复）。
+- 向量维度没有对应的索引时（`Qwen3-Embedding-4B` 是 2560 维）WeKnora 逐条比对，资料少时没有影响。
 
 ## 没有做的
 
-- 在真的 WeKnora 上跑通：等用户给出可用的 WeKnora 地址、在云平台配好密钥后验证。WeKnora 0.9 的接口按它的公开文档和客户端代码写成。
+- 在用户正式使用的 WeKnora 上验证：现在只在本机 Docker 里的 0.6.3 上跑过（见上）。接口按 WeKnora 的公开文档和客户端代码写成，0.6.3 上这几个接口都在。
 - 修复助手按需检索文档全文（#30）：现在只能拿到确认过的结构化结果；文档在 WeKnora 里的副本编号只在云端。
 - 设备档案和本体档案合并（另开 issue）。
 - 资料不能改挂到另一台设备；没挂设备的资料（「资料库」页上传的）只在「资料库」页出现。
