@@ -25,6 +25,7 @@
 - **安装不用 sudo，不改系统文件。** 开机自启要管理员权限，是安装之外单独的一步（issue #20，[RUNTIME_AUTOSTART.md](RUNTIME_AUTOSTART.md)）：表单里勾选“装好后设置开机自启”时，`runtime_install.STAGES` 在「启动」之后、「接入并检查」之前多一步「开机自启」，先列出要以管理员身份执行的内容，人确认后才做；不勾选就没有这一步。
 - **管理层只监听机器人本机。** 安装脚本以 `--host 127.0.0.1` 启动；平台经 SSH 的 direct-tcpip 通道访问它。
 - **默认是仿真本体。** 适配器按本体类型选：四足 `sim_quadruped`，机械臂 `sim_arm`。两者都不打开设备、不会让机器人动。ROS 2 适配器（#21 的「安装时选择」，`NX_ADAPTER=ros2`）等它的安装脚本进了安装包后，在 `runtime_install_plan.ADAPTERS` 和表单里加一项即可；默认仍是仿真，和 #21 一致。
+- **启动按安装时记下的本体。** #21 的安装脚本把本体记在 `~/neuxmind/adapter`。控制台启动（装完后的启动、「启动这个已有的管理层并接入」）时，这个文件写的是 `sim_quadruped` / `sim_arm` / `ros2` 之一就按它启动；卡片上的本体类型只决定安装时装哪个，以及没有这个记录的旧安装（#21 之前）启动时用哪个。记录不认识或是符号链接时不跟随。和 #20 的自启动一致。
 - 设备上只执行 `runtime_install_device.SCRIPTS` 里的四段固定脚本（检查、启动一步、查看一步、清理），文本经标准输入交给 `sh -s`，命令行上只有 `sh -s --` 和由字母、数字、`. _ + -` 组成的参数（安装包编号、步骤名、16 位十六进制任务号、端口、适配器名）。安装本身是设备上那份 `device_install.sh` 的 `install` / `start` / `remove`，它守自己的规则（只动带标记文件的安装目录、只给自己启动的运行时发信号）。
 
 ## 断开、弱网、再来一次
@@ -104,6 +105,7 @@
 - `tests/test_runtime_install_network.py`：经一个不断切断连接的中继安装能完成且只装一次；连接差到登录不上时不留下损坏的文件，恢复后续传完成。
 - `tests/test_runtime_install_plan.py`：决策表；`tests/test_runtime_package.py`：安装包清单、篡改检测、查找顺序、真实构建和应用打包里带上它。
 - `tests/test_runtime_install_real.py`（只在 Linux 上运行）：真实的 `device_install.sh`、真实的包和运行时——直连、经跳板机、真实安装途中断开、手工安装的只接入、真实启动失败后清理、端口被占。
+- `tests/test_runtime_install_adapter.py`：启动按安装时记下的本体（四足卡片上记下 sim_arm 的起成 sim_arm，ros2 不被起成仿真，没有记录的旧机械臂安装仍起成 sim_arm，不认识的记录和链接不跟随，替换时安装控制台选的本体）。
 - 浏览器：`tests/runtime_install_browser.cjs` + `tests/runtime_install_browser_fixture.py`（Chromium 和 WebKit）；逻辑：`tests/runtime_install_logic.cjs`。
 - 弱网：`tests/runtime_install_weak_network.py`（只能在 Linux 容器里以 NET_ADMIN 手动运行，不在任何套件里）。
 

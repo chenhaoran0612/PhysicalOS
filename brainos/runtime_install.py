@@ -26,6 +26,8 @@ Rules it keeps:
 * **The simulated body by default.** The adapter follows the robot's body type (``ADAPTERS``): a
   quadruped gets ``sim_quadruped``, a manipulator ``sim_arm``. Neither opens a device or moves anything.
   The ROS 2 adapter (issue #21) is chosen at install time too once its install script is in the package.
+  Start runs the body the install recorded (~/neuxmind/adapter, issue #21) and uses the body type only
+  for an install without that record (runtime_install_device.JOB_SCRIPT).
 * **The token** is never returned, logged or put into a job's view; it lives where issue #17 saves it.
 * **A failure says which step, what is left on the robot and how to clean it up**, and "清理" removes
   exactly what this install put there (``clean``).
