@@ -26,6 +26,11 @@ class Store:
         with self.lock:
             return [json.loads(row[0]) for row in self.db.execute('SELECT payload FROM objects WHERE kind=? ORDER BY rowid DESC', (kind,))]
 
+    def kinds(self):
+        """Every kind that has a record (issue #44: a deleted task takes its records of any kind)."""
+        with self.lock:
+            return [row[0] for row in self.db.execute('SELECT DISTINCT kind FROM objects ORDER BY kind')]
+
     def get(self, kind, key):
         with self.lock:
             row = self.db.execute('SELECT payload FROM objects WHERE kind=? AND id=?', (kind, key)).fetchone()

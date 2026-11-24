@@ -350,7 +350,7 @@ function writeSkill() {
   await page.waitForTimeout(800);
   await page.evaluate(() => refresh(true));
   assert(await page.locator('#main .first-run').count() === 0, '关闭后引导不应再出现');
-  assert(await page.locator('#main .journey-next').count() === 1, '工作台其余内容应照常');
+  assert(await page.locator('#main .tw-board').count() === 1, '工作台其余内容应照常');      // issue #44: the dashboard
   await shot('18-guide-closed');
 
   assert(!errors.length, '页面错误：' + errors.join(' | '));

@@ -73,7 +73,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
   await click('close');
 
   // ---------------------------------------------------------------- (a) workbench: the sim path, not the assistant
-  await go('overview');
+  await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
   assert(await nextAction() === 'sim-run-pick', '只有仿真机器人时，工作台应推荐“运行技能”，而不是 ' + await nextAction());
   const next = await page.locator('#main .journey-next').innerText();
   assert(next.includes('不需要助手模型') && !next.includes('让助手准备'), '工作台推荐文案不对：' + next);
@@ -105,7 +105,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
   await click('close');
 
   // The workbench follows: an installed skill but none in the project -> still the sim path.
-  await go('overview');
+  await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
   assert(await nextAction() === 'sim-run-pick', '技能已安装、未加入项目时仍应推荐运行技能');
 
   // ---------------------------------------------------------------- (c) application steps use the generated form
@@ -116,7 +116,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
   const adopted = (await st()).skills.find(s => s.entrypoint === 'patrol');
   assert(adopted && adopted.parameters.map(p => p.name).join() === 'waypoints,loops,tolerance', '加入项目的技能应保存参数说明：' + JSON.stringify(adopted));
   await click('close');
-  await go('overview');
+  await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
   assert(await nextAction() === 'application-add', '技能加入项目后应推荐创建应用，而不是 ' + await nextAction());
 
   await go('skills');
@@ -169,7 +169,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
   await click('close');
 
   // With an application on a simulated robot, the workbench still never points at the assistant.
-  await go('overview');
+  await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
   const appNext = await nextAction();
   assert(['harness-run', 'deliver-open'].includes(appNext), '有仿真应用时工作台推荐不对：' + appNext);
   assert(!(await page.locator('#main .journey-next [data-action="journey-prepare"]').count()), '有仿真应用时不应推荐工程助手');

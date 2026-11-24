@@ -225,6 +225,7 @@ document.addEventListener('submit',async e=>{const f=e.target.closest('[data-for
  if(kind==='operate')result=await api('operations',{release_id:f.dataset.id,action:f.dataset.kind,hardware_authorized:!!f.elements.hardware_authorized?.checked});
  if(kind==='infer'){result=await api('models/infer',{model_id:f.dataset.id,inputs:parse(p.inputs),max_units:p.max_units?Number(p.max_units):undefined});$('#invoke-result').innerHTML=json(result);await refresh(true);return;}
  await refresh(true);$('#dialog').close();
+ if(kind==='project'&&typeof taskCreated==='function')return taskCreated(result);   // issue #44: go on inside the new task
  if(kind==='project'){location.hash='overview';render();toast('任务目标已保存，下一步连接机器人');return;}
  if(kind==='application')return deliveryOpen(result.id);
  if(kind==='harness')return action('detail-evaluations',result.id);

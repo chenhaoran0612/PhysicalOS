@@ -167,6 +167,8 @@ def make_handler(application):
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #41: the layout of "我的机器人", likewise.
             extra=extra or {'/robots_page.js':('robots_page.js','text/javascript; charset=utf-8'),'/robots_page.css':('robots_page.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #44: 任务工作台 as a dashboard of the account's tasks, likewise.
+            extra=extra or {'/task_workbench.js':('task_workbench.js','text/javascript; charset=utf-8'),'/task_workbench.css':('task_workbench.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #22: safety limits per device, likewise.
             extra=extra or {'/safety_limits.js':('safety_limits.js','text/javascript; charset=utf-8'),'/safety_limits.css':('safety_limits.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
@@ -311,6 +313,8 @@ def make_handler(application):
                         'robots/reset':service.reset_robot,
                         # Issue #11: delete a real robot with its SSH connection, saved logins and investigations
                         'robots/remove':service.robot_remove.remove,
+                        # Issue #44: delete a task (任务项目) of the signed-in account; refused while it has robots or running work
+                        'projects/remove':service.task_remove.remove,
                         # Issue #22: safety limits a person fills in per device; the signed-in account is recorded as who
                         'robots/limits':service.safety_limits.read,
                         'robots/limits/save':lambda p:service.safety_limits.save(p,user),

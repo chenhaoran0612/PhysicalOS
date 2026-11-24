@@ -108,6 +108,8 @@ class Platform:
         self.runtime_link = RuntimeLinks(self)      # issue #17: the management layer over the robot's SSH connection, no tunnel by hand
         from .robot_remove import RobotRemoval
         self.robot_remove = RobotRemoval(self)      # issue #11: delete a robot with its connection and investigations
+        from .task_remove import TaskRemoval
+        self.task_remove = TaskRemoval(self)        # issue #44: delete a task (任务项目) with what it holds
         from .safety_limits import SafetyLimits
         self.safety_limits = SafetyLimits(self)     # issue #22: safety limits a person fills in per device
         from .runtime_install import RuntimeInstall
