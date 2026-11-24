@@ -109,6 +109,7 @@ def smoke(backend,state_dir):
     import http.cookiejar
     env={k:v for k,v in os.environ.items() if k not in ('PYTHONPATH','PYTHONHOME')}
     env['NEUXMIND_MAIL_DEV_ECHO']='1'  # freeze check registers without a mail server
+    env['NEUXMIND_CLOUD_AUTO_LOGIN']='0'  # issue #36: ... and must not register its test account in a cloud on this computer
     process=subprocess.Popen([str(backend),'--port','0','--state-dir',str(state_dir)],stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE,text=True,env=env,cwd=str(state_dir))
     try:
