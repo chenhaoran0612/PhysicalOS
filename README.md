@@ -128,7 +128,7 @@ python3.12 -m venv .build/packaging-venv
 
 ## 账号与邮箱验证
 
-应用打开后先显示登录 / 注册页，登录后才进入工作空间。会话记在 HttpOnly cookie 里，勾选“保持登录”时会话保留 30 天，否则 12 小时。侧栏底部是账户菜单：账户信息（改名、改密码）、云平台账户、助手工具设置、服务连接、用量与账单、使用指南、退出登录。
+应用打开后先显示登录 / 注册页，登录后才进入工作空间。会话记在 HttpOnly cookie 里，勾选“保持登录”时会话保留 30 天，否则 12 小时。侧栏底部是账户菜单：账户信息（改名、改密码）、云平台账户、助手工具设置、服务连接、用量与账单、使用指南、退出登录。登录应用时同时登录云平台（资料库），见 [docs/CLOUD_AUTO_LOGIN.md](docs/CLOUD_AUTO_LOGIN.md)（issue #36）。
 
 - 注册和找回密码都要填邮件里的 6 位验证码：10 分钟内有效，60 秒后才能重发，同一邮箱每小时最多发 5 次，输错 5 次作废。新密码至少 10 个字符，同时包含字母和数字。
 - 邮件服务按顺序读取：环境变量 `NEUXMIND_SMTP_HOST`、`NEUXMIND_SMTP_PORT`、`NEUXMIND_SMTP_USER`、`NEUXMIND_SMTP_PASSWORD`、`NEUXMIND_SMTP_FROM`、`NEUXMIND_SMTP_SSL`；或 `<状态目录>/mail.json`（同名小写键，不带前缀）。
@@ -164,6 +164,7 @@ NX_DEMO_CLOUD=docker python3 scripts/demo.py up             # 或：演示脚本
 ```text
 brainos/
   auth.py         工作空间身份与会话
+  cloud_auto_login.py 登录应用时一并登录（或注册）云平台，旧版本的登录退出一次
   recipes.py      服务方案、可视化参数与任务确认
   contracts.py    机器人、模型与执行器协议
   connector.py    显式接入地址的 HTTP 调用
