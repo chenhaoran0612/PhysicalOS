@@ -66,7 +66,7 @@ class ClassifierTableTests(unittest.TestCase):
             self.skipTest('node 不可用')
         codes = known_codes()
         for must in ('reset_in_progress', 'conformance_running', 'estop_latched', 'safety_rejected',
-                     'hardware_not_authorized', 'authorization_required', 'simulated_only', 'joint_state_required',
+                     'hardware_not_authorized', 'authorization_required', 'onsite_confirmation_required', 'joint_state_required',
                      'stop_count_mismatch', 'device_timeout', 'device_unreachable', 'simulated_evidence'):
             self.assertIn(must, codes)
         with tempfile.TemporaryDirectory() as tmp:
@@ -255,7 +255,8 @@ class ResetWayOutTests(unittest.TestCase):
             self.assertEqual((status, body['code']), (400, 'authorization_required'))
             status, body, _ = post('robots/run-skill', {'robot_id': remote['id'], 'skill_id': 's', 'request_id': 'x',
                                                         'hardware_authorized': True}, cookie)
-            self.assertEqual((status, body['code']), (400, 'simulated_only'))
+            # issue #42: a real robot may run an installed skill, after the on-site confirmation
+            self.assertEqual((status, body['code']), (400, 'onsite_confirmation_required'))
         finally:
             server.close()
             application.close()

@@ -124,6 +124,10 @@ const SMALL = {width: 900, height: 640};
   await dialogText('兼容：可以安装');
   await shot('04-skill-compatible', true);
   await submit();
+  // issue #42: installing ends in the run form, on a robot that is not a simulation too; back to the robot's detail from there
+  await dlg('form[data-form=sim-run]').waitFor();
+  await dialogText('技能已安装');
+  await page.evaluate(() => robotDetailOpen(document.querySelector('#dialog form[data-form=sim-run]').dataset.robot, 'skills'));
   await dlg('.cap-list').waitFor();
   await dialogText('巡逻');
   const installed = await dlg('.dialog-body').innerText();

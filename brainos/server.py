@@ -163,6 +163,8 @@ def make_handler(application):
             extra=extra or {'/repair_materials.js':('repair_materials.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #36: why the cloud is not signed in (the automatic sign-in), likewise.
             extra=extra or {'/cloud_auto_login.js':('cloud_auto_login.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #42: running an installed skill on a real robot (the confirmations of the run form), likewise.
+            extra=extra or {'/skill_run.js':('skill_run.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #41: the layout of "我的机器人", likewise.
