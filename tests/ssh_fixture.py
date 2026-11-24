@@ -19,6 +19,12 @@ class SSHFixture:
         self.username=username or DEFAULT_LOGIN[0];self.password=password or DEFAULT_LOGIN[1];self.auth_attempts=[]
         self.authorized_keys={key.asbytes() for key in authorized_keys or []};self.key_logins=0
         self.forward_to={tuple(x) for x in forward_to or []};self.forwarded=[];self.forwarding=True
+        # Issue #39: a host that asks its questions itself ("keyboard-interactive", what PAM does). ``prompts``:
+        # the (text, echoed) questions of one login, None when the host does not offer it; the login passes when
+        # every answer is the password. ``password_method``: False refuses the plain password method.
+        self.prompts=None;self.password_method=True;self.prompt_answers=[];self.methods_tried=[]
+        self.later_prompts=[]                     # more sets of questions after the first; no answer to them passes
+        self.allowed_auths=None                   # the methods the host announces, when a test names them itself
         self.banner_delay=0;self.auth_delay=0     # seconds: a slow link, for timeout tests
         self.unanswered=set()                     # commands that get no output and no exit status
         self.exec_answer_delay=0                  # seconds before the request to run a command is answered at all
@@ -37,12 +43,29 @@ class SSHFixture:
         owner=self
         class Protocol(paramiko.ServerInterface):
             def check_auth_password(self,username,password):
-                time.sleep(owner.auth_delay);owner.auth_attempts.append(username)
+                time.sleep(owner.auth_delay);owner.auth_attempts.append(username);owner.methods_tried.append('password')
+                if not owner.password_method:return paramiko.AUTH_FAILED
                 return paramiko.AUTH_SUCCESSFUL if username==owner.username and password==owner.password else paramiko.AUTH_FAILED
             def check_auth_publickey(self,username,key):
                 if username!=owner.username or key.asbytes() not in owner.authorized_keys:return paramiko.AUTH_FAILED
                 owner.key_logins+=1;return paramiko.AUTH_SUCCESSFUL
-            def get_allowed_auths(self,username):return 'password,publickey' if owner.authorized_keys else 'password'
+            def check_auth_interactive(self,username,submethods):
+                owner.methods_tried.append('keyboard-interactive')
+                if owner.prompts is None:return paramiko.AUTH_FAILED
+                self.asking=username;self.waiting=list(owner.later_prompts);return self.ask(owner.prompts)
+            def ask(self,prompts):
+                asked=paramiko.InteractiveQuery()
+                for text,echoed in prompts:asked.add_prompt(text,echoed)
+                return asked
+            def check_auth_interactive_response(self,responses):
+                time.sleep(owner.auth_delay);owner.auth_attempts.append(self.asking);owner.prompt_answers.append(list(responses))
+                if self.waiting:return self.ask(self.waiting.pop(0))
+                if owner.later_prompts:return paramiko.AUTH_FAILED
+                passed=self.asking==owner.username and len(responses)==len(owner.prompts) and all(r==owner.password for r in responses)
+                return paramiko.AUTH_SUCCESSFUL if passed else paramiko.AUTH_FAILED
+            def get_allowed_auths(self,username):
+                if owner.allowed_auths:return owner.allowed_auths
+                return ('password,publickey' if owner.authorized_keys else 'password')+(',keyboard-interactive' if owner.prompts is not None else '')
             def check_channel_request(self,kind,chanid):return paramiko.OPEN_SUCCEEDED if kind=='session' else paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
             def check_channel_direct_tcpip_request(self,chanid,origin,destination):
                 if not owner.forwarding:return paramiko.OPEN_FAILED_ADMINISTRATIVELY_PROHIBITED
