@@ -248,11 +248,11 @@ function materialLibraryPage() {
   const lib = materialLibrary, account = state.cloud_account || {logged_in: false};
   const title = ['MATERIAL LIBRARY', '资料库', '把机器人的手册、参数表、URDF 和驱动安装包存到云平台，按本体类型、厂家型号和版本归档。'];
   if (!account.logged_in) {
-    return heading(...title) + notice('资料库保存在云平台。请先登录云平台账户，再上传或查看资料。' +
-      `<div class="button-row">${button('去登录云平台', 'go-cloud', 'small')}</div>`);
+    return heading(...title) + cloudSignInNotice('资料库保存在云平台。请先登录云平台账户，再上传或查看资料。');   // issue #36: with the reason
   }
   // First visit, or another cloud account than the one the list was read for.
-  if ((!lib.loaded || lib.loadedFor !== (account.email || '')) && !lib.pending) setTimeout(materialLibraryLoad);
+  // (Issue #36: or the same account signed in anew, so that an answer from a lapsed sign-in is not kept.)
+  if ((!lib.loaded || lib.loadedFor !== cloudSignInKey()) && !lib.pending) setTimeout(materialLibraryLoad);
   const queue = lib.queue.length
     ? panel('本次上传', `<div class="material-queue">${lib.queue.map(materialQueueRow).join('')}</div>`,
       `<div class="material-queue-head">${materialQueueHead()}</div>`) + '<div class="spacer"></div>' : '';
@@ -306,7 +306,7 @@ async function materialFetch(append) {
     lib.error = err.message;
   }
   lib.loaded = true;
-  lib.loadedFor = (state.cloud_account || {}).email || '';
+  lib.loadedFor = cloudSignInKey();
   // The first answer brings the supported types (button, note): draw the whole page once.
   if (first || !materialDrawList()) materialRender();
 }

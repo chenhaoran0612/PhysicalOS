@@ -41,6 +41,8 @@ class Settings:
     # whole conversation every turn. Still bounded by the session budget.
     session_max_body_bytes: int = 8_000_000
     session_ttl_seconds: int = 12 * 3600
+    # Issue #36: a sign-in with ``remember: true`` (the desktop app's "保持登录") lasts this long instead.
+    session_remember_ttl_seconds: int = 30 * 24 * 3600
     login_max_failures: int = 8
     login_window_seconds: int = 60
     # Per-provider webhook signing secrets, e.g. {"sandbox": "..."}.
@@ -214,6 +216,8 @@ class Settings:
             max_body_bytes=_int("NEUXMIND_MAX_BODY_BYTES", cls.max_body_bytes),
             session_max_body_bytes=_int("NEUXMIND_SESSION_MAX_BODY_BYTES", cls.session_max_body_bytes),
             session_ttl_seconds=_int("NEUXMIND_SESSION_TTL_SECONDS", cls.session_ttl_seconds),
+            session_remember_ttl_seconds=_int("NEUXMIND_SESSION_REMEMBER_TTL_SECONDS",
+                                              cls.session_remember_ttl_seconds),
             login_max_failures=_int("NEUXMIND_LOGIN_MAX_FAILURES", cls.login_max_failures),
             login_window_seconds=_int("NEUXMIND_LOGIN_WINDOW_SECONDS", cls.login_window_seconds),
             webhook_secrets=secrets,

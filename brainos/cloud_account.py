@@ -27,6 +27,7 @@ import urllib.request
 from pathlib import Path
 
 from . import robot_caps
+from . import cloud_auto_login          # issue #36 (imports this module back; only used inside functions)
 from .connector import NoRedirect
 
 API_PREFIX = '/api/v1'
@@ -348,6 +349,7 @@ class CloudAccount:
         if base != self.settings().get('base_url'):
             self._drop_token()            # a session belongs to the server that issued it
             self._save_settings({'base_url': base})
+            cloud_auto_login.note_manual(self.platform)     # issue #36
         self.platform.audit('cloud.configured', {'base_url': base})
         return self.summary()
 
@@ -391,6 +393,7 @@ class CloudAccount:
             raise CloudError('云平台注册响应缺少会话')
         self._signed_in(result['token'], result['user'])
         self.platform.audit('cloud.registered', {'email': email})
+        cloud_auto_login.note_manual(self.platform)         # issue #36: signed in by hand, not replaced later
         return {'status': 'registered', 'account': self.summary(), 'verification': self._verification_view(result)}
 
     def login(self, p):
@@ -400,6 +403,7 @@ class CloudAccount:
             raise CloudError('云平台登录响应缺少会话')
         self._signed_in(result['token'], result['user'])
         self.platform.audit('cloud.login', {'email': email})
+        cloud_auto_login.note_manual(self.platform)         # issue #36
         return {'status': 'logged_in', 'account': self.summary()}
 
     def logout(self, p=None):
@@ -410,6 +414,7 @@ class CloudAccount:
                 pass                      # the local session is dropped either way
         self._drop_token()
         self.platform.audit('cloud.logout', {})
+        cloud_auto_login.note_manual(self.platform, signed_out=True)    # issue #36: signed out by hand, the app stays signed in
         return {'status': 'logged_out', 'account': self.summary()}
 
     def verify(self, p):

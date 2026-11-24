@@ -1,6 +1,6 @@
 // 账号验收（界面）：登录 / 注册页逐项校验（邮箱格式与拼写提示、密码规则与强度、两次输入一致）、密码显示切换、
 // 6 格验证码（粘贴、错误码）、内置测试账号、记住登录、改名、改密码、退出、旧密码失效、重复注册、忘记密码重置、手机宽度。
-// 用法：NEUXMIND_MAIL_DEV_ECHO=1 python3 -m brainos.server --port 8795 --state-dir <临时目录> 之后
+// 用法：NEUXMIND_MAIL_DEV_ECHO=1 NEUXMIND_CLOUD_AUTO_LOGIN=0 python3 -m brainos.server --port 8795 --state-dir <临时目录> 之后（=0：测试账号不去登录本机的云平台，issue #36）
 //       node tests/account_browser.cjs http://127.0.0.1:8795 <截图目录>
 const {chromium}=require(process.env.BRAIN_PLAYWRIGHT_MODULE||'playwright');const fs=require('fs');
 const base=process.argv[2],shots=process.argv[3],stateFile=shots+'/storage.json';fs.mkdirSync(shots,{recursive:true});

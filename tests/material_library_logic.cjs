@@ -30,7 +30,8 @@ const sandbox = {
   date: value => `date:${value}`,
 };
 vm.createContext(sandbox);
-const lib = vm.runInContext(readFileSync('web/material_library.js', 'utf8') + `
+// Issue #36: the sign-in notice and the sign-in key come from web/cloud_auto_login.js, loaded before it in the page.
+const lib = vm.runInContext(readFileSync('web/cloud_auto_login.js', 'utf8') + '\n' + readFileSync('web/material_library.js', 'utf8') + `
 ;({MaterialSha256, materialFormatOf, materialPrecheck, materialMissing, materialChunkRange, materialSizeText,
    materialResumable, materialProgress, materialLibraryPage, materialLibrary, materialRow, materialQueueRow,
    materialPump, materialLibraryAction, materialLibraryLoad})`, sandbox);

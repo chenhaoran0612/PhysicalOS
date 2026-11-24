@@ -172,6 +172,16 @@ function acctApplyGate(){
   document.body.classList.toggle('auth-pending',!acctChecked);
   if(need){if(gate.dataset.mode!==acctMode||gate.hidden){gate.innerHTML=acctGateHtml();gate.dataset.mode=acctMode;acctFocus();}gate.hidden=false;}
   else{gate.hidden=true;gate.innerHTML='';delete gate.dataset.mode;}
+  if(need)acctSignedOutShow(gate);
+}
+// Issue #36：启动时本地服务把这次登录退出了（旧版本留下的登录没有云平台登录，或云平台登录已到期）。
+// 原因写在登录表单上方，直到重新登录成功；它不是出错提示，所以不放进 .form-error（那里一输入就清空）。
+let acctSignedOutNote='';
+function acctSignedOutShow(gate){
+  const form=gate.querySelector('form[data-acct-form="login"]'),shown=gate.querySelector('.auth-note');
+  if(!acctSignedOutNote||!form){shown?.remove();return;}
+  if(shown)return;
+  const note=document.createElement('p');note.className='auth-note';note.setAttribute('role','status');note.textContent=acctSignedOutNote;form.before(note);
 }
 function acctFocus(){
   requestAnimationFrame(()=>{const g=document.getElementById('auth-gate');if(!g||g.hidden)return;
@@ -286,7 +296,7 @@ function acctCodeSent(r,extra){
   if(r.dev_code)window.nxDevCode=r.dev_code; // 仅自动化测试（NEUXMIND_MAIL_DEV_ECHO=1 且未配置邮件服务）
 }
 async function acctSignedIn(r,message){
-  acctPending=null;clearInterval(acctTimer);acctTimer=0;
+  acctPending=null;clearInterval(acctTimer);acctTimer=0;acctSignedOutNote='';
   state={...state,user:r.user};acctChecked=true;acctMode='login';
   await refresh(true);toast(message);
 }
@@ -344,7 +354,7 @@ document.addEventListener('submit',async e=>{
 // 最多等 6 秒；本地服务没回应时也不会一直停在"正在连接"。
 (async()=>{
   const timeout=new Promise(resolve=>setTimeout(()=>resolve({timeout:true}),6000));
-  try{const r=await Promise.race([api('me'),timeout]);if(r&&r.user){state={...state,user:r.user};}else if(r&&r.timeout){window.nxBootNote='本地服务响应较慢，请稍候或重新打开应用。';}}catch(err){window.nxBootNote='检查登录状态失败：'+(err&&err.message||err);}
+  try{const r=await Promise.race([api('me'),timeout]);if(r&&r.user){state={...state,user:r.user};}else if(r&&r.signed_out){acctSignedOutNote=String(r.signed_out.message||'');state={...state,user:null};}else if(r&&r.timeout){window.nxBootNote='本地服务响应较慢，请稍候或重新打开应用。';}}catch(err){window.nxBootNote='检查登录状态失败：'+(err&&err.message||err);}
   acctChecked=true;
   if(!state.user)acctMode='login';
   try{render();}catch(err){window.nxBootNote='界面渲染出错：'+(err&&err.message||err);acctApplyGate();}

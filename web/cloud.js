@@ -90,6 +90,7 @@ function cloudAccountPanel(a) {
   }
   if (!a.logged_in) {
     return panel('账户', `<div class="panel-body">${cloudView.error ? notice(h(cloudView.error), true) : ''}` +
+      cloudAutoLoginNote() +     // issue #36: why the automatic sign-in did not happen
       `<p class="subtitle">使用 NeuxMind 云平台账户登录。没有账户可以直接注册。</p><div class="spacer"></div>` +
       `<div class="button-row">${button('登录云平台', 'cloud-login', 'small')}${button('注册新账户', 'cloud-register', 'secondary small')}</div></div>`);
   }

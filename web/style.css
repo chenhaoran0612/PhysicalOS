@@ -369,6 +369,9 @@ body.auth-pending::before{content:"正在连接 Robot OS…";position:fixed;inse
 .auth-dot{margin:0 8px;color:#b4beb7}
 .auth-card .form-error{color:var(--red);background:#fcf0ee;border:1px solid #f1d5d1;border-radius:8px;font-size:13px;padding:10px 12px;margin-bottom:18px}
 .auth-card .form-error:empty,.acct-panel .form-error:empty{display:none}
+/* Issue #36: why the app asks to sign in again (not an error) */
+.auth-card h1:has(+.auth-note){margin-bottom:14px}
+.auth-note{color:#3d5a4c;background:#eef5ea;border:1px solid #d5e5cc;border-left:3px solid var(--green);border-radius:8px;font-size:13px;line-height:1.7;padding:10px 12px;margin:0 0 20px;overflow-wrap:anywhere}
 @media (max-width:900px){
  .auth-layout{grid-template-columns:1fr}
  .auth-aside{display:none}

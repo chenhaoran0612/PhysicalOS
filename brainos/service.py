@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from . import connector, robot_caps
+from . import cloud_auto_login          # issue #36
 from .errors import CodedError, refusal_fields
 from .contracts import FAMILIES, evaluation_simulation_reasons, required_text, string_list, validate_manifest
 from .store import Store
@@ -151,6 +152,8 @@ class Platform:
         result.update(self.workflows.snapshot())
         # The cloud session token stays in the credential file; only a summary is shown.
         result['cloud_account'] = self.cloud.summary()
+        # Issue #36: why the automatic cloud sign-in did not happen, or that it has lapsed (None: never ran).
+        result['cloud_account']['auto_login'] = cloud_auto_login.view(self, result['cloud_account']['logged_in'])
         # Issue #4: the TokenFans connection that tasks without a chosen model use (key never included).
         result['model_compute'] = self.model_compute.summary()
         result.update(self.body_types.snapshot())   # issue #32: the list of body types and the interfaces a type can name

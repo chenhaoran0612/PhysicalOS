@@ -175,9 +175,10 @@ def _throttle(session: Session, kind: str, key: str, limit: int, window: int, me
     session.add(RateEvent(kind=kind, key=key))
 
 
-def _issue_session(session: Session, user: User, settings: Settings) -> dict:
+def _issue_session(session: Session, user: User, settings: Settings, remember: bool = False) -> dict:
+    """``remember`` (issue #36): the longer lifetime, for a client that keeps its own sign-in that long."""
     token = new_session_token()
-    expires = now() + settings.session_ttl_seconds
+    expires = now() + (settings.session_remember_ttl_seconds if remember else settings.session_ttl_seconds)
     session.execute(delete(AuthSession).where(AuthSession.expires_at < now()))
     session.add(AuthSession(token_hash=token_hash(token), user_id=user.id, expires_at=expires))
     return {"token": token, "token_type": "bearer", "expires_at": expires}
@@ -221,7 +222,7 @@ def register(session: Session, payload: dict, settings: Settings, ip: str = "", 
         return {"status": "claim_sent", "email": email, "_claim_token": issue_claim(session, existing, settings, ip)}
     user, org = create_account(session, email, name.strip(), hash_password(password), verified=False)
     audit.record(session, "auth.register", f"user:{user.id}", org_id=org.id, target=user.email, ip=ip)
-    issued = _issue_session(session, user, settings)
+    issued = _issue_session(session, user, settings, payload.get("remember") is True)
     result = {**issued, "user": user_view(user), "org_id": org.id}
     if can_send_email:
         result["_verification_token"] = issue_verification(session, user, settings)
@@ -341,7 +342,7 @@ def login(session: Session, payload: dict, settings: Settings, ip: str = "") -> 
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(password)  # transparent scrypt cost upgrade (C-07)
     audit.record(session, "auth.login", f"user:{user.id}", target=email, ip=ip)
-    return {**_issue_session(session, user, settings), "user": user_view(user)}
+    return {**_issue_session(session, user, settings, payload.get("remember") is True), "user": user_view(user)}
 
 
 def logout(session: Session, token: str) -> None:

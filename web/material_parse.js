@@ -235,8 +235,7 @@ function parseDevicePanel() {
   const ui = parseDevice, robot = parseRobot();
   if (!robot) return notice('找不到这台设备', true);
   if (!(state.cloud_account || {}).logged_in) {
-    return notice('资料保存在云平台。请先登录云平台账户，再上传或查看这台设备的资料。' +
-      `<div class="button-row">${button('去登录云平台', 'go-cloud', 'small')}</div>`);
+    return cloudSignInNotice('资料保存在云平台。请先登录云平台账户，再上传或查看这台设备的资料。');   // issue #36: with the reason
   }
   const queue = materialLibrary.queue.filter(item => item.labels.device_id === robot.id);
   const list = ui.error ? notice(h(ui.error) + ' ' + parseButton('重试', 'reload', robot.id, 'secondary small'), true)

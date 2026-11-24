@@ -15,6 +15,7 @@ from .httpd import FastBindHTTPServer
 from .service import Platform
 from .commerce import Commerce
 from .material_parse import MaterialParse   # issue #34: parsing results of library materials
+from . import cloud_auto_login              # issue #36: an app sign-in signs into the cloud too
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -30,6 +31,9 @@ class Application:
         self.operator_email=operator_email.strip().lower()
         self.workspaces={}
         self.lock=threading.Lock()
+        # Issue #36: off here, so a test server never reaches a cloud on this computer; main() turns it on.
+        self.cloud_auto_login=False
+        self.cloud_login=cloud_auto_login.CloudAutoLogin(self)
 
     def workspace(self,user):
         with self.lock:
@@ -158,6 +162,8 @@ def make_handler(application):
             extra=extra or {'/material_parse.js':('material_parse.js','text/javascript; charset=utf-8'),'/material_parse.css':('material_parse.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #30: what a repair session found in the library, likewise.
             extra=extra or {'/repair_materials.js':('repair_materials.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #36: why the cloud is not signed in (the automatic sign-in), likewise.
+            extra=extra or {'/cloud_auto_login.js':('cloud_auto_login.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #22: safety limits per device, likewise.
@@ -175,6 +181,10 @@ def make_handler(application):
                 me=application.identity.user(self.token())
                 if not me:
                     return self.respond({'user':None})
+                # Issue #36: a session without a cloud sign-in (made before this version, or lapsed) is signed out once.
+                stale=application.cloud_login.stale_session(self.token(),me)
+                if stale:
+                    return self.respond({'user':None,'signed_out':stale},cookie='brain_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0')
                 return self.respond({'user':{**me,'sessions':application.identity.sessions(me['id'])}})
             user=self.user()
             if not user:
@@ -211,9 +221,11 @@ def make_handler(application):
                     return self.respond(application.send_code(email,'reset',code))
                 if path=='/api/password/reset':
                     token,user,lifetime=application.identity.reset_password(payload)
+                    application.cloud_login.signed_in(token,user,payload,lifetime)     # issue #36
                     return self.respond({'user':user,'session_seconds':lifetime},cookie=f'brain_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={lifetime}')
                 if path in ('/api/register','/api/login'):
                     token,user,lifetime=application.identity.sign_in(payload,register=path=='/api/register',require_code=True)
+                    application.cloud_login.signed_in(token,user,payload,lifetime)     # issue #36
                     return self.respond({'user':user,'session_seconds':lifetime},cookie=f'brain_session={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age={lifetime}')
                 if path=='/api/logout':
                     application.identity.logout(self.token())
@@ -224,7 +236,9 @@ def make_handler(application):
                 if path=='/api/account/profile':
                     return self.respond({'user':application.identity.update_profile(user['id'],payload)})
                 if path=='/api/account/password':
-                    return self.respond(application.identity.change_password(user['id'],self.token(),payload))
+                    changed=application.identity.change_password(user['id'],self.token(),payload)
+                    application.cloud_login.password_changed(user)     # issue #36: the cloud keeps its own password
+                    return self.respond(changed)
                 service=application.workspace(user)
                 if path.startswith('/api/operator/'):
                     if not application.operator_email or user['email']!=application.operator_email:
@@ -379,6 +393,7 @@ def main():
     parser.add_argument('--operator-email',default=os.environ.get('BRAIN_OPERATOR_EMAIL',''))
     args=parser.parse_args()
     app=Application(args.state_dir,args.operator_email)
+    app.cloud_auto_login=cloud_auto_login.enabled_by_environment()     # issue #36
     server=FastBindHTTPServer(('127.0.0.1',args.port),make_handler(app))
     server.daemon_threads=True
     print(f'NeuxMind Robot OS http://127.0.0.1:{server.server_port}',flush=True)
