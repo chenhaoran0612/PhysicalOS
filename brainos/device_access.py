@@ -154,11 +154,20 @@ class ConnectError(ValueError):
               ('jump','no_ssh'):'{via}能连到{jump}的地址，但那里没有应答 SSH；请核对{jump}的地址和端口',
               ('jump','timeout'):'{jump}经{via}应答超时：可能是它的地址不通，也可能只是网络慢；请核对后重试'}
     FORWARDING_PROHIBITED=1     # SSH channel-open failure code: "administratively prohibited"
-    def __init__(self,hop,reason,via_jump=False,level=None,total=1):
+    # Issue #39: a refused login says which login it was (``auth``). The form can be on the agent without
+    # the user having chosen it (pasting an ssh command sets it); "check the password" then points nowhere.
+    REFUSED={'password':'{who}拒绝登录：SSH 认证失败，{who}不接受这个密码；请核对{whose}用户名和密码',
+             'key':'{who}拒绝登录：SSH 认证失败，{who}不接受这把私钥；请核对{whose}用户名和私钥',
+             'agent':'{who}拒绝登录：SSH 认证失败。这次用的是“本机 SSH Agent”里的密钥，{who}都不接受，没有用密码；'
+                     '平时在终端里要输入密码才能登录的话，请把{whose}认证方式改为“密码”并填写密码'}
+    def __init__(self,hop,reason,via_jump=False,level=None,total=1,auth=None):
         self.hop,self.reason=hop,reason
         self.level=(level or 1) if hop=='jump' else None
         before=total if hop=='device' else self.level-1       # the jump host this hop is reached through
         text=(self.VIA_JUMP if via_jump else {}).get((hop,reason)) or self.MESSAGES[(hop,reason)]
+        if reason=='auth' and auth in self.REFUSED:
+            who=jump_label(self.level,total) if hop=='jump' else '设备'
+            text=self.REFUSED[auth].format(who=who,whose=who+'的' if hop=='jump' else '')
         super().__init__(text.format(jump=jump_label(self.level,total),via=jump_label(before,total)))
 
 
@@ -214,7 +223,7 @@ def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False,**where
         # as a timeout, and the message for a timeout allows for a wrong address too.
         elif time.monotonic()-started>=kwargs['timeout']:reason='timeout'
         else:reason='unreachable'
-    client.close();raise ConnectError(hop,reason,via_jump,**where) from None
+    client.close();raise ConnectError(hop,reason,via_jump,auth=auth,**where) from None
 
 
 class Route:
