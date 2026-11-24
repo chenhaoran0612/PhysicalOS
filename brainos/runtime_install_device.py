@@ -137,7 +137,8 @@ say pkg_files "$(ls -A "$pkg" 2>/dev/null | head -n 40 | tr '\n' ' ')"
 echo '@@NX-INSTALL:probed@@'
 '''
 
-# $2 step, $3 job id, $4 port, $5 adapter. Starts the step once per job id, detached.
+# $2 step, $3 job id, $4 port, $5 adapter (the console's, from the body type; start prefers the recorded one).
+# Starts the step once per job id, detached.
 _JOB_BODY = ('cd "$1" || exit 1\n'
              'bash ./device_install.sh "$2" >"$2.log" 2>&1 </dev/null\n'
              'code=$?\n'
@@ -154,6 +155,12 @@ if [ "$cur_job" = "$job" ]; then      # asked before: started already, unless th
   if [ "$cur_alive" = yes ] || [ "$cur_code" != - ] || [ -e "$pkg/$step.pid" ]; then echo '@@NX-INSTALL:already@@'; exit 0; fi
 fi
 if [ "$cur_alive" = yes ]; then echo '@@NX-INSTALL:busy@@'; exit 4; fi
+# The body the install recorded (issue #21's install script keeps it in ~/neuxmind/adapter) is the one start runs; the
+# console's guess from the card would override it. An install without that record (before #21) gets the console's.
+if [ "$step" = start ]; then
+  recorded=$(first "$root/adapter")
+  case $recorded in sim_quadruped|sim_arm|ros2) adapter=$recorded;; esac
+fi
 rm -f -- "$pkg/$step.job" "$pkg/$step.exit" "$pkg/$step.exit.tmp" "$pkg/$step.log" "$pkg/$step.pid"
 printf '%s\n' "$job" > "$pkg/$step.job" || { echo '@@NX-INSTALL:unwritable@@'; exit 5; }
 detach=

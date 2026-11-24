@@ -13,11 +13,11 @@ directory, and the runtime the install script starts listens on this machine's 1
 import json
 import os
 import shutil
+import socket
 import stat
 import sys
 import tempfile
 import unittest
-from unittest import mock
 
 from brainos import connector, runtime_install, runtime_package
 from runtime_install_support import InstallCase
@@ -37,6 +37,15 @@ def real_package():
         _BUILT['dir'] = tempfile.TemporaryDirectory()
         _BUILT['package'] = runtime_package.build(os.path.join(_BUILT['dir'].name, 'package'))
     return _BUILT['package']
+
+
+def listen(port):
+    """Another program listening on this machine's 127.0.0.1:<port>."""
+    listener = socket.socket()
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(('127.0.0.1', port))
+    listener.listen()
+    return listener
 
 
 @unittest.skipUnless(REAL, 'Linux with bash, flock, setsid and GNU realpath only')
@@ -119,11 +128,16 @@ class RealInstallTests(InstallCase):
         self.assertEqual(self.device.names('neuxmind-pkg/console'), [])
 
     def test_a_runtime_that_does_not_start_is_reported_and_cleaned_up_with_the_real_script(self):
+        # The check found the port free; another program takes it while the package is sent and installed, so
+        # the real install succeeds and the real start refuses (an unknown body no longer gets past install).
         connection = self.connect_directly()
-        with mock.patch.dict(runtime_install.ADAPTERS, {'quadruped': 'no_such_adapter'}):
-            view = self.install(connection)
+        self.start(connection)
+        self.wait(connection, until=lambda v: v['stage'] in ('upload', 'install'), seconds=120)
+        listener = listen(8790)
+        view = self.wait(connection, seconds=400)
+        listener.close()
         self.assertEqual((view['state'], view['failure']['stage']), ('failed', 'start'), json.dumps(view, ensure_ascii=False))
-        self.assertIn('did not come up', '\n'.join(view['failure']['log']))
+        self.assertIn('127.0.0.1:8790 is already in use', '\n'.join(view['failure']['log']))
         self.assertEqual([item['path'] for item in view['left']], [runtime_install.PACKAGE_DIR % self.package.id, '~/neuxmind'])
         self.assertEqual(self.listening(8790), [])
         view = self.clean(connection)
@@ -131,12 +145,23 @@ class RealInstallTests(InstallCase):
         self.assertEqual(self.device.names('neuxmind'), [])
         self.assertEqual(self.device.names('neuxmind-pkg'), [])
 
+    def test_the_real_script_starts_the_body_the_install_recorded_not_the_card_s(self):
+        connection = self.connect_directly()            # a quadruped card: the console's body is sim_quadruped
+        self.assertEqual(self.install(connection)['state'], 'succeeded')
+        code, out, err = self.device._run(['bash', self.device.local(self.package_dir() + '/device_install.sh'), 'stop'],
+                                          seconds=120)
+        self.assertEqual(code, 0, (out, err))
+        self.device.write('neuxmind/adapter', b'sim_arm\n')   # what issue #21's install records for an arm
+        view = self.install(connection)
+        self.assertEqual(view['state'], 'succeeded', json.dumps(view, ensure_ascii=False))
+        self.assertEqual([s['id'] for s in view['stages']], ['check', 'upload', 'start', 'link'])
+        robot = self.assert_online_and_linked(connection)
+        manifest = connector.call(robot['endpoint'], '/v1/manifest', robot['token'])
+        self.assertEqual((manifest['family'], manifest['simulated']), ('manipulator', True))
+        self.assertIn('adapter sim_arm', self.device.read(self.package_dir() + '/start.log').decode())
+
     def test_another_program_on_the_port_is_refused_before_anything_is_sent(self):
-        import socket
-        listener = socket.socket()
-        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        listener.bind(('127.0.0.1', 8790))
-        listener.listen()
+        listener = listen(8790)
         self.addCleanup(listener.close)
         connection = self.connect_directly()
         view = self.install(connection)
