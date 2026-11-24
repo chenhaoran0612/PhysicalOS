@@ -6,9 +6,13 @@ offer both and accept the password only when asked. The console used the plain m
 host turned it away with "SSH 认证失败" although the same password logged in from a terminal.
 Every machine here is a local SSH protocol fixture: nothing reaches a real one.
 """
+import io
+import os
 import secrets
 import unittest
 from unittest import mock
+
+import paramiko
 
 from brainos import device_access
 from ssh_fixture import SSHFixture
@@ -24,10 +28,10 @@ class PromptLoginTests(unittest.TestCase):
         self.opened = []
         self.addCleanup(lambda: [client.close() for client in self.opened])
 
-    def login(self, typed=None, hop='device', **where):
+    def login(self, typed=None, hop='device', auth='password', secret=None, **where):
         endpoint = {'host': '127.0.0.1', 'port': self.host.port, 'username': USER}
         pinned = device_access.fingerprint(self.host.key)
-        client = device_access.open_client(endpoint, 'password', {'password': typed or self.secret}, pinned, hop, **where)
+        client = device_access.open_client(endpoint, auth, secret or {'password': typed or self.secret}, pinned, hop, **where)
         self.opened.append(client)
         return client
 
@@ -135,6 +139,39 @@ class PromptLoginTests(unittest.TestCase):
         self.login()
 
         self.assertEqual(self.host.prompt_answers, [[self.secret, self.secret]])
+
+    # A refusal says which login was refused: the form can be on "本机 SSH Agent" without the user having
+    # chosen it (pasting an ssh command sets it), and "check the password or key" then points nowhere.
+    def test_refused_password_is_named_as_the_password(self):
+        error = self.assert_refused(typed=secrets.token_hex(8))
+
+        self.assertIn('认证失败', str(error))
+        self.assertIn('不接受这个密码', str(error))
+        self.assertNotIn('Agent', str(error))
+
+    def test_refused_agent_login_says_no_password_was_used(self):
+        with mock.patch.dict(os.environ, {'SSH_AUTH_SOCK': ''}):          # an agent without keys; never the user's own
+            error = self.assert_refused(auth='agent', secret={})
+
+        self.assertIn('认证失败', str(error))
+        self.assertIn('本机 SSH Agent', str(error))
+        self.assertIn('没有用密码', str(error))
+        self.assertIn('改为“密码”', str(error))
+
+    def test_refused_agent_login_of_a_jump_host_names_the_jump_host(self):
+        with mock.patch.dict(os.environ, {'SSH_AUTH_SOCK': ''}):
+            error = self.assert_refused(hop='jump', auth='agent', secret={}, level=2, total=3)
+
+        self.assertIn('第 2 级跳板机拒绝登录', str(error))
+        self.assertIn('本机 SSH Agent', str(error))
+
+    def test_refused_private_key_is_named_as_the_key(self):
+        text = io.StringIO()
+        paramiko.RSAKey.generate(2048).write_private_key(text)
+
+        error = self.assert_refused(auth='key', secret={'private_key': text.getvalue()})
+
+        self.assertIn('不接受这把私钥', str(error))
 
     def host_offers(self, methods):
         """Make the fixture announce exactly ``methods`` (it refuses the plain password either way)."""
