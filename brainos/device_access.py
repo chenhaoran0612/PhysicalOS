@@ -194,7 +194,11 @@ def open_client(endpoint,auth,secret,pinned,hop,sock=None,via_jump=False,**where
         try:kwargs['pkey']=private_key(secret)
         except ValueError:raise ConnectError(hop,'key',**where) from None
     started=time.monotonic()
-    try:client.connect(**kwargs);return client
+    try:
+        try:client.connect(**kwargs)
+        except paramiko.AuthenticationException as exc:
+            if auth!='password' or not _asked_for_password(client,user,kwargs['password'],exc):raise
+        return client
     except _KeyMismatch:reason='fingerprint'
     except (OSError,EOFError,paramiko.SSHException) as exc:
         # A host that answers too slowly is neither a wrong password nor a wrong address. paramiko does not
@@ -256,6 +260,37 @@ class Route:
         for client in reversed(clients):
             try:client.close()
             except Exception:continue     # a session that is already broken has nothing left to close
+
+
+def _asked_for_password(client,user,password,refusal):
+    """Log in by answering the host's own password question, after it refused the plain password method
+    (``refusal``). True when that let us in; raises what the host answered when it did not.
+
+    Issue #39: a host can offer both methods and accept the password only when it asks for it itself
+    ("keyboard-interactive", what PAM uses). ``ssh`` tries that first, so the same password logged in from
+    a terminal and was refused here. One more try on the same connection, and only when it can help:
+    paramiko has already answered the question itself when the plain method was not offered at all, a
+    host that was too slow has refused nothing, and a host that does not ask is not asked (a second
+    refusal of the same wrong password would count twice against the account)."""
+    import paramiko
+    if isinstance(refusal,paramiko.BadAuthenticationType) or _timed_out(refusal):return False
+    transport=client.get_transport()
+    if transport is None or not transport.is_active():return False
+    # The refusal did not say which methods the host has (paramiko drops the list): the "none" method
+    # asks for it, and sshd does not count that as a failed login.
+    try:transport.auth_none(user)
+    except paramiko.BadAuthenticationType as offered:
+        if 'keyboard-interactive' not in offered.allowed_types:return False
+    # The password goes to the first set of questions only, and only where the answer stays hidden: a
+    # question shown on screen is a one-time code, and what a host asks after the password (a second
+    # factor, a new password for an expired one) is not ours to answer. Those get nothing, and the
+    # host refuses the login.
+    rounds=[]
+    def answers(title,instructions,prompts):
+        rounds.append(len(prompts))
+        return [password if len(rounds)==1 and not echoed else '' for _,echoed in prompts]
+    transport.auth_interactive(user,answers)
+    return transport.is_authenticated()
 
 
 def credentials(p,prefix='',label=''):
