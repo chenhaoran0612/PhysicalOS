@@ -181,7 +181,7 @@ class SimRobotTests(unittest.TestCase):
         gallery = self.app.skill_examples({'project_id': quad['project_id'], 'robot_id': quad['id']})
         self.assertTrue(gallery['available'])
         items = {x['example']: x for x in gallery['items']}
-        self.assertEqual(sorted(items), ['patrol', 'status_report', 'wave'])
+        self.assertEqual(sorted(items), ['free_walk', 'goto_place', 'patrol', 'patrol_places', 'status_report', 'wave'])
         compat = {name: {c['robot_id']: c['compatible'] for c in x['compatibility']} for name, x in items.items()}
         self.assertEqual(compat['patrol'], {quad['id']: True, arm['id']: False})
         self.assertEqual(compat['wave'], {quad['id']: False, arm['id']: True})
@@ -318,7 +318,7 @@ class PackagingTests(unittest.TestCase):
                                 capture_output=True, text=True, timeout=180)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         report = json.loads(result.stdout)
-        self.assertEqual(report['examples'], ['patrol', 'status_report', 'wave'])
+        self.assertEqual(report['examples'], ['free_walk', 'goto_place', 'patrol', 'patrol_places', 'status_report', 'wave'])
         self.assertIn('runtime/examples/skills', report['data'])
         self.assertIn('neuxmind_runtime', report['packages'])
 

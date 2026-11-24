@@ -224,7 +224,8 @@ class Nav2OptionalTests(unittest.TestCase):
         self.assertTrue(report["dry_ok"], [c for c in report["cases"] if c["status"] == "failed"])
         # every standard capability gets a static declaration case; an undeclared one is skipped
         self.assertEqual([(c["id"], c["status"]) for c in report["cases"] if "navigate_to" in c["id"]],
-                         [("static.base.navigate_to.declaration", "skipped")])
+                         [("static.base.navigate_to.declaration", "skipped"),
+                          ("static.base.navigate_to_place.declaration", "skipped")])      # issue #38 (spec 1.2)
 
 
 # ------------------------------------------------------------------------- optional battery

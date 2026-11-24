@@ -45,7 +45,8 @@ class ManifestTests(unittest.TestCase):
         # iter04 review: the quadruped reports localization.pose (sim map = odom) and the arm gripper.state,
         # so the conformance suite can verify navigation and gripper stops (Q4-04, Q4-11).
         self.assertEqual(quad, {"safety.stop", "system.health", "sensor.battery", "sensor.imu", "base.odometry",
-                                "localization.pose", "base.velocity", "base.navigate_to", "legged.posture"})
+                                "localization.pose", "base.velocity", "base.navigate_to", "legged.posture",
+                                "base.navigate_to_place", "base.explore"})                 # issue #38 (spec 1.2)
         self.assertEqual(arm, {"safety.stop", "system.health", "joint.state", "arm.joint_position",
                                "gripper.position", "gripper.state"})
 

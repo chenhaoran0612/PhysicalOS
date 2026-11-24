@@ -114,6 +114,9 @@ class AdapterNewTests(_Home):
                              "--param", "base.velocity.max_vx=0.3")
         spec = out["input"]
         self.assertEqual({c["id"] for c in spec["capabilities"]}, {c["id"] for c in manifest["capabilities"]})
+        # issue #38: the places a body knows are carried over, Chinese names included
+        places = next(c for c in spec["capabilities"] if c["id"] == "base.navigate_to_place")["params"]["places"]
+        self.assertEqual(places, ["出发点", "会议室", "二楼"])
         self.assertEqual(spec["family"], "quadruped")
         self.assertFalse(spec["simulated"])                          # a new (real) body, not the sim
         self.assertNotIn("instance_id", spec)
@@ -177,6 +180,16 @@ class ScaffoldInjectionTests(_Home):
                              str(self.tmp / "param"), expect=1)
         self.assertEqual(err["code"], "unsafe_scaffold_input")
         self.assertIn("sensor.camera.rgb.params.name", err["error"])
+        # issue #38: a place name may be Chinese, but not anything that could end a string
+        for name in ('会议室"', "会议室'", "会议室\\", "会议 室", "会议室\n", "会议室$(id)", ""):
+            with self.subTest(name=name):
+                bad = self._manifest()
+                next(c for c in bad["capabilities"] if c["id"] == "base.navigate_to_place")["params"]["places"] = [name]
+                path.write_text(json.dumps(bad), encoding="utf-8")
+                err = self.home.json("adapter", "new", "dog_twin", "--from-manifest", str(path), "--out",
+                                     str(self.tmp / "place"), expect=1)
+                self.assertIn(err["code"], ("unsafe_scaffold_input", "invalid_manifest"), err)
+                self.assertFalse((self.tmp / "place").exists())
         for value in ("Acme\nimport os", "Acme\\x", "Acme'; import os #", "A" * 101):
             with self.subTest(value=value):
                 err = self.home.json("adapter", "new", "x_bot", "--out", str(self.tmp / "flags"), "--vendor", value,

@@ -521,6 +521,18 @@ bash ~/neuxmind-pkg/device_install.sh start
 
 **在一台真机上（只读，2026-11-21）。** 一台 Jetson Orin NX（Ubuntu 22.04，ROS 2 Humble，节点跑在非默认的域上、带 Fast DDS 配置文件），用户同意只读后：先只读看话题清单和 QoS（26 个话题，两个里程计话题，都是可靠发布；**没有电池话题，也没有任何速度指令话题**），再在单独的目录和回环端口上用这个安装脚本装了第二个管理层（机器上原来那份安装没有动，当时也没有在运行），`NX_ADAPTER=ros2`，域和 DDS 配置取自正在运行的节点的环境。`ros2-config.json` 把速度话题指到一个没有人订阅的名字、`nav2: false`、`battery: null`，所以连停止和锁存守护发出的零速度也到不了它的控制器（设备上装着 `nav2_msgs`，不关的话会声明导航）。结果：安装通过 Humble 检查，虚拟环境里 rclpy 能导入；启动后 `simulated: false`、`mode: ros2`、`motion_blocked: true`（没有填限值）；启动约 2 秒后从它自己的里程计话题读到位姿和速度，健康 `ok`；`sensor.battery` 没有声明（404）；ROS 图上这个节点只在那个没人订阅的话题上发布，对里程计是尽力而为的订阅。随后 `stop`、`remove`，没有留下进程、ros2 守护进程，机器上原有服务的状态前后一致。没有发任何运动指令，也没有发 `hardware_authorized`。痕迹：每次启动，管理层自己的 ROS 节点会在 `~/.ros/log` 留一个日志文件（`ros2` 命令行每次调用也留一个）。所以在这台机器上，这个适配器现在只能读里程计：读取那一刻它的 ROS 图上没有可以发速度指令的话题，要让它动，先要弄清它的运动接口（必要时写它自己的适配器，§3），并且要在现场、有人值守、硬件急停在手。控制台里从添加设备到“在线”（在控制台里安装是 #19）没有在这台真机上走过。
 
+### 3.4 机器人自带的导航程序接成动作（issue #38）
+
+有的机器人自己带着导航：电脑上已有“去某个地点”“上下楼”“不用地图自己走”的程序。`ros2` 适配器的配置里加一节 `programs`，就把它们接成两项标准动作 `base.navigate_to_place`（去一个它认识的地点，按名字）和 `base.explore`（无图自由走）；没有这一节时这两项不声明，别的都不变。格式和规则在 `adapters/programs.py` 的文件头，一份虚构的完整例子在 [examples/ros2/onbody-programs.example.json](examples/ros2/onbody-programs.example.json)，整体说明在 [docs/PLACE_SKILLS.md](../docs/PLACE_SKILLS.md)。
+
+- 一个地点是一串步骤，每一步启动机器人上的一个程序（不经过 shell）。一步成功 = 退出码 0 **并且**输出里有 `ok` 给的内容（只看退出码要明写 `exit_code_only: true`）；第一步没成功就结束。
+- 请求里的值只经占位符 `{max_speed}`、`{duration_s}`、`{radius}`、`{max_distance}` 进入程序。安全监督器给每个请求都填上速度上限；路线里有一步需要的速度高于它，整条路线在启动前被拒绝。
+- 路线取决于机器人在哪一层时用区域（`region` / `routes` / `enters`）。跨区域的步骤没走完，区域记为未知，之后去任何地点和自由走都被拒绝，直到人到场处理（删除 `state_file`，重启管理层）；唯一的例外是这一步每次都以程序保留给“还没动就拒绝”的退出码（`retry.exit_code`）结束。
+- 停止和取消：向程序的进程组发 SIGTERM（只发一次，反复停止不会打断程序自己的受控停止），`stop_grace_s`（最多 8 秒）后 SIGKILL，停止路径不等待；程序没有成功结束时适配器自己再发零速度。程序运行时非零的速度指令回答 `accepted: false`。管理层自己被杀时内核给程序发 SIGTERM（`PR_SET_PDEATHSIG`）：接进来的程序必须在 SIGTERM 时停下机器人。
+- `battery_percentage: "percent"`：电池话题的百分比是 0–100 的机器人。设备用 `rmw_zenoh_cpp` 时，安装时给 `RMW_IMPLEMENTATION=rmw_zenoh_cpp` 和 `ZENOH_SESSION_CONFIG_URI=<设备节点用的会话配置>`（§3.3 的 ROS 设置多认这一项）。
+
+**在哪里验证过。** `tests/test_programs.py`（替身脚本当程序）、`tests/test_ros2_programs.py`（rclpy 测试替身）、`tests/test_place_skills.py`（三个示例技能，仿真四足和 ROS 2 替身各一遍）。`tests/ros2_humble/`（**真实的 ROS 2 Humble**，Fast DDS：替身程序本身是一个真实的 rclpy 节点，经适配器启动，按给它的速度上限在真实的 `/cmd_vel` 上发指令；停止在宽限期内结束它、话题上最后是零速度；管理层被 SIGKILL 时程序收到 SIGTERM 并停下）。**没有在任何真机上运行过**，也没有对着 `rmw_zenoh_cpp` 跑过。
+
 ## 4. 写技能
 
 技能包 = `skill.json`（`skill.package.v1`）+ 文本文件。示例见 `examples/skills/`：

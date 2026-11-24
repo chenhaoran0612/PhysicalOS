@@ -9,7 +9,9 @@ base.velocity          publish     /cmd_vel            geometry_msgs/msg/Twist
 base.odometry          subscribe   /odom               nav_msgs/msg/Odometry
 sensor.battery         subscribe   /battery_state      sensor_msgs/msg/BatteryState
 base.navigate_to       action      navigate_to_pose    nav2_msgs/action/NavigateToPose
-safety.stop            —           zero Twist on /cmd_vel + cancel all Nav2 goals
+base.navigate_to_place action      a program on the body (``programs.places``, issue #38)
+base.explore           action      a program on the body (``programs.explore``, issue #38)
+safety.stop            —           zero Twist on /cmd_vel + cancel all Nav2 goals + end the program
 system.health          —           freshness of the subscribed topics
 =====================  ==========  ===============================================
 
@@ -17,6 +19,20 @@ system.health          —           freshness of the subscribed topics
 device has no battery topic), ``base.navigate_to`` only when Nav2 is there
 (see "Nav2"). Topic names come from :data:`DEFAULT_CONFIG` and the JSON file
 that ``NEUXMIND_ROS2_CONFIG`` names; there is no per-device interface table.
+
+On-body programs (issue #38)
+----------------------------
+A body that brings its own navigation as programs on its computer gets them as actions through the
+``programs`` section of the configuration (:mod:`neuxmind_runtime.adapters.programs` has the format
+and the rules: how success is told, the speed bound, regions, stopping). The two capabilities are
+declared only when the section is there. While a program runs, a velocity command that is not zero
+is answered ``accepted: false`` and not published (the program is driving on the same topic); zero
+velocity and ``stop()`` always go out, and ``stop()`` also ends the program. When a program ends
+without success the bridge publishes a zero Twist itself. Run so far only against stand-in programs
+and the rclpy test double; not on a robot.
+
+``battery_percentage`` is ``"ratio"`` (default: ``BatteryState.percentage`` is 0..1, as the message
+definition says) or ``"percent"`` for a body that publishes 0..100 there.
 
 What has been run (issue #21): the pure converters and the manifest builder
 with stand-in objects; the whole adapter through the conformance suite on a
@@ -120,6 +136,7 @@ from neuxmind_spec.manifest import normalize_latch_guard
 
 from ..clock import RealClock
 from ..hal import ActionHandle, ActionStatus, CANCELLED, FAILED, RUNNING, SUCCEEDED, RobotAdapter
+from . import programs
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "instance_id": "ros2-robot",
@@ -140,6 +157,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # What the body itself allows, from its datasheet; never guessed. May stay null: nothing moves
     # then until a person has filled in this device's safety limits (see "Limits" above).
     "limits": {"max_vx": None, "max_vy": 0.0, "max_wz": None, "holonomic": False},
+    # Issue #38: "ratio" = BatteryState.percentage is 0..1 (the message definition); "percent" = the
+    # body publishes 0..100 there.
+    "battery_percentage": "ratio",
+    # Issue #38: programs on the body offered as base.navigate_to_place / base.explore; null = none.
+    # Format and rules: neuxmind_runtime.adapters.programs.
+    "programs": None,
     "stale_after_s": 1.0,
     "hardware_estop": False,
     # Set either to true when bridging a simulator (Gazebo, Isaac Sim, ...).
@@ -152,7 +175,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 SUPPORTED_DISTRO = "humble"          # R1: the device runs ROS 2 Humble; nothing else is accepted
-ADAPTER_VERSION = "0.1.0"            # 0.0.1-skeleton until issue #21
+ADAPTER_VERSION = "0.2.0"            # 0.1.0: issue #21; 0.2.0: on-body programs (issue #38)
+BATTERY_PERCENTAGE = {"ratio": 100.0, "percent": 1.0}
 
 # Issue #21. Subscriptions default to best effort: that receives from reliable and from best-effort
 # (sensor QoS) publishers alike. The command publisher is reliable, which reaches both kinds of readers.
@@ -187,14 +211,23 @@ def odometry_outputs(msg) -> dict:
     return {"pose": [p.x, p.y, p.z, q.x, q.y, q.z, q.w], "velocity": [v.x, v.y, w.z]}
 
 
-def battery_outputs(msg) -> dict:
+def battery_scale(config: dict) -> float:
+    """What ``BatteryState.percentage`` is multiplied by to get 0..100 % (``battery_percentage``)."""
+    unit = config.get("battery_percentage", "ratio")
+    if unit not in BATTERY_PERCENTAGE:
+        raise ValueError(f"ROS 2 配置 battery_percentage 须为 {' / '.join(BATTERY_PERCENTAGE)}，收到 {unit!r}")
+    return BATTERY_PERCENTAGE[unit]
+
+
+def battery_outputs(msg, scale: float = 100.0) -> dict:
     """sensor_msgs/BatteryState → sensor.battery outputs.
 
-    ROS ``percentage`` is 0..1 (NaN when unknown); NeuxMind uses 0..100 %.
+    ROS ``percentage`` is 0..1 (NaN when unknown); NeuxMind uses 0..100 %. ``scale`` is 1 for a body
+    that publishes 0..100 (see :func:`battery_scale`).
     """
     if msg.percentage is None or math.isnan(msg.percentage):
         raise ValueError("BatteryState.percentage 未知")
-    out = {"percent": float(msg.percentage) * 100.0}
+    out = {"percent": float(msg.percentage) * scale}
     # POWER_SUPPLY_STATUS_CHARGING == 1
     out["charging"] = int(getattr(msg, "power_supply_status", 0)) == 1
     if getattr(msg, "voltage", None) is not None and not math.isnan(msg.voltage):
@@ -340,8 +373,11 @@ def build_manifest(config: dict, use_sim_time_param: bool = False, navigation: b
         capabilities.append({"id": "sensor.battery"})
     if navigation:                       # issue #21: without Nav2 there is no navigation, nothing else changes
         capabilities.append({"id": "base.navigate_to", "params": {"planner": "nav2"}})
+    battery_scale(config)                                                       # fail fast (raises ValueError)
+    if config.get("programs") is not None:   # issue #38: fail fast on a bad section (raises ValueError)
+        capabilities.extend(programs.manifest_capabilities(programs.normalize_config(config["programs"])))
     return {
-        "schema": "robot.adapter.v2", "spec_version": "1.1",
+        "schema": "robot.adapter.v2", "spec_version": "1.2",
         "instance_id": config["instance_id"], "name": config["name"],
         "vendor": config["vendor"], "model": config["model"], "family": config["family"],
         "adapter_version": ADAPTER_VERSION, "simulated": simulated,
@@ -619,6 +655,8 @@ class Ros2Adapter(RobotAdapter):
             raise RuntimeError("ROS 2 配置 nav2=true，但这台设备没有装 Nav2（nav2_msgs 不能导入）")
         self._nav = self._NavigateToPose = self._cancel_all = self._CancelGoal = None
         self._nav_handles: set[Ros2NavHandle] = set()
+        self._battery_scale = battery_scale(self.config)
+        self._programs: programs.ProgramRunner | None = None     # issue #38
         self._fresh_keys: tuple[str, ...] = ("odom",)    # topics whose freshness makes system.health
         self._bridge = Ros2Bridge(self.config["node_name"], self.config["stale_after_s"])
         try:
@@ -633,6 +671,10 @@ class Ros2Adapter(RobotAdapter):
             if self.navigation:
                 self._nav, self._NavigateToPose, self._cancel_all, self._CancelGoal = \
                     self._bridge.nav2_client(self.config["nav2_action"])
+            if self.config.get("programs") is not None:
+                self._programs = programs.ProgramRunner(programs.normalize_config(self.config["programs"]),
+                                                        on_halt=self._halt_after_program,
+                                                        on_takeover=self._zero_before_program)
         except BaseException:
             self._bridge.close()
             raise
@@ -646,11 +688,12 @@ class Ros2Adapter(RobotAdapter):
     def read(self, cap_id: str) -> dict:
         if cap_id == "system.health":
             errors = self._bridge.freshness_errors(self._fresh_keys)
-            return {"ok": not errors, "mode": "ros2", "errors": errors}
+            busy = self._programs is not None and self._programs.busy
+            return {"ok": not errors, "mode": "ros2:program" if busy else "ros2", "errors": errors}
         if cap_id == "base.odometry":
             return odometry_outputs(self._fresh("odom"))
         if cap_id == "sensor.battery" and "battery" in self._fresh_keys:
-            return battery_outputs(self._fresh("battery"))
+            return battery_outputs(self._fresh("battery"), self._battery_scale)
         raise ValueError(f"Ros2Adapter 不能读取 {cap_id}")
 
     def _publish_twist(self, args: dict) -> None:
@@ -658,11 +701,40 @@ class Ros2Adapter(RobotAdapter):
 
     def invoke(self, cap_id: str, args: dict) -> dict:
         if cap_id == "base.velocity":
+            moving = any(float(args.get(axis, 0.0)) != 0.0 for axis in ("vx", "vy", "wz"))
+            if moving and self._programs is not None and self._programs.busy:
+                # Issue #38: a program on the body is driving on this topic. Not an error (an error
+                # would make the runtime stop the adapter, and the program with it): just not taken.
+                return {"accepted": False}
             self._publish_twist(args)
             return {"accepted": True}
         raise ValueError(f"Ros2Adapter 不支持命令 {cap_id}")
 
+    def _halt_after_program(self) -> None:
+        """A program ended without success (failed, timed out, killed): it may not have stopped the
+        body itself, so the zero goes out from here."""
+        for _ in range(3):
+            self._publish_twist({"vx": 0.0, "vy": 0.0, "wz": 0.0})
+
+    def _zero_before_program(self) -> None:
+        """A program is about to take over the velocity topic. A setpoint published earlier must not
+        stay the last word on it if the program never publishes (a route that is already at its
+        place): the runtime's own watchdog for that setpoint is disarmed by the new action. Published
+        before the program exists, so it cannot land after the program's own first command."""
+        self._publish_twist({"vx": 0.0, "vy": 0.0, "wz": 0.0})
+
+    def _stop_programs(self) -> None:
+        if self._programs is not None:
+            self._programs.stop_all()
+
+    def status(self) -> dict:
+        return {} if self._programs is None else {"programs": self._programs.status()}
+
     def start_action(self, cap_id: str, args: dict) -> ActionHandle:
+        if cap_id in ("base.navigate_to_place", "base.explore"):
+            if self._programs is None:
+                raise ValueError(f"Ros2Adapter 不支持动作 {cap_id}：配置里没有 programs")
+            return self._programs.start(cap_id, args)
         if cap_id != "base.navigate_to":
             raise ValueError(f"Ros2Adapter 不支持动作 {cap_id}")
         if self._nav is None:
@@ -682,19 +754,25 @@ class Ros2Adapter(RobotAdapter):
         stop_adapter(self)
 
     def close(self) -> None:
-        self._bridge.close()
+        try:
+            if self._programs is not None:
+                self._programs.close()
+        finally:
+            self._bridge.close()
 
 
 def stop_adapter(adapter) -> None:
     """Stop logic shared by Ros2Adapter.stop (module-level so it is testable without rclpy).
 
-    Not an e-stop: zero velocity, cancel every known goal *and* ask Nav2 to
-    cancel all goals. Each step runs even if an earlier one fails.
+    Not an e-stop: zero velocity, cancel every known goal, ask Nav2 to cancel all
+    goals, *and* end a program running on the body (SIGTERM now, SIGKILL after its
+    grace period; the call does not wait). Each step runs even if an earlier one fails.
     """
     errors = []
     for step in (lambda: adapter._publish_twist({"vx": 0.0, "vy": 0.0, "wz": 0.0}),
                  lambda: [h.cancel() for h in list(adapter._nav_handles)],
-                 adapter._cancel_all_goals):
+                 adapter._cancel_all_goals,
+                 getattr(adapter, "_stop_programs", lambda: None)):     # issue #38; generated adapters have none
         try:
             step()
         except Exception as exc:

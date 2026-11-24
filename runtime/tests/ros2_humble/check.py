@@ -220,7 +220,7 @@ def main_runtime(base: Base) -> None:
         ids = [c["id"] for c in manifest.get("capabilities", [])]
         check("manifest without Nav2: no base.navigate_to, the rest declared",
               ids == ["safety.stop", "system.health", "base.velocity", "base.odometry", "sensor.battery"], ids)
-        check("adapter_version", manifest.get("adapter_version") == "0.1.0", manifest.get("adapter_version"))
+        check("adapter_version", manifest.get("adapter_version") == "0.2.0", manifest.get("adapter_version"))
 
         odom = wait_for(lambda: (lambda r: r[1].get("base.odometry") if r[0] == 200 else None)(rt.state("base.odometry")), 15)
         check("odometry read from the real /odom (best-effort publisher)",
@@ -305,6 +305,156 @@ def qos_mismatch_runtime(base: Base) -> None:
         (OUT / "runtime-qos.log").write_text(rt.log_text())
 
 
+# Issue #38: a stand-in for a navigation program that lives on the robot. It is a real rclpy node:
+# it drives on the same /cmd_vel as the runtime until it is told to stop (SIGTERM), then publishes
+# zero and exits. With "--for N" it stops by itself after N seconds and reports success.
+# It keeps rclpy's own signal handlers out (SignalHandlerOptions.NO): by default rclpy shuts its
+# context down on SIGTERM *before* a handler installed earlier runs, and nothing can be published
+# after that. "--naive" is a program written that way (handler first, then rclpy.init()): its own
+# zero never gets out, which is why the bridge publishes one itself when a program ends unsuccessfully.
+WALKER = r"""
+import signal, sys, time
+import rclpy
+from geometry_msgs.msg import Twist
+from rclpy.signals import SignalHandlerOptions
+
+args = sys.argv[1:]
+speed = float(args[args.index("--cruise") + 1])
+limit = float(args[args.index("--for") + 1]) if "--for" in args else 1e9
+stop = []
+signal.signal(signal.SIGTERM, lambda *_: stop.append(1))
+if "--naive" in args:
+    rclpy.init()
+else:
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+node = rclpy.create_node("standin_walker")
+pub = node.create_publisher(Twist, "/cmd_vel", 10)
+started = time.monotonic()
+while not stop and time.monotonic() - started < limit:
+    msg = Twist(); msg.linear.x = speed
+    pub.publish(msg)
+    rclpy.spin_once(node, timeout_sec=0.1)
+try:
+    for _ in range(5):
+        pub.publish(Twist())
+        rclpy.spin_once(node, timeout_sec=0.05)
+    print("exit signal" if stop else "exit route done", flush=True)
+    node.destroy_node(); rclpy.shutdown()
+except Exception as exc:
+    print("could not publish the zero:", type(exc).__name__, flush=True)
+    sys.exit(1)
+"""
+
+
+def _run_action(rt: "Runtime", cap: str, args: dict, request_id: str):
+    status, body = rt.call("POST", f"/v2/capabilities/{cap}/invoke",
+                           {"args": args, "hardware_authorized": True, "request_id": request_id})
+    return status, body, (body.get("run_id") or body.get("id")) if isinstance(body, dict) else None
+
+
+def _run_record(rt: "Runtime", run_id: str) -> dict:
+    status, body = rt.call("GET", f"/v2/runs/{run_id}")
+    return body if status == 200 else {}
+
+
+def _walkers() -> list:
+    listing = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True).stdout
+    return [line.split()[0] for line in listing.splitlines() if "walker.py" in line and "ps -eo" not in line]
+
+
+def programs_runtime(base: Base) -> None:
+    """Issue #38: programs on the body as base.navigate_to_place, over real DDS."""
+    work = Path(tempfile.mkdtemp(prefix="nx-programs-"))
+    (work / "walker.py").write_text(WALKER)
+
+    def walk(*extra):
+        return {"argv": [sys.executable, "walker.py", "--cruise", "{max_speed}", *extra], "speed_range": [0.1, 0.6],
+                "ok": "exit route done", "timeout_s": 60}
+    rt = Runtime(config(programs={"workdir": str(work), "stop_grace_s": 3.0,
+                                  "places": {"near": {"steps": [walk("--for", "2")]}, "far": {"steps": [walk()]},
+                                             "naive": {"steps": [walk("--naive")]}}}),
+                 "programs")
+    try:
+        if not check("runtime with on-body programs started", rt.url is not None, rt.log_text()[-400:] if rt.url is None else rt.url):
+            return
+        _, manifest = rt.call("GET", "/v2/manifest")
+        declared = {c["id"]: c.get("params", {}) for c in manifest.get("capabilities", [])}
+        check("manifest declares base.navigate_to_place with the configured places",
+              declared.get("base.navigate_to_place") == {"places": ["near", "far", "naive"]},
+              declared.get("base.navigate_to_place"))
+        wait_for(lambda: rt.state("base.odometry")[0] == 200, 15)
+        status, body, _ = _run_action(rt, "base.navigate_to_place", {"place": "near"}, "hp-0")
+        check("a place is refused before limits are filled (409 safety_limits_missing), no program started",
+              status == 409 and body.get("code") == "safety_limits_missing" and not _walkers(),
+              {"status": status, "code": body.get("code"), "walkers": _walkers()})
+        status, body = rt.call("POST", "/v2/safety/limits", {"limits": FILLED, "set_by": "ros2_humble check"})
+        check("limits filled (programs runtime)", status == 200, body if status != 200 else "")
+
+        before = len(base.twists)
+        status, body, run_id = _run_action(rt, "base.navigate_to_place", {"place": "near"}, "hp-1")
+        record = wait_for(lambda: (lambda r: r if r.get("status") not in (None, "queued", "running") else None)(
+            _run_record(rt, run_id)), 30) if run_id else None
+        speeds = sorted({round(t[1], 6) for t in base.twists[before:] if t[1] != 0.0})
+        check("go to a place: the program ran to its end and the run succeeded",
+              bool(record) and record.get("status") == "succeeded" and (record.get("result") or {}).get("place") == "near",
+              {"invoke": status, "run": {k: (record or {}).get(k) for k in ("status", "result", "error")}, "body": body})
+        check("the program drove at the bound the runtime gave it (filled limit 0.3 m/s), seen on the real /cmd_vel",
+              speeds == [0.3], speeds)
+        check("no program left after the run", not _walkers(), _walkers())
+
+        before = len(base.twists)
+        status, body, run_id = _run_action(rt, "base.navigate_to_place", {"place": "far"}, "hp-2")
+        moving = wait_for(lambda: [t for t in base.twists[before:] if t[1] != 0.0], 20)
+        check("a long walk is under way (the program publishes on /cmd_vel)", bool(moving) and bool(_walkers()),
+              {"invoke": status, "walkers": _walkers()})
+        _, health = rt.state("system.health")
+        check("health says a program is driving", health.get("system.health", {}).get("mode") == "ros2:program", health)
+        stopped_at = time.monotonic()
+        status, body = rt.call("POST", "/v1/stop", {"reason": "humble check: stop the program"})
+        gone = wait_for(lambda: not _walkers(), 6.0)
+        took = round(time.monotonic() - stopped_at, 2)
+        time.sleep(1.0)
+        tail = [t[1] for t in base.twists[-3:]]
+        record = _run_record(rt, run_id) if run_id else {}
+        check("stop: answered, the program is gone within its grace period, the last commands on /cmd_vel are zero",
+              status == 200 and bool(gone) and tail and all(v == 0.0 for v in tail),
+              {"status": status, "program_gone_after_s": took, "last": tail, "run": record.get("status")})
+        quiet = len(base.twists)
+        time.sleep(1.0)
+        check("nothing drives after the stop", all(t[1] == 0.0 for t in base.twists[quiet:]), base.twists[quiet:][:3])
+
+        status, body = rt.call("POST", "/v2/reset", {"hardware_authorized": True})
+        check("reset after stopping the program", status == 200 and body.get("latched") is False, body)
+
+        before = len(base.twists)
+        status, body, run_id = _run_action(rt, "base.navigate_to_place", {"place": "naive"}, "hp-naive")
+        moving = wait_for(lambda: [t for t in base.twists[before:] if t[1] != 0.0], 20)
+        status, body = rt.call("POST", f"/v2/runs/{run_id}/cancel", {}) if run_id else (None, None)
+        gone = wait_for(lambda: not _walkers(), 6.0)
+        time.sleep(1.0)
+        tail = [t[1] for t in base.twists[-3:]]
+        check("a program that cannot get its own zero out (rclpy shut down first) is cancelled: the bridge zeroes /cmd_vel",
+              bool(moving) and bool(gone) and tail and all(v == 0.0 for v in tail),
+              {"cancel": status, "program_gone": bool(gone), "last": tail})
+        before = len(base.twists)
+        status, body, run_id = _run_action(rt, "base.navigate_to_place", {"place": "far"}, "hp-3")
+        moving = wait_for(lambda: [t for t in base.twists[before:] if t[1] != 0.0], 20)
+        check("a second long walk is under way", bool(moving) and bool(_walkers()), {"invoke": status})
+        rt.proc.kill()                                # the runtime dies without running any of its own clean-up
+        rt.proc.wait(10)
+        gone = wait_for(lambda: not _walkers(), 6.0)
+        time.sleep(0.5)
+        tail = [t[1] for t in base.twists[-3:]]
+        check("runtime killed (SIGKILL): the kernel tells the program, it stops the base and exits",
+              bool(gone) and tail and all(v == 0.0 for v in tail), {"program_gone": bool(gone), "last": tail})
+    finally:
+        if rt.proc.poll() is None:
+            rt.stop_process()
+        for pid in _walkers():
+            subprocess.run(["kill", "-9", pid])
+        (OUT / "runtime-programs.log").write_text(rt.log_text())
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     environment()
@@ -318,6 +468,7 @@ def main() -> int:
     try:
         main_runtime(base)
         qos_mismatch_runtime(base)
+        programs_runtime(base)
     finally:
         executor.shutdown()
         base.destroy_node()

@@ -1,0 +1,78 @@
+{
+  "instance_id": "my-quadruped-01",
+  "name": "My quadruped",
+  "vendor": "acme",
+  "model": "q1",
+  "family": "quadruped",
+  "topics": {"cmd_vel": "/cmd_vel", "odom": "/odom", "battery": "/battery_state"},
+  "battery_percentage": "ratio",
+  "nav2": false,
+  "limits": {"max_vx": 0.6, "max_vy": 0.0, "max_wz": 0.8, "holonomic": false},
+  "programs": {
+    "workdir": "/home/robot/walk",
+    "env_file": "/opt/robot/env.bash",
+    "stop_grace_s": 5.0,
+    "start_region": "一楼",
+    "state_file": "/home/robot/neuxmind/programs-state.json",
+    "places": {
+      "出发点": {
+        "region": "一楼",
+        "routes": {
+          "一楼": [
+            {"title": "走回出发点", "argv": ["python3", "walk.py", "--goto", "home", "--cruise", "{max_speed}", "--run", "{run}"],
+             "speed_range": [0.25, 0.6], "ok": "exit route done", "timeout_s": 260,
+             "retry": {"when": "sensors not ready", "times": 2}}
+          ],
+          "二楼": [
+            {"title": "下楼", "argv": ["python3", "stairs.py", "down"], "speed": 0.3, "enters": "一楼",
+             "ok": "exit ok", "timeout_s": 300, "retry": {"exit_code": 3, "times": 2}},
+            {"title": "走回出发点", "argv": ["python3", "walk.py", "--goto", "home", "--cruise", "{max_speed}", "--run", "{run}"],
+             "speed_range": [0.25, 0.6], "ok": "exit route done", "timeout_s": 260}
+          ]
+        }
+      },
+      "会议室": {
+        "region": "一楼",
+        "routes": {
+          "一楼": [
+            {"title": "走到会议室", "argv": ["python3", "walk.py", "--goto", "meeting-room", "--cruise", "{max_speed}", "--run", "{run}"],
+             "speed_range": [0.25, 0.6], "ok": "exit route done", "timeout_s": 260,
+             "retry": {"when": "sensors not ready", "times": 2}}
+          ],
+          "二楼": [
+            {"title": "下楼", "argv": ["python3", "stairs.py", "down"], "speed": 0.3, "enters": "一楼",
+             "ok": "exit ok", "timeout_s": 300},
+            {"title": "走到会议室", "argv": ["python3", "walk.py", "--goto", "meeting-room", "--cruise", "{max_speed}", "--run", "{run}"],
+             "speed_range": [0.25, 0.6], "ok": "exit route done", "timeout_s": 260}
+          ]
+        }
+      },
+      "二楼": {
+        "region": "二楼",
+        "routes": {
+          "一楼": [
+            {"title": "走到楼梯口", "argv": ["python3", "walk.py", "--goto", "stairs-foot", "--cruise", "{max_speed}", "--run", "{run}"],
+             "speed_range": [0.25, 0.6], "ok": "exit route done", "timeout_s": 180,
+             "retry": {"when": "sensors not ready", "times": 2}},
+            {"title": "上楼", "argv": ["python3", "stairs.py", "up"], "speed": 0.25, "enters": "二楼",
+             "ok": "exit ok", "timeout_s": 300, "retry": {"exit_code": 3, "times": 2}}
+          ],
+          "二楼": []
+        }
+      }
+    },
+    "explore": {
+      "regions": ["一楼"],
+      "max_duration_s": 600,
+      "max_radius": 10,
+      "default_radius": 5,
+      "steps": [
+        {"title": "无图自由走", "argv": ["python3", "walk.py", "--wander", "--seconds", "{duration_s}", "--leash", "{radius}",
+                                      "--cruise", "{max_speed}", "--run", "{run}"],
+         "args_if": {"max_distance": ["--max-dist", "{max_distance}"]},
+         "speed_range": [0.2, 0.4], "ok": "exit (time|segment done)", "timeout_margin_s": 30,
+         "retry": {"when": "sensors not ready", "times": 2}}
+      ]
+    }
+  }
+}

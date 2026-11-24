@@ -29,7 +29,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-SPEC_VERSION = "1.1"
+SPEC_VERSION = "1.2"
 
 # Field type vocabulary --------------------------------------------------
 # float, int, bool, str, enum, vector (fixed-length float list),
@@ -150,6 +150,28 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
                inputs=(F("goal", "pose", description=_POSE), F("frame", "str", required=False), F("tolerance", "float", "m", required=False)),
                outputs=(F("reached", "bool"), F("final_pose", "pose", required=False)),
                params=(F("planner", "str", required=False),)),
+    # v1.2 (issue #38): a body that brings its own navigation knows places by name, and may be able
+    # to walk without any map. Both run on the body; the runtime starts, bounds and stops them.
+    Capability("base.navigate_to_place", 1, "action", "motion", "去指定地点",
+               "走到本体自己认识的一个地点（按名字，不是坐标）。可去的地点由本体在 places 参数里声明；"
+               "路线、避障、上下楼由本体自带的导航完成（v1.2 新增）。",
+               inputs=(F("place", "str", description="地点名，须是 places 里的一个"),
+                       F("max_speed", "float", "m/s", required=False, positive=True,
+                         description="这一次最快走多快；安全监督器会把它压到本体与现场填写的限值以内")),
+               outputs=(F("reached", "bool"), F("place", "str", required=False),
+                        F("final_pose", "pose", required=False)),
+               params=(F("places", "object", description="本体认识的地点名列表（互不相同的非空字符串）"),)),
+    Capability("base.explore", 1, "action", "motion", "无图自由走",
+               "不依赖地图，在当前位置附近自主行走并避障，到时间、走够距离或被停止为止（v1.2 新增）。",
+               inputs=(F("duration_s", "float", "s", positive=True, description="最多走多久"),
+                       F("radius", "float", "m", required=False, positive=True, description="离出发位置最远多远"),
+                       F("max_distance", "float", "m", required=False, positive=True, description="累计最多走多远"),
+                       F("max_speed", "float", "m/s", required=False, positive=True,
+                         description="这一次最快走多快；安全监督器会把它压到本体与现场填写的限值以内")),
+               outputs=(F("completed", "bool"), F("travelled", "float", "m", required=False),
+                        F("final_pose", "pose", required=False)),
+               params=(F("max_duration_s", "float", "s", required=False, positive=True),
+                       F("max_radius", "float", "m", required=False, positive=True))),
     Capability("legged.posture", 1, "command", "motion", "足式姿态", "站立、趴下、坐下等预设姿态。",
                inputs=(F("posture", "enum", choices=("stand", "lie", "sit", "recover")),),
                outputs=(F("accepted", "bool"),),

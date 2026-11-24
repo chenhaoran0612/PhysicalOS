@@ -22,7 +22,7 @@ from _support import ROS2_DOUBLE, http, wait_until
 from test_device_install import SKIP_REASON, Device, alive, arguments, installed_device, snapshot
 
 ROS_KEYS = ("ROS_DOMAIN_ID", "ROS_LOCALHOST_ONLY", "RMW_IMPLEMENTATION", "FASTRTPS_DEFAULT_PROFILES_FILE",
-            "CYCLONEDDS_URI")
+            "CYCLONEDDS_URI", "ZENOH_SESSION_CONFIG_URI")
 DEFAULT_SETUP = Path("/opt/ros/humble/setup.bash")
 
 # What a sourced ROS sets, as far as the script and the runtime care. The unguarded variable is there
@@ -194,7 +194,9 @@ class Ros2InstallRefusalTests(unittest.TestCase):
         for key, value in (("ROS_DOMAIN_ID", "77 x"), ("ROS_DOMAIN_ID", "233"), ("ROS_DOMAIN_ID", "-1"),
                            ("ROS_LOCALHOST_ONLY", "yes"), ("RMW_IMPLEMENTATION", "rmw_x;id"),
                            ("FASTRTPS_DEFAULT_PROFILES_FILE", "profiles.xml"),
-                           ("FASTRTPS_DEFAULT_PROFILES_FILE", str(device.home.parent / "missing.xml"))):
+                           ("FASTRTPS_DEFAULT_PROFILES_FILE", str(device.home.parent / "missing.xml")),
+                           ("ZENOH_SESSION_CONFIG_URI", "session.json5"),                 # issue #38
+                           ("ZENOH_SESSION_CONFIG_URI", str(device.home.parent / "missing.json5"))):
             with self.subTest(key=key, value=value):
                 result = self.refused(device, NX_ROS_SETUP=setup, **{key: value})
 
@@ -238,7 +240,8 @@ class Ros2InstallTests(unittest.TestCase):
         device = RosDevice()
         cls.profiles = device.profiles_file()
         cls.device = ros_install(device=device, ROS_DOMAIN_ID="42", ROS_LOCALHOST_ONLY="1",
-                                 FASTRTPS_DEFAULT_PROFILES_FILE=str(cls.profiles))
+                                 FASTRTPS_DEFAULT_PROFILES_FILE=str(cls.profiles),
+                                 ZENOH_SESSION_CONFIG_URI=str(cls.profiles))      # issue #38 (any readable file)
 
     @classmethod
     def tearDownClass(cls):
@@ -254,7 +257,8 @@ class Ros2InstallTests(unittest.TestCase):
         self.assertEqual((root / "adapter").read_text(), "ros2\n")
         recorded = (root / "ros2.env").read_text().splitlines()
         self.assertEqual(recorded, [f"ROS_SETUP={self.device.setup}", "ROS_DOMAIN_ID=42", "ROS_LOCALHOST_ONLY=1",
-                                    f"FASTRTPS_DEFAULT_PROFILES_FILE={self.profiles}"])
+                                    f"FASTRTPS_DEFAULT_PROFILES_FILE={self.profiles}",
+                                    f"ZENOH_SESSION_CONFIG_URI={self.profiles}"])
         self.assertEqual((root / "ros2.env").stat().st_mode & 0o077, 0)
 
     def test_install_says_what_it_found(self):
@@ -282,6 +286,7 @@ class Ros2InstallTests(unittest.TestCase):
         self.assertEqual((body["mode"], body["instance_id"]), ("ros2", "ros2-robot"))
         self.assertEqual((env["ROS_DISTRO"], env["ROS_DOMAIN_ID"], env["ROS_LOCALHOST_ONLY"]), ("humble", "42", "1"))
         self.assertEqual(env["FASTRTPS_DEFAULT_PROFILES_FILE"], str(self.profiles))
+        self.assertEqual(env["ZENOH_SESSION_CONFIG_URI"], str(self.profiles))
         self.assertNotIn("RMW_IMPLEMENTATION", env)
         self.assertNotIn("NEUXMIND_ROS2_CONFIG", env)
         self.assertNotIn("/somewhere/else", env["PYTHONPATH"])
