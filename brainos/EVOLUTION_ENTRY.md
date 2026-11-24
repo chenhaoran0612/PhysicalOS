@@ -162,7 +162,7 @@
   - 持久化：机器人记录 `sim = {kind, adapter, enabled, state}`，运行时状态目录 `<workspace>/sims/<robot id>/runtime`。应用重启时 `enabled` 的仿真机器人在后台自动恢复（新端口，重新连接检查）；已装技能和急停锁存一并保留。用户“关闭仿真”后不随重启恢复；“删除”会删记录和状态目录。
   - 打包后的应用没有 Python：子进程用后端二进制自身 `brainos-server --nx-sim-child serve …`（`desktop/launcher.py` 分发），技能隔离为 `inprocess`（在仿真机器人自己的进程内，与桌面进程隔开）；源码 + Linux 下用 `process`。
   - 示例技能库：`skills/examples` 列出随包的 runtime/examples/skills，并对项目内每台已连接机器人用同一条 `check_compatibility` 给出可用/不可用与原因；预检与安装接受 `example`（服务端解析路径，用户不输入路径）。示例目录只放宽“隐藏目录”一条规则（开发检出可能在 `.claude/…` 下），符号链接、硬链接、大小等检查不变。原路径输入保留为“从文件夹安装（高级）”；Swift 壳提供原生文件夹选择（`WKScriptMessageHandler` + `NSOpenPanel`，只接受本机控制台页面的请求）。
-  - 运行技能 `robots/run-skill` → `POST /v2/skills/<id>/run`：必须 `hardware_authorized=true`（页面复选框）；**只对仿真机器人开放**，真机仍走“机器人应用 → 现场测试 → 部署”；急停锁存时本地拒绝；`request_id` 幂等，结果不明不重试。
+  - 运行技能 `robots/run-skill` → `POST /v2/skills/<id>/run`：必须 `hardware_authorized=true`（页面复选框）；**只对仿真机器人开放**，真机仍走“机器人应用 → 现场测试 → 部署”（issue #42 起真机也可以直接运行，另要现场确认，见 docs/SKILL_RUN.md）；急停锁存时本地拒绝；`request_id` 幂等，结果不明不重试。
   - 实时状态 `robots/live`：只读 GET（`/v1/status`、`/v2/state`、`/v2/runs`、最新运行详情），每秒刷新；四足显示俯视图 + 走过的路线 + 坐标/朝向/速度，机械臂显示 6 个关节值与夹爪；“停止”沿用 `robots/stop`（`/v1/stop`，立即发送、无确认、锁存急停），解除急停沿用原有现场确认表单，完成后回到实时状态。
   - 文案：“我的机器人”的两个入口改为“通过 SSH 调查真机”“连接已在运行的机器人”，并与“添加仿真机器人”一起各配一句用户能懂的用途说明；能力卡片先写中文名和一句“这能让机器人做什么”（`robot_caps.USER_DOES`，覆盖能力标准全部 21 项），能力 ID 与规范描述降为次要小字。
   - 云平台页：未设置地址时自动探测（`cloud/probe`，只读、不保存），找到本机云平台则一键使用，否则平实说明“这台电脑上没有运行云平台……不登录也可以使用仿真机器人和技能”；地址输入框预填 `http://127.0.0.1:8800`（与 cloud/、sdk/、demo 一致，可用 `NEUXMIND_DEFAULT_CLOUD_URL` 覆盖）。
@@ -174,7 +174,7 @@
   - **未验证**：Swift 部分（`swiftc`/codesign 不能在 Linux 运行），原生文件夹选择器未编译、未实机点击；macOS 上 `inprocess` 技能模式与冻结后端未在 Mac 实测。
 - 遗留：
   - 在 Mac 上构建并实测：双击启动 → 添加仿真机器人 → 运行巡逻 → 退出应用后确认无残留 `brainos-server --nx-sim-child` 进程；文件夹选择器。
-  - 真机的“直接运行已装技能”未开放（有意），需要产品决定是否在现场测试流程之外提供。
+  - 真机的“直接运行已装技能”未开放（有意），需要产品决定是否在现场测试流程之外提供。（2026-11-24 issue #42 已开放，加了现场确认，见 docs/SKILL_RUN.md。）
   - 仿真机器人运行在 inprocess 技能模式（Mac）时，第三方从文件夹安装的技能与仿真运行时同进程；仍与桌面进程隔离，但不是 process 沙箱。
   - 示例技能参数用 JSON 文本框编辑；可改为按 skill.json 参数类型生成表单。
 
@@ -183,7 +183,7 @@
 - 目标：审查 Q5-03/04/05（P2）与 Q5-10/12（P3）。安全拒绝不能再被说成“服务内部出错/网络超时”；复位卡死时操作员拿到真实原因和出路；skill.json 声明的 min/max/choices 在表单与“高级 JSON”两条路上都先拦住；单位只来自 skill.json；首次用户 8 个困惑点。
 - 关键决策：
   - **错误先按结构分类**（`web/ux04_errors.js`，纯函数）：① 运行时/云/桌面的 `code`（码表覆盖 runtime、cloud、sdk、brainos 源码里出现的全部错误码，`param_*` 前缀兜底）；② 无码时按设备/云返回的 HTTP 状态（桌面自己的 400 不算）；③ 最后才用窄的文本规则，安全词在前，“HTTP 5xx”只认明确写法，网络超时只认 `timed out`/“未在时限内响应”等，不再命中 `x=500.0`、`512 步`、`timeout_s`。安全/状态/参数类拒绝都带“下一步”，绝不写“稍后重试”。
-  - 桌面 API 错误体增加 `code`、`device_status` 与字段信息（`param/min/max/choices…`，`brainos/errors.py`）；HTTP 状态仍为 400（兼容旧调用）。桌面自己的拒绝带码：`authorization_required`、`simulated_only`、`estop_latched`、`simulated_evidence`。`connector.request()` 改走 `call()`：保留设备 JSON 错误体（`code`），超时/连不上分别为 `device_timeout`/`device_unreachable`，409 不再显示“无法连接/请检查地址、凭据与协议”。
+  - 桌面 API 错误体增加 `code`、`device_status` 与字段信息（`param/min/max/choices…`，`brainos/errors.py`）；HTTP 状态仍为 400（兼容旧调用）。桌面自己的拒绝带码：`authorization_required`、`simulated_only`（issue #42 起不再产生，真机缺现场确认时是 `onsite_confirmation_required`）、`estop_latched`、`simulated_evidence`。`connector.request()` 改走 `call()`：保留设备 JSON 错误体（`code`），超时/连不上分别为 `device_timeout`/`device_unreachable`，409 不再显示“无法连接/请检查地址、凭据与协议”。
   - **复位**：设备带错误码的 4xx（如 409 `reset_in_progress`、`conformance_running`）记为 `rejected`（未执行、急停保持锁存，之后重试有效）；无码 4xx（旧网关的“执行未确认”）仍为 `unknown`。复位超时后读一次 `/v1/status`：`reset_in_progress` 时报“上一次复位一直没有完成”。界面给出结果对话框：原因 + 等待/重启运行时（真机写明重启方式，锁存保留）+ 仿真机器人“重启仿真机器人”（`sims/restart` = 停止并重启子进程，**不解除锁存**）；实时状态也显示“复位还没有完成”。
   - **参数**：表单与高级 JSON 用同一 `uxCheckValue`（类型、min/max、choices、长度）；数字输入不再带浏览器 min/max 属性（原生气泡说不清是哪个参数）；设备拒绝（`param_out_of_range` 等，运行时 v0.12.0 尚不返回，用桩响应验证）按 `param`（或运行时措辞里的参数名）标到对应字段。
   - 单位只取 skill.json `unit`，内置对照只给中文名；未声明单位的数值写“单位未声明”。
