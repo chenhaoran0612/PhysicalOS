@@ -53,11 +53,10 @@ class Application:
             result['outbox']=str(outbox)
         if code is None:
             return result
-        title='注册验证码' if purpose=='register' else '重置密码验证码'
-        body=(f'你的 NeuxMind {title}是：{code}\n\n{CODE_TTL_S//60} 分钟内有效。'
-              +('如果不是你本人操作，请忽略这封邮件。' if purpose=='register' else '如果不是你本人申请重置密码，请忽略这封邮件，你的密码不会改变。'))
+        from .mail_templates import verification_mail      # issue #37: a formal mail, plain text and HTML
+        subject,body,html=verification_mail(purpose,code,CODE_TTL_S//60)
         try:
-            self.mailer.send(email,f'NeuxMind {title}：{code}',body)
+            self.mailer.send(email,subject,body,html=html)
         except Exception:
             self.identity.discard_code(email,purpose)
             raise
