@@ -91,7 +91,7 @@ let failed = async () => {};
   await card(ROBOT).locator('[data-action="engine-profile"]').click();
   await page.locator('#device-profile .dp-verdict').waitFor({timeout: 60000});
   await banner.waitFor({timeout: 15000});
-  await expectText(banner, ['缺 2 项运控接口']);
+  await expectText(banner, ['有 2 项不在这台设备的 ROS 2 清单里']);
   await banner.locator('[data-action="engine-drivers"]').click();
   await drivers.waitFor();
   await expectText(drivers, ['启动驱动那一步一定要有人在现场确认']);     // what handing it over leads to, since issue #29
@@ -178,7 +178,7 @@ let failed = async () => {};
   // 6 · The card no longer says a motion driver is missing.
   await page.evaluate(() => refresh(true));
   await card(ROBOT).locator('[data-action="engine-drivers"]').waitFor({state: 'detached', timeout: 15000});
-  check(!(await card(ROBOT).innerText()).includes('运控驱动缺'), 'the card still says the driver is missing');
+  check(await card(ROBOT).locator('.md-card-tag').count() === 0, 'the card still says a motion interface is not in the listing');
   check(errors.length === 0, `page errors: ${errors}`);
   await browser.close();
   console.log(`repair_driver_browser (${engine.name()}): ok`);

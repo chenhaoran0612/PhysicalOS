@@ -83,7 +83,7 @@ const fs = require('fs');
   await expectText(dialog, ['经跳板机', `${cfg.jump_user}@127.0.0.1:${cfg.jump_port}`]);
   await confirmFingerprint('第 2 步：确认目标机指纹');
   // connected: the hardware scan runs through the jump host
-  await throughHardwareScan(['经跳板机', '/dev/ttyUSB0', '需要处理的问题'], 'artifacts/ssh-jump-hardware-scan.png');
+  await throughHardwareScan(['经跳板机', '/dev/ttyUSB0', '待确认'], 'artifacts/ssh-jump-hardware-scan.png');
   await click('close');
 
   // 2. Live status: read-only, names the route, shows the device's own numbers and the watched services.

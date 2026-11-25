@@ -5,6 +5,18 @@ It reads sysfs/procfs and the standard listing tools, and changes nothing on the
 ``parse`` turns its output into table rows (``devices``) and detected problems
 (``issues``). Issue ids are stable across scans, so a repair can be verified by
 scanning again and checking that the id is gone.
+
+How much a problem weighs (issue #47). A finding is a **fault** (``error``) only when both hold: the
+scan saw directly that the thing does not work now, and it can say what that blocks (``blocks``, shown
+with the fault). A fault without ``blocks`` cannot be made: ``_Builder.issue`` files it one level lower.
+What was seen not working but is not known to block anything is ``warning`` ("待确认": a device without
+a driver, no default route). What is only inferred is ``info`` ("提示"): the kernel log of this boot,
+the groups of the SSH account, an interface that is switched off or has no address. A robot that walks
+has ports nobody uses; none of that is a fault, and nothing of it colours the robot's card.
+
+``RULES`` names this set of rules and is saved with every scan. ``regraded`` gives a scan saved under
+earlier rules by today's; ``HardwareInit`` replaces such records with it when a workspace opens, so that
+the page, the repair flow and the assistant all read one grading.
 """
 import re
 import shlex
@@ -95,6 +107,21 @@ CATEGORIES = {
     'sensor': '传感器与总线', 'audio': '音频', 'input': '输入设备', 'power': '电源与电池', 'service': '系统服务',
 }
 SEVERITY_ORDER = {'error': 3, 'warning': 2, 'info': 1}
+RULES = 2
+ROOTFS_NOTE_PERCENT = 90
+ROOTFS_FULL_PERCENT = 99        # from here on nothing more can be installed or logged: a fault
+ROOTFS_BLOCKS = '往这台设备上安装管理层、技能和驱动，以及设备自己写日志和数据：都会因为没有空间而失败。'
+# The most a problem of each kind (the part of its id before the colon) weighs when nothing more is known
+# about it: what ``regraded`` gives a scan saved under earlier rules. Only what a scan of today's rules
+# proves itself (a full root partition) is a fault.
+GRADE_CAPS = {
+    'motion-driver': 'info', 'rootfs-full': 'warning', 'nvidia-driver': 'warning', 'pci-driver': 'warning', 'usb-driver': 'warning',
+    'net-down': 'info', 'net-carrier': 'info', 'net-noip': 'info', 'net-route': 'warning', 'net-dns': 'warning',
+    'video-perm': 'info', 'serial-perm': 'info', 'unit': 'info',
+    'log-firmware': 'info', 'log-probe': 'info', 'log-usb-enum': 'info', 'log-nvrm': 'info',
+    'log-usb-overcurrent': 'warning', 'log-undervoltage': 'warning', 'log-io-error': 'warning',
+}
+OTHER_ACCOUNT = '只有用这个账号运行的程序打不开它；机器人自己的程序如果由别的账号或 root 运行，不影响。'
 
 # PCI classes (first byte of the class code) that work without a kernel driver
 # often enough that a missing one is only noted: bridges, memory controllers,
@@ -210,13 +237,23 @@ class _Builder:
             self.devices.append(row)
         return row
 
-    def issue(self, id, severity, category, title, detail, hint='', device_id=None, fixable='auto', source='scan'):
+    def issue(self, id, severity, category, title, detail, hint='', device_id=None, fixable='auto', source='scan', blocks='',
+              onsite=None):
+        """``blocks``: what the problem stops from working. Only a problem that says so is a fault (issue #47).
+        ``onsite``: software cannot deal with it, someone has to go to the robot (``repair_policy.needs_onsite``).
+        That is a fact about the remedy and does not follow from how much the problem weighs; left out, it is
+        what it always was: not fixable remotely and more than a note."""
         if id in self._issue_ids:
             return
         self._issue_ids.add(id)
+        if onsite is None:
+            onsite = fixable != 'auto' and severity != 'info'
+        if severity == 'error' and not blocks:
+            severity = 'warning'
         self.issues.append({'id': id[:200], 'severity': severity, 'category': category, 'title': title[:200],
                             'detail': detail[:800], 'hint': hint[:600], 'device_id': device_id,
-                            'fixable': fixable, 'source': source})
+                            'fixable': fixable, 'source': source, 'blocks': blocks[:300] if severity == 'error' else '',
+                            'onsite': bool(onsite)})
 
 
 def _system(b, s):
@@ -265,9 +302,13 @@ def _storage(b, s, usb_by_port, pci_by_slot, claimed):
     root = (s.get('rootfs') or [''])[0].split()
     if len(root) >= 5 and re.fullmatch(r'[0-9]{1,3}%', root[4]):
         used = int(root[4][:-1])
-        if used >= 90:
-            b.issue('rootfs-full', 'warning' if used < 97 else 'error', 'storage', f'根分区空间不足（已用 {used}%）',
-                    f'根分区 {root[0]} 已使用 {used}%，安装驱动或软件包可能失败。',
+        if used >= ROOTFS_FULL_PERCENT:
+            b.issue('rootfs-full', 'error', 'storage', f'根分区已满（已用 {used}%）',
+                    f'根分区 {root[0]} 已使用 {used}%（df 读到的数值），剩余空间不够再写入。',
+                    '清理日志、缓存或不再使用的软件包后重新扫描。', fixable='auto', blocks=ROOTFS_BLOCKS)
+        elif used >= ROOTFS_NOTE_PERCENT:
+            b.issue('rootfs-full', 'warning', 'storage', f'根分区空间不多（已用 {used}%）',
+                    f'根分区 {root[0]} 已使用 {used}%，现在还能用；再安装较大的驱动或软件包可能不够。',
                     '清理日志、缓存或不再使用的软件包后重新扫描。', fixable='auto')
 
 
@@ -288,7 +329,8 @@ def _gpu(b, s, pci, system):
         detail = ('nvidia-smi 无法与驱动通信：' + ' '.join(output)[:300]) if failing else (
             '检测到 NVIDIA GPU，当前使用开源 nouveau 驱动，CUDA 与 GPU 推理不可用。' if driver == 'nouveau' else
             '检测到 NVIDIA GPU，但没有可用的 NVIDIA 驱动（未找到 nvidia-smi）。')
-        b.issue('nvidia-driver', 'error' if driver != 'nouveau' else 'warning', 'gpu', 'NVIDIA GPU 驱动未就绪', detail,
+        # Seen: the GPU has no working NVIDIA driver. Not known: whether anything on this robot uses the GPU.
+        b.issue('nvidia-driver', 'warning', 'gpu', 'NVIDIA GPU 驱动未就绪', detail,
                 '确认发行版与 GPU 型号后安装匹配的 NVIDIA 驱动（安装后通常需要重启）。', device_id='pci:' + nvidia[0]['slot'])
 
 
@@ -320,12 +362,13 @@ def _pci_rows(b, pci, claimed):
             continue        # bridges and host bridges are infrastructure, not devices to set up
         category, kind = PCI_KIND.get(base, ('pci', 'PCI 设备'))
         did = 'pci:' + d['slot']
-        status = 'ok' if d['driver'] else ('unknown' if base in PCI_DRIVERLESS_OK else 'error')
+        status = 'ok' if d['driver'] else ('unknown' if base in PCI_DRIVERLESS_OK else 'warning')
         detail = kind + (' · 可用内核模块：' + d['modules'] if d['modules'] and not d['driver'] else '')
         b.device(did, category, d['name'].split(': ', 1)[-1], 'PCIe ' + d['slot'], d['driver'] or '未加载', detail, status)
-        if status == 'error' and not (base == '03' and d['vendor'] == '0x10de'):
-            b.issue('pci-driver:' + d['slot'], 'error', category, f"未加载驱动：{d['name'].split(': ', 1)[-1][:80]}",
-                    f"{kind}（{d['slot']}，ID {d['vendor'][2:]}:{d['device'][2:]}）没有绑定内核驱动，设备当前不可用。",
+        if status == 'warning' and not (base == '03' and d['vendor'] == '0x10de'):
+            b.issue('pci-driver:' + d['slot'], 'warning', category, f"未加载驱动：{d['name'].split(': ', 1)[-1][:80]}",
+                    f"{kind}（{d['slot']}，ID {d['vendor'][2:]}:{d['device'][2:]}）没有绑定内核驱动：内核现在用不了这个设备。"
+                    '这台机器人用不用得到它，扫描看不出来。',
                     ('内核已提供候选模块 ' + d['modules'] + '，可尝试加载。') if d['modules'] else '需要确认设备型号并安装对应驱动。',
                     device_id=did)
 
@@ -412,21 +455,27 @@ def _network(b, s, system, usb_by_port, pci_by_slot, claimed):
             row['status'] = 'ok' if oper == 'up' else 'unknown'
             row['detail'] += ' · 用 USB 线连接电脑时使用'
         elif not admin_up:
-            row['status'] = 'warning'
-            b.issue('net-down:' + name, 'warning', category, f'{label} {name} 未启用',
-                    f'{name} 处于关闭状态（operstate={oper or "unknown"}）。',
+            # A network port that is switched off is a setting. A CAN interface that is down is seen not working
+            # and may carry the motors: it stays to be confirmed, which also keeps it with the problems that
+            # need someone on site (``repair_policy.needs_onsite``): bringing it up takes the bus bitrate.
+            row['status'] = 'warning' if is_can else 'unknown'
+            b.issue('net-down:' + name, 'warning' if is_can else 'info', category, f'{label} {name} 未启用',
+                    f'{name} 处于关闭状态（operstate={oper or "unknown"}）。' +
+                    ('接在这条总线上的设备现在收发不了数据；这台机器人用不用这条总线，扫描看不出来。' if is_can else
+                     '接口被设成关闭是一种配置，不是故障；要用它时再启用。'),
                     '启用接口；CAN 接口需要先确认总线波特率。' if is_can else '启用接口，或在网络管理器中启用对应连接。',
                     device_id=did, fixable='needs_user' if is_can else 'auto')
         elif not is_can and carrier == '0' and wireless != '1':
             spare = uplink and name != ssh_iface      # another interface already connects the robot
-            row['status'] = 'unknown' if spare else 'warning'
-            b.issue('net-carrier:' + name, 'info' if spare else 'warning', category, f'{name} 没有连接信号',
+            row['status'] = 'unknown'
+            b.issue('net-carrier:' + name, 'info', category, f'{name} 没有连接信号',
                     f'有线网卡 {name} 已启用，但检测不到链路（网线未连接或对端未通电）。' + ('设备已通过其他网口联网，如果这个网口本来就不用，可以忽略。' if spare else ''),
-                    '需要现场检查网线和交换机端口。', device_id=did, fixable='needs_user')
+                    '需要现场检查网线和交换机端口。', device_id=did, fixable='needs_user', onsite=not spare)
         elif not is_can and oper == 'up' and not v4 and not v6:
-            row['status'] = 'warning'
-            b.issue('net-noip:' + name, 'warning', category, f'{name} 没有获取到 IP 地址',
-                    f'{label} {name} 已连接但没有 IP 地址' + ('（无线网卡可能没有关联到网络）。' if wireless == '1' else '（DHCP 可能失败）。'),
+            row['status'] = 'unknown'
+            b.issue('net-noip:' + name, 'info', category, f'{name} 没有 IP 地址',
+                    f'{label} {name} 已连接但没有 IP 地址' + ('（无线网卡可能没有关联到网络）。' if wireless == '1' else '（没有配置地址，或 DHCP 没有成功）。') +
+                    '这个网口如果本来就不用，或接的是不需要 IP 的设备，可以忽略。',
                     '检查网络管理器连接配置并重新获取地址。', device_id=did)
     system['ssh_interface'] = ssh_iface
     if physical and not s.get('route'):
@@ -456,11 +505,11 @@ def _video(b, s, system, usb_by_port, claimed):
         row = b.device(did, 'camera', name, 'USB ' + cam['usb'] if cam['usb'] else '板载 / CSI', cam['driver'] or '未知',
                        '设备节点 ' + '、'.join(cam['nodes']))
         if cam['denied']:
-            row['status'] = 'warning'
+            # The camera itself was seen with its driver: what the SSH account may open says nothing about it.
             node, group = cam['denied'][0]
-            b.issue('video-perm:' + cam['nodes'][0], 'warning', 'camera', f'当前用户无权访问相机 {node}',
-                    f'{node} 属于用户组 {group or "未知"}，SSH 用户 {system.get("user") or ""} 不在该组中，程序将无法读取画面。',
-                    f'把该用户加入 {group or "video"} 组（重新登录后生效）。', device_id=did)
+            b.issue('video-perm:' + cam['nodes'][0], 'info', 'camera', f'SSH 账号无权访问相机 {node}',
+                    f'{node} 属于用户组 {group or "未知"}，SSH 登录用的这个账号（{system.get("user") or ""}）不在该组中。' + OTHER_ACCOUNT,
+                    f'要用这个账号运行读相机的程序时，把它加入 {group or "video"} 组（重新登录后生效）。', device_id=did)
 
 
 def _serial(b, s, system, usb_by_port, claimed):
@@ -481,10 +530,9 @@ def _serial(b, s, system, usb_by_port, claimed):
         row = b.device(did, 'serial', path.rsplit('/', 1)[-1] + ' · ' + name, 'USB ' + owner if owner else '板载 UART', driver or '未知',
                        f'{path} · 用户组 {group or "未知"} · 权限 {mode or "未知"}')
         if not _accessible(group, mode, system):
-            row['status'] = 'warning'
-            b.issue('serial-perm:' + path, 'warning', 'serial', f'当前用户无权读写串口 {path}',
-                    f'{path} 属于用户组 {group or "未知"}（权限 {mode}），SSH 用户 {system.get("user") or ""} 不在该组中，底盘/传感器程序将无法打开串口。',
-                    f'把该用户加入 {group or "dialout"} 组（重新登录后生效）。', device_id=did)
+            b.issue('serial-perm:' + path, 'info', 'serial', f'SSH 账号无权读写串口 {path}',
+                    f'{path} 属于用户组 {group or "未知"}（权限 {mode}），SSH 登录用的这个账号（{system.get("user") or ""}）不在该组中。' + OTHER_ACCOUNT,
+                    f'要用这个账号运行读写这个串口的程序时，把它加入 {group or "dialout"} 组（重新登录后生效）。', device_id=did)
 
 
 def _small(b, s):
@@ -557,10 +605,10 @@ def _kernel(b, s):
                 break
             key = f'log-{kind}:' + (kind if kind in SINGLE_LOG_ISSUES else groups[0])
             before = len(b.issues)
-            b.issue(key, 'warning', KERNEL_CATEGORY[kind],
+            b.issue(key, GRADE_CAPS['log-' + kind], KERNEL_CATEGORY[kind],
                     title.format(*groups, ''), detail.format(*(groups + [''])) + '\n内核日志：' + line.strip()[:300],
                     '内核日志记录的是本次启动以来的历史；修复后通常需要重新加载驱动、重新插拔或重启才能确认。',
-                    fixable=fixable, source='kernel_log')
+                    fixable=fixable, source='kernel_log', onsite=fixable == 'needs_user')
             count += len(b.issues) > before
             break
 
@@ -628,4 +676,34 @@ def parse(text):
                'errors': sum(1 for i in b.issues if i['severity'] == 'error'),
                'warnings': sum(1 for i in b.issues if i['severity'] == 'warning'),
                'categories': {k: v for k, v in counts.items() if v}}
-    return {'system': system, 'devices': b.devices, 'issues': b.issues, 'notes': b.notes, 'summary': summary, 'complete': 'end' in s}
+    return {'system': system, 'devices': b.devices, 'issues': b.issues, 'notes': b.notes, 'summary': summary, 'complete': 'end' in s,
+            'rules': RULES}
+
+
+def _capped(issue):
+    kind = str(issue['id']).split(':', 1)[0]
+    cap = 'warning' if kind == 'net-down' and issue.get('category') == 'can' else GRADE_CAPS.get(kind, 'warning')
+    severity = min(issue['severity'], cap, key=SEVERITY_ORDER.__getitem__)
+    # Whether someone has to go to the robot was told by the weight then; it is kept as it was.
+    onsite = issue.get('onsite', issue.get('fixable') != 'auto' and issue['severity'] != 'info')
+    return {**issue, 'severity': severity, 'blocks': '', 'onsite': bool(onsite)}
+
+
+def regraded(scan):
+    """A saved scan by today's rules. One saved under them is returned as it is. An earlier one
+    (issue #47) gives a new record (the one passed in is not changed) in which no problem weighs more than its kind can prove (``GRADE_CAPS``),
+    with the counts and the rows' states to match; the texts are the ones saved then. Faults cannot come
+    out of it: what they would have to say (``blocks``) was never read."""
+    if scan.get('rules') == RULES:
+        return scan
+    issues = sorted((_capped(issue) for issue in scan['issues']), key=lambda issue: -SEVERITY_ORDER[issue['severity']])
+    worst = {}
+    for issue in issues:                                # most severe first
+        if issue.get('device_id'):
+            worst.setdefault(issue['device_id'], issue['severity'])
+    devices = [{**row, 'status': 'warning' if worst.get(row['id'], 'warning') == 'warning' else 'unknown'}
+               if row['status'] == 'error' or (row['id'] in worst and row['status'] == 'warning') else row for row in scan['devices']]
+    statuses = [row['status'] for row in devices]
+    summary = {**scan['summary'], 'ok': statuses.count('ok'), 'attention': statuses.count('warning') + statuses.count('error'),
+               'errors': 0, 'warnings': sum(1 for issue in issues if issue['severity'] == 'warning')}
+    return {**scan, 'issues': issues, 'devices': devices, 'summary': summary, 'regraded': True, 'rules': RULES}

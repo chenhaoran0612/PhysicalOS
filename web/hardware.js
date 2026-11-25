@@ -4,7 +4,11 @@
 // built-in hardware-init Skill on the workspace default model (TokenFans, issue #4).
 const HW_CATEGORIES={compute:'处理器与内存',gpu:'GPU 与加速器',storage:'存储',network:'网络',camera:'相机与视频',serial:'串口',can:'CAN 总线',usb:'USB 设备',pci:'PCI 设备',sensor:'传感器与总线',audio:'音频',input:'输入设备',power:'电源与电池',service:'系统服务'};
 const HW_STATUS={ok:['正常','good'],warning:['需处理','warn'],error:['异常','bad'],unknown:['未确认','']};
-const HW_SEVERITY={error:['错误','bad'],warning:['警告','warn'],info:['提示','']};
+// Issue #47: a fault is something the scan saw not working and can say what it blocks; nothing else is one.
+const HW_SEVERITY={error:['故障','bad'],warning:['待确认','warn'],info:['提示','']};
+const HW_RULE='只有直接读到“现在不能用”、并且说得出它阻塞了什么的，才列为故障。读到了但不知道是否用得到的是“待确认”；只是推断出来的（开机日志、SSH 账号的权限、关着或没接的接口）是“提示”。';
+const hwFaults=scan=>scan.issues.filter(i=>i.severity==='error');
+const hwToConfirm=scan=>scan.issues.filter(i=>i.severity==='warning');
 const HW_OUTCOMES={fixed:['已修复','good'],pending_reboot:['重启后生效','blue'],not_reproduced:['未复现','good'],not_fixed:['未解决','bad'],needs_user:['需现场处理','warn'],skipped:['未处理','']};
 const HW_SUDO={none:'不需要',root:'以 root 账号执行',sudo_password:'通过 sudo 执行，用已保存的 SSH 登录密码完成验证（密码不会发送给模型）',sudo_nopasswd:'通过 sudo -n 执行（该账号需要配置免密 sudo，否则命令会失败）'};
 const HW_RISK={low:['低风险','good'],medium:['中风险','warn'],high:['高风险','bad']};
@@ -17,7 +21,7 @@ const HW_SOURCE={connect:'连接后自动扫描',manual:'手动扫描',repair:'�
 const hwRepairs=robotId=>hwList('hardware_repairs').filter(r=>r.robot_id===robotId).sort((a,b)=>b.created_at.localeCompare(a.created_at));
 const hwRunning=robotId=>rows('agent_sessions').find(s=>s.robot_id===robotId&&s.mode==='repair'&&engineActive(s.status));
 const hwBadge=(map,key)=>{const [t,c]=map[key]||[key,''];return badge(t,c);};
-// Errors and warnings need action; notes (info) are shown but never counted or pre-selected.
+// Faults and what is to be confirmed are listed first; notes (info) are shown but never counted or pre-selected.
 const hwActionable=scan=>scan.issues.filter(i=>i.severity!=='info');
 const hwPreselect=i=>i.fixable==='auto'&&i.severity!=='info';
 
@@ -28,19 +32,20 @@ function hwSystem(scan){
 }
 const hwDuration=ms=>ms==null?'—':ms<1000?Math.max(1,Math.round(ms))+' 毫秒':(ms/1000).toFixed(1)+' 秒';
 function hwMetrics(scan){
- const m=scan.summary,issues=hwActionable(scan).length;
- return `<div class="hw-metrics"><div><b>${m.devices}</b><span>已识别硬件</span></div><div><b>${m.ok}</b><span>状态正常</span></div><div class="${m.errors?'bad':issues?'warn':'good'}"><b>${issues}</b><span>需要处理的问题</span></div><div><b>${hwDuration(scan.duration_ms)}</b><span>只读扫描用时</span></div></div>`;
+ const m=scan.summary,faults=hwFaults(scan).length,confirm=hwToConfirm(scan).length;
+ return `<div class="hw-metrics"><div><b>${m.devices}</b><span>已识别硬件</span></div><div><b>${m.ok}</b><span>状态正常</span></div><div class="${faults?'bad':'good'}"><b>${faults}</b><span>故障${confirm?` · 另有 ${confirm} 项待确认`:''}</span></div><div><b>${hwDuration(scan.duration_ms)}</b><span>只读扫描用时</span></div></div>`;
 }
 // Issue #13: a problem software cannot fix is annotated and cannot be ticked until a person marks it as handled.
 function hwIssueRow(i,robotId,locked){
  const blocked=rpLocked(robotId,i.id);
- return `<label class="hw-issue sev-${h(i.severity)}${blocked?' is-blocked':''}"><input type="checkbox" name="hw-issue" value="${h(i.id)}" ${hwPreselect(i)&&!blocked?'checked':''} ${locked||blocked?'disabled':''}><span class="hw-issue-body"><span class="hw-issue-head">${hwBadge(HW_SEVERITY,i.severity)}<b>${h(i.title)}</b><span class="tag">${i.fixable==='auto'?'可远程处理':i.severity==='info'?'由你判断':'需要现场处理'}</span></span><span class="hw-issue-detail">${h(i.detail)}</span>${i.hint?`<span class="hw-issue-hint">建议：${h(i.hint)}</span>`:''}</span></label>${rpStrip(robotId,i)}`;
+ return `<label class="hw-issue sev-${h(i.severity)}${blocked?' is-blocked':''}"><input type="checkbox" name="hw-issue" value="${h(i.id)}" ${hwPreselect(i)&&!blocked?'checked':''} ${locked||blocked?'disabled':''}><span class="hw-issue-body"><span class="hw-issue-head">${hwBadge(HW_SEVERITY,i.severity)}<b>${h(i.title)}</b><span class="tag">${i.fixable==='auto'?'可远程处理':(i.onsite??i.severity!=='info')?'需要现场处理':'由你判断'}</span></span><span class="hw-issue-detail">${h(i.detail)}</span>${i.blocks?`<span class="hw-issue-blocks">阻塞：${h(i.blocks)}</span>`:''}${i.hint?`<span class="hw-issue-hint">建议：${h(i.hint)}</span>`:''}</span></label>${rpStrip(robotId,i)}`;
 }
 function hwIssues(scan,robotId,locked){
  if(!scan.issues.length)return `<div class="hw-clear">${badge('未发现问题','good')}<p>扫描到的硬件都已加载驱动、网络与设备权限正常。没有问题不等于已通过功能验证，相机画面、底盘控制等仍需各自测试。</p></div>`;
- const auto=scan.issues.filter(hwPreselect).length,actionable=hwActionable(scan).length,notes=scan.issues.length-actionable;
- return `<section class="hw-issues" aria-labelledby="hw-issues-title"><div class="section-head"><h3 id="hw-issues-title">${actionable?'需要处理的问题':'提示'} <span>${actionable||notes}</span>${actionable&&notes?`<small>另有 ${notes} 条提示</small>`:''}</h3><div class="button-row">${button('重新扫描','hardware-scan','secondary small',robotId)}${button('让助手修复所选问题','hardware-repair','small',robotId,locked||!rpSelectable(robotId,scan.issues))}</div></div>
- <p class="subtitle">已默认勾选可以远程处理的问题。助手只做软件层面的修复；软件修不了的问题只做标注，现场处理并标注后才能勾选。</p>
+ const faults=hwFaults(scan).length,actionable=hwActionable(scan).length,notes=scan.issues.length-actionable;
+ return `<section class="hw-issues" aria-labelledby="hw-issues-title"><div class="section-head"><h3 id="hw-issues-title">${faults?'故障':actionable?'待确认':'提示'} <span>${faults||actionable||notes}</span>${faults&&actionable>faults?`<small>另有 ${actionable-faults} 项待确认</small>`:''}${actionable&&notes?`<small>另有 ${notes} 条提示</small>`:''}</h3><div class="button-row">${button('重新扫描','hardware-scan','secondary small',robotId)}${button('让助手修复所选问题','hardware-repair','small',robotId,locked||!rpSelectable(robotId,scan.issues))}</div></div>
+ <p class="subtitle hw-rule">${HW_RULE}</p>
+ <p class="subtitle">已默认勾选可以远程处理的故障和待确认项。助手只做软件层面的修复；软件修不了的问题只做标注，现场处理并标注后才能勾选。</p>
  <div class="hw-issue-list">${scan.issues.map(i=>hwIssueRow(i,robotId,locked)).join('')}</div></section>`;
 }
 function hwTable(scan){
@@ -68,6 +73,7 @@ function hardwareOpen(robotId,keep=false){
  dialog('硬件初始化 · '+h(robot.name),`${where} · ${HW_SOURCE[scan.source]||'扫描'}于 ${date(scan.created_at)} · 只读`,`<div class="dialog-body hardware-init">
  ${hwSystem(scan)}${hwMetrics(scan)}
  ${scan.notes.length?notice(scan.notes.map(h).join('<br>'),true):''}
+ ${scan.regraded?notice('这份扫描是按之前的规则保存的：这里已按现在的规则重新定级（没有证据的不再算故障），说明文字还是当时的。重新扫描后会一起更新。'):''}
  ${run?notice('助手正在处理这台机器人的硬件问题，完成前不能再发起修复。 '+button('查看进度','engine-session','small',run.id),true):''}
  ${hwIssues(scan,robotId,!!run)}
  <section class="hw-devices" aria-labelledby="hw-devices-title"><div class="section-head"><h3 id="hw-devices-title">硬件清单</h3>${scan.issues.length?'':button('重新扫描','hardware-scan','secondary small',robotId)}</div><div id="hw-table">${hwTable(scan)}</div></section>
@@ -92,7 +98,7 @@ async function hardwareScan(robotId,source='manual'){
  }
  await refresh(true);
  if($('#dialog').open&&$('#dialog').dataset.hardwareRobot===robotId)return hardwareOpen(robotId,true);
- toast(`硬件扫描完成：${result.summary.devices} 项硬件，${result.issues.length} 个问题`);
+ toast(`硬件扫描完成：${result.summary.devices} 项硬件，${hwFaults(result).length} 项故障，${hwToConfirm(result).length} 项待确认`);
 }
 function hardwareRepairForm(robotId){
  const scan=hwLatest(robotId),chosen=[...document.querySelectorAll('#dialog [name=hw-issue]:checked')].map(x=>x.value);
@@ -150,8 +156,10 @@ function hardwareSessionPanel(s){
 }
 function hardwareCardTag(r){
  const scan=hwLatest(r.id);if(!scan)return '<span class="tag">硬件待扫描</span>';
- const n=hwActionable(scan).length;
- return n?badge(`硬件 ${scan.summary.devices} 项 · ${n} 个问题`,scan.summary.errors?'bad':'warn'):badge(`硬件 ${scan.summary.devices} 项正常`,'good');
+ // Issue #47: only a fault is loud. What is to be confirmed is a plain tag; notes are not counted at all.
+ const faults=hwFaults(scan).length,confirm=hwToConfirm(scan).length;
+ if(faults)return badge(`硬件故障 ${faults} 项`,'bad');
+ return confirm?`<span class="tag">硬件 ${scan.summary.devices} 项 · ${confirm} 项待确认</span>`:badge(`硬件 ${scan.summary.devices} 项 · 未发现故障`,'good');
 }
 // Wrap the shared engine views instead of editing them (they are also changed by #3/#4).
 {

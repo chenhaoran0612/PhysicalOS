@@ -70,10 +70,23 @@ const unread = result('not_read', [{...velocity, state: 'unchecked', found: [], 
 const unknown = result('unknown', [{...velocity, state: 'unchecked', found: [], found_total: 0}],
                        {reason: 'ROS 2 的清单不完整。这一次没有核对运控驱动。重新读取设备档案后再核对。'});
 
-// ---- the card: an entry only while something is missing
+// ---- the card: an entry only while something is missing, and never a red one (issue #47)
 show([missing]);
 let card = page.mdCard(CARD, robot);
-includes(card, '运控驱动缺 2 项', 'the card of a device that lacks interfaces says how many');
+includes(card, '<span class="tag md-card-tag">运控接口 2 项待确认</span>', 'a listing that can be believed: a plain tag says how many are not in it');
+check(/status (bad|warn)/.test(card), false, 'a listing cannot show that the body does not move: nothing loud');
+check(card.includes('运控驱动缺'), false, 'and nothing is called missing drivers');
+{
+  // What issue #47's robot had: the read saw no running node, so it shows no interface whatever the device has.
+  const unseen = result('missing', [stop, lacking(velocity), lacking(odometry)], {credible: false});
+  show([unseen]);
+  const quiet = page.mdCard(CARD, robot);
+  check(quiet.includes('md-card-tag') || /status (bad|warn)/.test(quiet), false, 'a read that saw no node puts no tag on the card');
+  includes(quiet, 'data-action="engine-drivers" data-id="robot-1"', 'the check can still be opened');
+  includes(page.mdSummary(unseen), '没有读到任何正在运行的节点', 'the reason is said');
+  includes(page.mdSummary(unseen), '不说明问题', 'and that it proves nothing');
+  show([missing]);
+}
 includes(card, 'data-action="engine-drivers" data-id="robot-1"', 'and has the button that opens the check');
 includes(card, '<button>实时状态</button>', 'the card keeps what it had');
 for (const [name, value] of [['with its drivers', complete], ['of a type outside the list', unlisted], ['without a profile', unread],
@@ -90,7 +103,8 @@ show([missing]);
 includes(page.engineRobotCard(robot), 'engine-drivers', 'the shared card is wrapped');
 
 // ---- one sentence per state
-includes(page.mdSummary(missing), '缺 2 项运控接口：底盘速度、里程计', 'missing: how many and which');
+includes(page.mdSummary(missing), '有 2 项不在这台设备的 ROS 2 清单里：底盘速度、里程计', 'missing: how many and which');
+includes(page.mdSummary(missing), '不说明本体不能运动', 'missing: what it does not say');
 includes(page.mdSummary(missing), '四足机器人', 'missing: by which type');
 includes(page.mdSummary(complete), '应有的 2 项运控接口都在', 'complete: what was checked');
 includes(page.mdSummary(complete), '另有 1 项平台核对不了（停止）', 'complete: what could not be checked is said');
@@ -104,7 +118,7 @@ let body = page.mdBody(robot, missing, ui);
 includes(body, '话题 <span class="dp-name">/cmd_vel</span>', 'the expected topic is named');
 includes(body, '<span class="dp-type">geometry_msgs/msg/Twist</span>', 'with its message type');
 includes(body, '<span class="dp-type">nav_msgs/msg/Odometry</span>', 'for every missing interface');
-includes(body, '缺少', 'missing rows say so');
+includes(body, '清单里没有', 'missing rows say so');
 includes(body, '停止没有自己的 ROS 2 接口', 'what cannot be checked says why');
 includes(body, '核对不了', 'and is marked as not checked, not as missing');
 includes(body, 'data-action="engine-drivers-repair" data-id="robot-1" >交给修复助手', 'the problems can be handed to the assistant');
@@ -191,7 +205,7 @@ excludes(body, '<b>x</b>', 'nor can a type');
 // ---- the line in the device profile
 show([missing]);
 includes(page.mdBanner('robot-1'), '查看并处理', 'missing: the profile offers to deal with it');
-includes(page.mdBanner('robot-1'), '缺 2 项运控接口', 'and says what is missing');
+includes(page.mdBanner('robot-1'), '有 2 项不在这台设备的 ROS 2 清单里', 'and says what is not in the listing');
 show([complete]);
 includes(page.mdBanner('robot-1'), '都在 ROS 2 清单里', 'complete: the profile says the interfaces are there');
 excludes(page.mdBanner('robot-1'), 'engine-drivers-repair', 'and offers no repair');

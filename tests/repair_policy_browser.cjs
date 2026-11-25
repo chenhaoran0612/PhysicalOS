@@ -86,7 +86,8 @@ let failed = async () => {};
     if (await box(id).isDisabled()) throw Error('Wrongly blocked: ' + id);
     if (await strip(id).count()) throw Error('Wrongly annotated: ' + id);
   }
-  if (!(await box(ISSUES[0]).isChecked())) throw Error('Software problems are no longer ticked by default');
+  if (!(await box(ISSUES[2]).isChecked())) throw Error('What the scan saw not working is no longer ticked by default');
+  if (await box(ISSUES[0]).isChecked()) throw Error('A note about the SSH account is ticked by default (issue #47)');
   if (await box(NOTE).isChecked()) throw Error('A note is ticked by default');
   await strip(ONSITE).scrollIntoViewIfNeeded();
   await shot('1-blocked');
@@ -105,6 +106,7 @@ let failed = async () => {};
 
   // 2 · A person marks it as handled: it can be ticked again, and what was ticked before is kept.
   await box(ISSUES[2]).uncheck();
+  await box(ISSUES[0]).check();                // a note is not ticked in advance (issue #47): the user ticks it
   await strip(ONSITE).locator('[data-action=hardware-mark]').click();
   await strip(ONSITE).locator('[data-action=hardware-unmark]').waitFor();
   if (!(await strip(ONSITE).innerText()).includes('已标注处理完成')) throw Error('Marked problem does not say so');

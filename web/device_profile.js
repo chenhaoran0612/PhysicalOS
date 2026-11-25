@@ -120,7 +120,8 @@ function profileHardware(profile) {
   return liveStale(hardware) +
     (hardware.complete ? '' : notice('这次硬件扫描不完整（输出被截断或缺少结尾），表格可能缺少部分设备。', true)) +
     '<div class="ls-tiles">' + tile(s.devices, '已识别硬件') + tile(s.ok, '工作正常', 'good') +
-    tile(s.attention, '需要处理', s.attention ? 'bad' : '') + tile(s.driver_missing, '未加载驱动') + tile(s.unknown, '未确认') + '</div>' +
+    tile(s.attention, '需要处理', s.attention ? (hardware.devices.some(d => d.status === 'error') ? 'bad' : 'warn') : '') +     // issue #47: red is for a fault
+    tile(s.driver_missing, '未加载驱动') + tile(s.unknown, '未确认') + '</div>' +
     (hardware.notes.length ? notice(hardware.notes.map(h).join('<br>')) : '') +
     table(['设备', '类别', '接口', '驱动', '工作状态'], rows) +
     `<p class="inline-note">和“实时状态”“硬件初始化”用的是同一条只读扫描。读取于 ${liveWhen(hardware.checked_at)}。</p>` +
