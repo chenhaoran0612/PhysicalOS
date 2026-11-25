@@ -20,6 +20,7 @@ import tarfile
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 from brainos import robot_bundle_device as device
 
@@ -142,6 +143,21 @@ class Pack(ScriptCase):
             self.assertEqual(handle.read(10)[4:8], b'\x00\x00\x00\x00')    # gzip header: no time stamp
         time.sleep(1.2)                                                     # into another second
         self.assertEqual(self.pack('~/walk_programs')[1], first)
+
+    def test_a_compression_that_fails_or_is_missing_is_a_failure_not_an_empty_archive(self):
+        # tar ends well even when the gzip after it does not; an empty archive must never be reported as packed.
+        self.program()
+        tools = os.path.join(self.base, 'tools')
+        os.makedirs(tools)
+        broken = os.path.join(tools, 'gzip')
+        with open(broken, 'w') as handle:
+            handle.write('#!/bin/sh\necho "gzip: stand-in that fails" >&2\nexit 3\n')
+        os.chmod(broken, 0o755)
+        with mock.patch.dict(os.environ, {'PATH': tools + os.pathsep + os.environ['PATH']}):
+            word, checksum, note, _ = self.pack('~/walk_programs')
+        self.assertEqual((word, checksum), ('failed', None), self.last_text)
+        self.assertIn('gzip', note)
+        self.assertEqual(os.listdir(os.path.dirname(self.outgoing())), [])      # nothing is left behind
 
     def test_a_link_is_stored_as_a_link_and_what_it_points_to_outside_does_not_travel(self):
         self.write('prog/a.txt', b'inside')
