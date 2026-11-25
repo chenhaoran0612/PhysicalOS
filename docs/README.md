@@ -49,7 +49,7 @@
 | [CLOUD_SKILLS_CONSOLE.md](CLOUD_SKILLS_CONSOLE.md) | 控制台的「云端技能」页面，机器人页面的「远程调用」「程序和场景数据」两节（issue #43） |
 | [SKILL_RUN.md](SKILL_RUN.md) | 直接运行已装技能，真机也可以：运行表单、真机运行前的现场确认和授权、`onsite_confirmation_required`、记录里写什么（issue #42） |
 | [TASK_WORKBENCH.md](TASK_WORKBENCH.md) | 任务工作台：入口是任务概览（数量、名称、大小一致的卡片），一个任务的步骤页在 `#task`，上面有它的技能与配置；删除任务会带走什么、什么情况不能删（issue #44、#46） |
-| [ROBOTS_PAGE.md](ROBOTS_PAGE.md) | 「我的机器人」页面：页面跟着状态走，卡片只留下一步和实时状态，其余收进「更多功能」；以后往这个页面加内容要加在哪里（issue #41） |
+| [ROBOTS_PAGE.md](ROBOTS_PAGE.md) | 「我的机器人」页面：页面跟着状态走，卡片只留下一步和实时状态，其余收进「更多功能」；以后往这个页面加内容要加在哪里；机器人的对话框共用一个框架：标题是功能、机器人名在下面，同一台机器人的对话框之间可以直接切换（issue #41） |
 | [BODY_TYPES.md](BODY_TYPES.md) | 本体类型清单：内置四足和机械臂、添加和删除类型、每类的状态机模板标识和应有的运控接口、设备自报类型与人选类型的关系 |
 | [HANDOFF.md](HANDOFF.md) | 0.2.0–0.7.1 桌面版交接记录（历史，不再更新；0.8.0 起见进化记录） |
 
