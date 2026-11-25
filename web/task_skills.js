@@ -32,8 +32,10 @@ const tsWhen = value => {
 };
 
 // Issue #42: robots belong to the account (st.robot_home), and so does what was installed or run on them directly.
-const tsOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id ||
-  (['robots', 'operations'].includes(kind) && Boolean(st.robot_home) && x.project_id === st.robot_home));
+// The robot a task was created with (task.robot_id) is its robot; without a choice, all of them are.
+const tsOf = (st, kind, task) => (st[kind] || []).filter(x => (x.project_id === task.id ||
+  (['robots', 'operations'].includes(kind) && Boolean(st.robot_home) && x.project_id === st.robot_home)) &&
+  (kind !== 'robots' || !task.robot_id || x.id === task.robot_id));
 
 // ---------------------------------------------------------------- what a robot knows
 
