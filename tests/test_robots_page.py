@@ -15,6 +15,7 @@ from test_product import Server
 
 ROOT = Path(__file__).resolve().parents[1]
 LINE = '<link rel="stylesheet" href="/robots_page.css"><script src="/robots_page.js" defer></script>'
+DIALOGS_LINE = '<link rel="stylesheet" href="/robot_dialogs.css"><script src="/robot_dialogs.js" defer></script>'
 
 
 class ServedTests(unittest.TestCase):
@@ -51,6 +52,23 @@ class ServedTests(unittest.TestCase):
         script = (ROOT / 'web' / 'robots_page.js').read_text(encoding='utf-8')
         self.assertIn("document.addEventListener('DOMContentLoaded', rpInstall)", script)
 
+    def test_the_frame_of_a_robots_dialogs_is_served_and_loaded_once(self):
+        for path, mime in (('/robot_dialogs.js', 'text/javascript'), ('/robot_dialogs.css', 'text/css')):
+            status, content_type, body = self.get(path)
+
+            self.assertEqual(status, 200, path)
+            self.assertTrue(content_type.startswith(mime), content_type)
+            self.assertEqual(body, (ROOT / 'web' / path[1:]).read_bytes())
+        _, _, body = self.get('/')
+        index = body.decode('utf-8')
+
+        self.assertEqual(index.count(DIALOGS_LINE), 1)
+        self.assertGreater(index.index(DIALOGS_LINE), index.index('/style.css'))
+        # dialog() is stood in front of once every script has run: a script that wraps dialog() itself
+        # (the e-stop banner does) is inside, whatever the order of the lines.
+        script = (ROOT / 'web' / 'robot_dialogs.js').read_text(encoding='utf-8')
+        self.assertIn("document.addEventListener('DOMContentLoaded', rdInstall)", script)
+
 
 class PageTests(unittest.TestCase):
     def test_the_page_script_parses_and_its_pure_functions_hold(self):
@@ -62,6 +80,16 @@ class PageTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertRegex(result.stdout, r'robots_page_logic: \d+ checks passed')
+
+    def test_the_dialog_script_parses_and_its_pure_functions_hold(self):
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node 不可用')
+        result = subprocess.run([node, 'tests/robot_dialogs_logic.cjs'], capture_output=True, text=True,
+                                timeout=120, cwd=str(ROOT))
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r'robot_dialogs_logic: \d+ checks passed')
 
 
 if __name__ == '__main__':
