@@ -15,8 +15,8 @@ const notice = (text, warn = false) => `<div class="notice ${warn ? 'warn' : ''}
 const sandbox = {h, button, badge, notice, icon: k => `<svg data-icon="${k}"></svg>`, date: v => (v ? 'D' + v : '—')};
 vm.createContext(sandbox);
 const page = vm.runInContext(readFileSync('web/task_workbench.js', 'utf8') +
-  '\n;({twFacts, twTotals, twBlocked, twPlan, twRemoveDialog, twCard, twBoard, twDashboardMarkup, twTaskMarkup, twGuideBody,' +
-  ' TW_STAGES, TW_INDEX_SHOWN, TW_OLD_LIST, TW_SESSION_ACTIVE, TW_FLOW_RUNNING, TW_JOB_ACTIVE})', sandbox);
+  '\n;({twFacts, twTotals, twBlocked, twPlan, twRemoveDialog, twCard, twBoard, twDashboardMarkup, twTaskMarkup, twGuideOnce, twHeadButtons,' +
+  ' TW_STAGES, TW_INDEX_SHOWN, TW_OLD_LIST, TW_OPTIONS_HEAD, TW_GUIDE_SEEN, TW_CARD_ROWS, TW_SESSION_ACTIVE, TW_FLOW_RUNNING, TW_JOB_ACTIVE})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -94,9 +94,9 @@ const facts = t => page.twFacts(state, t);
   }
   same(count(html, 'class="tw-card current"'), 1, 'one card is the task opened last');
   ok(html.includes('data-action="journey-start"'), 'a task is created from the head');
-  ok(html.includes('data-action="task-guide"'), 'the guide is in the head');
-  ok(html.indexOf('task-guide') < html.indexOf('tw-board'), 'in the head, above the board');
-  ok(html.includes('me@example.test'), 'the page says whose tasks these are');
+  // Issue #46: no 使用指南 in the head, and no sentence about whose tasks these are.
+  ok(!html.includes('task-guide') && !html.includes('使用指南'), 'the head has no guide');
+  ok(!html.includes('me@example.test') && !html.includes('其他账号看不到') && !html.includes('tw-owner'), 'the page does not say whose tasks these are');
   ok(html.indexOf('tw-board') < html.indexOf('tw-wall'), 'the board is above the wall');
   same(count(html, 'tw-empty'), 0, 'no empty state with tasks');
   const guided = page.twDashboardMarkup(state, 'c', '<section class="first-run">G</section>');
@@ -139,9 +139,19 @@ const facts = t => page.twFacts(state, t);
   ok(b.includes('试用任务') && b.includes('上次打开') && b.includes('1 项工作进行中'), 'the tags say what is special about a task');
   ok(c.includes('下一步：连接机器人'), 'the next step is named');
   same(count(c, '<i class="next"'), 1, 'and marked');
-  ok(c.includes('模型 1') && !c.includes('tw-holds-none'), 'what is prepared is shown without a robot too');
-  const bare = task('bare');
-  ok(page.twCard(bare, page.twFacts({projects: [bare]}, bare), false).includes('tw-holds-none'), 'a task that holds nothing yet says where to start');
+  ok(c.includes('模型 1'), 'what is prepared is shown without a robot too');
+  // Issue #46: every card has the same parts, whatever the task holds, so every card is the same size.
+  const bare = task('bare'), bareCard = page.twCard(bare, page.twFacts({projects: [bare]}, bare), false);
+  const long = task('long', {name: '名'.repeat(100), objective: '很长的目标。'.repeat(300)});
+  const longCard = page.twCard(long, page.twFacts({projects: [long]}, long), true);
+  const shape = card => card.replace(/>[^<]*</g, '><').replace(/ (title|aria-label|data-id|data-task|datetime)="[^"]*"/g, '')
+    .replace(/ class="(done|next)?"/g, '').replace(/ none"/g, '"').replace(/<span class="status[^>]*><i class="dot"><\/i><\/span>/g, '').replace(' current', '');
+  for (const [card, what] of [[a, 'a full task'], [c, 'a task with a model only'], [bareCard, 'an empty task'], [longCard, 'a task with very long texts']]) {
+    same(count(card, '<div class="tw-hold'), page.TW_CARD_ROWS.length, `${what} has every row`);
+    same(shape(card), shape(bareCard), `${what} has the same parts as any other card`);
+  }
+  same(count(bareCard, 'class="tw-hold none"'), page.TW_CARD_ROWS.length, 'a row without content says so instead of leaving');
+  ok(longCard.includes(`title="${'名'.repeat(100)}"`), 'a name cut short on the card can be read in full');
   ok(c.includes('data-action="task-open"') && c.includes('data-id="c"'), 'the card leads into the task');
 }
 
@@ -188,19 +198,45 @@ const facts = t => page.twFacts(state, t);
 // ---- inside a task
 {
   const old = '<div class="page-head">HEAD</div><section class="journey-next">NEXT</section>' + page.TW_OLD_LIST + '<span>3 项</span></div><div class="cards">OLD</div>';
-  const html = page.twTaskMarkup(old, 3);
+  const html = page.twTaskMarkup(old, '');
   ok(html.includes('href="#overview"') && html.includes('全部任务'), 'the way back to all tasks');
   ok(html.indexOf('tw-back') < html.indexOf('HEAD'), 'above the head');
   ok(html.includes('journey-next'), 'the steps of the task are kept');
   ok(!html.includes('OLD') && !html.includes('我的任务项目'), 'the old list of tasks at the foot is gone');
-  same(page.twTaskMarkup('<p>other</p>', 1).endsWith('<p>other</p>'), true, 'a view of another shape is kept whole');
+  same(page.twTaskMarkup('<p>other</p>', '').endsWith('<p>other</p>'), true, 'a view of another shape is kept whole');
+  // Issue #46: no "one of N tasks", no 新建任务项目 / 使用指南 in the head of a task.
+  ok(!html.includes('个任务之一'), 'the page does not say how many tasks there are');
+  const headed = '<div class="page-head"><div><h1>T</h1></div><div class="button-row">' + page.twHeadButtons() + '</div></div>' +
+    '<section class="journey-next">NEXT<button data-action="journey-guide">查看完整流程</button></section>' + page.TW_OPTIONS_HEAD + '<span>x</span></div>OPTIONS';
+  ok(page.twHeadButtons().includes('新建任务项目') && page.twHeadButtons().includes('使用指南'), 'the buttons the step view puts in its head');
+  const task1 = page.twTaskMarkup(headed, '<section id="task-skills">SKILLS</section>');
+  ok(!task1.includes('新建任务项目') && !task1.includes('使用指南'), 'both are gone from the head of a task');
+  ok(task1.includes('查看完整流程'), 'the link to the whole flow inside the step stays');
+  ok(task1.indexOf('journey-next') < task1.indexOf('task-skills') && task1.indexOf('task-skills') < task1.indexOf('OPTIONS'),
+     'the skills of the task come after its steps and before the optional abilities');
+  ok(page.twTaskMarkup('<p>other</p>', '<section id="task-skills">S</section>').endsWith('<section id="task-skills">S</section>'),
+     'in a view of another shape they come last');
 }
 
-// ---- the guide
+// ---- the first-run guide is for the first visit only (issue #46)
 {
-  const guide = page.twGuideBody(true);
-  for (const word of ['任务是什么', '新建任务', '进入任务', '删除任务', '任务属于谁']) ok(guide.includes(word), `the guide covers ${word}`);
-  ok(page.twGuideBody(false).includes('创建第一个任务'), 'without a task it offers the first');
+  const memory = () => { const kept = {}; return {kept, getItem: k => (k in kept ? kept[k] : null), setItem: (k, v) => { kept[k] = String(v); }}; };
+  const G = '<section class="first-run">G</section>';
+  const store = memory();
+  const first = page.twGuideOnce(G, 'u1', null, store);
+  same(first.html, G, 'the first visit shows the guide');
+  same(first.shownFor, 'u1', 'and remembers for whom during this visit');
+  same(store.kept[page.TW_GUIDE_SEEN + ':u1'], '1', 'and that this account has seen it');
+  same(page.twGuideOnce(G, 'u1', first.shownFor, store).html, G, 'it stays while the page is open (the page is drawn again and again)');
+  same(page.twGuideOnce(G, 'u1', null, store).html, '', 'the second visit has no guide');
+  const other = page.twGuideOnce(G, 'u2', first.shownFor, store);
+  same(other.html, G, 'another account on this computer has its own first visit');
+  same(other.shownFor, 'u2', 'which becomes the account of this visit');
+  same(page.twGuideOnce('', 'u3', null, store).html, '', 'nothing to show is nothing');
+  ok(!((page.TW_GUIDE_SEEN + ':u3') in store.kept), 'and does not use up the first visit');
+  const broken = {getItem() { throw Error('blocked'); }, setItem() { throw Error('blocked'); }};
+  same(page.twGuideOnce(G, 'u1', null, broken).html, G, 'without browser storage the guide is simply shown');
+  same(page.twGuideOnce(G, '', null, store).html, G, 'without an account nothing is remembered');
 }
 
 console.log(`task_workbench_logic: ${checks} checks passed`);

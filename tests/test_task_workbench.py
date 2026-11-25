@@ -342,13 +342,15 @@ class AccountTests(unittest.TestCase):
         self.assertEqual(status, 401)
 
     def test_the_page_files_are_served_and_loaded_once(self):
-        for path, mime in (('/task_workbench.js', 'text/javascript'), ('/task_workbench.css', 'text/css')):
+        for path, mime in (('/task_workbench.js', 'text/javascript'), ('/task_workbench.css', 'text/css'),
+                           ('/task_skills.js', 'text/javascript'), ('/task_skills.css', 'text/css')):     # issue #46
             with urllib.request.urlopen(self.server.url + path, timeout=10) as response:
                 self.assertTrue(response.headers.get('Content-Type', '').startswith(mime), path)
                 self.assertEqual(response.read(), (ROOT / 'web' / path[1:]).read_bytes())
         with urllib.request.urlopen(self.server.url + '/', timeout=10) as response:
             index = response.read().decode('utf-8')
         self.assertEqual(index.count(LINE), 1)
+        self.assertEqual(index.count('<link rel="stylesheet" href="/task_skills.css"><script src="/task_skills.js" defer></script>'), 1)
         self.assertGreater(index.index(LINE), index.index('/style.css'))
         # The page is taken over once every script has run, so the place of the line does not matter.
         script = (ROOT / 'web' / 'task_workbench.js').read_text(encoding='utf-8')
@@ -376,6 +378,17 @@ class PageTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertRegex(result.stdout, r'task_workbench_logic: \d+ checks passed')
+
+    def test_the_skills_of_a_task_are_read_and_shown_as_the_logic_checks_say(self):
+        # Issue #46: web/task_skills.js, the section of a task's page about its skills and their configuration.
+        node = shutil.which('node')
+        if not node:
+            self.skipTest('node 不可用')
+        result = subprocess.run([node, 'tests/task_skills_logic.cjs'], capture_output=True, text=True,
+                                timeout=120, cwd=str(ROOT))
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertRegex(result.stdout, r'task_skills_logic: \d+ checks passed')
 
 
 if __name__ == '__main__':
