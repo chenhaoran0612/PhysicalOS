@@ -169,6 +169,8 @@ def make_handler(application):
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #41: the layout of "我的机器人", likewise.
             extra=extra or {'/robots_page.js':('robots_page.js','text/javascript; charset=utf-8'),'/robots_page.css':('robots_page.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #41: the one frame of a robot's dialogs, likewise.
+            extra=extra or {'/robot_dialogs.js':('robot_dialogs.js','text/javascript; charset=utf-8'),'/robot_dialogs.css':('robot_dialogs.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #44: 任务工作台 as a dashboard of the account's tasks, likewise.
             extra=extra or {'/task_workbench.js':('task_workbench.js','text/javascript; charset=utf-8'),'/task_workbench.css':('task_workbench.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #46: the skills of a task and how they are configured, on the page of the task, likewise.

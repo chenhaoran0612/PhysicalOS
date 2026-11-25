@@ -1,0 +1,37 @@
+/* Issue #41, second part — the dialogs in one frame (web/robot_dialogs.js). Uses the shared tokens from style.css. */
+
+:root{--rd-pad:26px;--rd-pad-end:22px;--rd-bar:#f9fbf6;--rd-rule:#e5ecdc}   /* the padding of .dialog-body in style.css */
+@media(max-width:600px){:root{--rd-pad:20px;--rd-pad-end:20px}}
+
+/* ---- the frame: the head and the actions stay in sight, the content scrolls between them.
+   The <dialog> itself stays the scroller (the scripts that repaint a dialog keep its scrollTop). */
+#dialog{scroll-padding:120px 0 84px}                          /* a field reached with Tab is not under the head or the actions */
+#dialog .dialog-head{position:sticky;top:0;z-index:4;background:var(--surface)}
+#dialog:has(>.safety-dialog-slot:not(:empty)) .dialog-head{position:static}   /* the e-stop banner has the top */
+#dialog .dialog-footer{position:sticky;bottom:0;z-index:3}
+
+/* Actions that a script wrote as the last row of its content: the same bar, in the same place. */
+#dialog .dialog-body>.cv-actions,#dialog .dialog-body>.hw-next{position:sticky;bottom:0;z-index:3;justify-content:flex-end;
+  margin:22px calc(-1*var(--rd-pad)) calc(-1*var(--rd-pad-end));padding:15px var(--rd-pad);background:var(--rd-bar);border-top:1px solid var(--rd-rule)}
+#dialog .dialog-body>.hw-next .button:first-child{order:3}    /* the next step is the last button, as in a form */
+#dialog .dialog-body>.cv-actions [data-action="close"]{order:-1}   /* leaving comes first, the action last, as in a form */
+
+/* ---- the head of a robot's dialog: what it does, then which robot */
+#dialog .dialog-head>div:first-child{flex:1 1 auto;min-width:0}
+.dialog-head p:has(>.rd-robot){display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin-top:9px}
+.rd-robot{flex:none;max-width:100%;padding:3px 9px;border-radius:6px;background:#eef4e6;color:#3d5a45;font-weight:600;font-size:11px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rd-rest{flex:1 1 240px;min-width:0;overflow-wrap:anywhere;line-height:1.6}
+
+/* ---- the row to the robot's other dialogs */
+.rd-nav{display:flex;flex-direction:row;flex-wrap:wrap;gap:0 2px;margin:16px 0 -19px -10px}   /* a narrow window gets a second line, nothing is cut off */
+.rd-tab{flex:none;padding:8px 10px 11px;border:0;border-bottom:2px solid transparent;background:none;color:#7c8b74;font-size:12px;font-weight:500;
+  white-space:nowrap;transition:color var(--rd-fast,.15s),border-color var(--rd-fast,.15s)}
+.rd-tab:hover{color:var(--ink)}
+.rd-tab:active{color:var(--green)}
+.rd-tab[aria-current]{color:var(--green);border-bottom-color:var(--green);font-weight:600}
+.rd-tab:focus-visible{outline:2px solid var(--green);outline-offset:-2px;border-radius:5px}
+@media(max-width:600px){.rd-nav{margin-bottom:-21px}}
+/* A low window (a phone on its side): nothing is pinned, the content gets the room. */
+@media(max-height:560px){#dialog #dialog-content .dialog-head,#dialog .dialog-footer,#dialog .dialog-body>.cv-actions,#dialog .dialog-body>.hw-next{position:static}}
+@media(prefers-reduced-motion:reduce){.rd-tab{transition:none}}
