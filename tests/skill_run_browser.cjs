@@ -107,7 +107,7 @@ let failed = async () => {};
   await expectText(dialog.locator('.dialog-body'), ['这台机器人还没有安装技能包']);
   await install('goto_place');
   await dialog.locator(RUN_FORM).waitFor();
-  await expectText(dialog, ['运行技能', '技能已安装', '现在可以让机器人运行它', '去哪里', '最快速度', '真实的机器人',
+  await expectText(dialog, ['运行技能', '技能已安装', '现在可以运行', '去哪里', '最快速度', '真实的机器人',
                             '这台设备还没有填写安全限值', '急停按钮够得着']);
   must(await page.locator('#markup-in-a-robot').count() === 0, 'Markup in a robot name became part of the page');
   must(!(await dialog.locator(RUN_FORM).innerText()).includes('仿真'), 'The form of a real robot talks about simulation');

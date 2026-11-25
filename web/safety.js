@@ -43,7 +43,7 @@ function safetyButtons(e, where) {
 }
 
 // A robot of another project than the one in view (Q7b-10): say which project it belongs to.
-const safetyOtherProject = e => Boolean(e && e.project_id && e.project_id !== projectId);
+const safetyOtherProject = e => Boolean(e && e.project_id && e.project_id !== projectId && e.project_id !== state.robot_home);   // issue #42: a robot of the account is not "another project's"
 const safetyProjectNote = e => safetyOtherProject(e) ? `（项目：${e.project_name || find('projects', e.project_id)?.name || e.project_id}）` : '';
 
 // One alerting robot, as a banner row.

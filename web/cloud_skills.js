@@ -55,9 +55,10 @@ function cloudSkillPathProblem(path) {
   return '';
 }
 
-// Robots of the current project a release can be installed on: connected ones.
+// Robots a release can be installed on: connected ones. Issue #42: robots belong to the account, so the task
+// that is open (`project`, kept for the callers) does not narrow them.
 function cloudSkillRobots(robots, project) {
-  return (robots || []).filter(r => r.project_id === project && r.status === 'connected');
+  return (robots || []).filter(r => r.status === 'connected');
 }
 
 // Who published a release, for showing. The cloud records an account or key number, which says nothing to a reader.

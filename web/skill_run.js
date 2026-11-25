@@ -40,15 +40,15 @@ function skillRunStatusButton(robot) {
 }
 
 function skillRunInstalledNote(robot) {
-  return `<section class="plan-review ok"><h3>技能已安装</h3><p>现在可以让机器人运行它。也可以先关闭，之后在` +
-    `${skillRunIsSim(robot) ? '“实时状态”或' : ''}“能力与技能”里运行。</p></section>`;
+  return `<p class="subtitle skill-run-installed" data-skill-run-installed>${badge('技能已安装', 'good')} 现在可以运行；也可以先关闭，之后在` +
+    `${skillRunIsSim(robot) ? '“实时状态”或' : ''}“能力与技能”里运行。</p>`;
 }
 
 // A real robot whose device says it will refuse motion until a person fills in its safety limits.
 function skillRunLimitsNote(robot) {
   if (skillRunIsSim(robot) || robot?.device_status?.safety_limits?.motion_blocked !== true) return '';
   return `<section class="plan-review blocked" data-skill-run-limits><h3>这台设备还没有填写安全限值</h3>` +
-    `<p>填写之前，设备会拒绝一切让机器人运动的指令：会运动的技能会在第一步失败，只读取状态的技能可以运行。</p>` +
+    `<p>填写之前设备会拒绝运动：会运动的技能在第一步失败，只读取状态的技能可以运行。</p>` +
     `<div class="button-row">${button('填写安全限值', SKILL_RUN_LIMITS_ACTION, 'small', robot.id)}</div></section>`;
 }
 
@@ -58,12 +58,11 @@ const skillRunTick = (name, text) =>
 // The foot of the run form: what kind of robot this is, and what a person confirms.
 function skillRunConfirmHtml(robot) {
   if (skillRunIsSim(robot)) {
-    return notice('<b>仿真</b> 这是仿真机器人：运动发生在虚拟环境中。授权规则与真机相同，运行中随时可以按“停止”。') +
+    return notice('<b>仿真</b> 运动发生在虚拟环境中，运行中随时可以按“停止”。') +
       skillRunTick('hardware_authorized', '我确认机器人周围安全，授权它执行这个技能（技能可能让机器人运动）。');
   }
   return skillRunLimitsNote(robot) +
-    notice('<b>真机</b> 这台机器人按真实的机器人处理：技能开始后它会真的运动。运行中随时可以按“停止”，停止后急停会锁存；' +
-      '软件停止不能替代硬件急停。', true) +
+    notice('<b>真机</b> 这是真实的机器人，技能开始后它会真的运动。运行中随时可以按“停止”；软件停止不能替代硬件急停。', true) +
     skillRunTick('onsite_confirmed', '现场有人看着这台机器人，周围没有人和障碍物，急停按钮够得着。') +
     skillRunTick('hardware_authorized', '我授权它执行这个技能（技能可能让机器人运动）。');
 }

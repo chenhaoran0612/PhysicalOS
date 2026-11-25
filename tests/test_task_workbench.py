@@ -17,6 +17,7 @@ import unittest
 import urllib.request
 from pathlib import Path
 
+from brainos import robot_scope
 from brainos.engineering import ACTIVE
 from brainos.server import Application, make_handler
 from brainos.service import Platform, now
@@ -48,7 +49,8 @@ class Case(unittest.TestCase):
         return self.store.put(kind, record)
 
     def ids(self, kind):
-        return {x['id'] for x in self.store.list(kind)}
+        # issue #42: the robots' home is a record of kind ``projects`` that is not a task (brainos/robot_scope.py)
+        return {x['id'] for x in self.store.list(kind)} - {robot_scope.HOME}
 
 
 class RemoveTests(Case):

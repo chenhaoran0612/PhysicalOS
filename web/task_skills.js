@@ -31,7 +31,9 @@ const tsWhen = value => {
   return Number.isFinite(seconds) && seconds < 1e11 ? seconds * 1000 : value;
 };
 
-const tsOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id);
+// Issue #42: robots belong to the account (st.robot_home), and so does what was installed or run on them directly.
+const tsOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id ||
+  (['robots', 'operations'].includes(kind) && Boolean(st.robot_home) && x.project_id === st.robot_home));
 
 // ---------------------------------------------------------------- what a robot knows
 

@@ -12,6 +12,7 @@ import json
 import re
 
 from . import connector
+from . import robot_scope
 from .spec_bridge import capabilities as spec_caps, manifest as spec_manifest
 
 KIND_NAMES = {
@@ -431,7 +432,7 @@ def detail(platform, p):
     Only read-only GETs reach the device; nothing moves.
     """
     robot = platform.store.get('robots', p.get('robot_id'))
-    if p.get('project_id') and robot.get('project_id') != p['project_id']:
+    if robot_scope.elsewhere(robot, p.get('project_id')):      # issue #42: a robot of the account is every task's
         raise ValueError('该机器人不属于当前项目')
     if robot.get('endpoint') and robot.get('status') == 'connected':
         robot = refresh(platform, robot)

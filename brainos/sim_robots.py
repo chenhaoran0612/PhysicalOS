@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from . import connector, robot_caps, runtime_bridge, skill_run
+from . import connector, robot_caps, robot_scope, runtime_bridge, skill_run
 from .contracts import required_text
 from .errors import CodedError, refusal_fields
 
@@ -157,10 +157,13 @@ class SimRobots:
         if kind not in KINDS:
             raise ValueError('请选择仿真机器人类型：四足或机械臂')
         spec = KINDS[kind]
-        if p.get('project_id'):
-            project = self.platform.project(p['project_id'])
+        # Issue #42: asked through the server, the robot is kept at the robots' home; the task is only where the trial goes on.
+        at_home = robot_scope.is_home(p.get('project_id'))
+        task_id = p.get(robot_scope.TASK_FIELD) if at_home else p.get('project_id')
+        if task_id:
+            project = self.platform.project(task_id)
         else:
-            existing = self.platform.store.list('projects')
+            existing = robot_scope.tasks(self.platform.store.list('projects'))
             if existing:
                 project = existing[0]
             else:
@@ -168,18 +171,19 @@ class SimRobots:
                 project = self.platform.add_project(dict(DEFAULT_PROJECT))
                 project['auto_created'] = True
                 self.platform.store.put('projects', project)
-        taken = {r['name'] for r in self.platform.store.list('robots') if r.get('project_id') == project['id']}
+        owner = robot_scope.HOME if at_home else project['id']
+        taken = {r['name'] for r in self.platform.store.list('robots') if r.get('project_id') == owner}
         name = p.get('name') or spec['name']
         name = required_text(name, '机器人名称', 100)
         base, n = name, 2
         while name in taken:
             name, n = f'{base} {n}', n + 1
-        robot = {'id': uid('robot'), 'project_id': project['id'], 'name': name, 'family': spec['family'],
+        robot = {'id': uid('robot'), 'project_id': owner, 'name': name, 'family': spec['family'],
                  'endpoint': '', 'token': secrets.token_urlsafe(32), 'status': 'unconnected', 'capabilities': [],
                  'sim': {'kind': kind, 'adapter': spec['adapter'], 'enabled': True, 'state': 'starting'},
                  'created_at': now()}
         self.platform.store.put('robots', robot)
-        self.platform.audit('robot.sim_added', {'robot_id': robot['id'], 'kind': kind}, project['id'])
+        self.platform.audit('robot.sim_added', {'robot_id': robot['id'], 'kind': kind}, owner)
         robot = self.start(robot['id'])
         return {**robot, 'project_id': project['id']}
 
@@ -305,7 +309,7 @@ class SimRobots:
         the user then confirms on-site safety and resets as usual.
         """
         robot = self._sim_robot(p.get('robot_id'))
-        if p.get('project_id') and robot.get('project_id') != p['project_id']:
+        if robot_scope.elsewhere(robot, p.get('project_id')):      # issue #42: a robot of the account is every task's
             raise ValueError('该机器人不属于当前项目')
         self.stop_process(robot['id'], disable=False)
         self.platform.audit('robot.sim_restarted', {'robot_id': robot['id']}, robot['project_id'])
@@ -504,7 +508,7 @@ def _reset_facts(status, robot):
 def live(platform, p):
     """Read-only live view: device status, condensed state and the latest run. Nothing moves."""
     robot = platform.store.get('robots', p.get('robot_id'))
-    if p.get('project_id') and robot.get('project_id') != p['project_id']:
+    if robot_scope.elsewhere(robot, p.get('project_id')):      # issue #42: a robot of the account is every task's
         raise ValueError('该机器人不属于当前项目')
     view = {'robot_id': robot['id'], 'name': robot['name'], 'family': robot['family'],
             'simulated': bool(robot.get('sim')) or (robot.get('manifest') or {}).get('simulated') is True,
@@ -571,7 +575,7 @@ def run_skill(platform, p):
             raise ValueError('请求标识已用于其他操作')
         return existing
     robot = platform.store.get('robots', p.get('robot_id'))
-    if p.get('project_id') and robot.get('project_id') != p['project_id']:
+    if robot_scope.elsewhere(robot, p.get('project_id')):      # issue #42: a robot of the account is every task's
         raise ValueError('该机器人不属于当前项目')
     facts = skill_run.require_confirmations(robot, p)     # issue #42: a real robot needs the on-site confirmation too
     skill_id = required_text(p.get('skill_id'), '技能', 100)

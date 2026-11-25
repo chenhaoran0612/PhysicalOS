@@ -11,7 +11,10 @@ const blank=()=>Object.fromEntries(['projects','robots','services','models','dat
 let resourceKind='',modelSource='';
 let state={...blank(),user:null,families:familyNames},current='overview',projectId='',last='',polling=false,toastTimer,search='';
 const project=()=>state.projects.find(p=>p.id===projectId);
-const rows=k=>state[k].filter(x=>x.project_id===projectId);
+const rows=k=>state[k].filter(x=>x.project_id===projectId||robotShared(k,x));
+// Issue #42: robots, and what is kept about them, belong to the account (state.robot_home), so every task lists them. A task's own assistant settings are not shared.
+const ROBOT_HOME_PRIVATE=['agent_models','agent_skills','agent_mcp_servers'];
+function robotShared(kind,x){return Boolean(state.robot_home)&&x.project_id===state.robot_home&&!ROBOT_HOME_PRIVATE.includes(kind);}
 const find=(k,id)=>state[k].find(x=>x.id===id);
 const named=(k,id)=>find(k,id)?.name||id;
 const date=v=>v?new Date(v).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
@@ -33,7 +36,7 @@ const picker=(kind,name,label)=>field(label,select(name,rows(kind).map(x=>[x.id,
 function toast(text){$('#toast').textContent=text;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4500);}
 async function api(path,payload){const response=await fetch('/api/'+path,payload===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const result=await response.json();if(!response.ok){const error=Error(result.error||'请求失败');error.code=response.status;error.status=response.status;error.reason=typeof result.code==='string'?result.code:'';error.body=result;throw error;}return result;}
 function art(){return `<div class="hero-art" aria-hidden="true"><svg viewBox="0 0 420 220"><g fill="none" stroke="#b8cbaa"><path d="M210 110 100 55M210 110l110-55M210 110 100 175M210 110l110 65"/><circle cx="210" cy="110" r="77" stroke-dasharray="3 6" opacity=".6"/></g><g fill="#f8fbf3" stroke="#cadbbd"><rect x="58" y="35" width="84" height="40" rx="7"/><rect x="278" y="35" width="84" height="40" rx="7"/><rect x="58" y="155" width="84" height="40" rx="7"/><rect x="278" y="155" width="84" height="40" rx="7"/></g><g fill="#7b9369" text-anchor="middle"><text x="100" y="59">MODELS</text><text x="320" y="59">AGENTS</text><text x="100" y="179">SKILLS</text><text x="320" y="179">ROBOTS</text></g><g class="core"><path d="m210 68 49 26v42l-49 26-49-26V94Z" fill="#385a3d"/><path d="m210 68 49 26-49 26-49-26Z" fill="#719566"/><path d="M210 120v42" stroke="#9fbc89"/><path d="m210 83 22 12-22 12-22-12Z" fill="#d5e8ba"/><text x="210" y="138" text-anchor="middle" fill="#dceac9">ROBOT OS</text></g></svg></div>`;}
-function noProject(){return !project()?notice('先告诉平台机器人要完成什么工作，连接与结果会保存在同一个任务项目中。 '+`<button class="text-link" data-action="journey-start">描述我的任务 ↗</button>`):'';}
+function noProject(){return !project()&&current!=='robots'?notice('先告诉平台机器人要完成什么工作，连接与结果会保存在同一个任务项目中。 '+`<button class="text-link" data-action="journey-start">描述我的任务 ↗</button>`):'';}
 function overview(){const p=project();const stages=[['robots','接入本体',rows('robots').some(r=>r.status==='connected'),'连接设备与能力'],['skills','开发应用',rows('applications').length>0,'组合技能与模型'],['harness','测试验证',rows('evaluations').some(e=>e.scope==='onsite'&&e.passed),'工程检查与现场测试'],['deployment','部署上岗',rows('deployments').some(d=>d.status==='deployed'),'发布、运行与维护']];
  return heading('ROBOT APPLICATION PLATFORM',p?h(p.name):'让你的机器人，准备上岗。',p?h(p.objective):'接入机器人，构建能力，完成测试，交付可持续运行的机器人应用。',button(icon('plus')+' 新建项目','project-add')+button('开发指南 ↗','guide','secondary'))+
  (!p?`<section class="hero"><div class="hero-copy"><div class="hero-label"><i></i> NEUXMIND / ROBOT OS</div><h2>从一个机器人本体，<br>到一个能工作的系统。</h2><p>为开发者、集成商和机器人使用者提供共同的工作空间。<br>模型、技能、Agent 和交付工具，在这里协同工作。</p>${button('创建第一个项目 '+icon('arrow'),'project-add','small')}</div>${art()}</section>`:'')+

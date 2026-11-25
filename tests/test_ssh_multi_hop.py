@@ -11,6 +11,7 @@ import unittest
 from unittest import mock
 
 import test_ssh_jump as base
+from brainos import robot_scope
 from brainos import device_access, hardware_init, hardware_scan, ssh_route
 from brainos.service import Platform
 from hardware_fixture import jetson
@@ -563,7 +564,8 @@ class MigrationTests(ChainCase):
         self.assertEqual(saved['jumps'], [hop])
         self.assertEqual(secret['jumps'], [{'password': password, 'private_key': '', 'passphrase': ''}])
         self.assertFalse([key for key in secret if key.startswith('jump_')])
-        self.assertEqual(platform.store.get('device_connections', direct['id']), direct)      # a direct one is untouched
+        # a direct one is untouched by this migration (issue #42 moved it, with its robot, to the robots' home)
+        self.assertEqual(platform.store.get('device_connections', direct['id']), {**direct, 'project_id': robot_scope.HOME})
         view = platform.engineering.status({'project_id': self.pid, 'robot_id': saved['robot_id']})
         self.assertTrue(view['reachable'], view)
         self.assertTrue(view['via_jump'])

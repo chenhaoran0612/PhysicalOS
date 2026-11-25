@@ -264,7 +264,11 @@ class IdentityHttpTests(unittest.TestCase):
         self.assertEqual(len(self.request('/api/state',cookie=a)[1]['projects']),1)
         self.assertEqual(len(self.request('/api/state',cookie=b)[1]['projects']),0)
         aid=self.request('/api/state',cookie=a)[1]['projects'][0]['id']
-        self.assertEqual(self.request('/api/robots',{'project_id':aid,'name':'intrusion','family':'quadruped'},b)[0],400)
+        # issue #42: a robot is the account's own, whatever task the request names: nothing reaches account A
+        self.assertEqual(self.request('/api/robots',{'project_id':aid,'name':'intrusion','family':'quadruped'},b)[0],200)
+        self.assertEqual(self.request('/api/skills',{'project_id':aid,'name':'intrusion','version':'1','entrypoint':'x','required_capabilities':[]},b)[0],400)
+        self.assertEqual([r['name'] for r in self.request('/api/state',cookie=a)[1]['robots']],[])
+        self.assertEqual([r['name'] for r in self.request('/api/state',cookie=b)[1]['robots']],['intrusion'])
         self.request('/api/logout',{},a)
         self.assertEqual(self.request('/api/state',cookie=a)[0],401)
 
