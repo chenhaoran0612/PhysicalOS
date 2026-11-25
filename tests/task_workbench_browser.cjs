@@ -1,6 +1,8 @@
 // Browser acceptance for issue #44: 任务工作台 is a dashboard. It shows how many tasks the account has
-// and what they are called, then every task as a card in a masonry wall; a task is created from the
-// head and deleted from its card; 「使用指南」 is at the top right; one task is a page of its own (#task).
+// and what they are called, then every task as a card; a task is created from the head and deleted from
+// its card; one task is a page of its own (#task).
+// Issue #46: every card is the same size at every width and whatever its texts; the first-run guide is
+// there on the first visit only; the head has no 「使用指南」 and the page does not say whose tasks these are.
 //   node tests/task_workbench_browser.cjs <fixture-config.json> [screenshot-dir]
 // Fixture: tests/ux01_browser_fixture.py (a fresh state directory; the server needs NEUXMIND_MAIL_DEV_ECHO=1).
 // BRAIN_BROWSER=webkit runs it on WebKit, the engine of the desktop app.
@@ -31,6 +33,9 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   const card = name => main.locator('.tw-card', {hasText: name});
   const count = async () => Number(await main.locator('[data-tw-count]').innerText());
   const hash = () => page.evaluate(() => location.hash);
+  const cardBoxes = () => main.locator('.tw-wall .tw-card').evaluateAll(els => els.map(el => {
+    const r = el.getBoundingClientRect(); return {x: Math.round(r.x), w: Math.round(r.width * 2) / 2, h: Math.round(r.height * 2) / 2}; }));
+  const sameSize = boxes => new Set(boxes.map(b => b.w)).size === 1 && new Set(boxes.map(b => b.h)).size === 1;
   const noSidewaysScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth &&
     document.querySelector('main').scrollWidth <= document.querySelector('main').clientWidth);
   // The page scrolls inside #content-scroll: for a picture of all of it the window is made as high as the content.
@@ -62,18 +67,16 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   check(await main.locator('.tw-empty [data-action="journey-start"]').isVisible(), 'The empty dashboard does not offer the first task');
   check(await main.locator('.tw-wall').count() === 0, 'A wall is shown without a task');
   check(await main.locator('.journey-next').count() === 0, 'The step-by-step view of one task is still on the entry page');
-  check((await main.locator('.tw-owner').innerText()).includes(first), 'The dashboard does not say whose tasks these are');
-  check(await main.locator('.first-run').isVisible(), 'The first-run guide left the entry page');
-  const guide = main.locator('.tw-head [data-action="task-guide"]'), box = await guide.boundingBox(), area = await main.boundingBox();
-  check(await guide.innerText() === '使用指南', 'There is no 使用指南 in the head');
-  check(box.x + box.width > area.x + area.width - 80 && box.y < area.y + 140, `使用指南 is not at the top right: ${JSON.stringify(box)}`);
+  const entry = await main.innerText();
+  check(!entry.includes(first) && !entry.includes('其他账号看不到'), 'The dashboard still says whose tasks these are');
+  check(!entry.includes('使用指南') && await main.locator('[data-action="task-guide"]').count() === 0, 'The head still has 使用指南');
+  check(await main.locator('.tw-head button').count() === 1, 'The head has more than 新建任务');
+  // 2. The first visit shows the first-run guide, and keeps it while the page is drawn again.
+  check(await main.locator('.first-run').isVisible(), 'The first visit has no first-run guide');
+  await page.evaluate(() => render());
+  check(await main.locator('.first-run').isVisible(), 'The first-run guide left during the first visit');
   check(await noSidewaysScroll(), 'The empty dashboard scrolls sideways');
   await shot('1-empty');
-
-  // 2. The guide says what a task is and how to create, enter and delete one.
-  await guide.click();
-  for (const word of ['任务是什么', '新建任务', '进入任务', '删除任务', '任务属于谁']) await dialog.getByText(word, {exact: true}).first().waitFor();
-  await page.locator('#dialog .tw-guide [data-action="close"]').click();
 
   // 3. Creating a task leads into it: the page of one task, known to the sidebar and the breadcrumb.
   await create('仓库夜间巡检', LONG);
@@ -92,12 +95,15 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   // 4. Back on the dashboard: one task, by name and as a card.
   await home();
   check(await hash() === '#overview', 'The way back does not lead to the dashboard');
+  // The page was loaded again meanwhile: this is the second visit, the first-run guide is gone.
+  check(await main.locator('.first-run').count() === 0, 'The first-run guide is still there on the second visit');
   check(await count() === 1, 'The count is not 1 after the first task');
   check(await main.locator('.tw-names button').allInnerTexts().then(t => t.join('|').includes('仓库夜间巡检')), 'The dashboard does not name the task');
   check(await card('仓库夜间巡检').locator('.tw-objective').innerText() === LONG, 'The card does not show the goal');
   check((await card('仓库夜间巡检').locator('.tw-track-text').innerText()).includes('下一步：连接机器人'), 'The card does not say what is next');
 
-  // 5. More tasks: the count and the names follow; the wall is a masonry (columns, cards as high as their content).
+  // 5. More tasks: the count and the names follow; the wall has columns, and every card is the same size
+  //    although one goal is a paragraph and another a few words.
   await create('前台接待', '引导访客到会议室。'); await home();
   await create('工位上下料', '把料盘从推车搬到三号工位，空盘放回推车。'); await home();
   await create('园区巡逻', '白天每两小时沿园区外圈走一圈。'); await home();
@@ -105,9 +111,12 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   const names = await main.locator('.tw-names button span').allInnerTexts();
   check(['仓库夜间巡检', '前台接待', '工位上下料', '园区巡逻'].every(n => names.includes(n)), `The dashboard does not name every task: ${names}`);
   check(await main.locator('.tw-wall .tw-card').count() === 4, 'The wall does not have every task');
-  const boxes = await main.locator('.tw-wall .tw-card').evaluateAll(els => els.map(el => { const r = el.getBoundingClientRect(); return {x: Math.round(r.x), h: Math.round(r.height)}; }));
+  const boxes = await cardBoxes();
   check(new Set(boxes.map(b => b.x)).size >= 2, `The wall is one column at 1440: ${JSON.stringify(boxes)}`);
-  check(new Set(boxes.map(b => b.h)).size >= 2, `Every card is the same height: ${JSON.stringify(boxes)}`);
+  check(sameSize(boxes), `The cards are not the same size at 1440: ${JSON.stringify(boxes)}`);
+  const parts = await main.locator('.tw-wall .tw-card').evaluateAll(els => els.map(el =>
+    [...el.querySelectorAll('h3, .tw-objective, .tw-track-text, .tw-hold dd')].every(part => part.scrollWidth <= part.clientWidth + 1 || getComputedStyle(part).overflow === 'hidden')));
+  check(parts.every(Boolean), 'A text of a card is not kept inside its line');
   check(await main.locator('.tw-card.current').count() === 1, 'The task opened last is not marked');
   check(await noSidewaysScroll(), 'The dashboard scrolls sideways at 1440');
   await shot('3-dashboard');
@@ -171,8 +180,19 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   check(await dialog.locator('[data-action="task-remove-confirm"]').count() === 0, 'The refused deletion can be confirmed again');
   await page.locator('#dialog [data-action="close"]').first().click();
   check(await count() === 3, 'A refused deletion changed the count');
+  // Inside a task: no "one of N tasks", no 新建任务项目 or 使用指南 in its head (the skills section has its own script).
+  await card('园区巡逻').locator('[data-action="task-open"]').click();
+  await main.locator('.tw-back').waitFor();
+  check((await main.locator('.tw-back').innerText()).trim() === '← 全部任务', 'The page of a task says more than the way back above its head');
+  const inTask = await main.locator('.page-head button').allInnerTexts();
+  check(!inTask.some(t => t.includes('新建任务项目') || t.includes('使用指南')), `The head of a task still has: ${inTask}`);
+  await main.locator('#task-skills').getByText('巡逻狗').waitFor();
+  await home();
 
-  // 10. Every width: nothing scrolls sideways, the wall goes down to one column.
+  // 10. Every width: nothing scrolls sideways, the wall goes down to one column, and the cards stay the same
+  //     size: by now one task has a long goal, two have a robot, and a fourth has the longest name allowed.
+  await page.evaluate(async () => { await api('projects', {name: '名称很长的任务'.repeat(14) + '到头', objective: '短'}); await refresh(true); });
+  await main.locator('.tw-wall .tw-card').nth(3).waitFor();
   for (const width of [320, 375, 768, 1024, 1440, 1920]) {
     await page.setViewportSize({width, height: 900});
     await page.waitForTimeout(350);      // the sidebar slides away below 600
@@ -181,6 +201,8 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
       const r = el.getBoundingClientRect(); return r.left >= 0 && r.right <= document.documentElement.clientWidth + 1;
     }));
     check(inside, `A card or the board leaves the window at ${width}`);
+    const sizes = await cardBoxes();
+    check(sizes.length === 4 && sameSize(sizes), `The cards are not the same size at ${width}: ${JSON.stringify(sizes)}`);
     if ([320, 768, 1920].includes(width)) await shot(`6-width-${width}`);
   }
   const narrow = await (async () => { await page.setViewportSize({width: 375, height: 900}); await page.waitForTimeout(350);      // the sidebar slides away below 600

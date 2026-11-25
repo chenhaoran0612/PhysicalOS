@@ -1,0 +1,62 @@
+/* Issue #46 — the skills of a task and how they are configured (web/task_skills.js). Uses the shared tokens
+   of style.css and the greens of task_workbench.css. */
+:root{--ts-edge:#dfe7dc;--ts-wash:#f7faf4;--ts-soft:#64795c;--ts-rule:#eef1ea}
+
+.ts{margin:30px 0 8px}
+.ts>.section-head{margin-bottom:14px}
+.ts-robot{margin-bottom:16px;border:1px solid var(--ts-edge);border-radius:13px;background:var(--surface);overflow:hidden}
+.ts-robot[aria-busy=true] .ts-source{color:var(--green)}
+.ts-robot-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 22px 12px;background:linear-gradient(125deg,#edf4e5,#f8faf6)}
+.ts-robot-head h3{margin:0 0 6px;font-size:16px;line-height:1.4;letter-spacing:-.2px;overflow-wrap:anywhere}
+.ts-robot-head p{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;margin:0;font-size:12px;color:var(--ts-soft)}
+.ts-robot-head .button{flex:none}
+.ts-source{margin:0;padding:9px 22px;border-bottom:1px solid var(--ts-rule);font-size:11.5px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+
+/* the places a robot knows */
+.ts-places{padding:14px 22px;border-bottom:1px solid var(--ts-rule)}
+.ts-places h4{margin:0 0 8px;font-size:11px;font-weight:500;letter-spacing:.08em;color:var(--ts-soft)}
+.ts-places p{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.ts-places small{display:block;max-width:640px;font-size:11.5px;line-height:1.7;color:var(--muted)}
+.ts-chip{display:inline-flex;align-items:center;min-height:26px;padding:3px 11px;border:1px solid #cfdcc6;border-radius:13px;background:var(--ts-wash);font-size:12.5px;color:#2b4a36;overflow-wrap:anywhere}
+
+/* one skill: what it is, then each place the task uses it with the values of that use */
+.ts-skill{padding:16px 22px 18px;border-bottom:1px solid var(--ts-rule)}
+.ts-skill:last-child{border-bottom:0}
+.ts-skill.unused{background:#fbfcfa}
+.ts-skill-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.ts-skill-head h4{margin:0;font-size:14.5px;line-height:1.5;overflow-wrap:anywhere}
+.ts-key{font-size:11px;color:#8a9a80;overflow-wrap:anywhere}
+.ts-marks{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.ts-summary{max-width:720px;margin:6px 0 0;font-size:12.5px;line-height:1.75;color:#53625b;overflow-wrap:anywhere}
+.ts-use{margin-top:12px;border:1px solid var(--ts-rule);border-radius:10px;background:var(--surface)}
+.ts-use[data-from=app]{box-shadow:inset 3px 0 0 var(--green)}
+.ts-use[data-from=run]{box-shadow:inset 3px 0 0 #3f7fb8}
+.ts-from{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 14px;margin:0;padding:10px 16px;border-bottom:1px solid var(--ts-rule);font-size:12.5px}
+.ts-from strong{font-weight:600;overflow-wrap:anywhere}
+.ts-from span{font-size:11.5px;color:var(--muted)}
+.ts-skill.unused .ts-from strong{font-weight:500;color:var(--ts-soft)}
+.ts-rows{margin:0;padding:4px 16px 8px}
+.ts-row{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr);gap:4px 18px;padding:8px 0;border-bottom:1px dashed var(--ts-rule);font-size:13px;line-height:1.7}
+.ts-row:last-child{border-bottom:0}
+.ts-row dt{color:#4d6349;overflow-wrap:anywhere}
+.ts-row dt small{display:block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;color:#9aa69f}
+.ts-row dd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0;min-width:0;color:var(--ink)}
+.ts-text{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.ts-origin{font-style:normal;padding:1px 8px;border-radius:9px;background:#eef1ea;font-size:11px;color:var(--muted)}
+.ts-row[data-origin=unset] dd{color:var(--muted)}
+.ts-none{margin:0;padding:12px 16px;font-size:12.5px;line-height:1.7;color:var(--muted)}
+.ts-robot>.ts-none{padding:16px 22px}
+.ts-robot>.ts-none:empty{display:none}
+
+/* an order: places by name, points with coordinates */
+.ts-route,.ts-points{display:flex;flex-wrap:wrap;gap:6px 26px;margin:0;padding:0;list-style:none;counter-reset:ts-step}
+.ts-route li,.ts-points li{position:relative;display:inline-flex;align-items:center;gap:7px;min-height:28px;padding:3px 12px 3px 5px;border:1px solid #cfdcc6;border-radius:14px;background:var(--ts-wash);font-size:12.5px;color:#2b4a36;counter-increment:ts-step;overflow-wrap:anywhere}
+.ts-route li::before,.ts-points li::before{content:counter(ts-step);display:inline-grid;place-items:center;flex:none;width:19px;height:19px;border-radius:50%;background:var(--green);color:#fff;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.ts-route li:not(:last-child)::after,.ts-points li:not(:last-child)::after{content:"→";position:absolute;right:-20px;color:#9db08f}
+.ts-points li span{font-variant-numeric:tabular-nums}
+.ts-points li em{font-style:normal;font-size:11px;color:var(--ts-soft)}
+
+.ts-empty{padding:26px 24px;border:1px dashed #c9d6c6;border-radius:13px;background:var(--surface);text-align:center}
+.ts-empty p{max-width:520px;margin:0 auto 14px;font-size:13px;line-height:1.9;color:#53625b}
+
+@media(max-width:700px){.ts-robot-head,.ts-source,.ts-places,.ts-skill{padding-left:16px;padding-right:16px}.ts-row{grid-template-columns:1fr;gap:2px}.ts-marks{margin-left:0;width:100%}.ts-rows,.ts-from{padding-left:12px;padding-right:12px}}

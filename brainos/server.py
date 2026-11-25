@@ -171,6 +171,8 @@ def make_handler(application):
             extra=extra or {'/robots_page.js':('robots_page.js','text/javascript; charset=utf-8'),'/robots_page.css':('robots_page.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #44: 任务工作台 as a dashboard of the account's tasks, likewise.
             extra=extra or {'/task_workbench.js':('task_workbench.js','text/javascript; charset=utf-8'),'/task_workbench.css':('task_workbench.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #46: the skills of a task and how they are configured, on the page of the task, likewise.
+            extra=extra or {'/task_skills.js':('task_skills.js','text/javascript; charset=utf-8'),'/task_skills.css':('task_skills.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #22: safety limits per device, likewise.
             extra=extra or {'/safety_limits.js':('safety_limits.js','text/javascript; charset=utf-8'),'/safety_limits.css':('safety_limits.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #43: skills kept in the cloud, remote calls of a robot's skills, its programs and scene data, likewise.
