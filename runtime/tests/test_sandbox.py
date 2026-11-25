@@ -570,13 +570,18 @@ class HiddenTasksTests(unittest.TestCase):
             self.assertTrue(record["result"]["thread"])
             # The helpers count (the limit is at least the uid's visible count + headroom;
             # tasks the uid has in other containers can only add to it) ...
-            limit = sandbox_events(fx, run_id, "sandbox.started")[0]["limits"]["RLIMIT_NPROC"]
+            started = sandbox_events(fx, run_id, "sandbox.started")[0]
+            limit = started["limits"]["RLIMIT_NPROC"]
             self.assertGreaterEqual(limit, before + extra - self.TASK_SLACK)
             # ... and it is still a bound: the skill process plus its forks get the headroom,
-            # wherever the uid's other tasks live (previously: no fork at all).
+            # wherever the uid's other tasks live (previously: no fork at all). The lower bound
+            # is what this change fixes. With a pids cgroup (pids.max = extra_tasks) the upper
+            # bound is the cgroup's, whatever RLIMIT_NPROC is; without one it is RLIMIT_NPROC's.
+            # The calibration arithmetic itself is covered in test_sandbox_nproc.
             forks = record["result"]["forks"]
             self.assertGreaterEqual(forks, extra - 1 - self.TASK_SLACK)
-            self.assertLessEqual(forks, extra - 1 + self.TASK_SLACK)
+            self.assertLessEqual(forks, extra - 1 + self.TASK_SLACK,
+                                 f"pids cgroup: {started['pids_cgroup']}")
         finally:
             for helper in helpers:
                 helper.kill()
