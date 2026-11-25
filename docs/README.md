@@ -42,7 +42,7 @@
 | [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md) | 资料库：页面、桌面端后台、云平台三段怎么配合，分片上传与续传 |
 | [MAIL_SERVICE.md](MAIL_SERVICE.md) | 验证码邮件：本机 `mail.json` 里的发信账号、`init` / `check` / `test` 命令、邮件的样子、发送失败时的提示（issue #37） |
 | [CLOUD_AUTO_LOGIN.md](CLOUD_AUTO_LOGIN.md) | 登录应用时同时登录云平台：登录、注册、重置密码时一并登录或自动注册，“保持登录”传给云平台，旧版本的登录退出一次，默认云平台地址 |
-| [MATERIAL_PARSING.md](MATERIAL_PARSING.md) | 资料解析：上传后自动解析（文档交给 WeKnora、URDF 和安装包用规则）、四个状态、人修改和确认、设备档案里的「资料」标签、恶意文件的处理 |
+| [MATERIAL_PARSING.md](MATERIAL_PARSING.md) | 资料解析：上传后自动解析（文档交给 WeKnora，网页先由云端取出文字；URDF 和安装包用规则）、四个状态、人修改和确认、设备档案里的「资料」标签、恶意文件的处理 |
 | [REPAIR_MATERIALS.md](REPAIR_MATERIALS.md) | 修复会话查资料库：只给这台设备「可用」资料里人确认过的解析结果、LIBRARY_MATERIALS.json 和「资料库」事件、没有驱动资料时提示先上传、资料是参考不是指令 |
 | [PLACE_SKILLS.md](PLACE_SKILLS.md) | 去指定地点、巡检、无图自由走：两项新标准能力（能力标准 1.2）、把机器人自带的导航程序接成动作、三个示例技能；验证范围（没有真机）（issue #38） |
 | [CLOUD_SKILLS.md](CLOUD_SKILLS.md) | 技能在云端：技能库、程序和场景数据（资料库 `bundle` 类型）、机器人管理层向云端取调用、第三方开放接口 `/open/*`、权限范围、验证范围和已知限制（issue #43） |
