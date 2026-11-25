@@ -11,6 +11,7 @@ import os
 import tarfile
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 
@@ -460,7 +461,12 @@ class FromThePage(BundleCase):
         ended = self.finished(job)
         self.assertEqual((ended['status'], ended['error']), ('stopped', None))
         self.assertEqual(self.cloud.materials, {})
-        self.assertEqual(self.device.names(STORE + '/.outgoing'), [])       # what the robot packed meanwhile is not left there
+        # What the robot packed meanwhile is not left there. The script on the robot outlives the closed
+        # session by a moment and removes its own side files when it notices: wait for that, do not race it.
+        deadline = time.monotonic() + 10
+        while self.device.names(STORE + '/.outgoing') and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(self.device.names(STORE + '/.outgoing'), [])
 
     def test_a_failure_is_told_with_its_code_and_a_job_of_another_project_is_not_found(self):
         job = self.finished(self.bundles.start_collect(self.ask(directory='~/not-there', authorized=True)))

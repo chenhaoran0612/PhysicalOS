@@ -145,7 +145,7 @@ chmod 700 "$outdir"
 # What an earlier, interrupted collection left behind.
 find "$outdir" -type f -name '*.tar.gz*' -mtime +0 -exec rm -f -- {} + 2>/dev/null
 out=$outdir/$2.tar.gz
-cleanup() { rm -f -- "$out" "$out.rc" "$out.err" "$out.find"; }
+cleanup() { rm -f -- "$out" "$out.rc" "$out.zrc" "$out.err" "$out.find"; }
 # A session that is gone (a stop, a dropped link) must not leave the archive behind.
 trap 'cleanup; exit 130' HUP INT PIPE TERM
 cleanup
@@ -155,16 +155,19 @@ if tar --version 2>/dev/null | grep -q 'GNU tar'; then gnu=yes; hard=--hard-dere
 # gzip -n: no name and no time stamp in the gzip header (bsdtar's own -z writes the time of packing),
 # so the same files give the same bytes and the same checksum whenever they are packed.
 ( cd "$real" && kept 2>"$out.find" | tar $hard --null --no-recursion -T - -cf - 2>"$out.err"; echo $? >"$out.rc" ) |
-  gzip -n 2>/dev/null | head -c "$(($3 + 1))" >"$out"
+  { gzip -n 2>>"$out.err"; echo $? >"$out.zrc"; } | head -c "$(($3 + 1))" >"$out"
 size=$(($(wc -c <"$out")))
 if [ "$size" -gt "$3" ]; then cleanup; say toolarge; exit 6; fi
 rc=; [ ! -f "$out.rc" ] || IFS= read -r rc <"$out.rc"
+# tar ends well even when the gzip after it is missing or fails: its own result counts too.
+zrc=; [ ! -f "$out.zrc" ] || IFS= read -r zrc <"$out.zrc"
 note=$(cat "$out.find" "$out.err" 2>/dev/null | head -c 600)
 unread=no; [ ! -s "$out.find" ] || unread=yes
-rm -f -- "$out.rc" "$out.err" "$out.find"
+rm -f -- "$out.rc" "$out.zrc" "$out.err" "$out.find"
 # GNU tar ends with 1 when a file changed while it was read: the archive is whole, and that is said.
 # A part of the directory that could not be read is a failure: half a program is not a copy of it.
 changed=no
+[ "$zrc" = 0 ] || { cleanup; say failed "$note"; exit 7; }
 case "$unread:$gnu:$rc" in
   no:*:0) ;;
   no:yes:1) changed=yes;;
