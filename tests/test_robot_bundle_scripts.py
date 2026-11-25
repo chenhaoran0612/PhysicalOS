@@ -18,6 +18,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 
 from brainos import robot_bundle_device as device
@@ -131,6 +132,16 @@ class Pack(ScriptCase):
         self.assertEqual(tree(os.path.join(self.home, 'walk_programs')), before)        # the directory is only read
         self.assertEqual(stat.S_IMODE(os.stat(self.outgoing()).st_mode) & 0o077, 0)   # private to the account
         self.assertEqual(os.listdir(os.path.dirname(self.outgoing())), [TOKEN + '.tar.gz'])
+
+    def test_the_same_directory_packed_at_another_time_gives_the_same_bytes(self):
+        # "Already in the cloud" is decided by the checksum, so the time of packing must not be in the
+        # archive. bsdtar's own gzip writes the current time into the gzip header; GNU tar's does not.
+        self.program()
+        first = self.pack('~/walk_programs')[1]
+        with open(self.outgoing(), 'rb') as handle:
+            self.assertEqual(handle.read(10)[4:8], b'\x00\x00\x00\x00')    # gzip header: no time stamp
+        time.sleep(1.2)                                                     # into another second
+        self.assertEqual(self.pack('~/walk_programs')[1], first)
 
     def test_a_link_is_stored_as_a_link_and_what_it_points_to_outside_does_not_travel(self):
         self.write('prog/a.txt', b'inside')

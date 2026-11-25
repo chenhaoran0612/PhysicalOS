@@ -152,8 +152,10 @@ cleanup
 gnu=no; hard=
 COPYFILE_DISABLE=1; export COPYFILE_DISABLE      # macOS tar: no ._ files for extended attributes
 if tar --version 2>/dev/null | grep -q 'GNU tar'; then gnu=yes; hard=--hard-dereference; fi
-( cd "$real" && kept 2>"$out.find" | tar $hard --null --no-recursion -T - -czf - 2>"$out.err"; echo $? >"$out.rc" ) |
-  head -c "$(($3 + 1))" >"$out"
+# gzip -n: no name and no time stamp in the gzip header (bsdtar's own -z writes the time of packing),
+# so the same files give the same bytes and the same checksum whenever they are packed.
+( cd "$real" && kept 2>"$out.find" | tar $hard --null --no-recursion -T - -cf - 2>"$out.err"; echo $? >"$out.rc" ) |
+  gzip -n 2>/dev/null | head -c "$(($3 + 1))" >"$out"
 size=$(($(wc -c <"$out")))
 if [ "$size" -gt "$3" ]; then cleanup; say toolarge; exit 6; fi
 rc=; [ ! -f "$out.rc" ] || IFS= read -r rc <"$out.rc"
