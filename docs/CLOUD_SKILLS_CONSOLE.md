@@ -114,6 +114,7 @@
   - GNU tar 上加 `--hard-dereference`：硬链接按普通文件存。
   - 输出经 `head -c` 截在上限加 1 字节：超过 64 MiB 的不会写满磁盘，超了就删掉并报告。
   - `~/neuxmind-bundles` 和 `.outgoing` 先确认不是符号链接、实际路径就是它自己，然后才 `mkdir`：`~/neuxmind-bundles` 被链接到程序目录时什么都不会建在里面。
+  - 压缩用 `tar -cf - | gzip -n`：gzip 头里没有文件名和打包时间，同样的文件什么时候打包都是同样的字节、同样的校验值，“云端已经有这一份”才判断得准（macOS 的 bsdtar 自己压缩时会写进当前时间；0.21.7 起改成这样）。
   - 包放在 `~/neuxmind-bundles/.outgoing/<随机 16 位>.tar.gz`（目录 700），在设备上算 SHA-256；用完删除。会话没了（停止、断线）时脚本收到信号或写答复失败，自己把包删掉；控制台这边不管在哪一步结束（包括打包时被停止），都会再连一次把它删掉；仍然留下的，下次打包时把超过一天的清掉。
 - **取回**：经 SFTP 读回本机 `<工作空间>/bundle-cache/`，连接断了从已取到的位置接着读（连续 7 次没有进展才放弃）；读完算 SHA-256，必须等于设备上算出的那个，否则不上传。本机副本用完即删。
 - **去重**：打完包先问资料库这台机器人名下有没有 SHA-256 相同的一份（同样的文件打出来的包逐字节相同）。有 → 结果里 `already_in_library` 为真，不取回、不上传。
@@ -180,7 +181,7 @@ node tests/cloud_skills_browser.cjs CONFIG.json artifacts/issue43      # BRAIN_B
 | 下载被改动、不合规、版本在预检后变了、不兼容 | 假云端注入 |
 | 远程调用的读和写 | 假管理层（各种状态）；**真管理层**的 `/v2/remote`、`/v2/remote/skills`（`test_remote_calls.RealManagementLayer`，仿真四足：打开、读回、关闭、没装的技能被拒绝）。真管理层没有这两个接口时这一类自动跳过 |
 | 连上云端时的连接状态、最近的调用 | 只有假管理层：仿真机器人没有配置云端连接，状态是“没有配置” |
-| 打包和解开的两段脚本 | 真的执行：macOS（bsdtar，`/bin/sh`）；**Linux**：`python:3.13-slim`（Debian，GNU tar 1.35，dash）和 **Ubuntu 22.04**（`ros:humble-ros-base-jammy`，GNU tar 1.34，dash 和 bash，root 和普通用户各一遍），容器都是 `--network none`。33 个用例，Linux 上全部通过；macOS 上跳过 1 个（硬链接按普通文件存只有 GNU tar 才做） |
+| 打包和解开的两段脚本 | 真的执行：macOS（bsdtar，`/bin/sh`）；**Linux**：`python:3.13-slim`（Debian，GNU tar 1.35，dash）和 **Ubuntu 22.04**（`ros:humble-ros-base-jammy`，GNU tar 1.34，dash 和 bash，root 和普通用户各一遍），容器都是 `--network none`。34 个用例（0.21.7 加了“相隔 1.2 秒打两次包，字节相同”），Linux 上全部通过；macOS 上跳过 1 个（硬链接按普通文件存只有 GNU tar 才做） |
 | 收进云端、装到机器人的整条流程 | `BundleDevice`（脚本在本机真的执行）+ 假云端；+ **真云端**的资料库（`kind=bundle`、状态直接 `usable`、驱动安装包的送达不接受它） |
 | 页面 | 逻辑检查 3 个脚本；浏览器验收在 Chromium 和 WebKit 上各一遍，截图看过宽窗口和 600 px 窄窗口 |
 
