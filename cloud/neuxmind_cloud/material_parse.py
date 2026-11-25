@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import threading
 import time
 import uuid
@@ -61,6 +62,10 @@ OFFICE = ("docx", "xlsx", "doc", "xls")
 # What the knowledge service is told a file is (it accepts these extensions: WeKnora internal/utils).
 SERVICE_EXTENSIONS = {"docx": "docx", "doc": "doc", "xlsx": "xlsx", "xls": "xls", "pdf": "pdf", "markdown": "md",
                       "text": "txt", "yaml": "txt", "json": "txt", "xml": "txt"}
+# Issue #45: the knowledge service has no reader for HTML files (WeKnora 0.6.3: only .mhtml and web addresses),
+# so a page is sent as the text the rules parser takes out of it, under this extension.
+CONVERTED = {"html": "md"}
+SERVICE_EXTENSIONS.update(CONVERTED)
 NO_VALUE = {"null", "none", "n/a", "na", "无", "没有", "暂无", "未提及", "未说明", "未知", "不详", "-", "—", "未提供",
             "资料中未提及", "资料未提及", "文档未提及"}
 
@@ -232,6 +237,56 @@ def _inspect_office(job: _Job, settings: Settings, store: LibraryStore) -> tuple
     return warnings, ""
 
 
+def _page_text(job: _Job, settings: Settings, store: LibraryStore):
+    """The words of an HTML page (issue #45): ``(text as bytes, warnings)``, or the ``_Finish`` that ends the
+    job without sending anything."""
+    def refused(why: str) -> _Finish:
+        return _Finish({}, "rules", error=why)
+    try:
+        facts = extract(job.format, store.object_path(job.org_id, job.sha256), _limits(settings))
+    except ExtractFailed as exc:
+        if exc.detail:
+            log.warning("page reader for %s: %s (%s)", job.material_id, exc.code, exc.detail[-500:])
+        return refused(f"没有读出这个网页的文字：{exc.message}。可以手工填写后确认")
+    except OSError:
+        return refused("这份资料的文件已经不在云端")
+    text = facts.get("text") if isinstance(facts.get("text"), str) else ""
+    if not text.strip():
+        return refused("网页里没有可以读出的文字（内容可能是打开网页时才由脚本生成的），没有交给解析服务。"
+                       "可以把网页另存为 PDF 或文本后上传，或手工填写后确认")
+    data = (text + "\n").encode("utf-8", "replace")
+    if len(data) > settings.weknora_max_bytes:
+        return refused(f"网页的文字超过解析服务接收的上限（{settings.weknora_max_bytes // (1024 * 1024)} MB），"
+                       "没有解析；可以手工填写后确认")
+    warnings = [f"网页很长，只解析了前面约 {max(len(text) // 10000, 1)} 万字"] if facts.get("truncated") else []
+    return data, warnings
+
+
+def _page_warnings(job: _Job, settings: Settings, store: LibraryStore) -> list:
+    """What was noted when the page was turned into text, for a job that uses a copy sent earlier: the
+    copy is the same text, so the same notes hold (the page is read again; nothing is sent)."""
+    if job.format not in CONVERTED:
+        return []
+    page = _page_text(job, settings, store)
+    return [] if isinstance(page, _Finish) else page[1]
+
+
+def _page_file(job: _Job, settings: Settings, store: LibraryStore):
+    """An HTML page as the file that is sent instead of it: ``(descriptor, size, warnings)`` of a nameless
+    temporary file holding the page's text, or the ``_Finish`` that ends the job without sending."""
+    page = _page_text(job, settings, store)
+    if isinstance(page, _Finish):
+        return page
+    data, warnings = page
+    handle = tempfile.TemporaryFile()                   # nameless from the start; gone when it is closed
+    try:
+        handle.write(data)
+        handle.flush()
+        return os.dup(handle.fileno()), len(data), warnings
+    finally:
+        handle.close()
+
+
 def _reusable(db: Database, job: _Job) -> MaterialParse | None:
     """Another material of the organisation with the same content whose questions were already answered."""
     with db.transaction() as s:
@@ -247,29 +302,38 @@ def _upload_step(job: _Job, settings: Settings, store: LibraryStore, service, db
     if refusal:
         return _Finish({}, "rules", warnings=warnings, error=refusal)
     if job.knowledge_id and service is not None:         # parsed again: the knowledge service still has its copy
-        return _Next(INDEXING, 0, {"warnings": warnings})
+        return _Next(INDEXING, 0, {"warnings": warnings + _page_warnings(job, settings, store)})
     if service is None:
         return _Finish({}, "weknora", warnings=warnings, error=(
             "云平台没有配置文档解析服务（WeKnora），这份文档没有解析。管理员配置后可以“重新解析”；也可以现在手工填写后确认"))
-    if job.size > settings.weknora_max_bytes:
+    if job.format not in CONVERTED and job.size > settings.weknora_max_bytes:
         return _Finish({}, "weknora", warnings=warnings, error=(
             f"文件有 {job.size // (1024 * 1024)} MB，超过解析服务接收的上限（{settings.weknora_max_bytes // (1024 * 1024)} MB），"
             "没有解析；可以手工填写后确认"))
     earlier = _reusable(db, job)
     if earlier is not None:
         return _Finish(dict(earlier.extracted.get("values") or {}), "weknora",
-                       warnings=warnings + ["同一个文件已经为别的设备解析过，沿用了那次的解析结果"],
+                       warnings=warnings + _page_warnings(job, settings, store)
+                       + ["同一个文件已经为别的设备解析过，沿用了那次的解析结果"],
                        extracted=dict(earlier.extracted), knowledge_id=earlier.knowledge_id)
     extension = SERVICE_EXTENSIONS[job.format]
     stem = job.filename.rsplit(".", 1)[0] if "." in job.filename else job.filename
     metadata = {"neuxmind_material_id": job.material_id, "neuxmind_org_id": job.org_id,
                 "neuxmind_device_id": job.device_id}
+    size = job.size
+    if job.format in CONVERTED:
+        page = _page_file(job, settings, store)
+        if isinstance(page, _Finish):
+            return page
+        fd, size, more = page
+        warnings = warnings + more
+    else:
+        try:
+            fd = os.open(store.object_path(job.org_id, job.sha256), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        except FileNotFoundError:
+            return _Finish({}, "weknora", error="这份资料的文件已经不在云端")
     try:
-        fd = os.open(store.object_path(job.org_id, job.sha256), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    except FileNotFoundError:
-        return _Finish({}, "weknora", error="这份资料的文件已经不在云端")
-    try:
-        knowledge = service.upload(fd, job.size, f"{stem}.{extension}", metadata)
+        knowledge = service.upload(fd, size, f"{stem}.{extension}", metadata)
     finally:
         os.close(fd)
     if knowledge.duplicate:

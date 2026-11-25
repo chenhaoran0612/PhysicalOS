@@ -58,6 +58,7 @@
 
 - 给 #34 和 #31 都适用的一条：云端只是认出文件是不是声称的类型（压缩包只看开头），没有打开它。解析和安装时要把内容当作不可信的输入。
 - #34（解析）：已经做了，见 [MATERIAL_PARSING.md](MATERIAL_PARSING.md)。状态多了 `usable`（可用，人确认后）；资料多了所属设备 `device_id` / `device_name`，列表可以按它过滤。`format` 是 `library_types.FORMATS` 里的标识（`docx`、`xlsx`、`doc`、`xls`、`pdf`、`markdown`、`text`、`yaml`、`json`、`xml`、`urdf`、`zip`、`tar.gz`、`tar.xz`、`tar.bz2`、`tar`、`deb`）。
+- #45（网页）：`.html`、`.htm` 也是文档，`format` 是 `html`。页面没有为它改代码：能选哪些后缀、提示里写什么都来自云端的 `library/formats`。页面只显示它的文件名，从不显示它的内容；云端只把它当附件下载。
 - #31（把驱动安装包送到设备）：`GET /library/materials?kind=package&body_type=…&vendor=…&model=…` 找包，`…/content` 取文件（支持 `Range`，响应头 `X-Checksum-SHA256` 和详情里的 `sha256` 是整个文件的摘要），API Key 需要 `library:read`。
 - #32（本体类型清单）：资料上的 `body_type` 存的是类型的标识，云端现在只校验格式；页面的下拉来自 `state.families`。清单定了以后在 `library._upload_fields` 里对照它。
 

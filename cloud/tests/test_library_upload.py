@@ -63,7 +63,7 @@ class AcceptanceTest(LibraryCase):
         self.assertEqual(self.content(self.user, material["id"]).content, data)
 
     def test_other_types_are_refused_and_the_answer_names_what_is_supported(self):
-        for name in ("setup.exe", "page.html", "install.sh", "archive.rar", "photo.png", "macro.docm",
+        for name in ("setup.exe", "page.xhtml", "install.sh", "archive.rar", "photo.png", "macro.docm",
                      "noextension", "driver.tar.gz.exe", "vector.svg"):
             with self.subTest(name):
                 body = self.error(self.start_raw(self.user, name, b"x" * 64), 415, "unsupported_type")

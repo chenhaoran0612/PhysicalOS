@@ -116,6 +116,7 @@ class FakeWeKnora:
                 record = {"kb_id": kb_id, "part_filename": part_name, "fileName": parts.get("fileName", (b"",))[0].decode(),
                           "metadata": json.loads(parts.get("metadata", (b"{}",))[0] or b"{}"), "size": len(data),
                           "sha256": hashlib.sha256(data).hexdigest()}
+                record["content"] = data                 # issue #45: what was sent, for the tests
                 with fake.lock:
                     fake.uploads.append(record)
                     existing = next((k for k in fake.knowledge.values() if k["sha256"] == record["sha256"]), None)

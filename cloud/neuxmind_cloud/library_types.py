@@ -52,6 +52,7 @@ FORMATS = (
     Format("yaml", "YAML", DOCUMENT, (".yaml", ".yml")),
     Format("json", "JSON", DOCUMENT, (".json",)),
     Format("xml", "XML", DOCUMENT, (".xml",)),
+    Format("html", "HTML 网页", DOCUMENT, (".html", ".htm")),      # issue #45
     Format("urdf", "URDF", DOCUMENT, (".urdf", ".xacro")),
     Format("zip", "ZIP 压缩包", PACKAGE, (".zip",)),
     Format("tar.gz", "tar.gz 压缩包", PACKAGE, (".tar.gz", ".tgz")),
@@ -68,6 +69,10 @@ _GROUPS = (("Word", ("docx", "doc")), ("Excel", ("xlsx", "xls")), ("PDF", ("pdf"
            ("文本", ("markdown", "text", "yaml", "json", "xml")), ("URDF", ("urdf",)),
            ("驱动安装包", ("zip", "tar.gz", "tar.xz", "tar.bz2", "tar", "deb")))
 TEXT_FORMATS = frozenset(("markdown", "text", "yaml", "json", "xml", "urdf"))
+# Issue #45: an HTML page is text as well. It is stored and handed out like any other file (a download,
+# never a page of this origin: routes/library.py) and parsed from the text taken out of it (material_extract).
+TEXT_FORMATS = TEXT_FORMATS | {"html"}
+_GROUPS = (*_GROUPS[:4], ("网页", ("html",)), *_GROUPS[4:])
 
 
 def supported_text() -> str:
@@ -176,6 +181,8 @@ def _text_head(fmt: Format, head: bytes, whole: bool, strict: bool) -> None:
         raise Unsupported("内容不是 JSON 对象或数组")
     if fmt.id in ("xml", "urdf") and first != b"<":
         raise Unsupported("内容不是 XML")
+    if fmt.id == "html" and first != b"<":
+        raise Unsupported("内容不是 HTML 网页")
     # A long licence comment may come first: only what is certainly the whole start decides.
     if fmt.id == "urdf" and (whole or strict) and not _ROBOT_TAG.search(plain):
         raise Unsupported("内容里没有 URDF 的 <robot> 元素")

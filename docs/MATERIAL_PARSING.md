@@ -28,6 +28,7 @@
 | 资料 | 怎么读 | 项目（* 必填） |
 |---|---|---|
 | 文档：Word、Excel、PDF、Markdown、文本、YAML、JSON、XML | WeKnora 解析后问模型三个问题（只限这一份文档，不联网搜索） | 驱动名称*、驱动版本*、从哪里取驱动*、适用的系统*、适用的 ROS 2 发行版*、安装步骤*、装好后应该出现的话题*、动作 |
+| 网页（`.html`、`.htm`，issue #45） | 云端规则先取出网页里的文字，再把这些文字当作一份 Markdown 文档交给 WeKnora，之后和别的文档一样 | 同上 |
 | URDF（`.urdf`、`.xacro`） | 云端规则 | 机器人名称、连杆*、关节*（每个关节的类型、父子连杆、位置下限和上限、速度上限、力矩上限）。转动关节和移动关节要四个上限，连续转动关节要速度和力矩上限 |
 | 驱动安装包（deb、zip、tar.gz、tar.xz、tar.bz2、tar） | 云端规则，**不解析内容** | 校验值*（资料的 SHA-256，不能改）、名称*、版本*、适用架构*；选填：系统、ROS 2 发行版、安装步骤、说明 |
 
@@ -43,6 +44,7 @@
 - **解压炸弹**：压缩包只读成员名和必要的一小段内容（说明文件最多 1 MiB、程序只读前 20 字节），不解压到磁盘；解出的字节全部计入上限（默认 8 GiB），xz 解码器有内存上限（128 MiB）；ZIP 的压缩比异常高的成员不读，只报告；目录过大（成员数、目录字节数）在 `zipfile` 读它之前就拒绝。tar 用自己写的读取器，超过 1 MiB 的扩展头直接拒绝，不读进内存。
 - **路径穿越**：成员名里有 `..`、绝对路径、盘符，或者链接指向包外的，在结果里列出来（解析时只看名字，从不解开）；#31 把包装到设备上时要拒绝这样的包。
 - **XML（URDF、`package.xml`、Office 的关系部件）**：用 expat 读，**任何 DOCTYPE 都拒绝**，所以既没有外部实体，也没有实体膨胀；嵌套深度（64）和元素个数（20 万）有上限。
+- **网页（HTML，issue #45）**：WeKnora 0.6.3 没有读 HTML 文件的解析器（只有 `.mhtml` 和按网址抓取），所以网页不原样送去。同一个子进程用标准库的 `html.parser` 把文字取出来（`material_page.py`）：`<script>`、`<style>`、`<template>`、`<svg>`、`<iframe>` 等的内容和注释丢掉，标题前加 `#`，列表项前加 `- `（按层级缩进），表格一行占一行、单元格之间用 ` | ` 隔开（单元格里有段落或换行也不拆行），`<pre>` 里的命令原样放在代码围栏里，指向别的网站的链接把网址写在文字后面。**网页引用的任何东西都不去取**（图片、样式、脚本、框架），也不运行脚本，所以打开网页时才由脚本生成的内容读不到：读不出文字的网页标“没解析出来”，不送 WeKnora，可以另存为 PDF 或文本再传。只有标题、正文没有字的网页也算读不出文字。网页最大读 32 MiB，取出的文字最多 1 MiB，超过的部分不解析并在结果里注明（重新解析、同一个文件沿用别的设备的结果时也注明）；读一个网页最多用 10 秒 CPU（标准库的解析器遇到某些残缺的标记很慢），超时只是这一份没解析出来；发给 WeKnora 的是这些文字（文件名换成 `.md`），不是网页原文，所以两边的 SHA-256 不同。
 - **Office 文档的宏和外部引用**：送 WeKnora 之前先在同一个子进程里检查。有宏的（`vbaProject.bin`、启用宏的内容类型、旧格式里的 VBA 流）照常送去解析，只读文字，结果里注明“有宏，没有运行”。有外部引用的（关系部件里 `TargetMode="External"` 的图片、模板、OLE 对象等，以及 Excel 的外部链接和数据连接；旧格式 Word 里会去别处取内容的字段 `INCLUDEPICTURE`、`INCLUDETEXT`、`LINK`、`DDE`、`DDEAUTO`、`IMPORT`（只认字段代码的位置、不分大小写，正文里出现这些词不算），旧格式 Excel 里的 `WEBSERVICE`、`FILTERXML` 函数）**不送**，标“没解析出来”，原因里写明引用了哪里；普通超链接不算。关系部件超过 300 个的文档不检查完就不送（拒绝，而不是只查前一部分）。
 - **超大或畸形的 PDF**：超过 `NEUXMIND_WEKNORA_MAX_BYTES`（默认 50 MB，即 WeKnora 自己的默认上限）的文档不送；送去的由 WeKnora 的解析容器处理，解析失败、超时（默认 30 分钟）都只影响这一份。
 - **WeKnora 的答复**：不跟随重定向、不用代理、每个答复有字节上限和总时间上限（不只是每次读的超时，所以一点一点往外挤字节的服务也拖不住解析线程）、编号按固定格式检查后才拼进地址（不能是 `.`、`..`）；连不上或 5xx 时稍后重试（6 次，间隔从 30 秒到 15 分钟），密钥错误等明确的拒绝不重试。模型的回答里超出浮点范围的数字、过深的嵌套按没填处理。
@@ -105,6 +107,9 @@ python3 -m unittest tests.test_material_parse_desktop                           
 node tests/material_parse_logic.cjs                                                 # 页面逻辑
 python3 tests/material_parse_browser_fixture.py CONFIG.json &                       # 浏览器验收的夹具（SSH 替身、真云端、WeKnora 替身）
 node tests/material_parse_browser.cjs CONFIG.json                                   # BRAIN_BROWSER=webkit 换成 WebKit
+cd cloud/tests && python3 -m unittest test_material_html                            # 网页（issue #45）：类型判定、取文字、送 WeKnora
+python3 tests/material_html_browser_fixture.py CONFIG.json &                        # 网页的浏览器验收夹具（真云端、WeKnora 替身）
+node tests/material_html_browser.cjs CONFIG.json                                    # 在「资料库」页上传网页、解析、看结果
 ```
 
 测试里的文件都是测试自己生成的；WeKnora 用替身（`cloud/tests/fake_weknora.py`，只模仿它的五个接口）。2026-11-23 在本机 Docker 里的 WeKnora 0.6.3 上跑通过：对话模型 `qwen3.6-plus`、向量模型 `Qwen3-Embedding-4B`（都经 TokenFans），一份 Markdown 的驱动说明经云平台解析，8 项全部读出、状态「待确认」。
@@ -118,6 +123,7 @@ node tests/material_parse_browser.cjs CONFIG.json                               
 
 ## 没有做的
 
+- 网页（issue #45）还没有在真的 WeKnora 上跑过，只用替身验证了发过去的文字；`.mhtml`、`.xhtml` 和网页里引用的图片不处理。
 - 在用户正式使用的 WeKnora 上验证：现在只在本机 Docker 里的 0.6.3 上跑过（见上）。接口按 WeKnora 的公开文档和客户端代码写成，0.6.3 上这几个接口都在。
 - 修复助手按需检索文档全文（#30）：现在只能拿到确认过的结构化结果；文档在 WeKnora 里的副本编号只在云端。
 - 设备档案和本体档案合并（另开 issue）。

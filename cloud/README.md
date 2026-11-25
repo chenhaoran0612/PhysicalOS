@@ -338,10 +338,11 @@ issue #43 又加了四个权限范围，都不在默认范围里（见“云端�
 | Word / Excel 97–2003 | `.doc` `.xls` | 复合文档头，目录里有 `WordDocument` / `Workbook`（或 `Book`）流 |
 | PDF | `.pdf` | 前 1024 字节里有 `%PDF-` |
 | 文本 | `.md` `.markdown` `.txt` `.rst` `.csv` `.tsv` `.log` `.ini` `.cfg` `.conf` `.toml` `.yaml` `.yml` `.json` `.xml` | 全文没有控制字符，并且能按 UTF-8、否则按 GB 18030 完整解码，或者带 BOM 的 UTF-16；`.json` 以 `{` 或 `[` 开头，`.xml` 以 `<` 开头。其他编码（Shift-JIS、Big5、不带 BOM 的 UTF-16 等）要先转成 UTF-8 |
+| 网页（issue #45） | `.html` `.htm` | 和文本一样的编码要求，并且以 `<` 开头。只当作文件保存和下载，云端从不把它当网页输出（见上面 `…/content` 一行的响应头）；解析见 `docs/MATERIAL_PARSING.md` |
 | URDF | `.urdf` `.xacro` | 文本、以 `<` 开头，开头 4 MiB 里有 `<robot` 元素 |
 | 驱动安装包 | `.zip` `.tar.gz` `.tgz` `.tar.xz` `.txz` `.tar.bz2` `.tbz2` `.tar` `.deb` | ZIP：本地文件头和目录结束记录；压缩的 tar：对应的魔数，并且解出的前 512 字节是 tar 头（只解这 512 字节）；tar：头部校验和；deb：`ar` 头且第一个成员是 `debian-binary` |
 
-其他类型（可执行文件、脚本、HTML、SVG、带宏的 Office 文档、图片、rar / 7z 等）一律拒绝。云端不解压、不执行、不用 XML 解析器读上传的内容。
+其他类型（可执行文件、脚本、SVG、`.xhtml` / `.mhtml`、带宏的 Office 文档、图片、rar / 7z 等）一律拒绝。云端不解压、不执行、不用 XML 解析器读上传的内容。
 
 这些判定只是**认出**文件是不是声称的类型，不是对内容的担保：压缩包只看开头，后面可以是任何东西。之后真正打开这些文件的地方（解析 #34、把驱动安装包送到设备 #31）仍然要把内容当作不可信的输入处理。
 
