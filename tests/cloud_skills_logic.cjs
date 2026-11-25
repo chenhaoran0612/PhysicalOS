@@ -1,4 +1,4 @@
-// Pure-logic checks of web/cloud_skills.js (issue #43): what the 云端技能 page says about a skill, an
+// Pure-logic checks of web/cloud_skills.js (issue #43): what the 技能发布 and 技能加载 pages say about a skill, an
 // example and a preview, what the folder form accepts before anything is sent, which robots a release
 // can go to, and that text from the cloud never reaches the page as markup. The backend rules are in
 // brainos/cloud_skills.py, checked in tests/test_cloud_skills.py.
@@ -7,7 +7,7 @@ const {load, checker, HOSTILE, escaped} = require('./cloud_skills_logic_helper.c
 
 const {page, box} = load(['web/cloud_skills.js'], ['cloudSkillSize', 'cloudSkillWhen', 'cloudSkillExampleState', 'cloudSkillPathProblem',
   'cloudSkillRobots', 'cloudSkillCard', 'cloudSkillList', 'cloudSkillExamples', 'cloudSkillPublishBody', 'cloudSkillReleaseRow',
-  'cloudSkillsPage', 'cloudSkills', 'CLOUD_SKILLS_ROUTE', 'CLOUD_SKILLS_PUBLISH_STATES']);
+  'cloudSkillsPage', 'cloudSkillLoadPage', 'cloudSkills', 'CLOUD_SKILLS_ROUTE', 'CLOUD_SKILLS_LOAD_ROUTE', 'CLOUD_SKILLS_PUBLISH_STATES']);
 const counted = checker(), {check, includes, excludes} = counted;
 
 const release = (changes = {}) => ({skill_id: 'patrol', version: '0.1.0', title: '巡逻', description: '走一圈', summary: '走一圈',
@@ -15,11 +15,13 @@ const release = (changes = {}) => ({skill_id: 'patrol', version: '0.1.0', title:
   requires: [{id: 'base.navigate_to', title: '导航到目标点'}], optional: [], parameters: [], files: [{path: 'skill.py', size: 2048}], ...changes});
 const row = (changes = {}) => ({id: 'patrol', title: '巡逻', summary: '走一圈', latest: release(), versions: ['0.1.0'], ...changes});
 
-// ---------------------------------------------------------------- the page registers itself
-check(page.CLOUD_SKILLS_ROUTE, 'cloud-skills', 'the route');
-check(box.navigation.at(-1), ['cloud-skills', '云端技能'], 'one more entry at the end of the navigation');
-check(typeof box.views['cloud-skills'], 'function', 'its view');
-check(typeof box.icons['cloud-skills'], 'string', 'its icon');
+// ---------------------------------------------------------------- the two pages register themselves
+check(page.CLOUD_SKILLS_ROUTE, 'cloud-skills', 'the route of 技能发布');
+check(page.CLOUD_SKILLS_LOAD_ROUTE, 'cloud-skill-load', 'the route of 技能加载');
+check(box.navigation.slice(-2), [['cloud-skills', '技能发布'], ['cloud-skill-load', '技能加载']], 'two more entries at the end of the navigation');
+check(box.views['cloud-skills'] === page.cloudSkillsPage && box.views['cloud-skill-load'] === page.cloudSkillLoadPage, true, 'one view each');
+check(typeof box.icons['cloud-skills'] === 'string' && typeof box.icons['cloud-skill-load'] === 'string', true, 'one icon each');
+check(box.icons['cloud-skills'] === box.icons['cloud-skill-load'], false, 'that can be told apart');
 
 // ---------------------------------------------------------------- sizes, times
 check(page.cloudSkillSize(0), '0 B', 'nothing');
@@ -55,8 +57,13 @@ let html = page.cloudSkillCard(row({versions: ['0.2.0', '0.1.0'], latest: releas
 includes(html, '最新版本 0.2.0', 'the newest version');
 includes(html, '另有 1 个版本', 'how many more');
 includes(html, '会让机器人运动', 'a skill that moves the robot says so');
-includes(html, 'data-cloudskill-action="install"', 'install from the card');
+includes(html, 'data-cloudskill-action="versions"', '技能发布: the versions of the skill');
+excludes(html, 'data-cloudskill-action="install"', '技能发布: nothing that touches a robot');
+html = page.cloudSkillCard(row({versions: ['0.2.0', '0.1.0'], latest: release({version: '0.2.0'})}), true);
+includes(html, 'data-cloudskill-action="install"', '技能加载: install from the card');
 includes(html, 'data-id="patrol|0.2.0"', 'the release the button installs');
+includes(html, 'data-cloudskill-action="versions-load"', '技能加载: the versions, to choose one');
+excludes(html, 'data-cloudskill-action="versions"', '技能加载: not the dialog that deletes');
 html = page.cloudSkillCard(row({latest: release({motion: false})}));
 includes(html, '不会让机器人运动', 'a skill that does not move');
 excludes(html, '另有', 'one version: nothing more to say');
@@ -70,11 +77,20 @@ includes(page.cloudSkillList(), '正在读取云端技能库', 'before the first
 Object.assign(page.cloudSkills, {loaded: true, skills: [], error: ''});
 includes(page.cloudSkillList(), '云端技能库还是空的', 'an empty library');
 includes(page.cloudSkillList(), 'data-cloudskill-action="examples"', 'the way to fill it');
+html = page.cloudSkillList(true);
+includes(html, '云端技能库里还没有技能', '技能加载: an empty library');
+includes(html, 'data-action="go-cloud-skills"', 'points to 技能发布');
+excludes(html, 'data-cloudskill-action="examples"', 'and does not publish from here');
 Object.assign(page.cloudSkills, {error: HOSTILE});
 check(escaped(page.cloudSkillList()), true, 'an error is shown as text');
 includes(page.cloudSkillList(), 'data-cloudskill-action="refresh"', 'with a way to try again');
 Object.assign(page.cloudSkills, {error: '', skills: [row()]});
 includes(page.cloudSkillList(), 'data-cloudskill="patrol"', 'one card per skill');
+excludes(page.cloudSkillList(), 'data-cloudskill-action="install"', '技能发布: its cards do not install');
+includes(page.cloudSkillList(true), 'data-cloudskill-action="install"', '技能加载: its cards do');
+box.current = 'cloud-skill-load';
+includes(page.cloudSkillList(), 'data-cloudskill-action="install"', 'the list follows the page that is showing');
+box.current = 'cloud-skills';
 
 // ---------------------------------------------------------------- the examples panel
 Object.assign(page.cloudSkills, {examples: [{example: 'patrol', valid: true, skill_id: 'patrol', version: '0.1.0', title: '巡逻', summary: '走一圈', published: true, same_content: true},
@@ -109,7 +125,12 @@ html = page.cloudSkillReleaseRow(release({notes: '第一次发布'}));
 includes(html, '版本 0.1.0', 'the version');
 includes(html, '第一次发布', 'its notes');
 includes(html, 'aaaaaaaaaaaa…', 'the digest, shortened');
-includes(html, 'data-cloudskill-action="delete"', 'delete');
+includes(html, 'data-cloudskill-action="delete"', '技能发布: delete');
+excludes(html, 'data-cloudskill-action="install"', '技能发布: no install');
+html = page.cloudSkillReleaseRow(release({notes: '第一次发布'}), true);
+includes(html, 'data-cloudskill-action="install"', '技能加载: install this version');
+includes(html, 'data-id="patrol|0.1.0"', 'the version the button installs');
+excludes(html, 'data-cloudskill-action="delete"', '技能加载: no delete');
 html = page.cloudSkillReleaseRow(release({notes: HOSTILE, created_by: HOSTILE, version: HOSTILE, digest: HOSTILE}));
 check(escaped(html), true, 'notes and names from other people are escaped');
 
@@ -120,15 +141,28 @@ check(who('key:7'), '经 API Key 发布', 'published with a key');
 check(who('dev@example.test'), 'dev@example.test', 'a name is shown');
 check(who(null), '', 'nothing');
 
-// ---------------------------------------------------------------- the page itself
+// ---------------------------------------------------------------- the two pages themselves
 box.state.cloud_account = {logged_in: false};
 html = page.cloudSkillsPage();
 includes(html, '技能库保存在云平台', 'signed out: the sign-in notice');
 excludes(html, 'data-cloudskill-action="publish"', 'and nothing to publish with');
+html = page.cloudSkillLoadPage();
+includes(html, '技能库保存在云平台', '技能加载 signed out: the sign-in notice');
+excludes(html, 'data-cloudskill-action', 'and nothing to install with');
 box.state.cloud_account = {logged_in: true};
 Object.assign(page.cloudSkills, {loaded: true, loadedFor: 'owner|1', skills: [row()], error: ''});
 html = page.cloudSkillsPage();
 includes(html, 'data-cloudskill-action="publish"', 'signed in: publish');
 includes(html, 'id="cloud-skill-count">1<', 'the count');
+includes(html, '<h1>技能发布</h1>', 'its name');
+includes(html, 'id="cloud-skill-examples"', 'the examples belong to publishing');
+includes(html, 'data-action="go-cloud-skill-load"', 'the way to the other page');
+excludes(html, 'data-cloudskill-action="install"', '技能发布 installs nothing');
+html = page.cloudSkillLoadPage();
+includes(html, '<h1>技能加载</h1>', 'its name');
+includes(html, 'data-cloudskill-action="install"', '技能加载: install');
+includes(html, 'id="cloud-skill-count">1<', 'the same library, counted');
+for (const action of ['publish', 'examples', 'delete', 'versions']) excludes(html, `data-cloudskill-action="${action}"`, `技能加载 does not offer ${action}`);
+excludes(html, 'id="cloud-skill-examples"', 'nor the examples panel');
 
 console.log(`cloud skills logic checks passed: ${counted.checks}`);

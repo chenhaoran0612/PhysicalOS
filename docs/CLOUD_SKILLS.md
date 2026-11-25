@@ -166,7 +166,7 @@ curl -s -X POST -H "Authorization: Bearer $KEY" $BASE/open/robots/dlk_0123/stop
 
 ## 5. 控制台
 
-- **云端技能**（`brainos/cloud_skills.py`、`web/cloud_skills.js`、`web/cloud_skills.css`）：列出云端技能库；把一个本机技能文件夹**发布到云端**（先按现有规则读取和校验）；把云端的一个版本**安装到机器人**（下载 → 核对 `digest` → 兼容性说明 → 现有的 `POST /v2/skills/install`）。应用自带的示例技能可以一键发布到自己的技能库。
+- **云端技能**（`brainos/cloud_skills.py`、`web/cloud_skills.js`、`web/cloud_skills.css`）：两个页面，「技能发布」和「技能加载」，看同一个云端技能库；「技能发布」把一个本机技能文件夹**发布到云端**（先按现有规则读取和校验），「技能加载」把云端的一个版本**安装到机器人**（下载 → 核对 `digest` → 兼容性说明 → 现有的 `POST /v2/skills/install`）。应用自带的示例技能可以一键发布到自己的技能库。
 - **远程调用**（机器人页面上的一节）：这台机器人和云端连没连上；每个已安装技能一个“允许远程调用”开关（打开时要确认，运动类技能的确认里写明“第三方可以让机器人运动”）；最近的远程调用。
 - **程序和场景数据**：见第 2 节的两个动作。
 

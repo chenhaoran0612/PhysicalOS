@@ -57,7 +57,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
       lastBottom: last.bottom, footerTop: bottom.top, height: innerHeight};
   });
   // 0.20.0: issue #33 adds “资料库” after “云平台账户” (web/material_library.js).
-  assert(nav.count === 17 && nav.lastText === '云端技能' && nav.texts.at(-2) === '资料库' && nav.texts.at(-3) === '云平台账户', '侧栏项目不对：' + JSON.stringify(nav));
+  assert(nav.count === 18 && nav.lastText === '技能加载' && nav.texts.at(-2) === '技能发布' && nav.texts.at(-3) === '资料库' && nav.texts.at(-4) === '云平台账户', '侧栏项目不对：' + JSON.stringify(nav));
   assert(!nav.scrollable, '1440×900 下侧栏不应需要滚动：' + JSON.stringify(nav));
   assert(nav.lastBottom <= nav.footerTop && nav.lastBottom <= nav.height, '侧栏最后一项“资料库”应完整可见：' + JSON.stringify(nav));
   await page.locator('#navigation a[href="#cloud"]').click();
