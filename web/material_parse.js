@@ -12,9 +12,10 @@ const PARSE_TAB = 'materials';
 const PARSE_UNITS = {revolute: ['rad', 'rad/s', 'N·m'], prismatic: ['m', 'm/s', 'N'], continuous: ['—', 'rad/s', 'N·m']};
 const PARSE_LIMITS = [['lower', '位置下限'], ['upper', '位置上限'], ['velocity', '速度上限'], ['effort', '力矩上限']];
 const PARSE_MOVABLE = ['revolute', 'prismatic', 'continuous'];
-// The four states of R1-13 (material_parse_models.py explains them).
+// The states of R1-13 (material_parse_models.py explains them). 「已入库」 is issue #45: a document that is in
+// the knowledge base is a success, whether or not the driver's items could be read from it.
 Object.assign(MATERIAL_STATES, {parsing: ['解析中', 'blue'], parsed: ['待确认', 'warn'], usable: ['可用', 'good'],
-  failed: ['没解析出来', 'bad']});
+  stored: ['已入库', 'good'], failed: ['没解析出来', 'bad']});
 PROFILE_TABS[PARSE_TAB] = '资料';
 
 // The device whose 「资料」 tab is open: {robotId, loaded, materials, error, open, results, uploading, askRetry}.
@@ -155,7 +156,7 @@ function parsePanel(result) {
     `<div class="form-error" role="alert"></div>${parseWho(result)}<div class="mp-actions"><div class="button-row">${retry}</div>` +
     `<div class="button-row">${parseButton('保存', 'save', id, 'secondary')}` +
     `${parseButton(result.status === 'usable' ? '已确认可用' : '确认可用', 'confirm', id, '', result.status === 'usable' && !confirmable)}` +
-    `</div></div>${confirmable ? '' : `<p class="inline-note mp-missing">还缺：${h(result.missing.join('、'))}。填写后，或把不适用的项目勾上“不适用”，才能确认。</p>`}</form>`;
+    `</div></div>${confirmable ? '' : `<p class="inline-note mp-missing">${result.status === 'stored' ? '这份文档已经存入知识库。下面的驱动信息是可选的，要交给修复助手时：' : ''}还缺：${h(result.missing.join('、'))}。填写后，或把不适用的项目勾上“不适用”，才能确认。</p>`}</form>`;
 }
 
 const parseButton = (text, action, id, cls = '', disabled = false) =>
@@ -243,7 +244,7 @@ function parseDevicePanel() {
       : ui.materials.length ? `<ul class="mp-list">${ui.materials.map(parseDeviceRow).join('')}</ul>`
         : empty('这台设备还没有资料', '上传它的驱动手册、参数表、URDF 或驱动安装包。上传后自动解析，由人核对确认后才算“可用”。');
   return `<div class="mp-device"><div class="mp-device-head"><div><h3>这台设备的资料 <span class="badge-count">${ui.materials.length}</span></h3>` +
-    `<p class="inline-note">只列出上传给这台设备的资料。解析中 → 待确认 → 可用；没解析出来的可以手工填写后确认。</p></div>` +
+    `<p class="inline-note">只列出上传给这台设备的资料。解析中 → 待确认 → 可用；文档存进知识库就是“已入库”，读不出驱动信息也算成功；没解析出来的可以手工填写后确认。</p></div>` +
     `<div class="button-row">${parseButton('上传资料', 'upload-open', robot.id, 'small', ui.uploading)}` +
     `${parseButton('刷新', 'reload', robot.id, 'secondary small')}</div></div>` +
     (ui.uploading ? parseUploadForm(robot) : '') +

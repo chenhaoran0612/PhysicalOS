@@ -14,6 +14,9 @@ status     shown as    meaning
 parsing    解析中       the job below has not finished
 parsed     待确认       a result is there and complete; nobody confirmed it
 usable     可用         a person checked and confirmed the result
+stored     已入库       a document the knowledge service has indexed whose
+                       result lacks items (issue #45): kept and searchable,
+                       so a success; filled in and confirmed it is ``usable``
 failed     没解析出来   the parser failed or the result lacks items
                        (``status_detail`` names them); a person may fill
                        them in and confirm, which makes it ``usable``

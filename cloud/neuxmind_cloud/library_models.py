@@ -16,7 +16,10 @@ from .models import new_id, now
 PARSING, PARSED, PARSE_FAILED = "parsing", "parsed", "failed"
 # Issue #34: a parsed result a person confirmed (material_parse_models explains all four).
 USABLE = "usable"
-PARSE_STATES = (PARSING, PARSED, PARSE_FAILED, USABLE)
+# Issue #45: a document the knowledge service has indexed. It is kept and can be searched whether or not the
+# driver's items could be read from it, so it is a success of its own and not a failure.
+STORED = "stored"
+PARSE_STATES = (PARSING, PARSED, PARSE_FAILED, USABLE, STORED)
 
 UPLOAD_OPEN, UPLOAD_ASSEMBLING = "open", "assembling"
 

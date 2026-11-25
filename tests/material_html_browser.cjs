@@ -95,7 +95,38 @@ const PAGE = Buffer.from(`<!DOCTYPE html>
       'The answers are not in the result: ' + values);
     await shot('2-result');
 
-    // 5 · Nothing of the uploaded page became part of the console or ran in it.
+    // 5 · A page the model reads no driver item from is a success all the same: it is in the knowledge base.
+    await dialog.locator('button[data-action="close"]').click();
+    await dialog.waitFor({state: 'hidden'});
+    const PAPER = '论文精读.html';
+    await main.locator('.page-head [data-library-action="upload"]').click();
+    await dialog.locator('form[data-library-form="upload"]').waitFor();
+    await dialog.locator('select[name="body_type"]').selectOption('quadruped');
+    for (const [name, value] of Object.entries({vendor: '示例厂家', model: 'X1', version: '1.0'})) await dialog.locator(`[name="${name}"]`).fill(value);
+    await dialog.locator('input[type=file]').setInputFiles([{name: PAPER, mimeType: 'text/html',
+      buffer: Buffer.from('<!DOCTYPE html><html><head><meta charset="utf-8"><title>扩散模型精读</title></head><body><p>这篇论文讲的是扩散模型，和驱动没有关系。</p></body></html>')}]);
+    await dialog.locator('button[type=submit]').click();
+    await dialog.waitFor({state: 'hidden'});
+    const paper = page.locator('#material-list tbody tr', {hasText: PAPER});
+    await paper.waitFor({timeout: 60000});
+    const paperUntil = Date.now() + 60000;
+    let kept = {};
+    while (Date.now() < paperUntil && (kept.status || 'parsing') === 'parsing') {
+      await page.waitForTimeout(1000);
+      kept = (await fixture('materials')).materials.find(m => m.filename === PAPER) || {};
+    }
+    must(kept.status === 'stored', 'The page without driver items is ' + kept.status + ' ' + (kept.status_detail || ''));
+    must((await fixture('sent')).sent.some(s => s.fileName === '论文精读.md'), 'The page did not reach the knowledge service');
+    await page.evaluate(() => materialLibraryLoad());
+    await paper.locator('.status', {hasText: '已入库'}).waitFor({timeout: 15000});
+    must(!(await paper.innerText()).includes('没解析出来'), 'The stored page is shown as a failure: ' + await paper.innerText());
+    await shot('3-stored');
+    await paper.locator('[data-parse-action="open"]').click();
+    await dialog.locator('form[data-parse-form="result"]').waitFor({timeout: 15000});
+    must((await dialog.innerText()).includes('已经存入知识库'), 'The result does not say the document is in the knowledge base');
+    await shot('4-stored-result');
+
+    // 6 · Nothing of the uploaded page became part of the console or ran in it.
     must(await page.evaluate(() => window.__pageRan) === undefined, 'A script of the uploaded page ran in the console');
     must(await page.locator('img[src="x"]').count() === 0, 'Markup of the uploaded page became part of the console');
     must(errors.length === 0, 'page errors: ' + errors.join(' | '));
