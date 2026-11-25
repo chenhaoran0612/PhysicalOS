@@ -1,5 +1,8 @@
-/* Issue #43: the 云端技能 page (web/cloud_skills.js) and the second dialog it shares with the
+/* Issue #43: the 技能发布 and 技能加载 pages (web/cloud_skills.js) and the second dialog it shares with the
    robot page's sections. Colours are the tokens of style.css. */
+
+/* The way from 技能发布 to 技能加载 sits after the hint of the section head. */
+.section-head span .button{margin-left:10px}
 
 /* A skill card: the id and version line is quieter than the description under it. */
 .cloud-skill-card h3{overflow-wrap:anywhere}
