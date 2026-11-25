@@ -990,8 +990,11 @@ class SandboxHost:
         self.pid = self._proc.pid
         _SKILL_SESSIONS.add(self.pid)          # start_new_session: its session id is its pid
         self._sb.register_child(self.pid)
-        # The child waits for "init" before running any skill code, so it is in
-        # the cgroup before it can fork.
+        # Skill code runs only after "init", which is sent once this returns, so everything
+        # the skill starts is in the cgroup. Before "init" the child forks only short-lived
+        # RLIMIT_NPROC probes, each reaped before it goes on (sandbox_child._kernel_task_count);
+        # EAGAIN that no RLIMIT_NPROC explains (this cgroup's pids.max) leaves the count
+        # undetermined, so the child keeps the limit computed here.
         cgroup = PidsCgroup.create(self._sb.cgroup_base, self.workspace.name, self.config.extra_tasks)
         if cgroup is not None and cgroup.add(self.pid):
             self._cgroup = cgroup

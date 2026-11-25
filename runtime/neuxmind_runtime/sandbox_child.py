@@ -72,6 +72,7 @@ PR_SET_NO_NEW_PRIVS = 38
 # Limits entry (not an rlimit): tasks the skill may add on top of its uid's other tasks.
 NPROC_HEADROOM = "nproc_headroom"
 NPROC_PROBE_CEILING = 1 << 22        # PID_MAX_LIMIT on 64-bit Linux: no uid can have more tasks
+NPROC_PROBE_ATTEMPTS = 2             # forks per probe: a success is proof, a refusal must repeat
 
 
 # ---------------------------------------------------------------- stand-ins
@@ -153,24 +154,29 @@ def _prctl(option: int, value: int) -> bool:
 def _fork_fits(resource, limit: int, hard: int) -> bool | None:
     """Whether one more task of our uid can start under a soft ``RLIMIT_NPROC`` of ``limit``
     (the kernel refuses fork/clone with EAGAIN once the uid's task count reaches it).
+
+    A fork that succeeds is proof. EAGAIN has other causes too (a pids cgroup, a container's
+    ``--pids-limit``, pid_max / threads-max), so a refusal is only believed when it repeats.
     ``None``: the probe failed for another reason."""
     try:
         resource.setrlimit(resource.RLIMIT_NPROC, (limit, hard))
     except (ValueError, OSError):
         return None
-    try:
-        pid = os.fork()                      # still single-threaded: no skill code has run
-    except BlockingIOError:
-        return False
-    except OSError:
-        return None
-    if pid == 0:
-        os._exit(0)
-    try:
-        os.waitpid(pid, 0)                   # reaped: the uid's count is back to what it was
-    except ChildProcessError:
-        pass
-    return True
+    for _ in range(NPROC_PROBE_ATTEMPTS):
+        try:
+            pid = os.fork()                  # still single-threaded: no skill code has run
+        except BlockingIOError:
+            continue
+        except OSError:
+            return None
+        if pid == 0:
+            os._exit(0)
+        try:
+            os.waitpid(pid, 0)               # reaped: the uid's count is back to what it was
+        except ChildProcessError:
+            pass
+        return True
+    return False
 
 
 def _kernel_task_count(resource, hint: int) -> int | None:
@@ -179,40 +185,50 @@ def _kernel_task_count(resource, hint: int) -> int | None:
     The parent counts the uid's tasks in ``/proc``. In a PID namespace (a runtime in a
     container) that shows only the namespace's tasks, while the kernel counts every task
     of the uid -- other containers', the host's -- so "visible + headroom" could be below
-    the real count and the skill could not start a single thread. With soft limit ``L`` a
-    fork succeeds exactly when count < ``L``: one fork confirms count <= ``hint + 1`` (the
-    usual case, ``hint`` being the parent's count without us); otherwise an exponential and
-    then a binary search, about 2*log2(hidden tasks) forks. ``None`` when undetermined."""
+    the real count and the skill could not start a single thread.
+
+    With soft limit ``L`` a fork succeeds exactly when count < ``L``. One fork confirms
+    count <= ``hint + 1`` (the usual case, ``hint`` being the parent's count without us);
+    ``hint + 1`` is then returned, an upper bound. Otherwise the count is searched for. On
+    return the original limit is back; if it cannot be restored this raises, so the child
+    never runs on with a probe's limit. ``None`` when undetermined."""
     soft, hard = resource.getrlimit(resource.RLIMIT_NPROC)
     ceiling = NPROC_PROBE_CEILING if hard == resource.RLIM_INFINITY else min(hard, NPROC_PROBE_CEILING)
     try:
-        lo = min(hint + 2, ceiling)
-        fits = _fork_fits(resource, lo, hard)
+        return _search_task_count(resource, min(hint + 2, ceiling), ceiling, hard)
+    finally:
+        resource.setrlimit(resource.RLIMIT_NPROC, (soft, hard))    # an error propagates: fail closed
+
+
+def _search_task_count(resource, lo: int, ceiling: int, hard: int) -> int | None:
+    """See :func:`_kernel_task_count`: a probe at ``lo``; if refused, a probe at ``ceiling``
+    (refused there too: EAGAIN that no RLIMIT_NPROC explains, so undetermined), then an
+    exponential and a binary search -- about 2*log2(hidden tasks) probes."""
+    fits = _fork_fits(resource, lo, hard)
+    if fits is None:
+        return None
+    if fits:
+        return lo - 1                        # an upper bound; the caller never lowers the limit
+    if lo >= ceiling or not _fork_fits(resource, ceiling, hard):
+        return None
+    step = 1
+    while True:                              # refused at lo, fits at ceiling
+        hi = min(lo + step, ceiling)
+        if hi == ceiling:
+            break
+        fits = _fork_fits(resource, hi, hard)
         if fits is None:
             return None
         if fits:
-            return lo - 1                    # an upper bound; the caller never lowers the limit
-        step = 1
-        while True:                          # invariant: fork refused at lo
-            hi = min(lo + step, ceiling)
-            fits = _fork_fits(resource, hi, hard)
-            if fits is None or (not fits and hi == ceiling):
-                return None
-            if fits:
-                break
-            lo, step = hi, step * 2
-        while hi - lo > 1:                   # refused at lo, fits at hi
-            mid = (lo + hi) // 2
-            fits = _fork_fits(resource, mid, hard)
-            if fits is None:
-                return None
-            lo, hi = (lo, mid) if fits else (mid, hi)
-        return hi - 1
-    finally:
-        try:
-            resource.setrlimit(resource.RLIMIT_NPROC, (soft, hard))
-        except (ValueError, OSError):
-            pass
+            break
+        lo, step = hi, step * 2
+    while hi - lo > 1:                       # refused at lo, fits at hi
+        mid = (lo + hi) // 2
+        fits = _fork_fits(resource, mid, hard)
+        if fits is None:
+            return None
+        lo, hi = (lo, mid) if fits else (mid, hi)
+    return hi - 1
 
 
 def _calibrated(resource, limits: dict) -> dict:
@@ -229,7 +245,8 @@ def _calibrated(resource, limits: dict) -> dict:
 
 
 def _apply_limits(limits: dict) -> dict:
-    """Lower our own resource limits (soft = hard). Returns what was applied."""
+    """Lower our own resource limits (soft = hard). Returns what was applied. Raises if the
+    NPROC calibration leaves the limit in an unknown state (``main`` then exits with code 5)."""
     applied = {}
     try:
         import resource
