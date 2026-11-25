@@ -23,6 +23,9 @@ The input is untrusted. What the process does about that:
   any DOCTYPE is refused outright: no entity can be declared, so neither
   external entities nor entity expansion exist. Depth and element counts are
   capped as well.
+* An HTML page (issue #45) is only read for its words, by ``material_page.py``
+  next to this file (loaded by its full path, standard library only): nothing
+  the page refers to is fetched and no script in it runs.
 * The tar reader is written out here instead of using ``tarfile``, so that a
   header claiming gigabytes of extended attributes is refused instead of read.
 """
@@ -128,19 +131,40 @@ class SafeXml:
             raise Refused("xml_invalid", f"XML 格式不对（第 {exc.lineno} 行）：{expat.ErrorString(exc.code)}") from None
 
 
+def _decoded(data: bytes, code: str, what: str) -> str:
+    """``data`` as text: UTF-16 with a byte order mark, else UTF-8, else GB 18030 (what the library accepts)."""
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return data.decode("utf-16", "replace")
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            return data.decode("gb18030")
+        except UnicodeDecodeError:
+            raise Refused(code, f"{what} 不是 UTF-8、GB 18030 或 UTF-16 编码") from None
+
+
 def _xml_utf8(data: bytes) -> bytes:
     """The document as UTF-8 (the parser is told so; the declaration's own encoding is then ignored)."""
-    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
-        text = data.decode("utf-16", "replace")
-    else:
-        try:
-            text = data.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            try:
-                text = data.decode("gb18030")
-            except UnicodeDecodeError:
-                raise Refused("xml_encoding", "XML 不是 UTF-8、GB 18030 或 UTF-16 编码") from None
-    return text.encode("utf-8", "replace")
+    return _decoded(data, "xml_encoding", "XML").encode("utf-8", "replace")
+
+
+# ------------------------------------------------------------------ HTML (issue #45)
+def parse_html(data: bytes, limits: dict) -> dict:
+    """The words of a page (``material_page.py``, loaded from this file's own directory by its full path:
+    under ``-I`` that directory is not searched, and nothing else in it is ever loaded)."""
+    import importlib.util
+    sys.dont_write_bytecode = True                  # -I ignores PYTHONDONTWRITEBYTECODE
+    cpu = int(limits.get("html_cpu", 10))           # the standard library's reader is slow on some broken markup
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu + 5))
+    except (ValueError, OSError):
+        pass                                        # the limit set at the start is lower already
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "material_page.py")
+    spec = importlib.util.spec_from_file_location("material_page", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.page_text(_decoded(data, "html_encoding", "网页"), int(limits.get("html_text", 1024 * 1024)))
 
 
 # ------------------------------------------------------------------ URDF
@@ -767,6 +791,10 @@ def run(mode: str, limits: dict, handle) -> dict:
         if size > int(limits.get("urdf_bytes", 32 * 1024 * 1024)):
             raise Refused("too_large", "URDF 文件太大，没有解析")
         return parse_urdf(handle.read(), limits)
+    if mode == "html":
+        if size > int(limits.get("html_bytes", 32 * 1024 * 1024)):
+            raise Refused("too_large", "网页文件太大，没有解析")
+        return parse_html(handle.read(), limits)
     if mode == "deb":
         return parse_deb(handle, limits)
     if mode == "zip":

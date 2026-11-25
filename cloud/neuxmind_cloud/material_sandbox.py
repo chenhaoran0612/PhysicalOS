@@ -36,11 +36,15 @@ class Limits:
     urdf_bytes: int = 32 * 1024 * 1024
     output_bytes: int = 4 * 1024 * 1024
     xz_memory_bytes: int = 128 * 1024 * 1024
+    html_bytes: int = 32 * 1024 * 1024            # issue #45: the largest page that is read
+    html_cpu_seconds: int = 10                    # less than for an archive: a small page must not hold a worker long
+    html_text_bytes: int = 1024 * 1024            # and how much text is taken out of it (fits output_bytes when escaped)
 
     def for_child(self) -> dict:
         return {"cpu": self.cpu_seconds, "memory": self.memory_bytes, "unpacked": self.unpacked_bytes,
                 "members": self.members, "urdf_bytes": self.urdf_bytes, "depth": 64, "elements": 200_000,
-                "xz_memory": self.xz_memory_bytes}
+                "xz_memory": self.xz_memory_bytes, "html_bytes": self.html_bytes, "html_text": self.html_text_bytes,
+                "html_cpu": min(self.html_cpu_seconds, self.cpu_seconds)}
 
 
 class ExtractFailed(Exception):

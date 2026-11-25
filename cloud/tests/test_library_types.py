@@ -60,7 +60,7 @@ class NameTest(unittest.TestCase):
         for extension in types.EXTENSIONS:
             self.assertEqual(extension, extension.lower())
             self.assertTrue(extension.startswith("."))
-        for forbidden in (".html", ".htm", ".svg", ".js", ".sh", ".exe", ".py", ".docm", ".xlsm"):
+        for forbidden in (".xhtml", ".mhtml", ".svg", ".js", ".sh", ".exe", ".py", ".docm", ".xlsm"):
             self.assertNotIn(forbidden, types.EXTENSIONS)
 
     def test_the_sentence_names_every_suffix(self):
