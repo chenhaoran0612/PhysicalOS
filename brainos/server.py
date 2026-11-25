@@ -17,6 +17,7 @@ from .commerce import Commerce
 from .material_parse import MaterialParse   # issue #34: parsing results of library materials
 from . import cloud_auto_login              # issue #36: an app sign-in signs into the cloud too
 from . import robot_scope                   # issue #42: robots belong to the account, not to the task that is open
+from . import task_robot                    # issue #42: the robot a task is done with
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -166,6 +167,8 @@ def make_handler(application):
             extra=extra or {'/cloud_auto_login.js':('cloud_auto_login.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #42: running an installed skill on a real robot (the confirmations of the run form), likewise.
             extra=extra or {'/skill_run.js':('skill_run.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #42: the robot a task is done with (chosen when the task is created), likewise.
+            extra=extra or {'/task_robot.js':('task_robot.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #41: the layout of "我的机器人", likewise.
@@ -324,6 +327,8 @@ def make_handler(application):
                         'robots/remove':service.robot_remove.remove,
                         # Issue #44: delete a task (任务项目) of the signed-in account; refused while it has robots or running work
                         'projects/remove':service.task_remove.remove,
+                        # Issue #42: choose or change the robot a task is done with
+                        'projects/robot':lambda p:task_robot.choose(service,p),
                         # Issue #22: safety limits a person fills in per device; the signed-in account is recorded as who
                         'robots/limits':service.safety_limits.read,
                         'robots/limits/save':lambda p:service.safety_limits.save(p,user),
