@@ -681,11 +681,12 @@ def parse(text):
 
 
 def _capped(issue):
-    kind = str(issue['id']).split(':', 1)[0]
+    kind = str(issue.get('id', '')).split(':', 1)[0]
     cap = 'warning' if kind == 'net-down' and issue.get('category') == 'can' else GRADE_CAPS.get(kind, 'warning')
-    severity = min(issue['severity'], cap, key=SEVERITY_ORDER.__getitem__)
+    saved = issue.get('severity') if issue.get('severity') in SEVERITY_ORDER else 'info'      # a weight nobody knows proves nothing
+    severity = min(saved, cap, key=SEVERITY_ORDER.__getitem__)
     # Whether someone has to go to the robot was told by the weight then; it is kept as it was.
-    onsite = issue.get('onsite', issue.get('fixable') != 'auto' and issue['severity'] != 'info')
+    onsite = issue.get('onsite', issue.get('fixable') != 'auto' and saved != 'info')
     return {**issue, 'severity': severity, 'blocks': '', 'onsite': bool(onsite)}
 
 
@@ -693,17 +694,20 @@ def regraded(scan):
     """A saved scan by today's rules. One saved under them is returned as it is. An earlier one
     (issue #47) gives a new record (the one passed in is not changed) in which no problem weighs more than its kind can prove (``GRADE_CAPS``),
     with the counts and the rows' states to match; the texts are the ones saved then. Faults cannot come
-    out of it: what they would have to say (``blocks``) was never read."""
+    out of it: what they would have to say (``blocks``) was never read. A record that lacks a part
+    (no ``devices``, no ``summary``) is read as having none of it: this runs when a workspace opens and
+    on every state snapshot, and must not be what keeps either from working."""
     if scan.get('rules') == RULES:
         return scan
-    issues = sorted((_capped(issue) for issue in scan['issues']), key=lambda issue: -SEVERITY_ORDER[issue['severity']])
+    issues = sorted((_capped(issue) for issue in scan.get('issues') or []), key=lambda issue: -SEVERITY_ORDER[issue['severity']])
     worst = {}
     for issue in issues:                                # most severe first
         if issue.get('device_id'):
             worst.setdefault(issue['device_id'], issue['severity'])
-    devices = [{**row, 'status': 'warning' if worst.get(row['id'], 'warning') == 'warning' else 'unknown'}
-               if row['status'] == 'error' or (row['id'] in worst and row['status'] == 'warning') else row for row in scan['devices']]
-    statuses = [row['status'] for row in devices]
-    summary = {**scan['summary'], 'ok': statuses.count('ok'), 'attention': statuses.count('warning') + statuses.count('error'),
+    devices = [{**row, 'status': 'warning' if worst.get(row.get('id'), 'warning') == 'warning' else 'unknown'}
+               if row.get('status') == 'error' or (row.get('id') in worst and row.get('status') == 'warning') else row
+               for row in scan.get('devices') or []]
+    statuses = [row.get('status') for row in devices]
+    summary = {'devices': len(devices), **(scan.get('summary') or {}), 'ok': statuses.count('ok'), 'attention': statuses.count('warning') + statuses.count('error'),
                'errors': 0, 'warnings': sum(1 for issue in issues if issue['severity'] == 'warning')}
     return {**scan, 'issues': issues, 'devices': devices, 'summary': summary, 'regraded': True, 'rules': RULES}
