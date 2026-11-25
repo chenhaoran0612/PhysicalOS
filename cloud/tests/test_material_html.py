@@ -336,6 +336,12 @@ class ParseTest(ParseCase):
         self.assertEqual({upload["fileName"] for upload in self.fake.uploads}, {"guide.md"})
         self.assertEqual(self.fake.uploads[0]["sha256"], self.fake.uploads[1]["sha256"])
 
+    def test_a_page_without_driver_items_is_stored(self):
+        self.fake.answer = lambda question, ids: "{}"
+        result = self.upload_parsed("paper.html", PAGE)
+        self.assertEqual((result["status"], result["error"], len(self.fake.uploads)), ("stored", "", 1))
+        self.assertIn("已存入知识库", result["status_detail"])
+
     def test_no_temporary_file_is_left_behind(self):
         with tempfile.TemporaryDirectory() as scratch, mock.patch.object(tempfile, "tempdir", scratch):
             self.upload_parsed("guide.html", PAGE)

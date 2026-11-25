@@ -44,6 +44,7 @@ const excludes = (text, part, what) => { assert.ok(!String(text).includes(part),
 check(page.MATERIAL_STATES.parsed, ['待确认', 'warn'], 'parsed reads 待确认');
 check(page.MATERIAL_STATES.usable, ['可用', 'good'], 'usable reads 可用');
 check(page.MATERIAL_STATES.failed, ['没解析出来', 'bad'], 'failed reads 没解析出来');
+check(page.MATERIAL_STATES.stored, ['已入库', 'good'], 'stored reads 已入库, as a success (issue #45)');
 check(page.PROFILE_TABS.materials, '资料', 'the device profile has a 资料 tab');
 
 // --- 2. Text fields become lists; names and types are split at the first space.

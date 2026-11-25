@@ -20,7 +20,10 @@ that cannot be reached is tried again later (with growing pauses) and after
 Results are only ever data: shown to a person, edited, and confirmed. Nothing
 here (or anywhere in the cloud) runs an install step. A complete result is
 「待确认」 (``parsed``); one that lacks items is 「没解析出来」 (``failed``) and
-names them; only a person's confirmation makes it 「可用」 (``usable``). Who
+names them, except a document the knowledge service has indexed, which is
+「已入库」 (``stored``, issue #45): the library keeps information, and what is
+in the knowledge base can be searched whatever the model could read from it.
+Only a person's confirmation makes a result 「可用」 (``usable``). Who
 edited and who confirmed, and when, is kept with the result and in the audit log.
 """
 from __future__ import annotations
@@ -44,7 +47,7 @@ from . import library_bundle      # issue #43: a bundle is never parsed
 from .config import Settings
 from .db import Database
 from .errors import ApiError, bad_request, conflict
-from .library_models import PARSE_FAILED, PARSED, PARSING, USABLE, Material
+from .library_models import PARSE_FAILED, PARSED, PARSING, STORED, USABLE, Material
 from .library_store import LibraryStore
 from .material_parse_models import ASKING, DONE, INDEXING, QUEUED, MaterialParse
 from .material_sandbox import ExtractFailed, Limits, extract
@@ -474,6 +477,36 @@ def _apply(db: Database, job: _Job, owner: str, outcome, at: float) -> None:
         _finish(s, row, material, outcome, at)
 
 
+def _indexed(row: MaterialParse) -> bool:
+    """The knowledge service has this document: it parsed and indexed its copy without an error."""
+    return row.kind == fields.DOCUMENT and row.parser == "weknora" and not row.error and bool(row.knowledge_id)
+
+
+def _state(row: MaterialParse, values: dict, gaps: list[str]) -> tuple[str, str]:
+    """The material's status and the words under it, from a result the parser did not fail on. An indexed
+    document is a success whatever it lacks (issue #45): the library keeps information, the driver's items
+    are an extra."""
+    if not gaps:
+        return PARSED, ""
+    if not _indexed(row):
+        return PARSE_FAILED, fields.missing_text(gaps)
+    if any(v not in (None, "", []) for v in values.values()):
+        return STORED, f"已存入知识库；驱动信息{fields.missing_text(gaps)}（可选，填好并确认后才交给修复助手）"
+    return STORED, "已存入知识库；没有读出驱动信息（可选，需要时可以手工填写后确认）"
+
+
+def adopt_stored(db: Database) -> int:
+    """Documents that versions before issue #45 left in 「没解析出来」 only because items were missing: 「已入库」."""
+    with db.transaction() as s:
+        rows = s.execute(select(MaterialParse, Material).join(Material, Material.id == MaterialParse.material_id).where(
+            Material.status == PARSE_FAILED, MaterialParse.stage == DONE, MaterialParse.kind == fields.DOCUMENT,
+            MaterialParse.parser == "weknora", MaterialParse.error == "", MaterialParse.knowledge_id != "")).all()
+        for row, material in rows:
+            values = dict(row.values or {})
+            library.set_parse_state(s, material, *_state(row, values, fields.missing(row.kind, values, row.not_applicable)))
+        return len(rows)
+
+
 def _finish(s: Session, row: MaterialParse, material: Material, outcome: _Finish, at: float) -> None:
     kind = row.kind
     values = fields.clean_values(kind, outcome.values)
@@ -487,8 +520,7 @@ def _finish(s: Session, row: MaterialParse, material: Material, outcome: _Finish
     row.error, row.revision = outcome.error, row.revision + 1
     row.confirmed_by = row.confirmed_by_email = ""
     row.confirmed_at = None
-    status = PARSED if not gaps and not outcome.error else PARSE_FAILED
-    detail = outcome.error or fields.missing_text(gaps)
+    status, detail = (PARSE_FAILED, outcome.error) if outcome.error else _state(row, values, gaps)
     if outcome.error and gaps and any(v for v in values.values() if v not in (None, "", [])):
         detail = f"{outcome.error}（{fields.missing_text(gaps)}）"
     library.set_parse_state(s, material, status, detail)
@@ -659,6 +691,10 @@ class ParseWorker:
 def start_worker(db: Database, settings: Settings) -> ParseWorker | None:
     if settings.library_parse_interval_seconds <= 0:
         return None
+    try:
+        adopt_stored(db)
+    except Exception:  # pragma: no cover - logged; the next start tries again
+        log.exception("stored documents not adopted")
     return ParseWorker(db, settings).start()
 
 
@@ -721,7 +757,7 @@ def _edit(session: Session, p, material_id: str, payload) -> tuple[Material, Mat
         job.edited_by, job.edited_by_email, job.edited_at = p.user.id, p.user.email, at
     job.confirmed_by = job.confirmed_by_email = ""
     job.confirmed_at = None
-    library.set_parse_state(session, material, PARSED if not gaps else PARSE_FAILED, fields.missing_text(gaps))
+    library.set_parse_state(session, material, *_state(job, values, gaps))
     return material, job, gaps
 
 
