@@ -77,7 +77,9 @@ const ROBOT = '巡检机器人';
   check(await card(ROBOT).locator('.card-bottom .button:not(.secondary):visible').count() === 1, 'There is not exactly one filled button');
   check(await card(ROBOT).locator('.hb-line .status').isVisible(), 'Online / offline is not in sight');
   check(await card(ROBOT).getByText(`${cfg.robot_user}@127.0.0.1:${cfg.robot_port}`).isVisible(), 'The address is not in sight');
-  check(await card(ROBOT).locator('.card-body .tags .status.bad').isVisible(), 'A hardware problem is not in sight');
+  // Issue #47: this robot has devices to be confirmed and no fault, so nothing about its hardware is loud.
+  check(await card(ROBOT).locator('.card-body .tags .status.bad').count() === 0, 'Hardware without a fault is shown in red');
+  check((await card(ROBOT).locator('.robot-menu .tag', {hasText: '项待确认'}).count()) === 1, 'What is to be confirmed is not in the list');
   check(!(await card(ROBOT).locator('.card-body > .tags .tag').count()), 'A plain tag is still in the card body');
   check(!(await card(ROBOT).locator('.ra-line').isVisible()), 'Start at boot is in sight before the list is opened');
   await shot('2-one-robot');

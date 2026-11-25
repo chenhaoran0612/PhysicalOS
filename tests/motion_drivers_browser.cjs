@@ -101,15 +101,15 @@ let failed = async () => {};
 
   // 1 · Nothing is claimed before a device's profile was read.
   check(await page.locator('[data-action="engine-drivers"]').count() === 0, 'an entry before any profile was read');
-  await lacksText(page.locator('#main'), ['运控驱动缺']);
+  await lacksText(page.locator('#main'), ['运控接口']);
 
   // 2 · A quadruped without its chassis driver: the profile says what is missing, and so does its card.
   await readProfile(DOG);
   await banner.waitFor({timeout: 15000});
-  await expectText(banner, ['运控驱动', '四足机器人', '缺 2 项运控接口', '底盘速度', '里程计', '查看并处理']);
+  await expectText(banner, ['运控驱动', '四足机器人', '有 2 项不在这台设备的 ROS 2 清单里', '不说明本体不能运动', '底盘速度', '里程计', '查看并处理']);
   await shot('1-profile-banner');
   await close();
-  await card(DOG).getByText('运控驱动缺 2 项').waitFor({timeout: 15000});
+  await card(DOG).getByText('运控接口 2 项待确认').waitFor({timeout: 15000});
   check(await entry(DOG).count() === 1, 'the card of the device without its driver has no entry');
 
   // 3 · A device with its drivers: the profile says they are there, the card shows no entry.
@@ -124,26 +124,29 @@ let failed = async () => {};
   // 4 · An arm without its trajectory controller: the missing interface is an action, with its type.
   await readProfile(ARM);
   await banner.waitFor({timeout: 15000});
-  await expectText(banner, ['机械臂', '缺 1 项运控接口', '机械臂关节位置']);
+  await expectText(banner, ['机械臂', '有 1 项不在这台设备的 ROS 2 清单里', '机械臂关节位置']);
   await banner.locator('[data-action="engine-drivers"]').click();
   await drivers.waitFor();
-  await expectText(row('arm.joint_position'), ['动作', 'control_msgs/action/FollowJointTrajectory', '缺少']);
+  await expectText(row('arm.joint_position'), ['动作', 'control_msgs/action/FollowJointTrajectory', '清单里没有']);
   await expectText(row('joint.state'), ['话题', 'sensor_msgs/msg/JointState', '在', '/joint_states']);
   await expectText(row('safety.stop'), ['核对不了']);
   await shot('2-arm');
   await close();
-  await card(ARM).getByText('运控驱动缺 1 项').waitFor({timeout: 15000});
+  await card(ARM).getByText('运控接口 1 项待确认').waitFor({timeout: 15000});
   // On the hardware page, after scanning again: the problem is listed, not ticked in advance, and says the
   // assistant only diagnoses it; the hardware problems are ticked as before.
   await card(ARM).locator('[data-action="hardware-open"]').click();
   await dialog.getByText('硬件清单', {exact: true}).waitFor({timeout: 20000});
   await dialog.locator('[data-action="hardware-scan"]').first().click();
   await dialog.locator('.hw-issue-list').waitFor({timeout: 60000});
-  const armProblem = dialog.locator('label.hw-issue', {hasText: '缺少运控接口：机械臂关节位置（arm.joint_position）'});
+  const armProblem = dialog.locator('label.hw-issue', {hasText: 'ROS 2 清单里没有运控接口：机械臂关节位置（arm.joint_position）'});
   await expectText(armProblem, ['助手可安装，启动时要人在现场', 'control_msgs/action/FollowJointTrajectory']);
   check(!(await armProblem.locator('[name=hw-issue]').isChecked()), 'the motion driver problem is ticked in advance');
   check(!(await armProblem.locator('[name=hw-issue]').isDisabled()), 'the motion driver problem cannot be ticked');
-  check(await dialog.locator('[name=hw-issue][value="serial-perm:/dev/ttyUSB0"]').isChecked(), 'the hardware problems are no longer ticked');
+  await expectText(armProblem, ['待确认']);                 // issue #47: never a fault, a listing cannot show that the body does not move
+  check(await armProblem.locator('.status.bad').count() === 0, 'a motion interface that is not in the listing is shown as a fault');
+  check(await dialog.locator('[name=hw-issue][value="pci-driver:0008:01:00.0"]').isChecked(), 'what the scan saw not working is no longer ticked');
+  check(!(await dialog.locator('[name=hw-issue][value="serial-perm:/dev/ttyUSB0"]').isChecked()), 'a note about the SSH account is ticked in advance');
   await shot('2-arm-hardware');
   await close();
 
@@ -151,11 +154,11 @@ let failed = async () => {};
   await entry(DOG).click();
   await drivers.waitFor();
   await expectText(drivers, ['不发布运动指令', 'ROS 2 清单读取于', '按消息类型认']);
-  await expectText(row('base.velocity'), ['底盘速度', '话题', '/cmd_vel', 'geometry_msgs/msg/Twist', '缺少']);
-  await expectText(row('base.odometry'), ['里程计', '/odom', 'nav_msgs/msg/Odometry', '缺少']);
+  await expectText(row('base.velocity'), ['底盘速度', '话题', '/cmd_vel', 'geometry_msgs/msg/Twist', '清单里没有']);
+  await expectText(row('base.odometry'), ['里程计', '/odom', 'nav_msgs/msg/Odometry', '清单里没有']);
   await expectText(row('legged.posture'), ['足式姿态', '核对不了']);
   await expectText(row('safety.stop'), ['停止', '核对不了']);
-  check(!(await row('legged.posture').innerText()).includes('缺少'), 'what cannot be checked is shown as missing');
+  check(!(await row('legged.posture').innerText()).includes('清单里没有'), 'what cannot be checked is shown as missing');
   await shot('3-dog-1440');
   for (const width of WIDTHS) {
     await page.setViewportSize({width, height: 900});
@@ -176,7 +179,7 @@ let failed = async () => {};
   const form = dialog.locator('form');
   const listed = await form.locator('[name=issue_ids]').evaluateAll(boxes => boxes.map(b => b.value).sort());
   check(JSON.stringify(listed) === JSON.stringify([VELOCITY, ODOMETRY].sort()), `the form lists: ${listed.join(', ')}`);
-  await expectText(form, ['缺少运控接口：底盘速度（base.velocity）', '缺少运控接口：里程计（base.odometry）']);
+  await expectText(form, ['ROS 2 清单里没有运控接口：底盘速度（base.velocity）', 'ROS 2 清单里没有运控接口：里程计（base.odometry）']);
   check((await form.locator('[name=model_id] option:checked').innerText()).includes(MODEL), 'the TokenFans default model is not chosen');
   await form.locator('[name=data_authorized]').check();
   await form.locator('[name=modify_authorized]').check();
@@ -233,7 +236,7 @@ let failed = async () => {};
   await dialog.locator('[data-action="hardware-scan"]').first().click();
   await dialog.locator('.hw-issue-list').waitFor({timeout: 60000});
   await page.waitForFunction(() => !document.querySelector('#dialog .hw-scanning'), null, {timeout: 60000});
-  await lacksText(dialog, ['缺少运控接口']);
+  await lacksText(dialog, ['清单里没有运控接口']);
   await close();
 
   // 10 · A device whose type is not in the list: nothing is guessed, the profile asks to change the type.
@@ -253,7 +256,7 @@ let failed = async () => {};
   await card(COMPLETE).locator('[data-action="engine-body-type"]').first().click();
   await page.locator('#dialog [name=family]').selectOption('quadruped');
   await submit();
-  await card(COMPLETE).getByText('运控驱动缺 2 项').waitFor({timeout: 15000});
+  await card(COMPLETE).getByText('运控接口 2 项待确认').waitFor({timeout: 15000});
 
   if (errors.length) throw Error(errors.join('\n'));
   console.log(JSON.stringify({passed: true, browser: engine.name(), quadrupedMissing: 2, armMissing: 1, completeHasNoEntry: true,

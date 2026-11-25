@@ -33,11 +33,18 @@ state of the robot or of the platform's record of it.
 
 What it cannot tell: the listing says that a topic exists, not who publishes or subscribes it. A
 ``/cmd_vel`` that only a joystick node created counts as there.
+
+What a missing interface weighs (issue #47). A listing says which standard ROS 2 interfaces could be
+seen, never whether the body can move: a body may move through its vendor's own software. So a problem
+of this kind is never a fault (``error``). It is ``warning`` ("待确认") when the listing can be believed
+(``credible``: nodes were seen running, or the device has no ROS 2 at all), and ``info`` ("提示") when
+the read saw no running node: such a read shows no interface whatever the device has (nodes of another
+account, another ROS_DOMAIN_ID or RMW), and that is how a robot that walks was once reported as broken.
 """
 import logging
 import time
 
-from . import device_access, device_profile
+from . import device_access, device_profile, hardware_scan
 from .contracts import FAMILIES
 from .spec_bridge import capabilities as spec_caps, ros2_interfaces
 
@@ -63,9 +70,13 @@ NOTHING_TO_CHECK = '这个本体类型应有的接口在标准里都没有对应
 NO_ROS2 = '设备上没有读到 ROS 2（/opt/ros 下没有安装，也没有带 ROS 环境的进程在运行）：'
 NOTHING_RUNS = '设备上有 ROS 2 Humble，但没有读到正在运行的节点：'
 DEFAULT_ENVIRONMENT = '这一次是按默认设置读的；节点如果由别的账号运行，或设置了别的 ROS_DOMAIN_ID，这里看不到。'
-NOT_LISTED = '读到的 ROS 2 {what}清单里没有这个类型的{what}：'
-CAUSE = '运控驱动没有安装，或者没有在运行。'
-HINT = ('需要安装并启动这台本体的运控驱动。可以交给修复助手（issue #29）：它先查资料库里的驱动安装包，有就送到设备装上并启动，'
+NOT_LISTED = '读到的 ROS 2 {what}清单里没有这个类型的{what}。'
+# What a credible listing without the interface means, and what a listing without any node does not.
+MEANING = ('这只说明平台的 ROS 2 标准接口在这台设备上接不上，不说明本体不能运动：本体可能用厂家自己的方式运动，'
+           '也可能是运控驱动没有安装或没有在运行。')
+UNSEEN = ('这样一份清单不说明运控接口不在：读不到节点时，接口自然也读不到。在设备上确认运控程序在运行'
+          '（以及它用的账号、ROS_DOMAIN_ID 和 RMW）之后，重新读取设备档案。')
+HINT = ('如果这台本体应当通过 ROS 2 标准接口由平台控制：需要安装并启动它的运控驱动。可以交给修复助手（issue #29）：它先查资料库里的驱动安装包，有就送到设备装上并启动，'
         '启动那一步要有人在现场确认；资料库里没有时，要你提供安装包或在现场安装。装好以后重新扫描，或重新读取设备档案：'
         '都会重新读取 ROS 2 的清单来核对，只读，不发布运动指令。')
 HINT_WRONG_TYPE = ('需要让运控驱动用上面的消息类型提供这个接口（改驱动的配置或版本）。修复助手可以排查，并在批准后改驱动的配置或换装资料库里的驱动版本，'
@@ -95,9 +106,9 @@ def expected(body_type):
     return items
 
 
-def _verdict(status, reason, items, body_type=None, cause=''):
+def _verdict(status, reason, items, body_type=None, cause='', credible=True):
     named = {'id': body_type['id'], 'name': body_type['name']} if body_type else None
-    return {'status': status, 'reason': reason, 'cause': cause, 'body_type': named, 'items': items}
+    return {'status': status, 'reason': reason, 'cause': cause, 'body_type': named, 'items': items, 'credible': credible}
 
 
 def _shown(text):
@@ -168,7 +179,9 @@ def assess(body_type, ros2, family=None):
         return _verdict('unknown', f'{why}。这一次没有核对运控驱动。{again}', unchecked, body_type)
     judged = [_judged(item, ros2) for item in items]
     missing = any(item['state'] in ('missing', 'wrong_type') for item in judged)
-    return _verdict('missing' if missing else 'ok', '', judged, body_type, _cause(ros2) if missing else '')
+    # A read that saw no running node shows no interface whatever the device has (issue #47).
+    credible = not missing or ros2.get('status') == 'absent' or ros2.get('nodes') != []
+    return _verdict('missing' if missing else 'ok', '', judged, body_type, _cause(ros2) if missing else '', credible)
 
 
 def _issue(item, result):
@@ -181,11 +194,13 @@ def _issue(item, result):
         detail = wanted + f"设备上有{what} {item['name']}，但它的消息类型是 {actual}，不是上面的类型。"
         hint = HINT_WRONG_TYPE
     else:
-        title = f"缺少运控接口：{item['title']}（{item['capability']}）"
-        detail = wanted + (result['cause'] or NOT_LISTED.format(what=what)) + CAUSE
+        title = f"ROS 2 清单里没有运控接口：{item['title']}（{item['capability']}）"
+        detail = wanted + (result['cause'] or NOT_LISTED.format(what=what)) + (MEANING if result['credible'] else UNSEEN)
         hint = HINT
-    return {'id': item['issue_id'], 'severity': 'error', 'category': CATEGORY, 'title': title[:200], 'detail': detail[:800],
-            'hint': hint[:600], 'device_id': None, 'fixable': 'auto', 'source': SOURCE,
+    # Never a fault: a listing cannot show that the body does not move (issue #47).
+    severity = 'warning' if result['credible'] else 'info'
+    return {'id': item['issue_id'], 'severity': severity, 'category': CATEGORY, 'title': title[:200], 'detail': detail[:800],
+            'hint': hint[:600], 'device_id': None, 'fixable': 'auto', 'source': SOURCE, 'blocks': '', 'onsite': False,
             'capability': item['capability'], 'state': item['state'],
             'expected': {key: item[key] for key in ('kind', 'role', 'name', 'types')}}
 
@@ -214,11 +229,16 @@ def _merged(parsed, result, found, reverified=False, problem=None, note=None):
     summary = {**parsed['summary'],
                'errors': parsed['summary']['errors'] + sum(1 for issue in found if issue['severity'] == 'error'),
                'warnings': parsed['summary']['warnings'] + sum(1 for issue in found if issue['severity'] == 'warning')}
-    said = {'status': result['status'], 'reason': result['reason'], 'body_type': result['body_type'],
+    said = {'status': result['status'], 'reason': result['reason'], 'body_type': result['body_type'], 'credible': result['credible'],
             'checked_at': result['checked_at'], 'reverified': reverified, 'problem': problem or result['problem'],
             'missing': [issue['id'] for issue in found]}
     return {**parsed, 'issues': combined, 'summary': summary, 'notes': parsed['notes'] + ([note] if note else []),
             'motion_drivers': said}
+
+
+def _of_this_kind(scan):
+    """The motion driver problems of a saved scan, weighing what today's rules let them (issue #47)."""
+    return [issue for issue in hardware_scan.regraded(scan)['issues'] if issue['id'].startswith(ISSUE_PREFIX)]
 
 
 class MotionDrivers:
@@ -268,7 +288,7 @@ class MotionDrivers:
         for scan in self.store.list('hardware_scans'):
             if scan['robot_id'] == robot['id'] and (latest is None or scan['created_at'] > latest['created_at']):
                 latest = scan
-        return [issue for issue in (latest or {}).get('issues', []) if issue['id'].startswith(ISSUE_PREFIX)]
+        return _of_this_kind(latest) if latest else []
 
     def _known(self, robot, result):
         """The motion driver problems known for a robot. While the kept profile cannot be judged (an incomplete
@@ -303,7 +323,7 @@ class MotionDrivers:
         """For ``hardware_rescan``: when the session's baseline scan has motion driver problems, ROS 2 is
         read again over ``device`` (the rescan's fresh login) and the problems are judged by that."""
         baseline = self.store.get('hardware_scans', s['hardware']['scan_id'])
-        carried = [issue for issue in baseline['issues'] if issue['id'].startswith(ISSUE_PREFIX)]
+        carried = _of_this_kind(baseline)
         if not carried:
             return self.attach(robot, parsed)
         return self._verified(robot, connection, parsed, carried, lambda: device_profile.read_ros2(device), s['id'])

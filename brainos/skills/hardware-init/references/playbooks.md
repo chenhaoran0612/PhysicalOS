@@ -66,11 +66,13 @@
 - 例外只有一个：缺运控驱动（`motion-driver:*`）时启动运控驱动本身，按下面 motion-driver 那一节做，那一条命令 `starts_motion_driver=true`，要人在现场确认。
 - 不要 `systemctl disable` 或 `mask` 服务来“消除”失败。
 
-## motion-driver:<能力编号> — 缺少运控接口（运控驱动没有安装，或没有在运行）
+## motion-driver:<能力编号> — ROS 2 清单里没有运控接口（不等于本体不能运动）
+
+- 先分清是哪一种，再决定做不做事：这类问题只说明读到的 ROS 2 清单里没有平台的标准接口。本体可能正由厂家自己的程序驱动着，也可能运控程序在运行、只是用了别的账号、别的 `ROS_DOMAIN_ID` 或 RMW，读取时看不到。**第 1 步查到运控程序已经在运行的，不要再安装或启动另一个驱动**（两个程序同时驱动电机是危险的）：标为 `needs_user`，`actions` 写清看到的进程、服务和它用的环境变量，`followups` 写明请用户确认这台本体是否要通过 ROS 2 标准接口由平台控制。
 
 - 这类问题不是硬件扫描发现的：产品按本体类型列出运控驱动应提供的 ROS 2 话题或动作，和只读读取到的 ROS 2 清单对照。`selected_issues` 里这一条的 `expected` 写着应有的接口：`kind`（`topic` 话题 / `action` 动作）、`name`（惯用名，设备上可以不同）、`types`（消息类型，必须对得上）。
 - 整个过程不发运动指令，安全状态保持锁定：不发布话题、不调用服务、不发送动作目标、不改参数，不碰急停和设备上的 NeuxMind 运行时（产品会拒绝）。只读查询可以，例如 `ros2 topic info /cmd_vel`、`ros2 node list`。
-- 1. 检查（只读）：`ls /opt/ros` 看装了哪个 ROS 发行版；`dpkg -l` 的输出里找 `ros-humble-` 开头的包和厂商的驱动包；`systemctl list-units --type=service --all --no-pager` 找本体的驱动或启动服务，再用 `systemctl status <服务> --no-pager`、`journalctl -u <服务> -n 80 --no-pager` 看它是没有安装、没有启动还是启动失败。要用 `ros2` 命令时把 `ros2_env` 设为 true（产品加载 ROS 2 Humble，命令里不要写 `source`），例如 `device_exec` 执行 `ros2 pkg list`。
+- 1. 检查（只读）：`ps -eo user,pid,args` 找厂家的运控、底盘或 ROS 进程，看是谁在运行；`ls /opt/ros` 看装了哪个 ROS 发行版；`dpkg -l` 的输出里找 `ros-humble-` 开头的包和厂商的驱动包；`systemctl list-units --type=service --all --no-pager` 找本体的驱动或启动服务，再用 `systemctl status <服务> --no-pager`、`journalctl -u <服务> -n 80 --no-pager` 看它是没有安装、没有启动还是启动失败。要用 `ros2` 命令时把 `ros2_env` 设为 true（产品加载 ROS 2 Humble，命令里不要写 `source`），例如 `device_exec` 执行 `ros2 pkg list`。
 - 2. 驱动已经装好、只是没有运行：直接到第 4 步启动它。
 - 3. 驱动没有装：先用 `driver_packages` 查资料库。挑 `usable` 为 true、本体类型和厂家型号对得上的安装包，用 `driver_package_deliver` 送到设备（这一步要批准），它返回设备上的路径 `device_path` 和 `sha256`。可以先用 `sha256sum '<device_path>'` 再核对一次，然后用 `device_fix` 安装：
    - `.deb`：`DEBIAN_FRONTEND=noninteractive apt-get install -y '<device_path>'`（needs_root=true，build_step=true，依赖要从软件源下载时设备要能联网）。

@@ -75,6 +75,8 @@ SWITCHED_OFF = '用户改为逐条批准：之后的设备命令执行前都会�
 
 def needs_onsite(issue):
     """The scan itself says this problem needs on-site work. Notes (info) are the user's to judge."""
+    if 'onsite' in issue:                       # issue #47: said by the scan itself, whatever the problem weighs
+        return bool(issue['onsite'])
     return issue.get('fixable') != 'auto' and issue.get('severity') != 'info'
 
 

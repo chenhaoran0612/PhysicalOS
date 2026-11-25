@@ -93,7 +93,8 @@ class RunningSessionTests(EditCase):
         self.target.command_outputs[hardware_scan.SCAN_EXEC] = jetson().encode()
         self.old = self.connect_directly()
         scan = self.hw.scan({'project_id': self.pid, 'robot_id': self.old['robot_id']})
-        self.issue = scan['issues'][0]['id']
+        self.issue = 'serial-perm:/dev/ttyUSB0'       # the problem the fix below is for (not "the first one": the order follows the weights)
+        self.assertIn(self.issue, [issue['id'] for issue in scan['issues']])
         self.repair = self.store.put('agent_sessions', {
             **self.session(self.old, mode='repair'),
             'hardware': {'scan_id': scan['id'], 'issue_ids': [self.issue], 'skill': hardware_init.skill_info(), 'fixes': 0,
