@@ -12,12 +12,12 @@ const ROBOT_REMOVE_CARD_END = '</div></div></article>';
 let robotRemoveBaseAction = null;
 
 const robotRemoveOf = (kind, robotId) =>
-  (state[kind] || []).filter(x => x.project_id === projectId && x.robot_id === robotId);
+  (state[kind] || []).filter(x => x.robot_id === robotId);      // issue #42: in every task, a robot is not one task's
 
 // What the project holds about a robot, from the state the page already has.
 function robotRemoveFacts(robot) {
   const sessions = robotRemoveOf('agent_sessions', robot.id);
-  const flows = (state.workflow_runs || []).filter(run => run.project_id === projectId &&
+  const flows = (state.workflow_runs || []).filter(run =>
     run.definition?.template === ROBOT_REMOVE_FLOW_TEMPLATE && run.definition?.robot_id === robot.id);
   return {
     connection: find('device_connections', robot.connection_id),

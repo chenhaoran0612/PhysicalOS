@@ -14,6 +14,7 @@ const sandbox = {
   button: (text, action, cls = '', id = '', disabled = false) =>
     `<button type="button" class="button ${cls}" data-action="${action}" data-id="${h(id)}"${disabled ? ' disabled' : ''}>${text}</button>`,
   notice: (text, warn = false) => `<div class="notice ${warn ? 'warn' : ''}"><div>${text}</div></div>`,
+  badge: (text, cls = '') => `<span class="status ${cls}"><i class="dot"></i>${h(text)}</span>`,
 };
 vm.createContext(sandbox);
 vm.runInContext(readFileSync('web/ux04_errors.js', 'utf8'), sandbox);

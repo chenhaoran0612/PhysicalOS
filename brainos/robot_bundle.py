@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import device_access, device_transfer, hardware_init, package_fetch
+from . import robot_scope
 from . import robot_bundle_device as on_device
 from .cloud_account import CloudError
 from .device_transfer_target import shown
@@ -579,7 +580,7 @@ class RobotBundles:
         job_id = p.get('job_id')
         with self.lock:
             job = self.jobs.get(job_id) if isinstance(job_id, str) else None
-            if job is None or job['project_id'] != p.get('project_id'):
+            if job is None or robot_scope.elsewhere(job, p.get('project_id'), required=True):      # issue #42: kept with the robot, whichever task asks
                 raise ValueError('找不到这一次操作；应用重启后正在进行的不会保留，可以重新开始')
             return job
 

@@ -339,7 +339,8 @@ function writeSkill() {
   await go('models');
   await top.locator(`[data-safety-alert="${ignore}"]`).waitFor({timeout: 90000});
   const row = await top.locator(`[data-safety-alert="${ignore}"]`).innerText();
-  assert(row.includes('B 项目巡检狗') && row.includes('（项目：项目 B 园区）'), '横幅应写明另一个项目：' + row);
+  // issue #42: robots belong to the account, so the banner names the robot and no task next to it
+  assert(row.includes('B 项目巡检狗') && !row.includes('（项目：'), '横幅应写明机器人，且不再把它归到某个项目：' + row);
   assert(await page.evaluate(() => projectId) === projectA, '用户仍在项目 A');
   await shot('10-banner-other-project');
   // hidden window, robot latched: polling goes on
@@ -356,9 +357,11 @@ function writeSkill() {
     Object.defineProperty(document, 'hidden', {configurable: true, get: () => false});
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await top.locator(`[data-safety-alert="${ignore}"] [data-action="safety-goto"]`).click();
+  const noSwitch = await top.locator(`[data-safety-alert="${ignore}"] [data-action="safety-goto"]`).count();
+  assert(noSwitch === 0, '账号的机器人不应再有“切换到该项目查看”（issue #42）');
+  await top.locator(`[data-safety-alert="${ignore}"] [data-action="detail-robots"]`).click();
   await dlg('#robot-safety [data-safety-alert]').waitFor({timeout: 15000});
-  assert(await page.evaluate(() => projectId) === projectB, '“切换到该项目查看”应切换到项目 B');
+  assert(await page.evaluate(() => projectId) === projectA, '查看账号的机器人不应切换任务（issue #42）');
   await shot('11-switched-to-project-b');
   await fixture('/fixture/ignore?on=0');
   await page.waitForTimeout(1500);

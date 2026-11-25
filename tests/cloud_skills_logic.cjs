@@ -42,7 +42,7 @@ check(page.cloudSkillPathProblem(' /Users/you/skills/patrol '), '', 'a full path
 // ---------------------------------------------------------------- which robots
 const robots = [{id: 'a', project_id: 'project-1', status: 'connected'}, {id: 'b', project_id: 'project-1', status: 'error'},
   {id: 'c', project_id: 'project-2', status: 'connected'}];
-check(page.cloudSkillRobots(robots, 'project-1').map(r => r.id), ['a'], 'connected robots of this project only');
+check(page.cloudSkillRobots(robots, 'project-1').map(r => r.id), ['a', 'c'], 'connected robots, whichever task is open (issue #42: robots are the account\'s)');
 check(page.cloudSkillRobots(undefined, 'project-1'), [], 'no robots');
 
 // ---------------------------------------------------------------- examples

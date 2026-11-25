@@ -129,11 +129,11 @@ let f = factsOf({id: 'robot-1', connection_id: 'connection-1'});
 check(f.connection.id, 'connection-1', 'the connection the robot names');
 check(f.sessions.map(s => s.id), ['s1', 's2'], 'its own sessions only');
 check(f.running.id, 's2', 'the one that is still going');
-check([f.reports, f.scans, f.repairs], [1, 2, 1], 'its own inventories, scans and repair reports, in this project');
+check([f.reports, f.scans, f.repairs], [1, 2, 2], 'its own inventories, scans and repair reports, in every task (issue #42)');
 check(f.profiles, 1, 'its own device profile');
 check(f.applications.map(a => a.name), ['巡检'], 'applications that target it');
 check(f.flowRunning.id, 'w3', 'its adaptation flow that is running or stopping');
-check(f.flowsUnfinished, 2, 'its adaptation flows that were not finished: the paused and the stopping one');
+check(f.flowsUnfinished, 3, 'its adaptation flows that were not finished, in every task: the paused, the stopping and the running one');
 f = factsOf({id: 'robot-3'});
 check([f.connection, f.running, f.flowRunning, f.sessions.length, f.flowsUnfinished], [undefined, null, null, 0, 0],
       'a robot with nothing');

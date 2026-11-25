@@ -39,6 +39,7 @@ import time
 
 from .contracts import required_text
 from .service import now, uid
+from . import robot_scope
 from .spec_bridge import capabilities as spec_caps
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -116,7 +117,7 @@ def start(flows,p):
     template definition, start stage 1 (after the usual consent)."""
     platform=flows.platform;store=flows.store
     robot=store.get('robots',p.get('robot_id'))
-    if p.get('project_id') and robot['project_id']!=p['project_id']:raise ValueError('该本体不属于当前项目')
+    if robot_scope.elsewhere(robot,p.get('project_id')):raise ValueError('该本体不属于当前项目')     # issue #42: a robot of the account is every task's
     inventory=latest_inventory(store,robot)
     if not inventory:raise ValueError('该本体还没有本体档案：请先完成一次本体调查')
     if p.get('inventory_id') and p['inventory_id']!=inventory['id']:raise ValueError('只能从最新的本体档案启动适配；请刷新后重试')

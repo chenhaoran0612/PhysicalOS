@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 from . import connector, robot_caps
 from . import cloud_auto_login          # issue #36
+from . import robot_scope               # issue #42: robots belong to the account; every task can use them
 from .errors import CodedError, refusal_fields
 from .contracts import FAMILIES, evaluation_simulation_reasons, required_text, string_list, validate_manifest
 from .store import Store
@@ -74,6 +75,10 @@ class Platform:
         self.commerce, self.user_id = commerce, user_id
         from . import ssh_route
         ssh_route.migrate(self.store)               # issue #15: saved one-hop connections become a list of jump hosts, before anything reads them
+        try:
+            robot_scope.migrate(self.store)         # issue #42: robots, and what is kept about them, belong to the account, not to a task
+        except Exception as error:                  # nothing was moved: the workspace opens as it was, and the log says so
+            self.audit('robot_scope.migration_failed', {'error': str(error)[:500]})
         from .engineering import Engineering
         self.engineering = Engineering(self)
         from .workflows import Workflows
@@ -137,7 +142,9 @@ class Platform:
 
     def same_project(self, kind, key, project_id):
         obj = self.store.get(kind, key)
-        if obj.get('project_id') != project_id:
+        # Issue #42: what is kept at the robots' home (every robot is) is for every task; a request for the home may name a task's asset.
+        shared = robot_scope.HOME in (project_id, obj.get('project_id'))
+        if obj.get('project_id') != project_id and not shared:
             raise ValueError('所选资产不属于当前项目')
         return obj
 
@@ -146,6 +153,7 @@ class Platform:
         for kind in ('robots', 'services'):
             for obj in result[kind]:
                 obj['has_token'] = bool(obj.pop('token', ''))
+        result.update(projects=robot_scope.tasks(result['projects']), robot_home=robot_scope.HOME)     # issue #42: the robots' home is not a task
         for obj in result['robots']:
             if obj.get('sim'):
                 obj['sim'] = self.sims.process_view(obj)
@@ -546,7 +554,7 @@ class Platform:
             raise ValueError('Agent 类型无效')
         # Local checks are deterministic tools, explicitly separate from external LLM jobs.
         findings=[]
-        robots=[r for r in self.store.list('robots') if r['project_id']==project['id']]
+        robots=[r for r in self.store.list('robots') if r['project_id'] in (project['id'],robot_scope.HOME)]     # issue #42: the robots of the account
         apps=[a for a in self.store.list('applications') if a['project_id']==project['id']]
         if not robots:
             findings.append('项目尚未登记机器人：添加本体并连接设备端适配服务。')
@@ -910,7 +918,7 @@ class Platform:
         first, so nothing can delay or block it. The outcome is never retried.
         """
         robot = self.store.get('robots', p.get('robot_id'))
-        if p.get('project_id') and robot.get('project_id') != p['project_id']:
+        if robot_scope.elsewhere(robot, p.get('project_id')):      # issue #42: a robot of the account is every task's
             raise ValueError('该机器人不属于当前项目')
         if not robot.get('endpoint'):
             raise ValueError('这台机器人没有配置设备端地址，无法发送停止请求；请使用现场硬件急停')

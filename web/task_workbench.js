@@ -38,7 +38,9 @@ const TW_GUIDE_SEEN = 'nx-first-run-guide-seen';                                
 
 // ---------------------------------------------------------------- what a task holds
 
-const twOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id);
+// Issue #42: robots belong to the account (st.robot_home), so every task has all of them.
+const twOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id ||
+  (kind === 'robots' && Boolean(st.robot_home) && x.project_id === st.robot_home));
 
 // From the state the page already has. `stages` says which of TW_STAGES have a record.
 function twFacts(st, task) {
@@ -71,7 +73,8 @@ function twFacts(st, task) {
 // The numbers of the dashboard, over all tasks.
 function twTotals(list) {
   const sum = pick => list.reduce((n, [, f]) => n + pick(f), 0);
-  return {tasks: list.length, robots: sum(f => f.robots.length), online: sum(f => f.online), applications: sum(f => f.applications.length),
+  const robots = [...new Map(list.flatMap(([, f]) => f.robots).map(r => [r.id, r])).values()];     // issue #42: a robot that several tasks use counts once
+  return {tasks: list.length, robots: robots.length, online: robots.filter(r => r.status === 'connected').length, applications: sum(f => f.applications.length),
           deployed: list.filter(([, f]) => f.deployed).length, working: list.filter(([, f]) => f.working).length};
 }
 
@@ -81,8 +84,9 @@ const twNames = items => items.slice(0, TW_NAMES_SHOWN).map(x => x.name).join('�
 
 // Why the task cannot be deleted right now, with the way to what holds it; null when it can.
 function twBlocked(task, facts) {
-  if (facts.robots.length) {
-    return {text: `这个任务里还有 ${facts.robots.length} 台机器人（${twNames(facts.robots)}）。请先到“我的机器人”里删除它们，再删除任务。`,
+  const own = facts.robots.filter(r => r.project_id === task.id);      // issue #42: robots of the account stay when a task goes
+  if (own.length) {
+    return {text: `这个任务里还有 ${own.length} 台机器人（${twNames(own)}）。请先到“我的机器人”里删除它们，再删除任务。`,
             label: '去我的机器人', action: 'task-robots'};
   }
   if (facts.running.session) return {text: '这个任务有助手会话正在运行。请等它结束，或先停止它，再删除。', label: '进入任务', action: 'task-open'};
@@ -186,7 +190,7 @@ function twBoard(list) {
 function twDashboardMarkup(st, currentId, guide) {
   const list = (st.projects || []).map(task => [task, twFacts(st, task)]);
   const head = '<div class="page-head tw-head"><div><div class="eyebrow">TASK WORKBENCH</div><h1>任务工作台</h1>' +
-    '<p class="subtitle">每个任务保存一项工作的机器人、应用、测试和部署记录。新建任务，或进入一个任务继续。</p></div>' +
+    '<p class="subtitle">每个任务保存一项工作的应用、测试和部署记录；机器人属于账号，每个任务都可以使用。新建任务，或进入一个任务继续。</p></div>' +
     `<div class="button-row">${button(icon('plus') + ' 新建任务', 'journey-start')}</div></div>`;
   const wall = list.length
     ? `<div class="section-head tw-wall-head"><h2>全部任务 <span class="badge-count">${list.length}</span></h2><span>最近创建的在前</span></div>` +
