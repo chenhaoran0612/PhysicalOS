@@ -87,7 +87,7 @@ let failed = async () => {};
   const added = await post('robots', {name: DOG, family: 'quadruped', endpoint: cfg.device.url, token: cfg.device.access});
   same(added.status, 200, 'adding the first robot');
   same((await post('robots/connect', {robot_id: added.body.id})).status, 200, 'connecting it');
-  const arm = await post('robots', {name: ARM, family: 'manipulator'});
+  const arm = await post('robots', {name: ARM, family: 'manipulator', vendor: '示例机器人公司', model: 'A1'});     // issue #48: a robot whose device reports none needs a brand and model
   same(arm.status, 200, 'adding the second robot');
   const dog = added.body.id;
   await page.evaluate(() => refresh(true));      // the robots were added behind the page

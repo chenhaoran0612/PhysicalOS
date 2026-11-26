@@ -84,3 +84,7 @@
 - `tests/robot_model_browser.cjs`：在 Chromium 和 WebKit 上走完添加机器人、筛选、编排应用、清单里换机器人、现场测试落到选中的那台、改品牌型号；`tests/cloud_skills_browser.cjs` 按新规则更新。
 
 没有验证的：真机；真机的接入程序是否上报了品牌和型号（ROS 2 适配器默认上报 `unknown`，要在它的配置里填 `vendor`、`model`）；部署在外面的云平台；PostgreSQL 上的补列只由 `db.py` 原有的补列机制保证，这次没有单独在 PostgreSQL 上跑。
+
+## 品牌型号从清单里选（issue #53）
+
+品牌和型号的两个输入框现在是两个下拉列表，清单和图片见 [ROBOTS_PAGE.md](ROBOTS_PAGE.md) 的「品牌型号清单和图片」。保存的字段和这里的规则没有变。

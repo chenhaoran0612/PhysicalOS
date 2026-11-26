@@ -6,7 +6,7 @@
 // needs NEUXMIND_MAIL_DEV_ECHO=1). BRAIN_BROWSER=webkit runs it on WebKit, the engine of the desktop app.
 const engine = require(process.env.BRAIN_PLAYWRIGHT_MODULE || 'playwright')[process.env.BRAIN_BROWSER || 'chromium'];
 const {gateSignIn} = require('./gate_helper.cjs');
-const {openRobotMenu, robotEntry, addRobotWay} = require('./robots_page_helper.cjs');
+const {openRobotMenu, robotEntry, addRobotWay, robotStatus} = require('./robots_page_helper.cjs');
 const crypto = require('crypto');
 const fs = require('fs');
 
@@ -54,6 +54,10 @@ const ROBOT = '巡检机器人';
         'The empty page explains itself above the three ways');
   check(await main.locator('.page-head details.rp-settings').count() === 1, 'The empty page has no 设置');
   check(!(await main.locator('.notice:visible').count()), 'A notice is in sight on the empty page');
+  // Issue #53: nothing describes anything. A way to add a robot is its title and its button.
+  check(await main.locator('.page-head .eyebrow').count() === 0, 'The empty page still has a line above its title');
+  check(await main.locator('.robot-entry .journey-option p, .robot-entry .entry-eyebrow').count() === 0, 'A way to add a robot is still described');
+  check(await main.locator('.robot-entry .journey-option .button:visible').count() === 3, 'A way to add a robot lost its button');
   check(await noSidewaysScroll(), 'The empty page scrolls sideways');
   await shot('1-empty');
 
@@ -81,13 +85,37 @@ const ROBOT = '巡检机器人';
   check(seen[1] === '实时状态', 'The live state is not the second button');
   check(await card(ROBOT).locator('.card-bottom .button:not(.secondary):visible').count() === 1, 'There is not exactly one filled button');
   check(await card(ROBOT).locator('.hb-line .status').isVisible(), 'Online / offline is not in sight');
-  check(await card(ROBOT).getByText(`${cfg.robot_user}@127.0.0.1:${cfg.robot_port}`).isVisible(), 'The address is not in sight');
+  // Issue #53: the card is a picture, the name, online or not, the brand and model, and the buttons. Nothing else is in sight.
+  const address = `${cfg.robot_user}@127.0.0.1:${cfg.robot_port}`;
+  const picture = card(ROBOT).locator('.rp-picture img');
+  check(await picture.isVisible() && await picture.evaluate(el => el.complete && el.naturalWidth > 0), 'The card has no picture, or the picture did not load');
+  check((await card(ROBOT).locator('.rp-model').innerText()).replace(/\s+/g, ' ').trim() === '示例机器人公司 · X1', 'The card does not show the brand and model');
+  const text = await card(ROBOT).evaluate(el => el.innerText);
+  for (const hidden of [address, '最近心跳', '四足机器人', '待确认', '控制通道', '开机自启', '可发起调查']) {
+    check(!text.includes(hidden), `"${hidden}" is still in sight on the card`);
+  }
+  check(!/\d/.test(text.replace(ROBOT, '').replace('X1', '')), `A number is in sight on the card: ${JSON.stringify(text)}`);
   // Issue #47: this robot has devices to be confirmed and no fault, so nothing about its hardware is loud.
-  check(await card(ROBOT).locator('.card-body .tags .status.bad').count() === 0, 'Hardware without a fault is shown in red');
-  check((await card(ROBOT).locator('.robot-menu .tag', {hasText: '项待确认'}).count()) === 1, 'What is to be confirmed is not in the list');
-  check(!(await card(ROBOT).locator('.card-body > .tags .tag').count()), 'A plain tag is still in the card body');
-  check(!(await card(ROBOT).locator('.ra-line').isVisible()), 'Start at boot is in sight before the list is opened');
+  check(await card(ROBOT).locator('.status.bad').count() === 0, 'Hardware without a fault is marked as a fault');
+  check(await card(ROBOT).locator('.rp-details').count() === 1 && !(await card(ROBOT).locator('.rp-details').isVisible()), 'What the card keeps is in sight');
   await shot('2-one-robot');
+
+  // 2b. All of it is in 「实时状态」, above the live figures: when the last heartbeat was, what and where, the states, start at boot.
+  const overview = await robotStatus(page, card(ROBOT));
+  await page.locator('#ssh-status').waitFor();
+  const told = await overview.innerText();
+  for (const shown of [address, '最近心跳', '四足机器人', '示例机器人公司 X1', '项待确认', '控制通道', '开机自启', '可发起调查']) {
+    check(told.includes(shown), `"${shown}" is not in 实时状态: ${JSON.stringify(told)}`);
+  }
+  check(await overview.evaluate(el => el.compareDocumentPosition(document.querySelector('#ssh-status')) & Node.DOCUMENT_POSITION_FOLLOWING), 'The overview is not above the live figures');
+  await page.evaluate(() => refresh(true));
+  check(await page.locator('#dialog .rp-overview').count() === 1, 'A refresh doubled or dropped the overview');
+  // The buttons inside 实时状态 are one height.
+  await page.locator('#ssh-status .ls-tab').first().waitFor({timeout: 30000});
+  const heights = await page.locator('#dialog .rp-overview button:visible, #ssh-status button:visible').evaluateAll(els => [...new Set(els.map(el => Math.round(el.getBoundingClientRect().height)))]);
+  check(heights.length === 1, `The buttons inside 实时状态 have different heights: ${heights.join(', ')}`);
+  await shot('2b-live-status');
+  await page.locator('#dialog [data-action="close"]').first().click();
 
   // 3. The list: everything else, grouped; deleting last and apart. It hangs out of the card and is not cut.
   await openRobotMenu(card(ROBOT));
@@ -100,7 +128,11 @@ const ROBOT = '巡检机器人';
     check(entries.includes(action), `${action} is not in the list`);
   }
   check(entries[entries.length - 1] === 'engine-robot-remove', 'Deleting is not the last entry');
-  check(await panel.locator('.ra-line').isVisible(), 'Start at boot is not in the list');
+  check(await panel.locator('.ra-line, .tags, .robot-menu-note').count() === 0, 'The list holds something that is not an entry');
+  const entryHeights = await panel.locator('.robot-menu-item').evaluateAll(els => [...new Set(els.map(el => Math.round(el.getBoundingClientRect().height)))]);
+  check(entryHeights.length === 1, `The entries of the list have different heights: ${entryHeights.join(', ')}`);
+  const cardHeights = await card(ROBOT).locator('.card-bottom .button:visible, .card-bottom summary:visible').evaluateAll(els => [...new Set(els.map(el => Math.round(el.getBoundingClientRect().height)))]);
+  check(cardHeights.length === 1, `The buttons of the card have different heights: ${cardHeights.join(', ')}`);
   const reachable = await panel.locator('.robot-menu-item').evaluateAll(els => els.every(el => {
     el.scrollIntoView({block: 'nearest'});
     const r = el.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -146,6 +178,7 @@ const ROBOT = '巡检机器人';
   // 4. 「添加机器人」: the three ways, in a dialog. A simulated robot gets a card of the same shape.
   await main.locator('[data-action="engine-robots-add"]').click();
   check(await dialog.locator('.journey-option').count() === 3, 'The dialog of 添加机器人 does not offer the three ways');
+  check(await dialog.locator('.journey-option p, .entry-eyebrow').count() === 0 && !(await dialog.locator('.dialog-head p').innerText()).trim(), 'The dialog of 添加机器人 still describes the ways');
   await shot('4-add-dialog');
   await dialog.locator('[data-action="sim-add"]').click();
   await dialog.locator('button[type=submit]').click();
@@ -154,7 +187,7 @@ const ROBOT = '巡检机器人';
   check((await main.locator('.page-head .eyebrow').innerText()).includes('1 台真机 · 1 台仿真'), 'The head does not count real and simulated robots apart');
   const sim = main.locator('article.sim-card');
   const simSeen = await sim.locator('button:visible, summary:visible').evaluateAll(els => els.map(el => el.innerText.trim()));
-  check(simSeen.join() === '实时状态,能力与技能,更多功能', `A running simulation shows ${JSON.stringify(simSeen)}`);
+  check(simSeen.join() === '能力与技能,实时状态,更多功能', `A running simulation shows ${JSON.stringify(simSeen)}`);
   await openRobotMenu(sim);
   check(await sim.locator('.robot-menu-item[data-action="sim-stop"]').isVisible() && await sim.locator('.robot-menu-item[data-action="sim-remove"]').isVisible(),
         'Stopping and deleting a simulation are not in its list');
@@ -164,22 +197,25 @@ const ROBOT = '巡检机器人';
   await page.keyboard.press('Escape');
   await shot('5-two-robots');
 
-  // 5. Cards line up: each is a name, a line of state, one line of what and where. What only explains
-  //    is in the list.
+  // 5. Cards line up: each is a picture, a name with its state, the brand and model, the buttons. Nothing explains.
   const lines = name => card(name).evaluate(el => { const top = s => el.querySelector(s)?.getBoundingClientRect().top - el.getBoundingClientRect().top;
-    return {name: top('h3'), state: top('.hb-line, .rp-state'), what: top('.rp-what'), whatLines: el.querySelector('.rp-what')?.getClientRects().length,
-            bottom: top('.card-bottom'), height: el.getBoundingClientRect().height}; });
+    return {picture: top('.rp-picture'), name: top('h3'), model: top('.rp-model'), bottom: top('.card-bottom'), height: el.getBoundingClientRect().height}; });
   const a = await lines(ROBOT), b = await lines('仿真四足机器人');
-  for (const key of ['name', 'state', 'what', 'bottom', 'height']) {
+  for (const key of ['picture', 'name', 'bottom', 'height']) {
     check(Number.isFinite(a[key]) && Math.abs(a[key] - b[key]) <= 1, `The two cards do not line up at "${key}": ${JSON.stringify([a, b])}`);
   }
-  check(!(await sim.locator('.card-body .inline-note').count()) && !(await sim.locator('.card-body').innerText()).includes('地址和令牌'),
-        'A note that only explains is still on the simulated robot\'s card');
-  check(await sim.locator('.card-top .status').count() === 1 && (await sim.locator('.rp-state').innerText()).trim() === '运行中',
-        'Whether the simulation runs is not the line under its name');
+  const simText = await sim.evaluate(el => el.innerText);
+  check(!simText.includes('地址和令牌') && !simText.includes('现场证据') && !simText.includes('运行在这台电脑上'), 'A note that only explains is still on the simulated robot\'s card');
+  check((await sim.locator('.rp-title .status').innerText()).trim() === '运行中', 'Whether the simulation runs is not next to its name');
+  check((await sim.locator('.rp-model').innerText()).replace(/\s+/g, ' ').trim() === 'neuxmind-sim · sim-quadruped', 'The simulated robot does not show its brand and model');
+  check(await sim.locator('.rp-picture img').evaluate(el => el.complete && el.naturalWidth > 0), 'The simulated robot has no picture');
   await openRobotMenu(sim);
-  check((await sim.locator('.robot-menu-notes').innerText()).includes('不能作为现场证据'), 'The note about simulated results is not in the list');
+  check(await sim.locator('.robot-menu-notes, .robot-menu-note').count() === 0, 'The list of the simulated robot still explains');
   await page.keyboard.press('Escape');
+  // Its 实时状态 has what its card kept, too.
+  const simOverview = await robotStatus(page, sim);
+  check((await simOverview.innerText()).includes('仿真'), 'The overview of the simulated robot does not say it is simulated');
+  await page.locator('#dialog [data-action="close"]').first().click();
 
   // 5b. 「设置」 in the head: the two settings that are not a robot's, each in a dialog. It stays open
   //     when the page is drawn again, and closes like a card's list.

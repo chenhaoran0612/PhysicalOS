@@ -40,7 +40,7 @@ const shots = process.argv[3] || 'artifacts';
   await gateSignIn(page, {name: '第一次使用', email: 'ux01@example.test', password: 'ux01-password-123'});
   await page.locator('.robot-entry').waitFor();
   const entry = await page.locator('#main').innerText();
-  for (const text of ['添加仿真机器人', '通过 SSH 调查真机', '连接已在运行的机器人', '没有真机，先试一试']) {
+  for (const text of ['添加仿真机器人', '通过 SSH 调查真机', '连接已在运行的机器人']) {       // issue #53: the ways are no longer described
     assert(entry.includes(text), '我的机器人页缺少：' + text);
   }
   assert(!entry.includes('SSH 接入并调查') && !entry.includes('接入已有适配服务'), '旧的入口按钮文字仍在');

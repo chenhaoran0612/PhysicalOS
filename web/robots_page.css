@@ -67,3 +67,45 @@
 .rp-types .body-types-lead{margin-top:0}
 
 @media(max-width:850px){.robot-menu-panel{right:18px}}
+
+/* ================= Issue #53: a card is a picture, a name, online or not, brand and model, the everyday buttons */
+.rp-picture{display:flex;align-items:center;justify-content:center;height:168px;border-radius:9px 9px 0 0;border-bottom:1px solid #edf1e9;background:radial-gradient(120% 90% at 50% 100%,#e9f0e4 0,#f6f8f3 62%,#fafbf8 100%);overflow:hidden}
+.rp-picture img{display:block;width:auto;height:156px;max-width:92%;object-fit:contain;transition:transform .3s cubic-bezier(.16,1,.3,1)}
+.rp-picture-type img{height:124px;opacity:.9}
+.rp-card:hover .rp-picture img{transform:scale(1.04)}
+.rp-card .card-body{padding:16px 22px 16px}
+.rp-title{display:flex;align-items:center;gap:10px;min-height:26px}
+.rp-title h3{flex:1 1 auto;min-width:0;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-title .status{flex:none}
+.rp-title .hb-line{flex:none;min-height:0;margin:0}
+/* On the card only whether it is online: when the last heartbeat was, and why none comes, are in 「实时状态」. */
+.rp-title>.hb-line .hb-facts,.rp-title>.hb-line .hb-trouble{display:none}
+.rp-card .rp-model{margin:8px 0 0;font-size:13px;line-height:1.5;color:var(--ink);overflow-wrap:anywhere}
+.rp-card .rp-brand{color:#6f7f6c}
+.rp-card .rp-model-name{font-weight:600}
+.rp-card .rp-model-missing{color:var(--amber)}
+.rp-details[hidden]{display:none}
+
+/* ---- every button of a card and every entry of its list: one height */
+.rp-card .card-bottom .button,.rp-card .robot-menu>summary{min-height:34px;height:34px;padding-top:0;padding-bottom:0}
+.robot-menu-item{min-height:36px;height:36px;padding-top:0;padding-bottom:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rp-status-button{position:relative}
+.rp-attention{display:inline-block;width:7px;height:7px;margin-left:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px #fae9e6}
+
+/* ---- the three ways to add a robot: a title and its button */
+.robot-entry .journey-option h3{margin:0 0 14px}
+.rp-add .journey-option h3{margin:0 0 10px}
+
+/* ---- 「实时状态」: what the card keeps out of sight, above the robot's live page */
+.rp-overview{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0;padding:14px 26px;border-bottom:1px solid #edf1e9;background:#fafbf8;font-size:12px}
+.rp-status+*,.rp-overview+.rp-status{padding:0}
+.rp-overview>p{margin:0;min-height:0;color:#51654f;overflow-wrap:anywhere}
+.rp-overview .rp-what .body-type-name{color:var(--ink)}
+.rp-overview .tags{margin:0}
+.rp-overview .hb-line,.rp-overview .ra-line,.rp-overview .ri-line:not([hidden]){display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:0}
+.rp-overview .hb-line{flex:1 1 100%}
+/* ---- the buttons inside a robot's live page: one height */
+.rp-overview .button,.rp-overview .text-link,.live-status .button,.live-status .ls-chip,.live-status .ls-tab,#sim-live .button{min-height:32px;height:32px;padding-top:0;padding-bottom:0;display:inline-flex;align-items:center}
+.rp-overview .text-link{padding-left:10px;padding-right:10px;border:1px solid #dbe4da;border-radius:6px;background:#fff}
+@media(max-width:850px){.rp-overview{padding:12px 18px}}
+@media(prefers-reduced-motion:reduce){.rp-picture img{transition:none}}

@@ -7,10 +7,32 @@
 const PRODUCT = {vendor: '示例机器人公司', model: 'X1'};
 
 async function fillBrandAndModel(page, product = PRODUCT) {
+  // Issue #53: the two inputs are two pick-lists now (web/robot_catalog.js).
+  if (await page.locator('#dialog [data-rc-picker]').count()) return pickBrandAndModel(page.locator('#dialog'), product, true);
   for (const name of ['vendor', 'model']) {
     const input = page.locator(`#dialog input[name="${name}"]`);
     if (await input.count() && !(await input.first().inputValue())) await input.first().fill(product[name]);
   }
 }
 
-module.exports = {fillBrandAndModel, PRODUCT};
+// Chooses a brand and model in the pick-lists of a form (`scope`: a locator the picker is inside of):
+// from the lists when they have them, otherwise 「其他」 and typed. With `onlyIfEmpty` a picker that
+// already has a brand is left as it is.
+const OTHER = '__other__';
+async function pickBrandAndModel(scope, product = PRODUCT, onlyIfEmpty = false) {
+  const picker = scope.locator('[data-rc-picker]').first();
+  if (onlyIfEmpty && (await picker.locator('[name="vendor"]').inputValue())) return;
+  const has = (list, value) => list.locator('option').evaluateAll((options, v) => options.some(o => o.value === v), value);
+  const vendors = picker.locator('[data-rc="vendor"]'), models = picker.locator('[data-rc="model"]');
+  if (await has(vendors, product.vendor)) {
+    await vendors.selectOption(product.vendor);
+    if (await has(models, product.model)) return models.selectOption(product.model);
+    await models.selectOption(OTHER);
+  } else {
+    await vendors.selectOption(OTHER);
+    await picker.locator('[name="vendor"]').fill(product.vendor);
+  }
+  await picker.locator('[name="model"]').fill(product.model);
+}
+
+module.exports = {fillBrandAndModel, pickBrandAndModel, PRODUCT};

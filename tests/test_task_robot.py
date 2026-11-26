@@ -123,7 +123,7 @@ class OverHttp(unittest.TestCase):
         return {p['name']: p.get('robot_id') for p in self.request('/api/state')[1]['projects']}
 
     def test_the_form_of_a_new_task_carries_the_robot(self):
-        robot = self.request('/api/robots', {'name': 'Patrol 1', 'family': 'quadruped'})[1]['id']
+        robot = self.request('/api/robots', {'name': 'Patrol 1', 'family': 'quadruped', 'vendor': 'Example Robotics', 'model': 'X1'})[1]['id']
 
         status, task, _ = self.request('/api/projects', {'name': 'Site A', 'objective': 'Inspect', 'robot_id': robot})
         self.assertEqual((status, task['robot_id']), (200, robot))
@@ -135,8 +135,8 @@ class OverHttp(unittest.TestCase):
         self.assertEqual(self.tasks(), {'Site A': robot, 'Site B': None})
 
     def test_the_robot_is_changed_from_the_page_of_the_task(self):
-        first = self.request('/api/robots', {'name': 'Patrol 1', 'family': 'quadruped'})[1]['id']
-        second = self.request('/api/robots', {'name': 'Arm 1', 'family': 'manipulator'})[1]['id']
+        first = self.request('/api/robots', {'name': 'Patrol 1', 'family': 'quadruped', 'vendor': 'Example Robotics', 'model': 'X1'})[1]['id']
+        second = self.request('/api/robots', {'name': 'Arm 1', 'family': 'manipulator', 'vendor': 'Example Robotics', 'model': 'X1'})[1]['id']
         task = self.request('/api/projects', {'name': 'Site A', 'objective': 'Inspect', 'robot_id': first})[1]['id']
 
         status, changed, _ = self.request('/api/projects/robot', {'project_id': task, 'robot_id': second})

@@ -24,6 +24,7 @@ let failed = async () => {};
 
 // Issue #48: what the simulated quadruped reports as its brand and model; the releases are published for it.
 const SIM_PRODUCT = {vendor: 'neuxmind-sim', model: 'sim-quadruped'};
+const {pickBrandAndModel} = require('./robot_model_helper.cjs');
 
 (async () => {
   const cfg = JSON.parse(fs.readFileSync(process.argv[2]));
@@ -76,10 +77,9 @@ const SIM_PRODUCT = {vendor: 'neuxmind-sim', model: 'sim-quadruped'};
   // Issue #48: a release is for one brand and model; the examples are published for the one that is typed.
   const productForm = dialog.locator('form[data-form="engine-rm-examples"]');
   await productForm.waitFor();
-  must(await productForm.locator('[name=vendor][required]').count() === 1 && await productForm.locator('[name=model][required]').count() === 1,
+  must(await productForm.locator('[data-rc-picker][data-rc-required] [data-rc="vendor"][required]').count() === 1,
        'The examples can be published without a brand and model');
-  await productForm.locator('[name=vendor]').fill(SIM_PRODUCT.vendor);
-  await productForm.locator('[name=model]').fill(SIM_PRODUCT.model);
+  await pickBrandAndModel(productForm, SIM_PRODUCT);                  // issue #53: the brand and model are two pick-lists
   await productForm.locator('[type=submit]').click();
   await dialog.locator('.cloud-skill-example').first().waitFor();
   const published = await dialog.locator('.cloud-skill-example').count();
@@ -122,9 +122,8 @@ const SIM_PRODUCT = {vendor: 'neuxmind-sim', model: 'sim-quadruped'};
   must(await page.evaluate(() => window.__markupRan) === undefined, 'Markup in a skill title was run');
   await shot('05-publish-preview');
   await publishForm.locator('[name=notes]').fill('验收脚本发布的版本');
-  must(await publishForm.locator('[name=vendor][required]').count() === 1, 'A folder can be published without a brand and model');
-  await publishForm.locator('[name=vendor]').fill(SIM_PRODUCT.vendor);
-  await publishForm.locator('[name=model]').fill(SIM_PRODUCT.model);
+  must(await publishForm.locator('[data-rc-picker][data-rc-required] [data-rc="vendor"][required]').count() === 1, 'A folder can be published without a brand and model');
+  await pickBrandAndModel(publishForm, SIM_PRODUCT);
   await publishForm.locator('[type=submit]').click();
   await page.waitForFunction(() => document.querySelector('[data-cloudskill="status_report"]')?.innerText.includes('最新版本 0.2.0'));
   must((await main.locator('[data-cloudskill="status_report"]').innerText()).includes('另有 1 个版本'), 'The earlier version is not counted');
