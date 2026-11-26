@@ -58,7 +58,9 @@ const shots = process.argv[3] || 'artifacts/ux03';
       lastBottom: last.bottom, footerTop: bottom.top, height: innerHeight};
   });
   // 0.20.0: issue #33 adds “资料库” after “云平台账户” (web/material_library.js).
-  assert(nav.count === 18 && nav.lastText === '技能加载' && nav.texts.at(-2) === '技能发布' && nav.texts.at(-3) === '资料库' && nav.texts.at(-4) === '云平台账户', '侧栏项目不对：' + JSON.stringify(nav));
+  // Issue #49: 工程助手, 助手工具 and 自有服务 are hidden for now (web/hidden_pages.js): 18 - 3.
+  assert(!nav.texts.some(t => ['工程助手', '助手工具', '自有服务'].includes(t)), '侧栏仍有暂时隐藏的页面：' + JSON.stringify(nav));
+  assert(nav.count === 15 && nav.lastText === '技能加载' && nav.texts.at(-2) === '技能发布' && nav.texts.at(-3) === '资料库' && nav.texts.at(-4) === '云平台账户', '侧栏项目不对：' + JSON.stringify(nav));
   assert(!nav.scrollable, '1440×900 下侧栏不应需要滚动：' + JSON.stringify(nav));
   assert(nav.lastBottom <= nav.footerTop && nav.lastBottom <= nav.height, '侧栏最后一项“资料库”应完整可见：' + JSON.stringify(nav));
   await page.locator('#navigation a[href="#cloud"]').click();
@@ -230,6 +232,8 @@ const shots = process.argv[3] || 'artifacts/ux03';
   assert((await page.locator('#dialog [name=input_contract]').inputValue()).length > 0, '契约应有默认说明，基本使用不必填写');
   await click('close');
 
+  // Issue #49: 自有服务 and 助手工具 are hidden for now; their forms are still checked, with the pages brought back.
+  await require('./hidden_pages_helper.cjs').showHiddenPages(page); await page.reload();
   await go('services');
   assert(!(await page.locator('#main').innerText()).includes('版本化协议'), '自有服务页仍有“版本化协议”');
   await page.evaluate(() => action('service-add'));
