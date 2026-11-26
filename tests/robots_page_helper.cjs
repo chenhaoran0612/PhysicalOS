@@ -76,16 +76,35 @@ function throughRobotsPage(page) {
       }
     }
     await openListOf(this, timeout);
+    // Issue #53: a control the card keeps out of sight is clicked where a person finds it, in 「实时状态」.
+    const kept = await keptOnCard(this, timeout);
+    if (kept) return clickInStatus(owner, kept, options);
     return proto.clickBeforeRobotsPage.call(this, options);
   };
   // Waiting for something to be visible, and reading its text: likewise through the list it is in.
   proto.waitFor = async function waitFor(options) {
-    if (!options?.state || options.state === 'visible') await openListOf(this, options?.timeout);
+    if (!options?.state || options.state === 'visible') {
+      await openListOf(this, options?.timeout);
+      // Issue #53: what the card keeps out of sight is "visible" once it is on the card and not hidden by its own feature.
+      if (await keptOnCard(this, options?.timeout)) return waitKept(this, options?.timeout);
+    }
     return proto.waitForBeforeRobotsPage.call(this, options);
   };
   proto.innerText = async function innerText(options) {
     await openListOf(this, options?.timeout);
-    return proto.innerTextBeforeRobotsPage.call(this, options);
+    const text = await proto.innerTextBeforeRobotsPage.call(this, options);
+    // Issue #53: the text of a whole card is what it shows and what it keeps for 「实时状态」 (the same
+    // elements are shown there), so a script that looks for a state "on the card" still finds it.
+    // The heartbeat line of a card likewise: the card shows its badge, the rest of the line is kept.
+    const line = el => [...el.children].map(part => part.innerText || part.textContent).filter(Boolean).join(' ');
+    const kept = await this.first().evaluate((el, lineSource) => {
+      const whole = eval(lineSource);
+      if (el.matches?.('article.rp-card .rp-title > .hb-line')) return {instead: whole(el)};
+      if (!el.matches?.('article.rp-card')) return null;
+      return {more: [...el.querySelectorAll('.rp-title > .hb-line, .rp-details')].map(part => (part.matches('.hb-line') ? whole(part) : part.innerText || part.textContent)).join('\n')};
+    }, String(line)).catch(() => null);
+    if (kept?.instead !== undefined) return kept.instead;
+    return kept?.more ? text + '\n' + kept.more : text;
   };
 }
 
@@ -102,4 +121,76 @@ async function openListOf(locator, timeout) {
   } catch { /* not there: the call that follows reports it as it always did */ }
 }
 
-module.exports = {openRobotMenu, robotEntry, robotAction, addRobotWay, throughRobotsPage};
+// ---------------------------------------------------------------- issue #53: what a card keeps out of sight
+// A card shows a picture, a name, online or not, the brand and model, and its buttons. Everything else the
+// features put on it (when the last heartbeat was and why none comes, the address, the tags, start at boot,
+// the progress of an installation) is kept in the card, out of sight, and shown in the robot's 「实时状态」.
+//   * reading it (innerText, textContent, count) works as before: the elements are still in the card, and
+//     innerText() of a whole card answers what it shows followed by what it keeps;
+//   * waiting for it to be visible waits until it is there and its own feature does not hide it;
+//   * clicking a control in it opens 「实时状态」, clicks the same control there and closes the dialog
+//     again unless the click itself opened something;
+//   * robotStatus(page, card) opens 「实时状态」 and returns the locator of the overview, for a script
+//     that wants to look at what a person sees.
+const KEPT = `el => {
+  const card = el.closest('article.rp-card');
+  if (!card) return null;
+  const line = el.closest('.rp-title > .hb-line');
+  if (!el.closest('.rp-details') && !(line && el.closest('.hb-facts, .hb-trouble'))) return null;
+  const all = [...card.querySelectorAll('.rp-title > .hb-line, .rp-title > .hb-line *, .rp-details *')];
+  return {robot: card.dataset.rpRobot, index: all.indexOf(el)};
+}`;
+
+async function keptOnCard(locator, timeout) {
+  try {
+    const proto = Object.getPrototypeOf(locator), target = locator.first();
+    await proto.waitForBeforeRobotsPage.call(target, {state: 'attached', timeout});
+    const found = await target.evaluate(eval(KEPT));
+    return found && found.index >= 0 ? found : null;
+  } catch { return null; }
+}
+
+async function waitKept(locator, timeout = 30000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const shown = await locator.first().evaluate(el => {
+      for (let at = el; at && !at.matches('.rp-details'); at = at.parentElement) if (at.hidden) return false;
+      return true;
+    }).catch(() => false);
+    if (shown) return;
+    if (Date.now() > deadline) throw Error(`waitFor: ${locator} is not shown in 实时状态 within ${timeout} ms`);
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
+
+async function openStatus(page, robotId, timeout) {
+  const proto = Object.getPrototypeOf(page.locator('html')), click = proto.clickBeforeRobotsPage || proto.click, wait = proto.waitForBeforeRobotsPage || proto.waitFor;
+  const overview = page.locator(`#dialog[open] .rp-overview[data-rp-overview="${robotId}"]`);
+  if (await overview.count()) return {overview, opened: false};
+  await click.call(page.locator(`article.rp-card[data-rp-robot="${robotId}"] .rp-status-button`), {timeout});
+  await wait.call(overview, {timeout});
+  return {overview, opened: true};
+}
+
+async function clickInStatus(page, kept, options) {
+  const proto = Object.getPrototypeOf(page.locator('html'));
+  const {opened} = await openStatus(page, kept.robot, options?.timeout);
+  await page.evaluate(index => {
+    document.querySelectorAll('[data-rp-twin]').forEach(el => el.removeAttribute('data-rp-twin'));
+    [...document.querySelector('#dialog .rp-overview').querySelectorAll('*')][index]?.setAttribute('data-rp-twin', '');
+  }, kept.index);
+  await proto.clickBeforeRobotsPage.call(page.locator('#dialog [data-rp-twin]'), options);
+  // What was clicked acts in place (a retry): the dialog that was opened for it is closed again.
+  await page.waitForTimeout(150);
+  if (opened && await page.locator(`#dialog[open] .rp-overview[data-rp-overview="${kept.robot}"]`).count()) {
+    await proto.clickBeforeRobotsPage.call(page.locator('#dialog [data-action="close"]').first());
+  }
+}
+
+// Opens 「实时状态」 of a card (a locator of it) and returns the locator of the overview in the dialog.
+async function robotStatus(page, card) {
+  const robotId = await card.first().getAttribute('data-rp-robot');
+  return (await openStatus(page, robotId)).overview;
+}
+
+module.exports = {openRobotMenu, robotEntry, robotAction, addRobotWay, throughRobotsPage, robotStatus};

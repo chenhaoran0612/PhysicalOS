@@ -206,7 +206,7 @@ let failed = async () => {};
   await openRemove(second.id);
   await confirmRemoved(second.id);
   must(await page.locator('article.card').count() === 0, 'A card is left after deleting every robot');
-  await expectText(page.locator('#main'), ['选择一种方式添加机器人']);
+  await expectText(page.locator('#main .robot-entry'), ['添加仿真机器人']);        // issue #53: the empty page is the three ways, without a line that describes them
   must((await appState()).robots.length === 0, 'A robot is left in the state');
   await shot('7-empty');
   result.lastRobotDeleted = true;

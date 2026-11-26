@@ -154,13 +154,20 @@ const ROBOT = '巡检机器人', OLD_ROBOT = '只填了服务地址的机器人'
   await control('/advance?seconds=120');
 
   // 5. "重试" while it is still cut off says so and changes nothing. It works from the keyboard.
-  const retry = line(ROBOT).locator('[data-action="engine-heartbeat-check"]');
+  // Issue #53: the card shows only online / offline; why no heartbeat comes and the retry are in 实时状态.
+  check(!(await line(ROBOT).locator('[data-action="engine-heartbeat-check"]').isVisible()), 'The retry is still in sight on the card');
+  const {robotStatus} = require('./robots_page_helper.cjs');
+  const closeStatus = () => page.locator('#dialog [data-action="close"]').first().click();
+  const shownLine = (await robotStatus(page, card(ROBOT))).locator('.hb-line');
+  const retry = shownLine.locator('[data-action="engine-heartbeat-check"]');
+  check((await shownLine.innerText()).includes('已离线'), '实时状态 does not say since when the robot is offline: ' + await shownLine.innerText());
   check((await retry.getAttribute('aria-label')).includes(ROBOT), 'The retry does not say which robot it is for');
   await retry.focus();
   await page.keyboard.press('Enter');
   await toastSays('还是没有收到心跳');
   await expectLine(ROBOT, ['离线', '重试'], 'A retry while the robot is still cut off');
   check(await retry.evaluate(el => el === document.activeElement), 'The keyboard focus left the retry button');
+  await closeStatus();
 
   // 6. The network is back. Nobody touches the app: the next heartbeat brings it online.
   await control('/restore');
@@ -174,12 +181,14 @@ const ROBOT = '巡检机器人', OLD_ROBOT = '只填了服务地址的机器人'
   await expectLine(ROBOT, ['离线'], 'Cut off a second time');
   await control('/restore');
   await page.locator('#toast').evaluate(el => el.classList.remove('show'));
+  await robotStatus(page, card(ROBOT));
   await retry.focus();
   await page.keyboard.press('Enter');
   await toastSays('收到心跳，机器人在线');
   await expectLine(ROBOT, ['在线'], 'After a retry that reached the robot');
   check(await retry.count() === 0, 'A retry is still offered although the robot is online');
-  check(await line(ROBOT).evaluate(el => el === document.activeElement), 'The keyboard focus was dropped when the retry button went away');
+  check(await shownLine.evaluate(el => el === document.activeElement), 'The keyboard focus was dropped when the retry button went away');
+  await closeStatus();
   check(await card(ROBOT).getAttribute('data-same-card') === 'yes', 'The cards were drawn again for a retry');
 
   // 8. The status page takes its state from the heartbeat. One failed read no longer says "连不上".

@@ -157,8 +157,10 @@ function writeSkill() {
   await top.locator(`[data-safety-alert="${real}"]`).waitFor({timeout: 10000});
   await go('robots');
   await top.locator(`[data-safety-alert="${real}"]`).waitFor({timeout: 10000});
-  const rowsText = await page.locator('#main').innerText();
-  assert(rowsText.includes('停止后仍在移动'), '机器人列表应有“停止后仍在移动”标记');
+  // Issue #53: a card keeps its states for 实时状态 and marks the button when one is a problem.
+  const rowsText = await page.locator('#main .rp-details').allTextContents();
+  assert(rowsText.join(' ').includes('停止后仍在移动'), '机器人卡片（实时状态）应有“停止后仍在移动”标记');
+  assert(await page.locator('#main .rp-status-button .rp-attention').count() >= 1, '有问题的机器人，「实时状态」按钮上应有标记');
   await shot('05-global-banner-robots-page');
   // any dialog repeats the banner at its top (the page underneath is inert)
   await page.locator('#main [data-action="robot-add"]').first().click();

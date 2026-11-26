@@ -14,6 +14,7 @@
 // BRAIN_BROWSER=webkit runs it on WebKit, the engine of the desktop app (WKWebView); default Chromium.
 const {gateSignIn} = require('./gate_helper.cjs');
 const {addRobotWay, robotAction} = require('./robots_page_helper.cjs');
+const {pickBrandAndModel} = require('./robot_model_helper.cjs');
 const engine = require(process.env.BRAIN_PLAYWRIGHT_MODULE || 'playwright')[process.env.BRAIN_BROWSER || 'chromium'];
 const crypto = require('crypto');
 const fs = require('fs');
@@ -37,8 +38,9 @@ let failed = async () => {};
   const must = (condition, message) => { if (!condition) throw Error(message); };
   const same = (actual, expected, what) => must(JSON.stringify(actual) === JSON.stringify(expected),
                                                 `${what}: ${JSON.stringify(actual)} instead of ${JSON.stringify(expected)}`);
+  // Issue #53: a card shows the brand and model as "品牌 · 型号"; compared without the separator.
   const has = async (locator, texts) => {
-    const text = await locator.innerText();
+    const text = (await locator.innerText()).replace(/ · /g, ' ');
     for (const t of texts) if (!text.includes(t)) throw Error(`Missing "${t}" in: ${text.slice(0, 900)}`);
   };
   const appState = () => page.evaluate(() => fetch('/api/state').then(r => r.json()));
@@ -69,8 +71,7 @@ let failed = async () => {};
   await add.locator('button[type=submit]').click();
   await page.waitForFunction(() => /品牌和型号/.test(document.querySelector('#dialog .form-error')?.textContent || ''));
   same((await appState()).robots.length, 0, 'robots after the refused form');
-  await add.locator('[name=vendor]').fill('Beta <b>');
-  await add.locator('[name=model]').fill('B2');
+  await pickBrandAndModel(add, {vendor: 'Beta <b>', model: 'B2'});       // issue #53: two pick-lists; a brand that is not listed is typed under 「其他品牌」
   await add.locator('button[type=submit]').click();
   await dialog.waitFor({state: 'hidden'});
   const first = await robotNamed('巡检狗一号');
@@ -196,8 +197,7 @@ let failed = async () => {};
   await assign.waitFor();
   same([await assign.locator('[name=vendor]').inputValue(), await assign.locator('[name=model]').inputValue()], ['Beta <b>', 'B2'], 'the form starts from what is saved');
   await has(assign, ['1 个应用不能再用在它上面']);
-  await assign.locator('[name=vendor]').fill('Gamma');
-  await assign.locator('[name=model]').fill('G3');
+  await pickBrandAndModel(assign, {vendor: 'Gamma', model: 'G3'});
   await page.screenshot({path: file('7-assign')});
   await assign.locator('button[type=submit]').click();
   await dialog.waitFor({state: 'hidden'});

@@ -2,24 +2,28 @@
 // Issue #41 — "我的机器人", tidied.
 //
 // Over time every feature put its own buttons, lines and tags on a robot's card (a real robot had eleven
-// buttons and six tags) and its own section on the page. This file lays the page out again:
+// buttons and six tags) and its own section on the page. Issue #41 laid the page out again; issue #53
+// took what was left of the texts and figures off the card:
 //
-//   * A card keeps in sight what the robot is, whether it is online, what asks for attention, the next
-//     step and the live state. Everything else is one click away in the card's 「更多功能」 list, grouped.
+//   * A card is what the robot looks like, its name, whether it is online, its brand and model, the
+//     next step, 「实时状态」 and the 「更多功能」 list. Nothing else is in sight, and nothing describes.
+//   * Everything else the features put on the card (when the last heartbeat was and why none comes,
+//     the body type and address, the state tags, start at boot, the progress of an installation) is
+//     kept in the card, out of sight (`.rp-details`), and shown in the robot's 「实时状态」 above its
+//     live figures (`.rp-overview`). A robot without a live page of its own gets a dialog with that.
 //   * The page follows its state. Without a robot it shows the three ways to add one. With a robot it
 //     shows the robots and one 「添加机器人」 button; the three ways are in that button's dialog.
-//   * Nothing explains the page on the page. The two settings that are not a robot's (the assistant's
-//     models, the list of body types) are in the 「设置」 list of the page head, each in its own dialog.
-//   * Cards line up: every card is a name, a line of state, one line of what and where, then what asks
-//     for attention. Notes that explain rather than report are in the card's list.
+//   * The two settings that are not a robot's (the assistant's models, the list of body types) are in
+//     the 「设置」 list of the page head, each in its own dialog.
 //
 // The other scripts are not edited: each still builds its part of a card by wrapping engineRobotCard.
-// rpCard() takes the finished card and moves the parts, keeping every element (and the attributes the
-// in-place painters of heartbeat.js, runtime_install.js, runtime_autostart.js and connection_verify.js
-// find them by). It is a pure function of the card's markup: tests/robots_page_logic.cjs.
+// rpParts() takes the finished card apart, keeping every element (and the attributes the in-place
+// painters of heartbeat.js, runtime_install.js, runtime_autostart.js and connection_verify.js find
+// them by). It is a pure function of the card's markup: tests/robots_page_logic.cjs.
 // The page is taken over once every script has loaded (DOMContentLoaded), so the place of this file in
 // index.html does not matter. A later feature that adds a button to the card needs nothing here: an
-// action this file does not know lands in the list under 「其他」.
+// action this file does not know lands in the list under 「其他」; anything else it adds to the card's
+// body is shown in 「实时状态」.
 
 const RP_MENU_LABEL = '更多功能';
 const RP_BOTTOM = '<div class="card-bottom"><div class="button-row">', RP_END = '</div></div></article>';
@@ -28,19 +32,21 @@ const RP_TAGS = '<div class="tags">';
 const RP_GROUPS = [
   ['连接', ['engine-ssh', 'engine-ssh-verify', 'engine-ssh-edit', 'robot-connect', 'robot-config']],
   ['设备', ['engine-status', 'sim-live', 'detail-robots', 'engine-profile', 'engine-inventory', 'hardware-open', 'engine-drivers',
-            'engine-discover', 'engine-session', 'engine-body-type']],
+            'engine-discover', 'engine-session', 'engine-body-type', 'engine-robot-model']],
   ['管理层', ['engine-runtime-link', 'engine-runtime-install']],
   ['仿真', ['sim-start', 'sim-stop']],
 ];
-const RP_OTHER = '其他', RP_FACTS = '其他状态', RP_NOTES = '说明';
+const RP_OTHER = '其他';
+const RP_START = '<article class="card', RP_BODY_OPEN = '<div class="card-body">';
+const RP_STATUS = ['engine-status', 'sim-live'], RP_STATUS_LABEL = '实时状态';       // a robot's live page: over SSH, or its own service
+const RP_OVERVIEW = 'engine-robot-overview', RP_OVERVIEW_LABEL = '概览';         // the same for a robot that has neither
+const RP_NO_MODEL = '未填写品牌型号', RP_ATTENTION = '有需要处理的事';
+const RP_HOSTS = {'ssh-status': 'sshStatus', 'sim-live': 'simLive', 'rp-status': 'rpStatus'};   // a live page in the dialog -> where the dialog says whose it is
 const RP_SETTINGS_LABEL = '设置', RP_PAGE = 'page';         // the list of the page head; RP_PAGE is its key where robots have their id
-const RP_EMPTY_LINE = '选择一种方式添加机器人';
 const RP_TYPES_OPEN = 'engine-body-types-open';
 const RP_REMOVE = ['engine-robot-remove', 'sim-remove'];
 const RP_ALWAYS = ['robot-reset'];                        // releasing an emergency stop is never put away
-const RP_SECOND = ['engine-status', 'sim-live', 'detail-robots', 'engine-profile'];
 const RP_BUTTON_CLASSES = ['button', 'secondary', 'small', 'danger-outline', 'text-link', 'body-type-change'];
-const RP_LOUD_TONES = ['bad', 'warn', 'blue'];            // a problem, a warning, work in progress
 const RP_BODY_TYPE_LABEL = '修改本体类型';
 
 // ---------------------------------------------------------------- reading a card's markup
@@ -71,68 +77,82 @@ const rpAsLead = item => rpWithClasses(item, item.classes.filter(c => c !== 'sec
 const rpAsQuiet = item => rpWithClasses(item, item.classes.includes('secondary') ? item.classes
   : [...item.classes.filter(c => c !== 'small'), 'secondary', ...(item.classes.includes('small') ? ['small'] : [])]);
 
-// The tags of a card: [what stays in sight, what goes into the list]. A tag is a top-level <span>.
-function rpSplitTags(inner) {
-  const seen = [], quiet = [], token = /<span\b[^>]*>|<\/span>/g;
-  let depth = 0, start = 0, end = 0, match;
-  // Anything that is not a tag (none of today's scripts puts such a thing there) is kept, in the list.
-  const between = upTo => { const other = inner.slice(end, upTo).trim(); if (other) quiet.push(other); };
-  while ((match = token.exec(inner))) {
-    if (match[0] !== '</span>') { if (!depth) { start = match.index; between(start); } depth += 1; continue; }
-    depth -= 1;
-    if (depth) continue;
-    end = match.index + match[0].length;
-    const tag = inner.slice(start, match.index + match[0].length), classes = rpAttr(tag.slice(0, tag.indexOf('>') + 1), 'class').split(/\s+/);
-    const loud = classes.includes('body-type-flag') || (classes.includes('status') && RP_LOUD_TONES.some(tone => classes.includes(tone)));
-    (loud ? seen : quiet).push(tag);
-  }
-  between(inner.length);
-  return [seen.join(''), quiet.join('')];
-}
-
 // ---------------------------------------------------------------- what stays in sight
 
-// Of the buttons of a card's row: {always, lead, second}. The rest goes into the list.
+// Of the buttons of a card's row: {always, lead, status}. The rest goes into the list.
+// `status` is the robot's 「实时状态」: its own live page when it has one, otherwise the overview alone.
 function rpPick(buttons, robot) {
-  const always = buttons.filter(b => RP_ALWAYS.includes(b.action)), rest = buttons.filter(b => !RP_ALWAYS.includes(b.action));
+  const always = buttons.filter(b => RP_ALWAYS.includes(b.action));
+  const status = RP_STATUS.map(action => buttons.find(b => b.action === action)).find(Boolean) || rpOverviewButton(robot);
+  const rest = buttons.filter(b => !RP_ALWAYS.includes(b.action) && b !== status);
   // The button its own feature drew filled is that feature's next step ("开始调研", "调研进展", "配置 SSH", "启动仿真").
   const filled = b => !b.classes.includes('secondary') && !b.classes.some(c => c.startsWith('danger')) && !RP_REMOVE.includes(b.action);
   const running = rest.find(b => b.action === 'engine-session' && filled(b));
-  const skills = !robot?.sim && robot?.status === 'connected' ? rest.find(b => b.action === 'detail-robots') : null;
-  const everyday = except => RP_SECOND.map(action => rest.find(b => b.action === action && b !== except)).find(Boolean) || null;
-  const lead = running || skills || rest.find(filled) || everyday(null);
-  const second = everyday(lead);
-  return {always, lead, second};
+  const skills = (robot?.sim || robot?.status === 'connected') ? rest.find(b => b.action === 'detail-robots') : null;
+  const lead = running || (!robot?.sim && skills) || rest.find(filled) || skills || null;
+  return {always, lead, status};
+}
+
+// 「实时状态」 of a robot that has no live page of its own: what its card used to show, in a dialog.
+function rpOverviewButton(robot) {
+  const html = `<button type="button" class="button secondary small" data-action="${RP_OVERVIEW}" data-id="${h(robot?.id || '')}">${RP_STATUS_LABEL}</button>`;
+  return {html, action: RP_OVERVIEW, classes: ['button', 'secondary', 'small']};
 }
 
 // ---------------------------------------------------------------- a card
 
-function rpMenu(robot, entries, managementLine, facts, open, notes = '') {
+function rpMenu(robot, entries, open) {
   const group = (title, body, cls = '') => (body
     ? `<div class="robot-menu-group${cls}" role="group" aria-label="${title}"><span class="robot-menu-title" aria-hidden="true">${title}</span>${body}</div>` : '');
   const of = actions => entries.filter(e => actions.includes(e.action)).sort((a, b) => actions.indexOf(a.action) - actions.indexOf(b.action))
     .map(e => e.html).join('');
   const known = [...RP_GROUPS.flatMap(([, actions]) => actions), ...RP_REMOVE];
-  const groups = RP_GROUPS.map(([title, actions]) => group(title, of(actions) + (title === '管理层' ? managementLine : ''))).join('');
+  const groups = RP_GROUPS.map(([title, actions]) => group(title, of(actions))).join('');
   const other = group(RP_OTHER, entries.filter(e => !known.includes(e.action)).map(e => e.html).join(''));
-  const state = group(RP_FACTS, facts ? RP_TAGS + facts + '</div>' : '', ' robot-menu-facts');
   const remove = of(RP_REMOVE) ? `<div class="robot-menu-group robot-menu-danger">${of(RP_REMOVE)}</div>` : '';
-  const about = group(RP_NOTES, notes, ' robot-menu-notes');
   return `<details class="robot-menu" data-rp-menu="${h(robot.id)}"${open ? ' open' : ''}>` +
     `<summary class="button secondary small" aria-label="${h(robot.name || '')} 的${RP_MENU_LABEL}">${RP_MENU_LABEL}</summary>` +
-    `<div class="robot-menu-panel">${groups}${other}${state}${about}${remove}</div></details>`;
+    `<div class="robot-menu-panel">${groups}${other}${remove}</div></details>`;
 }
 
-// The finished card of a robot, laid out again. A card of a shape this file does not know is returned as it is.
-function rpCard(html, robot, open = false) {
+// What a robot looks like (web/robot_catalog.js).
+function rpPicture(robot) {
+  const picture = typeof rcPicture === 'function' ? rcPicture(robot) : null;
+  return picture ? `<div class="rp-picture${picture.exact ? '' : ' rp-picture-type'}"><img src="${h(picture.src)}" alt="${h(picture.alt)}" width="360" height="360" loading="lazy" decoding="async"></div>` : '';
+}
+
+function rpModelLine(robot) {
+  const p = robot?.product, known = p && p.vendor && p.model;
+  return known ? `<p class="rp-model"><span class="rp-brand">${h(p.vendor)}</span><span class="rp-sep" aria-hidden="true"> · </span><span class="rp-model-name">${h(p.model)}</span></p>`
+    : `<p class="rp-model rp-model-missing">${RP_NO_MODEL}</p>`;
+}
+
+// Whether a robot without a heartbeat line is there: a simulated one says so itself, another one is as its control channel is.
+function rpStateBadge(robot, simState) {
+  if (simState) return simState;
+  const on = robot?.status === 'connected';
+  return `<span class="status ${on ? 'good' : ''}"><i class="dot"></i>${on ? '在线' : '离线'}</span>`;
+}
+
+// The parts of a finished card, or null for a card of a shape this file does not know:
+//   always, lead, status   the buttons that stay in sight
+//   entries                the entries of 「更多功能」
+//   line                   the heartbeat line of a robot reached over SSH ('' when it has none)
+//   state                  online or not, for a robot without that line
+//   details                everything else the features put on the card: shown in 「实时状态」
+//   attention              whether something in the details is a proven problem
+function rpParts(html, robot) {
   const at = html.lastIndexOf(RP_BOTTOM);
-  if (!html.startsWith('<article class="card') || at < 0 || !html.endsWith(RP_END)) return html;
-  let body = html.slice(0, at).replace('<article class="card', () => '<article class="card rp-card');
+  if (!html.startsWith(RP_START) || at < 0 || !html.endsWith(RP_END)) return null;
+  const classes = html.slice(RP_START.length, html.indexOf('"', RP_START.length));        // what else the card is (after "card")
+  let body = html.slice(RP_START.length, at);
+  if (!body.endsWith('</div>')) return null;
+  body = body.slice(body.indexOf('>') + 1, -'</div>'.length);          // inside the card's body
+  if (!body.startsWith(RP_BODY_OPEN)) return null;
+  body = body.slice(RP_BODY_OPEN.length);
   const row = rpButtons(html.slice(at + RP_BOTTOM.length, -RP_END.length));
-  const pick = rpPick(row.buttons, robot), kept = [...pick.always, pick.lead, pick.second].filter(Boolean);
+  const pick = rpPick(row.buttons, robot), kept = [...pick.always, pick.lead, pick.status].filter(Boolean);
   const entries = row.buttons.filter(b => !kept.includes(b)).map(rpAsEntry);
-  const visible = [...pick.always.map(b => b.html), pick.lead ? rpAsLead(pick.lead).html : '', pick.second ? rpAsQuiet(pick.second).html : ''].join('');
-  if (!entries.length) return body + RP_BOTTOM + visible + row.rest + RP_END;          // nothing to put away: the body stays as it is
 
   // Changing the body type: from the line of text into the list.
   body = body.replace(/\s?<button\b[^>]*data-action="engine-body-type"[^>]*>[\s\S]*?<\/button>/, whole => {
@@ -141,44 +161,55 @@ function rpCard(html, robot, open = false) {
       .replace(/\baria-label="[^"]*"/, () => `aria-label="${RP_BODY_TYPE_LABEL}：${h(robot?.name || '')}"`)}));
     return '';
   });
-  // Start at boot: a state of the management layer, next to its entries.
-  let managementLine = '';
-  body = body.replace(/<div class="ra-line"[\s\S]*?<\/div>/, whole => { managementLine = whole; return ''; });
-  // Tags: what asks for attention stays, plain facts go into the list.
-  let facts = '';
-  const tagsAt = body.indexOf(RP_TAGS), tagsEnd = tagsAt < 0 ? -1 : body.indexOf('</div>', tagsAt);
-  if (tagsEnd >= 0) {
-    const [seen, quiet] = rpSplitTags(body.slice(tagsAt + RP_TAGS.length, tagsEnd));
-    facts = quiet;
-    body = body.slice(0, tagsAt) + (seen ? RP_TAGS + seen + '</div>' : '') + body.slice(tagsEnd + '</div>'.length);
+  // The corner of the card: the picture of the body type goes (the card has a picture), its badges are states.
+  let corner = '', simState = '';
+  body = body.replace(/<div class="card-top">[\s\S]*?<span class="button-row">([\s\S]*?)<\/span><\/div>/, (whole, badges) => { corner = badges; return ''; });
+  body = body.replace(/<div class="card-top"><\/div>/, '');
+  if (robot?.sim) { const [kind, state] = rpSplitKind(corner); if (state) { corner = kind; simState = state; } }
+  body = body.replace(/<h3>[\s\S]*?<\/h3>/, '');
+  let line = '';
+  body = body.replace(/<div class="hb-line"[\s\S]*?<\/div>/, whole => { line = whole; return ''; });
+  // What only explains (issue #53: no descriptions): the second line and the notes of a simulated robot.
+  if (robot?.sim) {
+    body = body.replace(/<p>([\s\S]*?)<\/p>/, (whole, inner) => `<p>${inner.split('<br>')[0]}</p>`).replace(/<p class="inline-note">[\s\S]*?<\/p>/g, '');
   }
-  const lined = rpLines(body, robot);
-  return lined.body + RP_BOTTOM + visible + row.rest + rpMenu(robot, entries, managementLine, facts, open, lined.notes) + RP_END;
+  // What the robot is, and where: one line.
+  body = body.replace(/<p>([\s\S]*?)<\/p>/, (whole, inner) => {
+    const cut = inner.indexOf('<br>');
+    if (cut < 0) return `<p class="rp-what">${inner}</p>`;
+    return `<p class="rp-what">${inner.slice(0, cut)}<span class="rp-sep" aria-hidden="true"> · </span><span class="rp-where">${inner.slice(cut + 4)}</span></p>`;
+  });
+  // The badges of the corner join the other states.
+  if (corner) body = body.includes(RP_TAGS) ? body.replace(RP_TAGS, () => RP_TAGS + corner) : body + RP_TAGS + corner + '</div>';
+  const attention = /class="status[^"]*\bbad\b/.test(body) || /class="[^"]*\bbody-type-flag\b/.test(body);      // a proven problem (issue #47), not a hint
+  return {...pick, row, entries, classes, line, state: line ? '' : rpStateBadge(robot, simState), details: body, attention};
 }
 
-// The lines of a card, so that cards line up: under the name one line of state, then one line of what
-// the robot is and where. What explains rather than reports (a second line of a simulated robot, its
-// note about evidence) goes to the list as notes. Returns the body and the notes; nothing is dropped.
-function rpLines(body, robot) {
-  let notes = '';
-  const note = text => { if (text.trim()) notes += `<p class="robot-menu-note">${text.trim()}</p>`; };
-  // What and where: one line. The first plain paragraph of the card is that line.
-  let next = body.replace(/<p>([\s\S]*?)<\/p>/, (whole, inner) => {
-    const at = inner.indexOf('<br>');
-    if (at < 0) return `<p class="rp-what">${inner}</p>`;
-    const first = inner.slice(0, at), rest = inner.slice(at + '<br>'.length);
-    if (robot?.sim) { note(rest); return `<p class="rp-what">${first}</p>`; }
-    return `<p class="rp-what">${first}<span class="rp-sep" aria-hidden="true"> · </span><span class="rp-where">${rest}</span></p>`;
-  });
-  if (!robot?.sim) return {body: next, notes};
-  next = next.replace(/<p class="inline-note">([\s\S]*?)<\/p>/g, (whole, inner) => { note(inner); return ''; });
-  // Whether it runs: from the corner, where a real robot has no state, to the line under the name, where it has.
-  const top = /(<div class="card-top">[\s\S]*?<span class="button-row">)([\s\S]*?)(<\/span><\/div>)/.exec(next);
-  if (top && next.includes('</h3>')) {
-    const [kind, state] = rpSplitKind(top[2]);
-    if (state) next = next.replace(top[0], () => top[1] + kind + top[3]).replace('</h3>', () => `</h3><div class="rp-state">${state}</div>`);
-  }
-  return {body: next, notes};
+// The status button: quiet, with a dot when something asks for attention.
+function rpStatusButton(item, attention) {
+  const quiet = rpAsQuiet(item);
+  const mark = attention ? `<i class="rp-attention" role="img" aria-label="${RP_ATTENTION}"></i>` : '';
+  return rpWithClasses(quiet, [...quiet.classes, 'rp-status-button']).html.replace(/>([^<]*)<\/button>$/, (whole, text) => `>${text}${mark}</button>`);
+}
+
+// The finished card of a robot, laid out again: its picture, its name, whether it is there, its brand and
+// model, and the everyday buttons. Everything else the features put on it is kept, out of sight, in
+// `.rp-details` (the scripts that paint their parts in place still find them) and is shown in 「实时状态」.
+// A card of a shape this file does not know is returned as it is.
+function rpCard(html, robot, open = false) {
+  const parts = rpParts(html, robot);
+  if (!parts) return html;
+  const visible = [...parts.always.map(b => b.html), parts.lead ? rpAsLead(parts.lead).html : '', rpStatusButton(parts.status, parts.attention)].join('');
+  return `<article class="card rp-card${parts.classes}" data-rp-robot="${h(robot?.id || '')}">${rpPicture(robot)}` +
+    `<div class="card-body"><div class="rp-title"><h3>${h(robot?.name || '')}</h3>${parts.state}${parts.line}</div>${rpModelLine(robot)}` +
+    `<div class="rp-details" hidden>${parts.details}</div></div>` +
+    RP_BOTTOM + visible + parts.row.rest + (parts.entries.length ? rpMenu(robot, parts.entries, open) : '') + RP_END;
+}
+
+// What 「实时状态」 shows of a robot besides its live figures: whether it is there, and everything its card keeps out of sight.
+function rpOverview(html, robot) {
+  const parts = rpParts(html, robot);
+  return parts ? `<section class="rp-overview" data-rp-overview="${h(robot?.id || '')}" aria-label="${RP_OVERVIEW_LABEL}">${parts.line}${parts.details}</section>` : '';
 }
 
 // The badges in the corner of a simulated robot's card: [what it is (仿真), how it is (运行中)].
@@ -214,7 +245,7 @@ function rpSettings() {
 }
 
 // The head of the page: one line of state, the title, and on the right what can be done to the page.
-const rpHead = (line, buttons) => `<div class="page-head rp-head"><div><div class="eyebrow">${h(line)}</div><h1>我的机器人</h1></div>` +
+const rpHead = (line, buttons) => `<div class="page-head rp-head"><div>${line ? `<div class="eyebrow">${h(line)}</div>` : ''}<h1>我的机器人</h1></div>` +
   `<div class="button-row">${buttons}${rpSettings()}</div></div>`;
 
 function rpPage() {
@@ -224,7 +255,7 @@ function rpPage() {
   if (!state.user) rpOpen = null;
   if (rpOpen !== RP_PAGE && !list.some(r => r.id === rpOpen)) rpOpen = null;
   // No robot yet: the three ways to add one are the page.
-  if (!list.length) return rpHead(RP_EMPTY_LINE, '') + engineRobotOptions();
+  if (!list.length) return rpHead('', '') + rpWays();
   return rpHead(rpSummary(list), button(icon('plus') + ' 添加机器人', 'engine-robots-add')) +
     `<div class="cards rp-cards">${list.map(r => rpCard(engineRobotCard(r), r, rpOpen === r.id)).join('')}</div>`;
 }
@@ -250,9 +281,55 @@ function rpTypesRepaint() {
   if (line) line.textContent = rpTypesCount();
 }
 
+// The three ways to add a robot, each a title and its button: what explained them is gone (issue #53).
+function rpWays() {
+  return engineRobotOptions().replace(/<small class="entry-eyebrow">[\s\S]*?<\/small>/g, '').replace(/(<\/h3>)<p>[\s\S]*?<\/p>/g, '$1');
+}
+
+// ---------------------------------------------------------------- 「实时状态」: what the card keeps out of sight
+
+// The dialog shows a robot's live page: {host, robotId}, or null.
+function rpStatusShown() {
+  const dialogEl = document.getElementById('dialog');
+  if (!dialogEl?.open) return null;
+  for (const [id, key] of Object.entries(RP_HOSTS)) {
+    const host = dialogEl.querySelector('#' + id);
+    if (host && dialogEl.dataset[key]) return {host, robotId: dialogEl.dataset[key]};
+  }
+  return null;
+}
+
+let rpOverviewLast = '';                // the overview as it was last written from the state
+
+// Puts the overview of the robot above its live page, and keeps it up to date. What other scripts paint
+// in place inside it stays as painted until the state itself says something else.
+function rpOverviewSync() {
+  const shown = rpStatusShown(), dialogEl = document.getElementById('dialog');
+  const old = dialogEl?.querySelector('.rp-overview');
+  const robot = shown && rows('robots').find(r => r.id === shown.robotId);
+  let html = robot ? rpOverview(engineRobotCard(robot), robot) : '';
+  // A robot with a live page over SSH has its overview there, not on the page of its skills.
+  if (html && shown.host.id === 'sim-live' && rpParts(engineRobotCard(robot), robot)?.status.action !== 'sim-live') html = '';
+  if (!html) { old?.remove(); rpOverviewLast = ''; return; }
+  if (old && old.dataset.rpOverview === robot.id && html === rpOverviewLast) return;
+  rpOverviewLast = html;
+  if (old) old.outerHTML = html;
+  else shown.host.insertAdjacentHTML('beforebegin', html);
+  if (typeof hbPaint === 'function') hbPaint();
+}
+
+// 「实时状态」 of a robot without a live page of its own.
+function rpStatusOpen(robotId) {
+  const robot = rows('robots').find(r => r.id === robotId);
+  if (!robot) return toast('这台机器人已经不在了');
+  dialog(RP_STATUS_LABEL, h(robot.name), '<div class="dialog-body rp-status" id="rp-status"></div>');
+  document.getElementById('dialog').dataset.rpStatus = robotId;
+  rpOverviewSync();
+}
+
 // 「添加机器人」 on a page that already has robots: the three ways, in a dialog.
 function rpAddOpen() {
-  dialog('添加机器人', '选择一种方式', `<div class="dialog-body rp-add">${engineRobotOptions()}</div>`);
+  dialog('添加机器人', '', `<div class="dialog-body rp-add">${rpWays()}</div>`);
 }
 
 // ---------------------------------------------------------------- the list, on the page
@@ -268,8 +345,13 @@ function rpCloseMenus(focus = false) {
 
 function rpInstall() {
   const baseAction = engineAction;
-  engineAction = async (type, id) => (type === 'engine-robots-add' ? rpAddOpen() : type === RP_TYPES_OPEN ? rpTypesOpen() : baseAction(type, id));
+  engineAction = async (type, id) => (type === 'engine-robots-add' ? rpAddOpen() : type === RP_TYPES_OPEN ? rpTypesOpen()
+    : type === RP_OVERVIEW ? rpStatusOpen(id) : baseAction(type, id));
   views.robots = rpPage;
+  // A live page was opened (whoever opened it says whose it is right after): the overview goes above it.
+  const baseDialog = dialog, baseRefresh = engineRefresh;
+  dialog = (...args) => { const out = baseDialog(...args); queueMicrotask(rpOverviewSync); return out; };
+  engineRefresh = () => { baseRefresh(); rpOverviewSync(); };
   document.addEventListener('click', e => {
     const summary = e.target.closest?.('details.robot-menu > summary');
     if (summary) {
