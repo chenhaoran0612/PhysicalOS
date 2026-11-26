@@ -76,10 +76,10 @@ class OnTheSimulatedBody(unittest.TestCase):
     def test_inspection_round_visits_both_and_comes_back(self):
         record = self.fx.wait(self.fx.run("patrol_places"), 40)
         self.assertEqual(record["status"], "succeeded", record["error"])
-        self.assertEqual(record["result"], {"visited": ["二楼", "会议室", "出发点"], "loops": 1, "returned_to": "出发点"})
+        self.assertEqual(record["result"], {"visited": ["会议室", "二楼", "出发点"], "loops": 1, "returned_to": "出发点"})
         self.assertTrue(self.near("出发点"))
         arrived = [e["place"] for e in record["events"] if e["type"] == "log" and e.get("message") == "到达"]
-        self.assertEqual(arrived, ["二楼", "会议室", "出发点"])
+        self.assertEqual(arrived, ["会议室", "二楼", "出发点"])
 
     def test_inspection_round_in_another_order_without_returning(self):
         record = self.fx.wait(self.fx.run("patrol_places", {"places": "会议室, 二楼", "return_to": "", "loops": 2}), 60)
@@ -211,8 +211,8 @@ class OnTheRos2BridgeWithStandInPrograms(unittest.TestCase):
     def test_inspection_round_runs_the_programs_in_the_order_of_the_site(self):
         record = self.run_skill("patrol_places", timeout=60)
         self.assertEqual(record["status"], "succeeded", record["error"])
-        self.assertEqual(record["result"]["visited"], ["二楼", "会议室", "出发点"])
-        self.assertEqual(self.names(), ["goto-stairs", "stairs-up", "stairs-down", "goto-meeting", "goto-home"])
+        self.assertEqual(record["result"]["visited"], ["会议室", "二楼", "出发点"])
+        self.assertEqual(self.names(), ["goto-meeting", "goto-stairs", "stairs-up", "stairs-down", "goto-home"])
         self.assertEqual(json.loads((self.dir / "region.json").read_text())["region"], "一楼")
 
     def test_free_walk(self):

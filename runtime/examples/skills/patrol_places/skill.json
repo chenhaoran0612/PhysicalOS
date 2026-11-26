@@ -8,7 +8,7 @@
   "requires": [{"id": "base.navigate_to_place"}, {"id": "safety.stop"}],
   "optional": [{"id": "sensor.battery"}],
   "parameters": [
-    {"name": "places", "type": "str", "required": false, "default": "二楼、会议室", "title": "巡检地点", "description": "按顺序要去的地点，用顿号或逗号隔开", "max_length": 400},
+    {"name": "places", "type": "str", "required": false, "default": "会议室、二楼", "title": "巡检地点", "description": "按顺序要去的地点，用顿号或逗号隔开", "max_length": 400},
     {"name": "return_to", "type": "str", "required": false, "default": "出发点", "title": "最后回到", "description": "巡检完回到哪里；留空表示停在最后一个地点", "max_length": 100},
     {"name": "loops", "type": "int", "required": false, "default": 1, "title": "圈数", "description": "所有地点走完算一圈，要走几圈", "unit": "圈", "min": 1, "max": 5},
     {"name": "max_speed", "type": "float", "required": false, "title": "最快速度", "description": "最快走多快；不填时用本体和现场限值允许的速度", "unit": "m/s", "min": 0.1, "max": 1.5}

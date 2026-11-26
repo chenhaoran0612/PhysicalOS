@@ -157,6 +157,8 @@ def make_handler(application):
             extra=extra or {'/runtime_install.js':('runtime_install.js','text/javascript; charset=utf-8'),'/runtime_install.css':('runtime_install.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #20: autostart (the confirmation, the card line), likewise.
             extra=extra or {'/runtime_autostart.js':('runtime_autostart.js','text/javascript; charset=utf-8'),'/runtime_autostart.css':('runtime_autostart.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #38: a robot's body (simulated or its own ROS 2) and its device configuration, likewise.
+            extra=extra or {'/robot_body.js':('robot_body.js','text/javascript; charset=utf-8'),'/robot_body.css':('robot_body.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #33: the material library page, likewise.
             extra=extra or {'/material_library.js':('material_library.js','text/javascript; charset=utf-8'),'/material_library.css':('material_library.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #34: parsing results, and the materials of a device in its profile, likewise.
@@ -355,6 +357,10 @@ def make_handler(application):
                         'robots/runtime-install/autostart':service.runtime_install.autostart,
                         'robots/runtime-install/autostart-off':service.runtime_install.autostart_off,
                         'robots/runtime-install/answer':service.runtime_install.answer,
+                        # Issue #38: a robot's body (simulated or its own ROS 2) and its device configuration
+                        'robots/body/save':service.robot_body.save,'robots/body/check':service.robot_body.check,
+                        'robots/body/detect':service.robot_body.detect,
+                        'robots/runtime-install/apply-body':service.runtime_install.apply_body,
                         'skills/package-preview':service.preview_skill_package,
                         'skills/package-install':service.install_skill_package,
                         'onsite/poll':service.poll_onsite,

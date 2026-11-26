@@ -22,7 +22,7 @@ def split_places(text):
     return [name.strip() for name in re.split(r"[、,，;；\n]+", text or "") if name.strip()]
 
 
-def run(ctx, places="二楼、会议室", return_to="出发点", loops=1, max_speed=None):
+def run(ctx, places="会议室、二楼", return_to="出发点", loops=1, max_speed=None):
     stops = split_places(places)
     if not stops:
         raise ValueError("至少要有一个巡检地点")

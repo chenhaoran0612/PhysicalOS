@@ -632,7 +632,7 @@ EXAMPLE_PRESETS = {
     'wave': {'cycles': 2, 'amplitude': 0.6},
     'status_report': {},
     'goto_place': {'place': '会议室'},
-    'patrol_places': {'places': '二楼、会议室', 'return_to': '出发点', 'loops': 1},
+    'patrol_places': {'places': '会议室、二楼', 'return_to': '出发点', 'loops': 1},
     'free_walk': {'duration_s': 60, 'radius': 2.0},
 }
 EXAMPLE_NOTES = {

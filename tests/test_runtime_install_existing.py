@@ -23,7 +23,8 @@ class ExistingTests(InstallCase):
         self.assertEqual(view['state'], 'needs_choice', view)
         self.assertEqual([o['id'] for o in view['choice']['options']], ['use', 'replace'])
         self.assertEqual(view['choice']['found'], {'root': 'installed', 'version': '0.4.0', 'console_package': '',
-                                                    'running': True, 'running_port': 8790})
+                                                    'running': True, 'running_port': 8790,
+                                                    'adapter': 'sim_quadruped', 'other_body': False})
         self.assertEqual(self.device.names('neuxmind-pkg/console'), [])
         self.assertEqual([kind for kind, _ in self.device.install_runs], ['probe'])
         self.assertEqual(self.device.runs(), runs)

@@ -57,6 +57,15 @@ NO_TOOLS = '设备上缺少安装脚本要用的命令：{tools}。什么都没�
 NO_SPACE = '设备的主目录只剩 {free} MB，安装至少需要 {need} MB。什么都没有安装'
 CHOICE_INVALID = '这台设备上的情况不允许这样处理（可选：{options}）'
 REPLACE_UNCONFIRMED = '删除后重装会删掉设备上原有的 ~/neuxmind（状态目录、日志和令牌），需要先确认'
+REAL_BODY = 'ros2'                        # issue #38: device_install.sh's adapter for the robot's own ROS 2
+
+
+def body_differs(found, adapter):
+    """Issue #38: the install on the robot was made for the other kind of body (simulated against real) than the
+    one wanted now. Only a new install changes that, so such an install is never linked or started as it is."""
+    if adapter is None:
+        return False
+    return ((found.get('adapter') or 'sim_quadruped') == REAL_BODY) != (adapter == REAL_BODY)
 
 
 class Decision:
@@ -93,7 +102,7 @@ def found_of(probe):
     port = int(port) if _NUMBER.fullmatch(port) and int(port) <= 65535 else None
     return {'root': probe.get('root', ''), 'version': probe.get('version', '')[:40],
             'console_package': probe.get('console', '')[:80], 'running': probe.get('running') == 'yes',
-            'running_port': port}
+            'running_port': port, 'adapter': probe.get('adapter', '')[:40]}
 
 
 def _support(probe, steps):
@@ -118,11 +127,12 @@ def _support(probe, steps):
     return None
 
 
-def _existing(probe, package, port, existing, confirm, found):
-    """The steps for a finished install that this console did not make from this package."""
+def _existing(probe, package, port, existing, confirm, found, other_body=False):
+    """The steps for a finished install that this console did not make from this package, or (issue #38,
+    ``other_body``) that was made for the other kind of body: that one can only be replaced."""
     running = found['running']
-    options = ['use'] if running else []
-    if not running and found['version'] == package.runtime_version:
+    options = ['use'] if running and not other_body else []
+    if not running and not other_body and found['version'] == package.runtime_version:
         options.append('start')
     options.append('replace')
     if existing is None:
@@ -152,9 +162,12 @@ def _unfinished_elsewhere(port, existing, confirm, found):
     return Decision('steps', FRESH, port, found=found, notes=['设备上那份没装完的 ~/neuxmind 由安装脚本先清掉，然后重新安装'])
 
 
-def plan(probe, port_state, package, port, existing=None, confirm=False):
-    """The ``Decision`` for this robot: steps to run, a choice to ask for, or a refusal."""
+def plan(probe, port_state, package, port, existing=None, confirm=False, adapter=None):
+    """The ``Decision`` for this robot: steps to run, a choice to ask for, or a refusal. ``adapter`` (issue #38):
+    the body the install is wanted for; None does not compare it with what is there."""
     found = found_of(probe)
+    other_body = body_differs(found, adapter)
+    found['other_body'] = other_body
     if port_state == 'forbidden':
         return _refuse('install_forwarding_off', FORWARDING_OFF, found)
     root = found['root']
@@ -174,7 +187,7 @@ def plan(probe, port_state, package, port, existing=None, confirm=False):
         decision = _unfinished_elsewhere(port, existing, confirm, found)
         if decision.kind != 'steps':
             return decision
-    elif root == 'installed' and found['console_package'] == package.id:
+    elif root == 'installed' and found['console_package'] == package.id and not other_body:
         if found['running']:
             decision = Decision('steps', ['link'], found['running_port'] or port, found=found,
                                 notes=['设备上已经有这个控制台装好的同一个安装包，正在运行：直接接入'])
@@ -182,7 +195,7 @@ def plan(probe, port_state, package, port, existing=None, confirm=False):
             decision = Decision('steps', ['upload', 'start', 'link'], port, found=found,
                                 notes=['设备上已经有这个控制台装好的同一个安装包：启动并接入'])
     elif root == 'installed':
-        decision = _existing(probe, package, port, existing, confirm, found)
+        decision = _existing(probe, package, port, existing, confirm, found, other_body)
         if decision.kind != 'steps':
             return decision
     else:

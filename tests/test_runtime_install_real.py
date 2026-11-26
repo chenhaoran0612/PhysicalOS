@@ -160,6 +160,87 @@ class RealInstallTests(InstallCase):
         self.assertEqual((manifest['family'], manifest['simulated']), ('manipulator', True))
         self.assertIn('adapter sim_arm', self.device.read(self.package_dir() + '/start.log').decode())
 
+    # --- issue #38: a real body. ROS 2 itself is not here: the "ROS installation" is a setup file that exports what
+    # a sourced ROS sets and puts the runtime's rclpy test double on PYTHONPATH (runtime/tests/ros2_double, NOT ROS 2).
+
+    def stand_in_ros(self):
+        base = tempfile.mkdtemp(prefix='nxros', dir='/tmp')
+        self.addCleanup(shutil.rmtree, base, True)
+        double = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'runtime', 'tests', 'ros2_double')
+        setup = os.path.join(base, 'opt', 'ros', 'humble', 'setup.bash')
+        os.makedirs(os.path.dirname(setup))
+        with open(setup, 'w') as handle:
+            handle.write('export ROS_VERSION=2\nexport ROS_DISTRO=humble\n'
+                         'export PYTHONPATH="%s${PYTHONPATH:+:$PYTHONPATH}"\n' % os.path.realpath(double))
+        return setup
+
+    def body_config(self, *more_places):
+        example = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'runtime', 'examples', 'ros2', 'onbody-programs.example.json')
+        with open(example, encoding='utf-8') as handle:
+            config = json.load(handle)
+        workdir = tempfile.mkdtemp(prefix='nxwork', dir='/tmp')
+        self.addCleanup(shutil.rmtree, workdir, True)
+        programs = config['programs']
+        programs['workdir'] = workdir
+        programs.pop('env_file', None)
+        programs['state_file'] = os.path.join(workdir, 'state.json')
+        for name in more_places:
+            programs['places'][name] = json.loads(json.dumps(programs['places']['会议室']))
+        return json.dumps(config, ensure_ascii=False)
+
+    def places_of(self, robot):
+        manifest = connector.call(robot['endpoint'], '/v2/manifest', robot['token'])
+        self.assertEqual(manifest['name'], 'My quadruped')       # the body of the device configuration, not a built-in one
+        # (``simulated`` is true here: the rclpy double says so about itself, as a simulated graph must.)
+        place = next(c for c in manifest['capabilities'] if c['id'] == 'base.navigate_to_place')
+        return place['params']['places']
+
+    def test_a_real_body_is_installed_started_and_reconfigured_with_the_real_script(self):
+        connection = self.connect_directly()
+        setup = self.stand_in_ros()
+        request = {'project_id': self.pid, 'robot_id': connection['robot_id'], 'kind': 'ros2', 'setup': setup,
+                   'settings': {'ROS_DOMAIN_ID': '24', 'ROS_LOCALHOST_ONLY': '1'}}
+        self.platform.robot_body.save({**request, 'config_text': self.body_config()})
+        view = self.install(connection)
+        self.assertEqual(view['state'], 'succeeded', json.dumps(view, ensure_ascii=False))
+        self.assertEqual(self.device.read('neuxmind/adapter'), b'ros2\n')
+        self.assertEqual(self.device.read('neuxmind/ros2.env').decode().splitlines(),
+                         ['ROS_SETUP=' + setup, 'ROS_DOMAIN_ID=24', 'ROS_LOCALHOST_ONLY=1'])
+        self.assertEqual(stat.S_IMODE(os.stat(self.device.local('neuxmind/ros2-config.json')).st_mode), 0o600)
+        self.assertIn('adapter ros2', self.device.read(self.package_dir() + '/start.log').decode())
+        robot = self.assert_online_and_linked(connection)
+        self.assertEqual(self.places_of(robot), ['出发点', '会议室', '二楼'])
+        kept = next(c for c in robot['manifest_v2']['capabilities'] if c['id'] == 'base.navigate_to_place')
+        self.assertEqual(kept['params']['places'], ['出发点', '会议室', '二楼'])      # what the page shows, at once
+        found = self.platform.robot_body.detect({'project_id': self.pid, 'robot_id': connection['robot_id']})
+        self.assertEqual((found['installed']['adapter'], found['installed']['setup']), ('ros2', setup))
+        self.assertEqual(found['installed']['settings'], {'ROS_DOMAIN_ID': '24', 'ROS_LOCALHOST_ONLY': '1'})
+        self.assertIn('会议室', json.loads(found['installed']['config_text'])['programs']['places'])
+        # A changed configuration: stop, the new file, start; the layer then knows one more place.
+        token = self.device.token()
+        self.platform.robot_body.save({**request, 'config_text': self.body_config('前台')})
+        self.installs.apply_body({'project_id': self.pid, 'robot_id': connection['robot_id']})
+        view = self.wait(connection, seconds=400)
+        self.assertEqual(view['state'], 'succeeded', json.dumps(view, ensure_ascii=False))
+        robot = self.assert_online_and_linked(connection)
+        self.assertEqual(self.places_of(robot), ['出发点', '会议室', '二楼', '前台'])
+        self.assertEqual(self.device.token(), token)                            # the install itself was kept
+        self.assertEqual(self.listening(8790), ['127.0.0.1'])
+        self.assert_no_token_anywhere(token, view)
+
+    def test_reading_the_ros_settings_of_running_programs(self):
+        """``rosprobe`` on a real /proc: a program of this login that runs with ROS 2 gives its settings."""
+        import subprocess
+        program = subprocess.Popen(['sleep', '60'], env={'PATH': os.environ['PATH'], 'ROS_DISTRO': 'humble', 'ROS_DOMAIN_ID': '24',
+                                                         'RMW_IMPLEMENTATION': 'rmw_zenoh_cpp', 'UNRELATED': 'x'})
+        self.addCleanup(program.wait)
+        self.addCleanup(program.kill)
+        connection = self.connect_directly()
+        found = self.platform.robot_body.detect({'project_id': self.pid, 'robot_id': connection['robot_id']})
+        self.assertGreaterEqual(found['running']['count'], 1)
+        self.assertEqual(found['running']['settings'], {'ROS_DOMAIN_ID': '24', 'RMW_IMPLEMENTATION': 'rmw_zenoh_cpp'})
+        self.assertIsNone(found['installed'])
+
     def test_another_program_on_the_port_is_refused_before_anything_is_sent(self):
         listener = listen(8790)
         self.addCleanup(listener.close)

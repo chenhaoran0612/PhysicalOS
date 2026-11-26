@@ -15,7 +15,8 @@ from install_fixture import InstallDevice, fake_package
 from ssh_fixture import DEFAULT_LOGIN, SSHFixture
 from test_ssh_jump import JUMP_PASSWORD, JUMP_USER
 
-FAST_BUDGETS = {'check': 20, 'upload': 60, 'remove': 20, 'install': 20, 'start': 20, 'link': 20, 'clean': 20, 'look': 3}
+FAST_BUDGETS = {'check': 20, 'upload': 60, 'remove': 20, 'install': 20, 'start': 20, 'link': 20, 'clean': 20, 'look': 3,
+                'restart': 20}
 WAIT_SECONDS = 90
 
 

@@ -40,7 +40,9 @@ PATHS=[ROOT,ROOT/'spec',ROOT/'runtime']
 PACKAGES=['brainos','neuxmind_spec','neuxmind_runtime']
 # Imported lazily (inside functions or by name) and therefore named explicitly.
 HIDDEN=['brainos.sim_child','brainos.sim_robots','brainos.runtime_bridge','neuxmind_runtime.cli',
-        'neuxmind_runtime.adapters.sim_quadruped','neuxmind_runtime.adapters.sim_arm']
+        'neuxmind_runtime.adapters.sim_quadruped','neuxmind_runtime.adapters.sim_arm',
+        # Issue #38: the console checks a real body's device configuration with the adapter's own parser.
+        'neuxmind_runtime.adapters.ros2','neuxmind_runtime.adapters.programs']
 
 
 def run(args):
