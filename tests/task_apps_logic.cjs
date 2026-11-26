@@ -159,7 +159,7 @@ const find = id => state.applications.find(a => a.id === id);
 
   const empty = page.taTaskMarkup(state, C, '');
   ok(empty.includes('还没有确定') && empty.includes('不同型号之间不通用'), 'a task that bound nothing says no brand and model is fixed, and why it matters');
-  ok(empty.includes('这个任务还没有绑定应用') && empty.includes('任务工作台不开发应用') && empty.includes('从账号已有的应用里选一个绑定'), 'and what to do');
+  ok(empty.includes('这个任务还没有绑定应用') && empty.includes('工作台不开发应用') && empty.includes('从账号已有的应用里选一个绑定'), 'and what to do');
   same(count(empty, 'class="ta-app'), 0, 'without rows');
   const bare = page.taTaskMarkup({projects: [C]}, C, '');
   ok(bare.includes('账号里还没有应用') && count(bare, 'data-action="taskapp-pick"') === 1, 'with no application in the account, the empty state only sends to 机器人应用');

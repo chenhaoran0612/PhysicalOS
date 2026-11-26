@@ -154,7 +154,7 @@ function taItem(st, task, item) {
 function taTaskMarkup(st, task, skills) {
   const facts = taFacts(st, task), any = taAccountApps(st).length > 0;
   const head = '<div class="tw-back"><a href="#overview">← 全部任务</a></div>' +
-    `<div class="page-head ta-head"><div><div class="eyebrow">TASK</div><h1>${h(task.name)}</h1><p class="subtitle">${h(task.objective)}</p></div>` +
+    `<div class="page-head ta-head"><div><h1>${h(task.name)}</h1></div>` +      // issue #52: the name alone, nothing above or under it
     `<div class="button-row">${button(icon('plus') + ' 绑定应用', 'taskapp-pick')}${button('去创建应用', 'taskapp-create', 'secondary')}</div></div>`;
   // Issue #42, third part: the line that says which robot the task is done with, and changes it (web/task_robot.js).
   const robotLine = typeof taskRobotLine === 'function' ? taskRobotLine(st.robots || [], task) : '';
@@ -172,7 +172,7 @@ function taTaskMarkup(st, task, skills) {
     ? `<div class="section-head ta-list-head"><h2>已绑定的应用 <span class="badge-count">${facts.apps.length}</span></h2><span>${facts.released} 个已发布</span></div>` +
       `<div class="ta-list" role="list">${facts.items.map(item => taItem(st, task, item)).join('')}</div>`
     : '<section class="ta-empty"><h2>这个任务还没有绑定应用</h2>' +
-      `<p>任务工作台不开发应用。${any ? '从账号已有的应用里选一个绑定；没有合适的，就到「机器人应用」里创建。' : '账号里还没有应用：先到「机器人应用」里创建一个，再回来绑定。'}</p>` +
+      `<p>工作台不开发应用。${any ? '从账号已有的应用里选一个绑定；没有合适的，就到「机器人应用」里创建。' : '账号里还没有应用：先到「机器人应用」里创建一个，再回来绑定。'}</p>` +
       `<div class="button-row">${any ? button('绑定应用', 'taskapp-pick') : ''}${button('去创建应用 ' + icon('arrow'), 'taskapp-create', any ? 'secondary' : '')}</div></section>`;
   return head + robotLine + model + list + (skills || '');
 }
@@ -213,7 +213,7 @@ function taTasksDialog(st, app) {
     return `<div class="ta-pick-row"><div><b>${h(task.name)}</b>` + (can.ok || can.bound ? '' : `<small class="ta-pick-why">${h(can.why)}</small>`) + '</div>' +
       (can.bound ? button('解除绑定', 'taskapp-unbind-from', 'secondary small', task.id + '|' + taRoot(app))
         : button('绑定', 'taskapp-bind-to', 'small', task.id + '|' + taRoot(app), !can.ok)) + '</div>';
-  }).join('') : '<p class="ta-pick-none">还没有任务。到「任务工作台」里新建一个，再回来绑定。</p>';
+  }).join('') : '<p class="ta-pick-none">还没有任务。到「工作台」里新建一个，再回来绑定。</p>';
   return ['绑定到任务', `${h(app.name)} · ${h(taLabel(st, app))}`,
           `<div class="dialog-body ta-pick"><div class="form-error" role="alert"></div>${body}` +
           `<div class="button-row ta-pick-foot">${button('关闭', 'close', 'secondary small')}</div></div>`];

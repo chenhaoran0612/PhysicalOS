@@ -62,7 +62,7 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
 
   // 1. The entry is the dashboard. A new account has no task: the count says so and the page offers the first.
   await main.locator('.tw-board').waitFor();
-  check(await main.locator('h1').innerText() === '任务工作台', 'The entry page is not titled 任务工作台');
+  check(await main.locator('h1').innerText() === '工作台', 'The entry page is not titled 工作台');
   check(await count() === 0, 'A new account does not start with 0 tasks');
   check(await main.locator('.tw-empty [data-action="journey-start"]').isVisible(), 'The empty dashboard does not offer the first task');
   check(await main.locator('.tw-wall').count() === 0, 'A wall is shown without a task');
@@ -71,6 +71,10 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   check(!entry.includes(first) && !entry.includes('其他账号看不到'), 'The dashboard still says whose tasks these are');
   check(!entry.includes('使用指南') && await main.locator('[data-action="task-guide"]').count() === 0, 'The head still has 使用指南');
   check(await main.locator('.tw-head button').count() === 1, 'The head has more than 新建任务');
+  // Issue #52: the page is called 工作台 everywhere, and nothing only describes it.
+  check((await page.locator('#navigation a[href="#overview"]').innerText()).trim() === '工作台', 'The sidebar does not call the page 工作台');
+  check(await main.locator('.tw-head .subtitle').count() === 0, 'The head still has a sentence under the name');
+  check(await main.locator('.tw-count small').count() === 0 && await main.locator('.tw-figures small').count() === 0, 'The count or the numbers still have a note under them');
   // 2. The first visit shows the first-run guide, and keeps it while the page is drawn again.
   check(await main.locator('.first-run').isVisible(), 'The first visit has no first-run guide');
   await page.evaluate(() => render());
@@ -85,7 +89,7 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   await main.locator('.ta-empty').getByText('这个任务还没有绑定应用', {exact: true}).waitFor();
   check(await main.locator('.journey-next, .journey-step').count() === 0, 'The page of a task still has the step-by-step view');
   check(await main.locator('h1').innerText() === '仓库夜间巡检', 'The page of a task is not titled with its name');
-  check(await page.locator('#breadcrumb').innerText() === '任务工作台 / 仓库夜间巡检', 'The breadcrumb does not name the task');
+  check(await page.locator('#breadcrumb').innerText() === '工作台 / 仓库夜间巡检', 'The breadcrumb does not name the task');
   check(await page.locator('#navigation a[aria-current="page"]').getAttribute('href') === '#overview', 'The sidebar does not mark 任务工作台');
   check(await main.getByText('我的任务项目').count() === 0, 'The old list of tasks is still at the foot of a task');
   await shot('2-inside-a-task');
@@ -103,6 +107,11 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   check(await main.locator('.tw-names button').allInnerTexts().then(t => t.join('|').includes('仓库夜间巡检')), 'The dashboard does not name the task');
   check(await card('仓库夜间巡检').locator('.tw-objective').innerText() === LONG, 'The card does not show the goal');
   check((await card('仓库夜间巡检').locator('.tw-track-text').innerText()).includes('还没有绑定应用'), 'The card does not say that nothing is bound yet');     // issue #50
+  const board = await main.innerText();
+  for (const gone of ['任务工作台', '最近创建的在前', '现在没有正在进行的工作', '台已连接', '应用已发布到机器人', '任务用到的机器人应用', '技能组成的工作流程']) {
+    check(!board.includes(gone), `Issue #52: the dashboard still says 「${gone}」`);
+  }
+  check((await main.locator('.tw-wall-head').innerText()).replace(/\s+/g, ' ').trim() === '全部任务 1', `The head of the list says more than its name and count: ${await main.locator('.tw-wall-head').innerText()}`);
 
   // 5. More tasks: the count and the names follow; the wall has columns, and every card is the same size
   //    although one goal is a paragraph and another a few words.

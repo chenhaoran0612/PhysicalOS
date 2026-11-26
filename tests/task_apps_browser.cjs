@@ -100,7 +100,7 @@ let failed = async () => {};
   await newTask('仓库巡检', '每天沿仓库通道巡检一圈，发现异常就报告。');
   must(await main.locator('.journey-next, .journey-step, .journey-options').count() === 0, 'the page of a task still has the steps to develop with');
   await has(main.locator('.ta-model'), ['品牌型号', '还没有确定', '不同型号之间不通用']);
-  await has(main.locator('.ta-empty'), ['这个任务还没有绑定应用', '任务工作台不开发应用', '从账号已有的应用里选一个绑定']);
+  await has(main.locator('.ta-empty'), ['这个任务还没有绑定应用', '工作台不开发应用', '从账号已有的应用里选一个绑定']);
   same(await main.locator('.ta-head .button').allInnerTexts().then(t => t.map(x => x.trim())), ['绑定应用', '去创建应用'], 'the buttons in the head of a task');
   must(await main.locator('#task-skills').count() === 0, 'the skills section is shown for a task without an application');
   await main.locator('.ta-head [data-action="taskapp-pick"]').click();

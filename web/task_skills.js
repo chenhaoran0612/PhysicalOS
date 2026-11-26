@@ -14,7 +14,11 @@
 // Nothing here is new data and nothing reaches a robot except that one read-only request. What a robot
 // does not report (the coordinates of its places, its map) is said to be missing, not made up.
 //
-// web/task_workbench.js puts the section on the page (twTaskView) and routes its one action.
+// web/task_apps.js puts the section on the page.
+//
+// Issue #52: the section has no describing sentences and no 「重新读取」 (the device is read when the page
+// is drawn, again after an install, and a failed read again later); whether the robot is connected stands
+// where that button was; every skill says how often it was run on the robot and how the latest run went.
 // The functions down to tsSectionMarkup are pure (state in, facts or markup out): tests/task_skills_logic.cjs.
 
 const TS_PLACE_CAPABILITY = 'base.navigate_to_place';
@@ -110,7 +114,7 @@ function tsRobotView(st, task, robot, live) {
   const entry = (id, more = {}) => {
     if (!entries.has(id)) {
       entries.set(id, {id, title: id, version: '', summary: '', installed: fromDevice ? 'missing' : 'unknown', installedAt: null,
-                       decls: null, compatible: true, uses: [], defaults: []});
+                       decls: null, compatible: true, uses: [], defaults: [], runs: {count: 0}});
     }
     return Object.assign(entries.get(id), more);
   };
@@ -141,6 +145,7 @@ function tsRobotView(st, task, robot, live) {
     const own = runs.filter(o => String(o.skill_id) === id);
     const latest = own.reduce((a, b) => (String(b.created_at || '') >= String(a.created_at || '') ? b : a));
     const e = entry(id);
+    e.runs = {count: own.length, when: latest.created_at || null, status: latest.status, error: latest.error || ''};     // issue #52: shown with the skill
     e.uses.push({from: 'run', label: `最近一次直接运行（共 ${own.length} 次）`, when: latest.created_at || null, status: latest.status,
                  rows: tsRows(e.decls, latest.parameters || {}, places)});
   }
@@ -190,6 +195,14 @@ function tsUseMarkup(use) {
     `${tsRowsMarkup(use.rows)}</div>`;
 }
 
+// Issue #52: how often a skill was run on this robot and how the latest run went.
+function tsRunMarkup(runs) {
+  if (!runs.count) return '<p class="ts-run none"><strong>运行信息</strong><span>还没有运行过</span></p>';
+  const parts = [`运行过 ${runs.count} 次`, runs.when ? `最近一次 ${date(runs.when)}` : '', TS_RUN_STATUS[runs.status] || ''].filter(Boolean);
+  return `<p class="ts-run" data-status="${h(runs.status || '')}"><strong>运行信息</strong><span>${h(parts.join(' · '))}</span>` +
+    `${runs.error ? `<em>${h(runs.error)}</em>` : ''}</p>`;
+}
+
 function tsSkillMarkup(skill) {
   const [word, tone] = TS_INSTALLED[skill.installed];
   const installed = skill.installedAt && (skill.installed === 'device' || skill.installed === 'record') ? `${word} · ${date(skill.installedAt)}` : word;
@@ -200,13 +213,14 @@ function tsSkillMarkup(skill) {
   return `<article class="ts-skill${skill.uses.length ? '' : ' unused'}" data-ts-skill="${h(skill.id)}">` +
     `<header class="ts-skill-head"><h4>${h(skill.title)}</h4><span class="mono ts-key">${h(skill.id)}${skill.version ? '@' + h(skill.version) : ''}</span>` +
     `<span class="ts-marks">${badge(installed, tone)}${skill.compatible ? '' : badge('与这台机器人不兼容', 'bad')}</span></header>` +
-    `${skill.summary ? `<p class="ts-summary">${h(skill.summary)}</p>` : ''}${body}</article>`;
+    `${skill.summary ? `<p class="ts-summary">${h(skill.summary)}</p>` : ''}${tsRunMarkup(skill.runs)}${body}</article>`;
 }
 
 function tsRobotMarkup(view) {
   const robot = view.robot, connected = robot.status === 'connected';
+  // Issue #52: a list read from the device needs no sentence; one from the records says why.
   const source = view.loading ? '正在读取这台机器人上的技能…'
-    : view.source === 'device' ? '技能列表是刚从这台机器人上读到的。'
+    : view.source === 'device' ? ''
     : `按控制台的安装记录显示：${view.error || (connected ? '这台机器人没有设备地址，读不到它上面的技能。' : '机器人现在没有连接，读不到它上面的技能。')}`;
   const places = view.places.length
     ? `<div class="ts-places"><h4>这台机器人认识的地点</h4><p>${view.places.map(name => `<span class="ts-chip">${h(name)}</span>`).join('')}</p>` +
@@ -217,16 +231,16 @@ function tsRobotMarkup(view) {
     : `<p class="ts-none">${view.loading ? '' : '这台机器人上还没有技能。在“我的机器人”里打开它的“能力与技能”，可以安装技能包。'}</p>`;
   return `<article class="ts-robot" data-ts-robot="${h(robot.id)}"${view.loading ? ' aria-busy="true"' : ''}>` +
     `<header class="ts-robot-head"><div><h3>${h(robot.name)}</h3>` +
-    `<p>${badge(connected ? '已连接' : '未连接', connected ? 'good' : '')}<span>已安装 ${view.installed} 个技能 · 这个任务用到 ${view.used} 个</span></p></div>` +
-    `${connected && robot.endpoint ? button('重新读取', 'task-skills-reload', 'secondary small', robot.id, view.loading) : ''}</header>` +
-    `<p class="ts-source">${h(source)}</p>${places}${skills}</article>`;
+    `<p><span>已安装 ${view.installed} 个技能 · 这个任务用到 ${view.used} 个</span></p></div>` +
+    `<span class="ts-state">${badge(connected ? '已连接' : '未连接', connected ? 'good' : '')}</span></header>` +      // issue #52: where 「重新读取」 was
+    `${source ? `<p class="ts-source">${h(source)}</p>` : ''}${places}${skills}</article>`;
 }
 
 // The whole section. `lives` holds what the devices answered, by tsLiveKey.
 function tsSectionMarkup(st, task, lives) {
   const robots = tsRobots(st, task);
   if (!tsApps(st, task).length) return '';         // issue #50: nothing is configured for a task before it has an application
-  const head = '<div class="section-head"><h2>技能与配置</h2><span>这个品牌型号的机器人装了哪些技能、绑定的应用用到哪些、各自怎样配置</span></div>';
+  const head = '<div class="section-head"><h2>技能与配置</h2></div>';
   const body = robots.length
     ? robots.map(robot => tsRobotMarkup(tsRobotView(st, task, robot, lives[tsLiveKey(st, robot)]))).join('')
     : `<div class="ts-empty"><p>账号里还没有这个品牌型号的机器人。接入一台以后，这里会列出它装了哪些技能，以及绑定的应用怎样配置它们。</p>${button('去我的机器人', 'go-robots', 'small')}</div>`;
@@ -246,9 +260,9 @@ function tsPaint() {
 
 // One read-only request per robot and state of its installs; the answer is kept, since the page is drawn
 // again whenever its data changes. A failure is kept too (it is shown), and tried again later.
-function tsRead(robot, again = false) {
+function tsRead(robot) {
   const key = tsLiveKey(state, robot);
-  if (!again && !tsShouldRead(tsLives[key], Date.now())) return;
+  if (!tsShouldRead(tsLives[key], Date.now())) return;
   tsForget(robot.id, key);
   tsLives[key] = {loading: true};
   const failed = error => ({available: false, items: [], error: error?.message || '读取已安装技能失败', failed: true, at: Date.now()});
@@ -272,11 +286,4 @@ function taskSkillsSection() {
   for (const robot of tsRobots(state, task)) if (!wanted.includes(robot)) tsForget(robot.id);
   for (const robot of wanted) tsRead(robot);
   return tsSectionMarkup(state, task, tsLives);
-}
-
-function taskSkillsReload(id) {
-  const robot = (state.robots || []).find(r => r.id === id);
-  if (!robot) return;
-  tsRead(robot, true);
-  tsPaint();
 }
