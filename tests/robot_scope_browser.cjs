@@ -100,8 +100,9 @@ let failed = async () => {};
   await shots('robots-in-task-b');
   await page.goto(cfg.url + '/#overview');
   await taskCard(TASK_B).waitFor();
+  // Issue #50: a card names the robots of the brand and model the task is for; neither task has bound an application yet.
   for (const name of [TASK_A, TASK_B]) {
-    must((await taskCard(name).innerText()).includes(ROBOT), `The card of ${name} does not name the robot`);
+    must((await taskCard(name).innerText()).includes('绑定应用后确定'), `The card of ${name} does not say its robots follow from its applications`);
   }
   const figure = await main.locator('.tw-board').innerText();
   must(/机器人\s*1\b/.test(figure.replace(/\n/g, ' ')), `The dashboard does not count the shared robot once: ${figure.slice(0, 200)}`);

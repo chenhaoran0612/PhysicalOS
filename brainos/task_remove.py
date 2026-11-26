@@ -70,6 +70,7 @@ class TaskRemoval:
                 self.platform.robot_remove._delete_files(session['id'])
             deleted = {}
             with self.store.atomic():
+                self.platform.task_apps.keep_models(project['id'])     # issue #50: a model an application of the account uses stays
                 for kind in self.store.kinds():
                     if kind in KEPT:
                         continue

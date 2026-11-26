@@ -87,7 +87,7 @@ let failed = async () => {};
   const added = await post('robots', {name: DOG, family: 'quadruped', endpoint: cfg.device.url, token: cfg.device.access});
   same(added.status, 200, 'adding the first robot');
   same((await post('robots/connect', {robot_id: added.body.id})).status, 200, 'connecting it');
-  const arm = await post('robots', {name: ARM, family: 'manipulator'});
+  const arm = await post('robots', {name: ARM, family: 'manipulator', vendor: '示例机器人公司', model: 'A1'});     // issue #48: a robot that reports no brand and model is given one
   same(arm.status, 200, 'adding the second robot');
   const dog = added.body.id;
   await page.evaluate(() => refresh(true));      // the robots were added behind the page
@@ -112,15 +112,28 @@ let failed = async () => {};
   same(await line.getAttribute('data-task-robot'), dog, 'the robot on the page of the task');
   must((await line.innerText()).includes('巡检狗') && (await line.innerText()).includes('已连接'), 'The page of the task does not name its robot');
   must(await main.locator('#markup-in-a-robot').count() === 0, 'A robot\'s name is drawn as markup on the page of the task');
+  // Issue #50: the robot decides which brand and model the task is for; the task binds applications of it.
+  const model = main.locator('.ta-model');
+  must((await model.innerText()).includes('由这个任务用的机器人「巡检狗') , `The page does not say that the robot decides the brand and model: ${await model.innerText()}`);
+  must(await main.locator('#task-skills').count() === 0, 'A task that has bound no application shows the skills section');
+  const skill = await post('skills', {project_id: patrol.id, robot_id: dog, name: '走一圈', version: '1', requires: ['safety.stop'], entrypoint: 'patrol',
+                                      success_condition: '走完', stop_condition: '超时', model_ids: []});
+  same(skill.status, 200, 'registering a skill for the robot');
+  const made = await post('applications', {project_id: patrol.id, name: '园区一圈', version: '1', robot_id: dog,
+                                           steps: [{skill_id: skill.body.id, parameters: {}, timeout_s: 60}]});
+  same(made.status, 200, 'making an application for the robot');
+  same((await post('task-apps/bind', {project_id: patrol.id, application_id: made.body.id})).status, 200, 'binding it to the task');
+  await page.evaluate(() => refresh(true));
   const skills = main.locator('#task-skills');
   await skills.getByText('巡检狗').first().waitFor();
   must(!(await skills.innerText()).includes(ARM), 'The skills of the task list a robot the task was not created with');
+  must((await main.locator('.ta-app').innerText()).includes('1 台可用'), 'The bound application is not shown with the robot of the task');
   await shots('2-task-page');
   await page.goto(cfg.url + '/#overview');
   const holds = await taskCard('园区巡检').locator('.tw-holds').innerText();
   must(holds.includes('1 台') && holds.includes('巡检狗') && !holds.includes(ARM), `The card does not show the task's robot only: ${holds}`);
   const first = await taskCard('先建的任务').locator('.tw-holds').innerText();
-  must(first.includes('2 台'), `A task without a choice does not show the robots of the account: ${first}`);
+  must(first.includes('绑定应用后确定'), `A task without a choice and without an application names robots: ${first}`);      // issue #50
   result.created = true;
 
   // 3 · Another task with the same robot.
@@ -156,6 +169,18 @@ let failed = async () => {};
   must((await line.innerText()).includes('还没有选择'), 'Leaving the choice open is not shown');
   same((await appState()).projects.find(p => p.name === '夜间巡检').robot_id ?? null, null, 'the choice after it was cleared');
   result.changed = true;
+  // Issue #50: a task that has bound an application cannot change to a robot of another brand and model.
+  await page.goto(cfg.url + '/#overview');
+  await taskCard('园区巡检').locator('[data-action="task-open"]').click();
+  await line.waitFor();
+  await line.locator('[data-action="trobot-change"]').click();
+  await dialog.locator(CHANGE).waitFor();
+  await dialog.locator('select[name="robot_id"]').selectOption(arm.body.id);
+  await dialog.locator('button[type=submit]').click();        // refused: the dialog stays and says why
+  await page.waitForFunction(() => /先.*解除/.test(document.querySelector('#dialog .form-error')?.textContent || ''));
+  same((await appState()).projects.find(p => p.name === '园区巡检').robot_id, dog, 'the robot after a refused change');
+  await dialog.locator('[data-action="close"]').first().click();
+  result.kept = true;
 
   // 5 · The chosen robot is deleted.
   same((await post('robots/remove', {robot_id: dog})).status, 200, 'deleting the robot');
@@ -167,6 +192,8 @@ let failed = async () => {};
   await line.locator('[data-action="trobot-change"]').click();
   await dialog.locator(CHANGE).waitFor();
   same(await dialog.locator('select[name="robot_id"]').inputValue(), '', 'nothing is selected when the robot is gone');
+  // Issue #50: the application bound for the robot that is gone is of another brand and model than the arm; it is let go of first.
+  same((await post('task-apps/unbind', {project_id: patrol.id, application_id: made.body.id})).status, 200, 'unbinding the application');
   await dialog.locator('select[name="robot_id"]').selectOption(arm.body.id);
   await submit();
   await page.waitForFunction(id => document.querySelector('.task-robot')?.dataset.taskRobot === id, arm.body.id);

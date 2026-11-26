@@ -88,9 +88,12 @@ class OldWorkspace(unittest.TestCase):
     def test_what_a_task_made_stays_with_the_task(self):
         store = open_platform(self, self.root).store
 
-        for kind, key in (('applications', 'application-1'), ('operations', 'operation-1'), ('agent_sessions', 'session-task'),
-                          ('conformance_reports', 'conformance-1')):
+        for kind, key in (('agent_sessions', 'session-task'), ('conformance_reports', 'conformance-1')):
             self.assertEqual(self.project_of(store, kind, key), self.a, kind)
+        # Issue #50: applications, and the operation records of one, are the account's too; the task has its application bound.
+        for kind, key in (('applications', 'application-1'), ('operations', 'operation-1')):
+            self.assertEqual(self.project_of(store, kind, key), HOME, kind)
+        self.assertEqual([(b['project_id'], b['application_id']) for b in store.list('task_applications')], [(self.a, 'application-1')])
         self.assertEqual(self.project_of(store, 'robot_inventories', 'inventory-other'), self.b)
 
     def test_the_lists_keep_their_order(self):
@@ -119,8 +122,10 @@ class OldWorkspace(unittest.TestCase):
 
         removed = platform.task_remove.remove({'project_id': self.a})
 
-        self.assertEqual(removed['deleted'], {'agent_sessions': 1, 'applications': 1, 'operations': 1, 'conformance_reports': 1,
+        # Issue #50: the application and its operation record are the account's and stay; the binding goes.
+        self.assertEqual(removed['deleted'], {'agent_sessions': 1, 'task_applications': 1, 'conformance_reports': 1,
                                               'device_evidence': 1})
+        self.assertEqual(self.project_of(platform.store, 'applications', 'application-1'), HOME)
         store = platform.store
         self.assertEqual({r['id'] for r in store.list('robots')}, {self.first, self.second, self.third})
         self.assertEqual(self.project_of(store, 'device_connections', 'connection-1'), HOME)
@@ -188,8 +193,9 @@ class Requests(unittest.TestCase):
             self.assertEqual(scoped, {'project_id': HOME, 'robot_id': 'robot-1', 'task_project_id': 'project-a'}, route)
 
     def test_requests_of_a_task_keep_their_task(self):
-        for route in ('projects', 'projects/remove', 'applications', 'deployments', 'operations', 'onsite', 'harness',
-                      'engineering/work', 'engineering/workflows', 'engineering/models', 'engineering/skills', 'skills',
+        # Issue #50: applications, skills, checks, on-site tests and releases are answered for the account (tests/test_task_apps.py).
+        for route in ('projects', 'projects/remove', 'operations', 'task-apps/bind',
+                      'engineering/work', 'engineering/workflows', 'engineering/models', 'engineering/skills',
                       'models/deploy', 'jobs', 'agents/run', 'cloud-skills/publish', 'library/list'):
             payload = {'project_id': 'project-a', 'robot_id': 'robot-1'}
             self.assertIs(robot_scope.request(route, payload), payload, route)
@@ -199,7 +205,7 @@ class Requests(unittest.TestCase):
             self.assertEqual(robot_scope.request('robots', asked), {**asked, 'project_id': HOME})
 
     def test_nothing_a_task_makes_is_kept_at_the_home(self):
-        for route in ('applications', 'jobs', 'scenes', 'skills', 'engineering/work', 'engineering/workflows', 'projects/remove'):
+        for route in ('jobs', 'scenes', 'task-apps/bind', 'engineering/work', 'engineering/workflows', 'projects/remove'):
             with self.assertRaisesRegex(ValueError, '请先进入一个任务'):
                 robot_scope.request(route, {'project_id': HOME, 'name': 'x'})
 

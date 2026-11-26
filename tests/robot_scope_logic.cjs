@@ -29,7 +29,9 @@ const state = {
                    {id: 's-a', project_id: 'a', robot_id: null, mode: 'engineering', status: 'completed'}],
   robot_inventories: [{id: 'i1', project_id: HOME, robot_id: 'r1'}],
   hardware_scans: [{id: 'h1', project_id: HOME, robot_id: 'r1'}],
-  applications: [{id: 'app-a', project_id: 'a', robot_id: 'r1', name: '巡检一圈'}, {id: 'app-b', project_id: 'b', robot_id: 'r1', name: '送件'}],
+  // Issue #50: applications are the account's as well; each task has bound one, both made for the same robot.
+  applications: [{id: 'app-a', project_id: HOME, robot_id: 'r1', name: '巡检一圈'}, {id: 'app-b', project_id: HOME, robot_id: 'r1', name: '送件'}],
+  task_applications: [{id: 'b-a', project_id: 'a', application_id: 'app-a'}, {id: 'b-b', project_id: 'b', application_id: 'app-b'}],
   operations: [{id: 'o-home', project_id: HOME, robot_id: 'r1', kind: 'skill_install', skill_id: 'patrol', status: 'succeeded'},
                {id: 'o-b', project_id: 'b', robot_id: 'r1', kind: 'skill_install', skill_id: 'carry', status: 'succeeded'}],
   agent_models: [{id: 'm-home', project_id: HOME}, {id: 'm-a', project_id: 'a'}, {id: 'm-b', project_id: 'b'}],
@@ -51,7 +53,8 @@ for (const open of ['a', 'b']) {
   same(ids(lists.rows('robots')), ['r1', 'r2'], `task ${open} lists every robot of the account`);
   same(ids(lists.rows('robot_inventories')), ['i1'], `task ${open} sees what is kept about a robot`);
   same(ids(lists.hwList('hardware_scans')), ['h1'], `task ${open} sees a robot's hardware scans`);
-  same(ids(lists.rows('applications')), ['app-' + open], `task ${open} lists its own applications only`);
+  same(ids(lists.rows('applications')), ['app-a', 'app-b'], `task ${open} lists every application of the account (issue #50)`);
+  same(ids(lists.rows('operations')), open === 'a' ? ['o-home'] : ['o-home', 'o-b'], `task ${open} lists its own records and the account's`);
   same(ids(lists.rows('agent_models')), ['m-' + open], `task ${open} offers its own models, not the home's`);
 }
 lists.projectId = 'a';
@@ -66,11 +69,11 @@ same(ids(lists.rows('robots')), ['mine'], 'a state without the home (an older ba
 // ---- 任务工作台
 const tw = {h, button, badge, notice, icon: k => `<svg data-icon="${k}"></svg>`, date: v => (v ? 'D' + v : '—')};
 vm.createContext(tw);
-const board = vm.runInContext(readFileSync('web/task_workbench.js', 'utf8') + '\n;({twFacts, twTotals, twBlocked, twPlan})', tw);
+const board = vm.runInContext(readFileSync('web/task_apps.js', 'utf8') + '\n' + readFileSync('web/task_workbench.js', 'utf8') + '\n;({twFacts, twTotals, twBlocked, twPlan})', tw);
 const factsA = board.twFacts(state, A), factsB = board.twFacts(state, B);
 same([ids(factsA.robots), ids(factsB.robots)], [['r1', 'r2'], ['r1', 'r2']], 'every task has the robots of the account');
-same([factsA.stages[1], factsB.stages[1]], [true, true], 'a connected robot of the account counts for every task');
-same([ids(factsA.applications), ids(factsB.applications)], [['app-a'], ['app-b']], 'the applications stay each task\'s own');
+same([ids(factsA.bound.robots), ids(factsB.bound.robots)], [['r1'], ['r1']], 'two tasks whose applications are for the same robot both have it');
+same([ids(factsA.applications), ids(factsB.applications)], [['app-a'], ['app-b']], 'a task has the applications it has bound');
 same(ids(factsA.sessions), ['s-a'], 'a robot\'s investigation is not one task\'s session');
 const totals = board.twTotals([[A, factsA], [B, factsB]]);
 same([totals.robots, totals.online, totals.applications], [2, 1, 2], 'a robot that two tasks use is counted once');
@@ -84,7 +87,7 @@ ok(board.twBlocked(A, board.twFacts(legacy, A)).text.includes('还有 1 台机�
 // ---- the skills of a task
 const ts = {h, button, badge, date: v => (v ? 'D' + v : '—')};
 vm.createContext(ts);
-const skills = vm.runInContext(readFileSync('web/task_skills.js', 'utf8') + '\n;({tsWanted, tsRobotView})', ts);
+const skills = vm.runInContext(readFileSync('web/task_apps.js', 'utf8') + '\n' + readFileSync('web/task_skills.js', 'utf8') + '\n;({tsWanted, tsRobotView})', ts);
 same([ids(skills.tsWanted(state, A)), ids(skills.tsWanted(state, B))], [['r1'], ['r1']], 'both tasks read the skills of the same connected robot');
 const view = skills.tsRobotView(state, A, dog, null);
 ok(JSON.stringify(view).includes('patrol'), 'what was installed on the robot directly is known in every task');

@@ -73,20 +73,23 @@ const state = {robot_home: HOME, projects: [open, withDog, lost], robots,
                models: [], datasets: [], skills: [], services: [], operations: []};
 const tw = {h, button, badge, notice, icon: k => `<svg data-icon="${k}"></svg>`, date: v => (v ? 'D' + v : '—')};
 vm.createContext(tw);
-const board = vm.runInContext(readFileSync('web/task_workbench.js', 'utf8') + '\n;({twFacts, twTotals, twCard, twBlocked})', tw);
+const board = vm.runInContext(readFileSync('web/task_apps.js', 'utf8') + '\n' + readFileSync('web/task_workbench.js', 'utf8') + '\n;({twFacts, twTotals, twCard, twBlocked})', tw);
 const facts = task => board.twFacts(state, task);
 same([ids(facts(withDog).robots), ids(facts(open).robots), ids(facts(lost).robots)], [['r2'], ['r1', 'r2', 'r3'], []],
      'the card of a task counts the robot it was created with');
 ok(board.twCard(withDog, facts(withDog), false).includes('1 台 · 1 台已连接 · 巡检狗'), 'and names it');
-same([facts(withDog).stages[1], facts(lost).stages[1]], [true, false], 'a connected robot of the task counts as its step');
+// Issue #50: a card has no five steps any more; the robot of the task says which brand and model the task is for.
+same([ids(facts(withDog).bound.robots), facts(lost).bound.robots.length, facts(open).bound.robots.length], [['r2'], 0, 0],
+     'the robots a task works with: the one it was created with; none while nothing is chosen or bound');
 const totals = board.twTotals([open, withDog, lost].map(t => [t, facts(t)]));
 same([totals.robots, totals.online], [3, 2], 'the dashboard still counts every robot once');
 same(board.twBlocked(withDog, facts(withDog)), null, 'the robot of a task does not keep the task from being deleted');
 const ts = {h, button, badge, date: v => (v ? 'D' + v : '—')};
 vm.createContext(ts);
-const skills = vm.runInContext(readFileSync('web/task_skills.js', 'utf8') + '\n;({tsWanted})', ts);
-same([ids(skills.tsWanted(state, withDog)), ids(skills.tsWanted(state, open))], [['r2'], ['r2', 'r3']],
-     'the skills of a task are read from its robot; without a choice from every connected one');
+const skills = vm.runInContext(readFileSync('web/task_apps.js', 'utf8') + '\n' + readFileSync('web/task_skills.js', 'utf8') + '\n;({tsWanted})', ts);
+// Issue #50: without a choice the task's robots follow from the applications it has bound; it has bound none here.
+same([ids(skills.tsWanted(state, withDog)), ids(skills.tsWanted(state, open))], [['r2'], []],
+     'the skills of a task are read from its robot; without a choice and without an application from none');
 
 // ---- the form of a new task has the field
 const formLine = readFileSync('web/app.js', 'utf8').split('\n').find(l => l.includes("type==='project-add'"));

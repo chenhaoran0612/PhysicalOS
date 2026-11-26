@@ -96,6 +96,8 @@ class Platform:
         self.body_types = BodyTypes(self)           # issue #32: the platform's list of body types; a device has the type a person chose
         from .robot_model import RobotModels
         self.robot_models = RobotModels(self)       # issue #48: a robot's brand and model; applications and skills belong to one (after body_types)
+        from .task_apps import TaskApps
+        self.task_apps = TaskApps(self)             # issue #50: applications belong to the account; a task binds them (after robot_models)
         from .sim_robots import SimRobots
         self.sims = SimRobots(self, self.store.root)
         from .hardware_init import HardwareInit
@@ -178,6 +180,7 @@ class Platform:
         result.update(self.body_types.snapshot())   # issue #32: the list of body types and the interfaces a type can name
         result.update(self.device_profile.snapshot())   # issue #27: which robots have a device profile (for the deletion)
         result.update(self.motion_drivers.snapshot())   # issue #28: per SSH robot, which motion interfaces of its type are missing
+        result.update(self.task_apps.snapshot())    # issue #50: which applications each task has bound
         return result
 
     def add_project(self, p):
@@ -566,6 +569,7 @@ class Platform:
         findings=[]
         robots=[r for r in self.store.list('robots') if r['project_id'] in (project['id'],robot_scope.HOME)]     # issue #42: the robots of the account
         apps=[a for a in self.store.list('applications') if a['project_id']==project['id']]
+        apps=apps+[a for a in self.task_apps.applications(project['id']) if a not in apps]     # issue #50: the applications the task has bound
         if not robots:
             findings.append('项目尚未登记机器人：添加本体并连接设备端适配服务。')
         for robot in robots:

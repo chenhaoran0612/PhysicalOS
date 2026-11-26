@@ -50,6 +50,7 @@ def choose(platform, p):
         except ValueError:
             raise ValueError(NOT_A_TASK) from None
         chosen, before = robot_of(platform, p.get(FIELD)), task.get(FIELD)
+        platform.task_apps.check_robot(task, chosen)       # issue #50: not to a robot of another brand and model than the bound applications
         if chosen:
             task[FIELD] = chosen
         else:

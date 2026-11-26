@@ -46,10 +46,10 @@ const fs = require('fs');
   check(!(await main.innerText()).includes('个任务之一'), 'The page still says it is one of N tasks');
   const headButtons = await main.locator('.page-head button').allInnerTexts();
   check(!headButtons.some(t => t.includes('新建任务项目') || t.includes('使用指南')), `The head of a task still has: ${headButtons}`);
-  check(await main.locator('.journey-next').isVisible() && await main.locator('.journey-step').count() === 5, 'The steps of the task left its page');
-  await section.getByText('这个任务还没有机器人').waitFor();
-  const order = await main.evaluate(el => ['.journey-steps', '#task-skills', '.journey-options'].map(s => el.querySelector(s).getBoundingClientRect().top));
-  check(order[0] < order[1] && order[1] < order[2], `The skills are not between the steps and the optional abilities: ${order}`);
+  // Issue #50: a task binds applications and develops nothing; before it has one there is nothing configured to show.
+  await main.locator('.ta-empty').waitFor();
+  check(await main.locator('.journey-next, .journey-step, .journey-options').count() === 0, 'The page of a task still has the steps to develop with');
+  check(await section.count() === 0, 'The skills section is shown for a task without an application');
   await shot('1-no-robot');
 
   // 2. A simulated quadruped with three skills: one used by an application, one run directly, one not used.
@@ -67,8 +67,9 @@ const fs = require('fs');
     const registered = await api('skills', {project_id: projectId, name: '巡检', entrypoint: 'patrol_places', version: patrolPlaces.version,
       requires: ['base.navigate_to_place', 'safety.stop'], success_condition: '每个地点都到达', stop_condition: '有一处没到',
       parameters: JSON.stringify(patrolPlaces.parameters)});
-    await api('applications', {project_id: projectId, name: '每日巡检', robot_id: robot.id, version: '1',
+    const made = await api('applications', {project_id: projectId, name: '每日巡检', robot_id: robot.id, version: '1',
       steps: [{skill_id: registered.id, parameters: {places: '会议室、二楼', return_to: '出发点', loops: 2}, timeout_s: 900}]});
+    await api('task-apps/bind', {project_id: projectId, application_id: made.id});      // issue #50: the task works with what it has bound
     await api('robots/run-skill', {robot_id: robot.id, skill_id: 'patrol', parameters: {waypoints: [[0.5, 0], [0.5, 0.5]], loops: 1},
                                    hardware_authorized: true, request_id: 'run-' + Date.now(), project_id: projectId});
     await refresh(true);
@@ -100,10 +101,10 @@ const fs = require('fs');
   await shot('2-skills');
 
   // 3. Reading again keeps the section; nothing else on the page is drawn again by it.
-  await page.evaluate(() => { document.querySelector('.journey-next').dataset.kept = '1'; });
+  await page.evaluate(() => { document.querySelector('.ta-model').dataset.kept = '1'; });
   await robot.locator('[data-action="task-skills-reload"]').click();
   await section.locator(`[data-ts-robot="${ids.robot}"]`).getByText('技能列表是刚从这台机器人上读到的。').waitFor({timeout: 20000});
-  check(await page.evaluate(() => document.querySelector('.journey-next').dataset.kept === '1'), 'Reading the skills again drew the whole page again');
+  check(await page.evaluate(() => document.querySelector('.ta-model').dataset.kept === '1'), 'Reading the skills again drew the whole page again');
 
   // 4. Every width: nothing scrolls sideways and nothing leaves the window.
   for (const width of [320, 375, 768, 1024, 1440, 1920]) {

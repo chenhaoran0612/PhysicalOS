@@ -14,7 +14,7 @@ const {connectTokenFans}=require('./tokenfans_browser.cjs');
  await page.goto(cfg.url);await gateSignIn(page,{name:'用户路径验收',email:`journey-${Date.now()}@example.test`,'password':'fixture-password-123'});await page.getByRole('heading',{name:'任务工作台',exact:true}).waitFor();/* issue #44: the entry is the dashboard */await page.screenshot({path:'artifacts/user-journey-welcome.png'});
  await click('journey-start');
  await page.locator('form[data-form=project]').waitFor();await fill('name','仓库异常巡检');await fill('objective','每天检查仓库通道，识别障碍并输出异常报告。');await submit();await page.locator('#dialog').waitFor({state:'hidden'});
- await page.locator('.journey-next').getByText('连接你的机器人',{exact:true}).waitFor();await click('journey-connect');await page.getByText('有 SSH 地址、用户名和密码或密钥',{exact:true}).waitFor();await click('close');
+ /* issue #50: the page of a task binds applications; it has no steps to develop with. The ways to connect a robot are still a dialog of the console. */await page.locator('.ta-empty').getByText('这个任务还没有绑定应用',{exact:true}).waitFor();if(await page.locator('.journey-next').count())throw Error('The page of a task still has the step-by-step view');await page.evaluate(()=>action('journey-connect'));await page.getByText('有 SSH 地址、用户名和密码或密钥',{exact:true}).waitFor();await click('close');
  // Real HTTP persistence for task assets; no model invocation or device action.
  await page.evaluate(async()=>{const s=await api('state'),pid=s.projects[0].id;await api('robots',{vendor:'示例机器人公司',model:'X1',project_id:pid,name:'巡检设备',family:'quadruped',endpoint:''});await refresh(true);});
  // Issue #4: models come only from TokenFans, connected on 云平台账户 (fake key from the fixture's stand-in).
