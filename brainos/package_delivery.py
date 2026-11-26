@@ -40,6 +40,7 @@ from pathlib import Path
 
 from . import device_transfer, package_fetch
 from . import robot_scope
+from . import model_library
 from . import device_transfer_target as target
 from .cloud_account import CloudError
 from .errors import CodedError
@@ -228,10 +229,7 @@ class PackageDelivery:
             name = STATUS_NAMES.get(status) or (target.shown(status, 40) if isinstance(status, str) and status else '未知')
             raise CodedError('这份安装包还没有标为“可用”（现在是“%s”），不能送到设备：资料要先解析、再由人确认' % name,
                              code='package_not_usable')
-        owner = material.get('device_id')
-        if owner not in (None, '') and owner != robot['id']:
-            other = material.get('device_name') if isinstance(material.get('device_name'), str) and material['device_name'] else '另一台设备'
-            raise CodedError('这份安装包属于“%s”，不能送到这台机器人；请在这台机器人的资料里上传它' % other, code='package_other_device')
+        model_library.check_delivery(material, robot)     # issue #51: its brand and model's, or still bound to it alone
         package_fetch._record(material)
 
     def _source(self):

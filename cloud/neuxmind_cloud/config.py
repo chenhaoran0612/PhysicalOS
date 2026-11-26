@@ -29,7 +29,7 @@ def _list(name: str) -> list[str]:
 
 # Issue #43: the cloud-skills settings, each a positive integer read from NEUXMIND_<NAME IN UPPER CASE>.
 CLOUD_SKILL_SETTINGS = (
-    "skill_org_max_releases", "skill_release_max_body_bytes", "library_max_bundle_bytes",
+    "skill_org_max_releases", "skill_release_max_body_bytes", "library_max_bundle_bytes", "library_max_model_bytes",
     "device_link_max_body_bytes", "device_link_poll_seconds", "device_link_poll_busy_seconds",
     "device_link_offline_seconds", "device_link_max_devices", "device_link_max_syncs_per_minute",
     "skill_call_pickup_timeout_seconds", "skill_call_lost_after_seconds", "skill_call_rate_per_minute",
@@ -157,6 +157,7 @@ class Settings:
     skill_org_max_releases: int = 500                     # releases in the skill store per organisation
     skill_release_max_body_bytes: int = 3 * 1024 * 1024   # body of POST /skills/releases
     library_max_bundle_bytes: int = 64 * 1024 * 1024      # a robot's programs and scene data (library kind "bundle")
+    library_max_model_bytes: int = 512 * 1024 * 1024      # a robot model: a URDF with its meshes (library kind "model", issue #51)
     device_link_max_body_bytes: int = 2 * 1024 * 1024     # body of POST /device-link/sync (up to 200 skills)
     device_link_poll_seconds: int = 2                     # how often a robot is told to sync ...
     device_link_poll_busy_seconds: int = 1                # ... while a remote call is under way

@@ -57,6 +57,20 @@ def list_materials(request: Request, body_type: str | None = None, vendor: str |
         return library.list_materials(s, principal(request, s), filters)
 
 
+@router.post("/materials/rebind")
+def rebind_materials(request: Request, payload=Body(default=None)):
+    """Issue #51: the materials still bound to one device go to that device's brand and model."""
+    from .. import library_product
+    return library_product.rebind(ctx(request).db, _store(request), lambda s: principal(request, s), payload)
+
+
+@router.put("/materials/{material_id}/product")
+def move_material(request: Request, material_id: str, payload=Body(default=None)):
+    """Issue #51: one material goes to another brand and model."""
+    from .. import library_product
+    return library_product.move(ctx(request).db, lambda s: principal(request, s), material_id, payload)
+
+
 @router.get("/materials/{material_id}")
 def get_material(request: Request, material_id: str):
     with ctx(request).db.transaction() as s:

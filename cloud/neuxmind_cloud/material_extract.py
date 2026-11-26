@@ -170,6 +170,7 @@ def parse_html(data: bytes, limits: dict) -> dict:
 # ------------------------------------------------------------------ URDF
 def parse_urdf(data: bytes, limits: dict) -> dict:
     robot, links, joints, warnings = {"name": None}, [], [], []
+    meshes: list[str] = []                       # issue #51: the mesh files the URDF names
     stack: list[str] = []
     current: dict | None = None
     includes = 0
@@ -184,6 +185,8 @@ def parse_urdf(data: bytes, limits: dict) -> dict:
         skipped = any(t in ("transmission", "gazebo") for t in stack)
         if tag == "xacro:include":
             includes += 1
+        elif tag == "mesh" and attrs.get("filename") and len(meshes) < MODEL_MESHES:
+            meshes.append(attrs["filename"])
         elif tag == "link" and parent in ("robot", "xacro:macro") and attrs.get("name"):
             links.append(attrs["name"])
         elif tag == "joint" and "type" in attrs and not skipped and current is None:
@@ -214,7 +217,7 @@ def parse_urdf(data: bytes, limits: dict) -> dict:
     for joint in joints:
         if not joint["raw"]:
             joint.pop("raw")
-    return {"robot_name": robot["name"], "links": links, "joints": joints, "warnings": warnings}
+    return {"robot_name": robot["name"], "links": links, "joints": joints, "warnings": warnings, "mesh_files": meshes}
 
 
 # ------------------------------------------------------------------ names inside archives
@@ -287,6 +290,9 @@ class Members:
         if parts[-1].endswith(".deb") and len(self.nested) < 20:
             self.nested.append(_shown("/".join(parts)))
         return None
+
+    def metadata_cap(self, _which: str) -> int:
+        return META_BYTES
 
     def read_metadata(self, which: str, data: bytes) -> None:
         try:
@@ -599,7 +605,7 @@ def scan_zip(handle, size: int, members: Members) -> None:
                 continue
             wanted = members.wants_metadata(info.filename, info.file_size)
             if wanted:
-                members.read_metadata(wanted, _read_member(archive, info, META_BYTES))
+                members.read_metadata(wanted, _read_member(archive, info, members.metadata_cap(wanted)))
             elif members.wants_probe(info.filename, info.file_size):
                 members.probe(_read_member(archive, info, 20))
         except _ZIP_ERRORS:
@@ -781,12 +787,105 @@ def inspect_ole(handle, mode: str) -> dict:
     return {"macros": macros, "external": external, "hyperlinks": 0}
 
 
+# ------------------------------------------------------------------ robot model (issue #51)
+MODEL_MESHES = 5000
+MODEL_NAMES = 50_000
+MESH_LOADABLE = (".stl", ".obj", ".msh")       # what the simulation (MuJoCo) reads
+
+
+def _mesh_name(reference: str) -> str:
+    return reference.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+
+
+def model_facts(facts: dict, urdf: str | None, present: set[str] | None, warnings: list[str]) -> dict:
+    """The URDF's facts plus what is known about its meshes. ``present``: the lower-case file names in
+    the archive, or ``None`` for a single ``.urdf`` (nothing came with it)."""
+    names = list(dict.fromkeys(_shown(name) for name in map(_mesh_name, facts.pop("mesh_files", [])) if name))
+    missing = [name for name in names if present is None or name.lower() not in present]
+    unsupported = [name for name in names if name not in missing and not name.lower().endswith(MESH_LOADABLE)]
+    notes = list(facts.get("warnings") or []) + warnings
+
+    def examples(found: list[str]) -> str:
+        return "、".join(_shown(name) for name in found[:EXAMPLES])
+
+    if present is None and names:
+        notes.append(f"这份 URDF 用到 {len(names)} 个网格文件（例如 {examples(names)}），单个 .urdf 不带它们：仿真里这些部分只显示"
+                     "碰撞形状或不显示。要带网格，请把 .urdf 和网格文件打成一个压缩包（.zip / .tar.gz）上传")
+    elif missing:
+        notes.append(f"URDF 用到的 {len(missing)} 个网格文件在压缩包里没有（例如 {examples(missing)}）；仿真里这些部分不显示")
+    if unsupported:
+        notes.append(f"有 {len(unsupported)} 个网格文件仿真读不了（例如 {examples(unsupported)}；只能读 .stl、.obj、.msh）；"
+                     "仿真里这些部分不显示，可以转成 .stl 或 .obj 后重新上传")
+    return {**facts, "warnings": notes, "urdf": urdf,
+            "meshes": {"named": len(names), "missing": missing[:50], "unsupported": unsupported[:50]}}
+
+
+class ModelMembers(Members):
+    """An archive that should hold one ``.urdf`` and its meshes: the ``.urdf`` is read, the rest only named."""
+
+    def __init__(self, limits: dict):
+        super().__init__(limits)
+        self.urdf_cap = int(limits.get("urdf_bytes", 32 * 1024 * 1024))
+        self.urdfs: list[str] = []
+        self.urdf_data: bytes | None = None
+        self.names: set[str] = set()
+
+    def add(self, name: str) -> None:
+        super().add(name)
+        if len(self.names) < MODEL_NAMES:
+            self.names.add(_mesh_name(name).lower())
+
+    def wants_probe(self, name: str, size: int) -> bool:
+        return False
+
+    def wants_metadata(self, name: str, size: int) -> str | None:
+        clean = name.replace("\\", "/")
+        if unsafe_name(name) or not clean.lower().endswith(".urdf"):
+            return None
+        self.urdfs.append(clean)
+        return "urdf" if len(self.urdfs) == 1 and size <= self.urdf_cap else None
+
+    def metadata_cap(self, _which: str) -> int:
+        return self.urdf_cap
+
+    def read_metadata(self, which: str, data: bytes) -> None:
+        self.urdf_data = data
+
+    def facts(self) -> dict:
+        if not self.urdfs:
+            raise Refused("model_no_urdf", "压缩包里没有 .urdf 文件；机器人模型的压缩包里要有一个 .urdf 和它用到的网格文件")
+        if len(self.urdfs) > 1:
+            raise Refused("model_many_urdf", f"压缩包里有 {len(self.urdfs)} 个 .urdf（{'、'.join(_shown(n) for n in self.urdfs[:EXAMPLES])}）；"
+                          "机器人模型的压缩包里只能有一个")
+        if self.urdf_data is None:
+            raise Refused("too_large", "压缩包里的 .urdf 太大或读不出来，没有解析")
+        return model_facts(parse_urdf(self.urdf_data, self.limits), self.urdfs[0], self.names, super().facts()["warnings"])
+
+
+def _run_model(mode: str, limits: dict, handle, size: int) -> dict:
+    if mode == "model.urdf":
+        if size > int(limits.get("urdf_bytes", 32 * 1024 * 1024)):
+            raise Refused("too_large", "URDF 文件太大，没有解析")
+        return model_facts(parse_urdf(handle.read(), limits), None, None, [])
+    members = ModelMembers(limits)
+    if mode == "model.zip":
+        scan_zip(handle, size, members)
+    elif mode == "model.tar.gz":
+        scan_tar(Unpacked(handle, "gz", int(limits.get("unpacked", 4 * 1024 ** 3)), int(limits.get("xz_memory", XZ_MEMORY))),
+                 members)
+    else:
+        raise Refused("unknown_mode", f"不认识的解析方式 {mode}")
+    return members.facts()
+
+
 # ------------------------------------------------------------------ entry point
 TAR_MODES = {"tar": "", "tar.gz": "gz", "tar.xz": "xz", "tar.bz2": "bz2"}
 
 
 def run(mode: str, limits: dict, handle) -> dict:
     size = os.fstat(handle.fileno()).st_size
+    if mode.startswith("model."):                          # issue #51
+        return _run_model(mode, limits, handle, size)
     if mode == "urdf":
         if size > int(limits.get("urdf_bytes", 32 * 1024 * 1024)):
             raise Refused("too_large", "URDF 文件太大，没有解析")

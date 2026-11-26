@@ -5,3 +5,6 @@ invoke==3.0.3
 pynacl==1.6.2
 cffi==2.1.1
 pycparser==3.11
+# Issue #51: MuJoCo simulation (the engine without its viewer and studio) and what it needs.
+mujoco-core==4.0.1
+numpy==2.5.5

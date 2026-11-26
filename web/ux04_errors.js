@@ -363,6 +363,19 @@ const UX_CODES = {
   body_type_template_invalid: ['input', '状态机模板标识的写法不对。', '只用小写字母、数字、点、下划线或连字符，并以字母或数字开头'],
   body_type_interfaces_required: ['input', '本体类型至少要有一个应有的运控接口。', '勾选至少一个接口后再添加'],
   body_type_interface_unknown: ['input', '选的接口里有一个不是标准能力编号。', '从列表里勾选接口后再添加'],
+  // Issue #51: the library by brand and model (brainos/model_library.py) and MuJoCo simulation environments (brainos/mujoco_sim.py).
+  package_other_model: ['input', '这份安装包属于另一个品牌型号的机器人，不能送到这台机器人上。', '在“资料库”里找这台机器人品牌型号的安装包', '如果只是标错了，在“资料库”里给它“改品牌型号”'],
+  sim_no_product: ['input', '这个应用还没有品牌型号，不知道该用哪种机器人的模型来仿真。', '先给它的机器人填写品牌和型号'],
+  sim_no_robot_model: ['input', '这个品牌型号还没有可用的机器人模型（URDF），仿真需要它。', '在“资料库”的“机器人模型”里上传 URDF，或带网格文件的压缩包', '核对解析出的关节和上限后，确认为可用'],
+  sim_family_unsupported: ['input', '这一版的仿真只支持四足、轮式、人形和机械臂这几种本体。', '换成支持的本体类型的机器人再做仿真'],
+  sim_engine_missing: ['service', '这个安装里没有 MuJoCo 仿真引擎，不能做仿真。', '安装带仿真引擎的版本'],
+  sim_model_invalid: ['input', '这份机器人模型不能用于仿真。', '按提示修正 URDF 或压缩包，重新上传并确认'],
+  sim_check_failed: ['service', '这个仿真环境没有通过检查：MuJoCo 没能把它建立起来，或运行时不稳定。', '看技术细节里的原因', '重新生成环境，或修正机器人模型后再试'],
+  sim_scene_busy: ['state', '这个应用已经有一个环境正在生成或检查。', '等它结束后再生成新的'],
+  sim_agent_failed: ['service', '工程助手没有写出仿真环境的描述。', '点“查看过程”看它停在哪里', '重新生成，或先用空场地'],
+  sim_scene_invalid: ['service', '工程助手写出的环境描述不符合格式，没有采用。', '重新生成；可以在补充说明里把要求写得更具体'],
+  sim_scene_not_ready: ['state', '这个环境还没有检查完，或者还没有被确认，暂时不能用。', '等检查结束后看预览并确认'],
+  sim_scene_in_use: ['state', '有仿真机器人正在使用这个环境。', '先在“我的机器人”里删除那台仿真机器人'],
 };
 
 // Codes that start like these are parameter refusals even when not listed (e.g. a new runtime code).

@@ -45,6 +45,7 @@ from starlette.responses import JSONResponse
 from . import audit
 from . import library_types as types
 from . import library_bundle      # issue #43: kind "bundle"
+from . import library_model       # issue #51: kind "model"
 from .auth import Principal, _throttle, bearer_token
 from .config import Settings
 from .db import Database, advisory_lock
@@ -174,15 +175,18 @@ def _upload_fields(payload, settings: Settings) -> dict:
         raise bad_request(str(exc)) from None
     if fmt is None:
         raise unsupported(f"不支持这种文件类型（{filename}）")
+    fmt = library_model.requested_format(payload, fmt, filename)  # issue #51: kind "model"
     fmt = library_bundle.requested_format(payload, fmt)          # issue #43: kind "bundle"
     size = payload.get("size")
     if isinstance(size, bool) or not isinstance(size, int) or size < 1:
         raise bad_request("size 须为文件的字节数（正整数）")
     limit = settings.library_max_package_bytes if fmt.kind == types.PACKAGE else settings.library_max_document_bytes
     limit = library_bundle.size_limit(fmt, settings, limit)
+    limit = library_model.size_limit(fmt, settings, limit)
     if size > limit:
         what = "驱动安装包" if fmt.kind == types.PACKAGE else "文档"
         what = library_bundle.label(fmt, what)
+        what = library_model.label(fmt, what)
         raise ApiError(413, "file_too_large", f"文件太大：{what}最大 {limit} 字节，这个文件 {size} 字节",
                        max_bytes=limit, kind=fmt.kind)
     sha256 = payload.get("sha256")
@@ -197,7 +201,11 @@ def _upload_fields(payload, settings: Settings) -> dict:
     library_bundle.require_device(fmt, device_id, device_name)
     labels = (body_type, vendor.casefold(), model.casefold(), version.casefold())
     # Issue #34: a material of one device is not a duplicate of the same file kept for another device.
+    if fmt.kind != types.BUNDLE:      # issue #51: a material belongs to its brand and model; only a bundle to one device
+        device_id = device_name = ""
     label_key = _digest(*labels, "device", device_id) if device_id else _digest(*labels)
+    if fmt.kind == types.MODEL:       # the same .urdf may be kept as a document and as the robot model
+        label_key = _digest(*labels, "kind", types.MODEL)
     return {"filename": filename, "filename_key": _digest(filename.casefold()), "kind": fmt.kind, "format": fmt.id,
             "body_type": body_type, "vendor": vendor, "model": model, "version": version, "label_key": label_key,
             "description": _description(payload.get("description")), "size": size, "sha256": sha256.lower(),
@@ -250,6 +258,7 @@ def formats_view(settings: Settings) -> dict:
     return {"formats": [{"id": f.id, "label": f.label, "kind": f.kind, "extensions": list(f.extensions)}
                         for f in types.FORMATS],
             "extensions": list(types.EXTENSIONS), "supported": types.supported_text(),
+            "model": library_model.formats_view(settings),          # issue #51
             "limits": {"document_bytes": settings.library_max_document_bytes,
                        "package_bytes": settings.library_max_package_bytes,
                        "org_quota_bytes": settings.library_org_quota_bytes,

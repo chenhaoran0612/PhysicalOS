@@ -67,7 +67,8 @@ class RealCloudDelivery(unittest.TestCase):
         self.platform = Platform(os.path.join(self.work.name, 'state'))
         self.addCleanup(self.platform.close)
         connection, secret = self.device.login()
-        self.platform.store.put('robots', {'id': ROBOT, 'project_id': PROJECT, 'name': '测试机器人', 'connection_id': CONNECTION})
+        self.platform.store.put('robots', {'id': ROBOT, 'project_id': PROJECT, 'name': '测试机器人', 'connection_id': CONNECTION,
+                                           'product': {'vendor': '示例厂家', 'model': 'X1', 'source': 'manual'}})
         self.platform.store.put('device_connections', {**connection, 'id': CONNECTION, 'robot_id': ROBOT, 'project_id': PROJECT})
         self.platform.store.put('agent_secrets', {**secret, 'id': CONNECTION})
         self.sign_in(self.cloud.url)

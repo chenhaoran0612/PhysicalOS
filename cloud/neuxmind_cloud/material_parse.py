@@ -44,6 +44,7 @@ from sqlalchemy.orm import Session
 from . import audit, library, weknora
 from . import material_fields as fields
 from . import library_bundle      # issue #43: a bundle is never parsed
+from . import library_model       # issue #51: a robot model is read as a URDF, also from an archive
 from .config import Settings
 from .db import Database
 from .errors import ApiError, bad_request, conflict
@@ -126,6 +127,7 @@ class _Job:
     sha256: str
     filename: str
     device_id: str
+    material_kind: str = ""          # issue #51
 
 
 def _limits(settings: Settings) -> Limits:
@@ -206,6 +208,7 @@ def _drop_no_value(value, depth: int = 0):
 # ------------------------------------------------------------------ the steps
 def _rules_step(job: _Job, settings: Settings, store: LibraryStore) -> _Finish:
     mode = "urdf" if job.kind == fields.URDF else job.format
+    mode = library_model.extract_mode(job.material_kind, job.format, mode)
     try:
         facts = extract(mode, store.object_path(job.org_id, job.sha256), _limits(settings))
     except ExtractFailed as exc:
@@ -317,12 +320,11 @@ def _upload_step(job: _Job, settings: Settings, store: LibraryStore, service, db
     if earlier is not None:
         return _Finish(dict(earlier.extracted.get("values") or {}), "weknora",
                        warnings=warnings + _page_warnings(job, settings, store)
-                       + ["同一个文件已经为别的设备解析过，沿用了那次的解析结果"],
+                       + ["同一个文件已经解析过（别的品牌型号或版本下），沿用了那次的解析结果"],
                        extracted=dict(earlier.extracted), knowledge_id=earlier.knowledge_id)
     extension = SERVICE_EXTENSIONS[job.format]
     stem = job.filename.rsplit(".", 1)[0] if "." in job.filename else job.filename
-    metadata = {"neuxmind_material_id": job.material_id, "neuxmind_org_id": job.org_id,
-                "neuxmind_device_id": job.device_id}
+    metadata = {"neuxmind_material_id": job.material_id, "neuxmind_org_id": job.org_id}   # issue #51: no device
     size = job.size
     if job.format in CONVERTED:
         page = _page_file(job, settings, store)
@@ -394,15 +396,16 @@ def _ask_step(job: _Job, service):
 def _new_jobs(db: Database) -> int:
     """A job for every material that waits in 「解析中」 and has none yet."""
     with db.transaction() as s:
-        rows = s.execute(select(Material.id, Material.org_id, Material.sha256, Material.format)
+        rows = s.execute(select(Material.id, Material.org_id, Material.sha256, Material.format, Material.kind)
                          .outerjoin(MaterialParse, MaterialParse.material_id == Material.id)
                          .where(Material.status == PARSING, MaterialParse.material_id.is_(None)).limit(200)).all()
     created = 0
-    for material_id, org_id, sha256, fmt in rows:
+    for material_id, org_id, sha256, fmt, material_kind in rows:
         try:
             with db.transaction() as s:
                 s.add(MaterialParse(material_id=material_id, org_id=org_id, sha256=sha256,
-                                    kind=fields.result_kind(fmt), stage=QUEUED, next_at=0.0, stage_since=now()))
+                                    kind=library_model.result_kind(material_kind, fields.result_kind(fmt)),
+                                    stage=QUEUED, next_at=0.0, stage_since=now()))
             created += 1
         except IntegrityError:
             continue                                       # another worker made it first
@@ -434,7 +437,8 @@ def _claim(db: Database, settings: Settings, at: float, kinds=None) -> tuple[_Jo
             job.stage, job.lease_until, job.lease_owner = DONE, 0.0, ""
             return None, ""
         snapshot = _Job(material_id, job.org_id, job.kind, job.stage, job.attempts, job.stage_since, job.knowledge_id,
-                        material.format, material.size, material.sha256, material.filename, material.device_id)
+                        material.format, material.size, material.sha256, material.filename, material.device_id,
+                        material.kind)
     return snapshot, owner
 
 
@@ -705,7 +709,7 @@ def _job(session: Session, material_id: str, lock: bool = False) -> MaterialPars
 
 
 def view(material: Material, job: MaterialParse | None) -> dict:
-    kind = fields.result_kind(material.format)
+    kind = library_model.result_kind(material.kind, fields.result_kind(material.format))
     done = job is not None and job.stage == DONE
     values = dict(job.values) if done else fields.clean_values(kind, {})
     if kind == fields.PACKAGE:
@@ -797,7 +801,7 @@ def retry(db: Database, who, material_id: str) -> dict:
             raise conflict("这份资料正在解析", code="parse_running")
         if job is None:
             job = MaterialParse(material_id=material.id, org_id=material.org_id, sha256=material.sha256,
-                                kind=fields.result_kind(material.format))
+                                kind=library_model.result_kind(material.kind, fields.result_kind(material.format)))
             s.add(job)
         at = now()
         job.stage, job.next_at, job.attempts, job.resends, job.stage_since = QUEUED, 0.0, 0, 0, at

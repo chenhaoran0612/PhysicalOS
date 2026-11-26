@@ -364,6 +364,14 @@ issue #43 又加了四个权限范围，都不在默认范围里（见“云端�
 | POST `/library/materials/{id}/parse/confirm` | 同上，并确认 → `usable`；409 `parse_incomplete`（`missing[]`） |
 | POST `/library/materials/{id}/parse/retry` | → `parsing`，从头解析 |
 
+### 品牌型号归属和机器人模型（issue #51，`library_product.py`、`library_model.py`）
+
+资料属于它的 `vendor` + `model` 标注所指的品牌型号（不分大小写），不再属于一台设备；上传时给的 `device_id` / `device_name` 只对 bundle 保存。约定和迁移见 [docs/MODEL_LIBRARY.md](../docs/MODEL_LIBRARY.md)。
+
+- `POST /library/materials/rebind` `{device_id, vendor, model}` → `{moved, merged, kept[]}`：把还绑在这台设备上的资料归到这个品牌型号（由控制台调用，可以重复）。同内容的留一份（确认过的优先），同名不同内容的不动并列出。
+- `PUT /library/materials/{id}/product` `{vendor, model}`：改一份资料的品牌型号。409 `material_exists` / `version_exists` / `bundle_needs_device`。
+- 机器人模型：`POST /library/uploads` 带 `kind: "model"`，接受单个 `.urdf` 或装着一个 `.urdf` 和网格文件的 `.zip` / `.tar.gz`；按 URDF 解析（压缩包只读其中的 `.urdf`，另报告缺少的和仿真读不了的网格）。`GET /library/formats` 的 `model` 给出后缀和上限。配置 `NEUXMIND_LIBRARY_MAX_MODEL_BYTES`（默认 512 MiB）。
+
 ### 程序和场景数据（资料库的 `bundle` 类型，issue #43，`library_bundle.py`）
 
 有的机器人靠自己电脑上的程序行走，这些程序和它们用的场景数据（地点标记、参考地图）是一个目录，打成一个 `.tar.gz` 存进资料库，沿用上面的分片上传、校验、配额和下载。约定见 [docs/CLOUD_SKILLS.md](../docs/CLOUD_SKILLS.md) §2。

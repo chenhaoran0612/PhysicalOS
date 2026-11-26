@@ -88,6 +88,8 @@ class Platform:
         self.cloud = CloudAccount(self)
         from .material_library import MaterialLibrary
         self.library = MaterialLibrary(self)        # issue #33: documents and driver packages kept in the cloud
+        from .model_library import ModelLibrary
+        self.model_library = ModelLibrary(self)     # issue #51: a material belongs to a brand and model; old ones are moved
         from .package_delivery import PackageDelivery
         self.package_delivery = PackageDelivery(self)   # issue #31: a usable driver package goes from the library to a device, verified there
         from .model_compute import ModelCompute
@@ -100,6 +102,8 @@ class Platform:
         self.task_apps = TaskApps(self)             # issue #50: applications belong to the account; a task binds them (after robot_models)
         from .sim_robots import SimRobots
         self.sims = SimRobots(self, self.store.root)
+        from .mujoco_sim import MujocoSim
+        self.mujoco = MujocoSim(self)               # issue #51: simulation environments for applications, run with MuJoCo
         from .hardware_init import HardwareInit
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         from .device_profile import DeviceProfile
@@ -988,6 +992,7 @@ class Platform:
         self.heartbeat.close()      # issue #24: the timer, its SSH sessions and its checks end before the store is closed
         self.runtime_link.close()   # issue #17: the SSH sessions of the links to the robots' management layers
         self.runtime_install.close()   # issue #19: installs under way stop waiting (what a robot does goes on there)
+        self.mujoco.close()         # issue #51: scenes being generated or checked stop waiting
         self.sims.close()
         self.workflows.close()
         self.engineering.close()

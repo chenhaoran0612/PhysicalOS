@@ -307,9 +307,9 @@ class ParseTest(ParseCase):
         other = self.upload_parsed("notes.md", b"# demo\n")
         self.assertEqual(other["status"], "parsed")
 
-    def test_the_same_page_for_two_devices_is_converted_and_asked_about_once(self):
-        self.upload_parsed("a.html", PAGE, device_id="robot-0123456789ab", device_name="一号机")
-        second = self.upload_parsed("a.html", PAGE, device_id="robot-0123456789ac", device_name="二号机")
+    def test_the_same_page_for_two_models_is_converted_and_asked_about_once(self):
+        self.upload_parsed("a.html", PAGE, model="X1")
+        second = self.upload_parsed("a.html", PAGE, model="X2")
         self.assertEqual((second["status"], len(self.fake.uploads), len(self.fake.questions)), ("parsed", 1, 3))
 
     def test_a_page_with_only_a_title_is_not_sent(self):
@@ -320,11 +320,11 @@ class ParseTest(ParseCase):
         cut = Limits(html_text_bytes=3000)
         page = ("<p>" + "一行文字。" * 20 + "</p>\n").encode() * 500
         with mock.patch.object(material_parse, "_limits", lambda settings: cut):
-            first = self.upload_parsed("long.html", page, device_id="robot-0123456789ab", device_name="一号机")
+            first = self.upload_parsed("long.html", page, model="X1")
             self.ok(self.post(f"/library/materials/{first['material']['id']}/parse/retry", {}, self.owner))
             self.parse_all()
             again = self.result(first["material"]["id"])
-            second = self.upload_parsed("long.html", page, device_id="robot-0123456789ac", device_name="二号机")
+            second = self.upload_parsed("long.html", page, model="X2")
         self.assertEqual((again["status"], second["status"], len(self.fake.uploads)), ("parsed", "parsed", 1))
         for result in (first, again, second):
             self.assertTrue(any("只解析了前面" in warning for warning in result["warnings"]), result["warnings"])

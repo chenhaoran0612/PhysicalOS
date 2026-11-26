@@ -73,27 +73,29 @@ const path = require('path');
     await dialog.getByText('硬件清单', {exact: true}).waitFor({timeout: 30000});
     await page.locator('#dialog [data-action="close"]').first().click();
 
-    // 1 · The device profile has a 「资料」 tab; the device has no materials yet.
+    // 1 · The device profile has a 「资料」 tab; its brand and model has no materials yet (issue #51: materials are the brand and model's).
     const card = page.locator('article.card', {hasText: '一号机械臂'});
     await card.locator('[data-action="engine-profile"]').click();
     await profile.locator('.dp-verdict').waitFor({timeout: 30000});
     await profile.locator('#dp-tab-materials').click();
-    await profile.locator('.empty', {hasText: '这台设备还没有资料'}).waitFor({timeout: 15000});
+    await profile.locator('.empty', {hasText: '这个品牌型号还没有资料'}).waitFor({timeout: 15000});
+    check((await profile.locator('.mp-device-head').innerText()).includes('示例机器人公司 X1'), 'the tab names the brand and model the materials belong to');
     check((await profile.locator('#dp-tab-materials').getAttribute('aria-selected')) === 'true', 'the 资料 tab is selected');
     await shot('1-empty');
 
-    // 2 · Upload a URDF and a manual from the device profile: the device's type and name go with them.
+    // 2 · Upload a URDF and a manual from the device profile: the robot's brand, model and body type go with them, nothing is typed.
     await profile.locator('[data-parse-action="upload-open"]').click();
     const form = profile.locator('form[data-parse-form="device-upload"]');
     await form.locator('input[type=file]').setInputFiles([cfg.samples['demo_arm.urdf'], cfg.samples['驱动手册.docx']]);
-    await form.locator('[name=vendor]').fill('示例厂家'); await form.locator('[name=model]').fill('A1');
+    check(await form.locator('input[name=vendor]').getAttribute('type') === 'hidden' && await form.locator('input[name=vendor]').inputValue() === '示例机器人公司',
+          'the brand is the robot\'s own, not typed');
     await form.locator('[name=version]').fill('2.1');
     await form.locator('button[type=submit]').click();
     await row('demo_arm.urdf').waitFor({timeout: 30000});
     await row('驱动手册.docx').waitFor({timeout: 30000});
     const listed = await page.evaluate(async () => (await api('library/list', {})).materials);
-    check(listed.length === 2 && listed.every(m => m.device_name === '一号机械臂' && m.body_type === 'quadruped'),
-          `materials carry the device: ${JSON.stringify(listed.map(m => [m.device_name, m.body_type]))}`);
+    check(listed.length === 2 && listed.every(m => m.vendor === '示例机器人公司' && m.model === 'X1' && !m.device_id && m.body_type === 'quadruped'),
+          `materials carry the brand and model, not the device: ${JSON.stringify(listed.map(m => [m.vendor, m.model, m.device_id, m.body_type]))}`);
 
     // 3 · The URDF: the first joint's limits are read, the second joint's missing limits are named.
     await waitState('demo_arm.urdf', '没解析出来');
