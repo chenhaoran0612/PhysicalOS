@@ -61,7 +61,7 @@ const SMALL = {width: 900, height: 640};
 
   const ids = await page.evaluate(async cfg => {
     const robot = async (name, endpoint, token) => {
-      const r = await api('robots', {project_id: projectId, name, family: 'quadruped', endpoint, token});
+      const r = await api('robots', {vendor:'示例机器人公司',model:'X1',project_id: projectId, name, family: 'quadruped', endpoint, token});
       await api('robots/connect', {robot_id: r.id});
       return r.id;
     };

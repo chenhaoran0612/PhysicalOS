@@ -177,6 +177,8 @@ const shots = process.argv[3] || 'artifacts/ux03';
   // Manual registration: plain language; optional parameter declarations drive the step form.
   await go('skills');
   await page.evaluate(() => action('skill-add'));
+  await page.locator('#dialog form[data-form="skill"]').waitFor();
+  await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a skill names the brand and model it is for
   await page.locator('form[data-form=skill]').waitFor();
   const reg = await dlg('.dialog-body').innerText();
   for (const word of ['执行端技能标识', '需要的设备能力', '绑定模型']) assert(!reg.includes(word), '登记技能表单仍有行话：' + word);

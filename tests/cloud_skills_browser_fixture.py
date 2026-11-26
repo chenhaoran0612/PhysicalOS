@@ -103,6 +103,7 @@ def main():
             return {'tamper': cloud.tamper is not None}
         if what == 'state':
             return {'releases': sorted('%s@%s' % key for key in cloud.releases),
+                    'products': [held['release'].get('product') for held in cloud.releases.values()],   # issue #48
                     'materials': [m['view'] for m in cloud.materials.values()],
                     'switches': runtime.switches, 'posted': runtime.posted,
                     'bundle_scripts': device.bundle_scripts, 'refused': device.refused,

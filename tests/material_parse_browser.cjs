@@ -65,7 +65,7 @@ const path = require('path');
     await page.goto(cfg.url + '/#robots');
     await page.locator('[data-action="engine-ssh"]').first().click();
     await fill('name', '一号机械臂'); await fill('host', '127.0.0.1'); await fill('port', cfg.target_port);
-    await page.locator('#dialog [name=family]').selectOption('quadruped');
+    await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
     await fill('username', cfg.target_user); await fill('password', cfg.target_password);
     await submit();
     await page.locator('#dialog input[type=checkbox]').check();

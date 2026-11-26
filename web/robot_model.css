@@ -1,0 +1,26 @@
+/* Issue #48: a robot's brand and model; applications and skills by brand and model. */
+.robot-model-tag { background: #edf5e7; border-color: transparent; font-weight: 600; }
+.robot-model-tag.robot-model-missing, .robot-model-missing { color: var(--amber, #9b702a); }
+.robot-model-tag.robot-model-missing { background: #fbf2df; }
+.robot-model-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.robot-model-note { margin: 0 0 18px; }
+.robot-model-inputs .field { margin-bottom: 8px; }
+.robot-model-filter { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.robot-model-chip { display: grid; gap: 2px; padding: 10px 14px; text-align: left; border: 1px solid var(--line, #e2e8e2); border-radius: 12px;
+  background: var(--surface, #fff); color: inherit; font: inherit; cursor: pointer; transition: transform var(--duration-fast, 150ms), box-shadow var(--duration-fast, 150ms); }
+.robot-model-chip small { color: var(--muted, #7b8780); }
+.robot-model-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgb(0 0 0 / 8%); }
+.robot-model-chip:focus-visible { outline: 2px solid var(--green, #28674f); outline-offset: 2px; }
+.robot-model-chip.active { border-color: var(--green, #28674f); box-shadow: inset 0 0 0 1px var(--green, #28674f); }
+.robot-model-delivery { display: grid; gap: 8px; margin: 12px 0; padding: 12px 14px; border: 1px solid var(--line, #e2e8e2); border-radius: 12px; }
+.robot-model-pick { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+.robot-model-pick select { flex: 1; min-width: 0; }
+.robot-model-release-line { margin-top: 6px; }
+@media (max-width: 560px) { .robot-model-inputs { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .robot-model-chip { transition: none; } .robot-model-chip:hover { transform: none; } }
+.robot-model-name { color: var(--ink, #24332e); font-weight: 600; }
+.robot-model-delivery { font-size: 11px; color: #59704a; background: #fbfcfa; }
+.robot-model-delivery > span:first-child b { font-weight: 500; color: #9baa8a; margin-right: 6px; }
+.robot-model-delivery .inline-note { margin: 0; }
+.robot-model-pick { font-weight: 500; white-space: nowrap; }
+.robot-model-pick select { border: 1px solid #dbe4d1; border-radius: 5px; padding: 9px 12px; background: white; color: #405c32; min-height: 37px; font-size: 12px; }

@@ -28,6 +28,9 @@ else:
 from brainos.cloud_account import CloudError  # noqa: E402
 from brainos.service import Platform  # noqa: E402
 
+# Issue #48: a release is published for one brand and model; these are the ones the simulated quadruped reports.
+SIM = {'vendor': 'neuxmind-sim', 'model': 'sim-quadruped'}
+
 ROBOT, PROJECT, CONNECTION = 'robot-fixture', 'project-fixture', 'connection-fixture'
 HOME = '/home/robot'
 
@@ -69,7 +72,7 @@ class SkillLibrary(RealCloudCase):
             raise
 
     def test_the_examples_are_published_under_the_digest_the_console_computes(self):
-        result = self.skills.publish_examples()
+        result = self.skills.publish_examples(SIM)
         self.assertEqual({r['status'] for r in result['results']}, {'published'}, result)
         self.assertTrue(all(r['digest_matches'] for r in result['results']), result)
         overview = self.skills.overview()
@@ -78,10 +81,10 @@ class SkillLibrary(RealCloudCase):
         by_id = {row['id']: row['latest'] for row in overview['skills']}
         self.assertTrue(by_id['patrol']['motion'])
         self.assertFalse(by_id['status_report']['motion'])
-        self.assertEqual(self.skills.publish_examples()['published'], len(result['results']))     # again: nothing new
+        self.assertEqual(self.skills.publish_examples(SIM)['published'], len(result['results']))     # again: nothing new
 
     def test_a_release_is_downloaded_verified_and_installed_on_a_simulated_robot(self):
-        self.skills.publish_examples()
+        self.skills.publish_examples(SIM)
         robot = self.platform.add_sim_robot({'kind': 'quadruped'})
         ask = {'robot_id': robot['id'], 'project_id': robot['project_id'], 'skill_id': 'patrol', 'version': '0.1.0'}
         preview = self.skills.install_preview(ask)
@@ -92,7 +95,7 @@ class SkillLibrary(RealCloudCase):
         self.assertEqual(installed['patrol'], preview['release']['digest'])
 
     def test_other_content_under_a_version_is_refused_and_a_release_can_be_deleted(self):
-        self.skills.publish_examples()
+        self.skills.publish_examples(SIM)
         import json
         import shutil
         from brainos import runtime_bridge
@@ -103,7 +106,7 @@ class SkillLibrary(RealCloudCase):
         preview = self.skills.publish_preview({'path': str(target)})
         self.assertEqual(preview['state'], 'conflict')
         with self.assertRaises(CloudError) as caught:
-            self.skills.publish({'path': str(target), 'digest': preview['digest']})
+            self.skills.publish({**SIM, 'path': str(target), 'digest': preview['digest']})
         self.assertEqual(caught.exception.code, 'skill_version_exists')
 
         self.assertEqual(len(self.skills.detail({'skill_id': 'wave'})['releases']), 1)
@@ -126,11 +129,11 @@ class UnverifiedAccount(RealCloudCase):
                 self.skipTest('this checkout\'s cloud has no skill library yet')
             raise
         with self.assertRaises(CloudError) as caught:
-            skills.publish({'example': 'status_report', 'digest': preview['digest']})
+            skills.publish({**SIM, 'example': 'status_report', 'digest': preview['digest']})
         self.assertEqual(caught.exception.code, 'email_unverified')
         self.assertIn('邮箱尚未验证', str(caught.exception))
         with self.assertRaises(CloudError) as caught:
-            skills.publish_examples()
+            skills.publish_examples(SIM)
         self.assertEqual(caught.exception.code, 'email_unverified')
 
 

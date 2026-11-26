@@ -26,7 +26,7 @@ let failed=async()=>{};
 
  await page.goto(cfg.url);await gateSignIn(page,{name:'调研状态验收',email:`investigation-${crypto.randomBytes(4).toString('hex')}@example.test`,password:'Inv'+crypto.randomBytes(6).toString('hex')+'7'});
  await click('journey-start');await fill('name','巡检机器人接入');await fill('objective','认识机器人并修好驱动与网络');await submit();
- await page.goto(cfg.url+'/#robots');await click('engine-ssh');await page.locator('#dialog [name=family]').selectOption('quadruped');await fill('name','园区巡检狗');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password',cfg.ssh_password);await submit();
+ await page.goto(cfg.url+'/#robots');await click('engine-ssh');await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);await fill('name','园区巡检狗');await fill('host','127.0.0.1');await fill('port',cfg.ssh_port);await fill('username','robot');await fill('password',cfg.ssh_password);await submit();
  await dlg.getByText('确认 SSH 主机指纹',{exact:true}).waitFor();await dlg.locator('input[type=checkbox]').check();await submit();
  // Hardware initialisation opens after connecting (#2); its "next step" is the investigation entry.
  await dlg.locator('[data-action="engine-discover"]').first().click({timeout:30000});

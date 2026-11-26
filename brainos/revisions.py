@@ -4,6 +4,7 @@ from .service import digest, now
 
 def preview(platform, p):
     source = platform.same_project('applications', p.get('source_application_id'), p.get('project_id'))
+    platform.robot_models.check_revision(source, p)             # issue #48: a new version stays with the brand and model
     manifest = platform.application_manifest(p)
     if manifest['version'] == source['version']:
         raise ValueError('请为修改后的应用填写新的版本号')
@@ -58,5 +59,6 @@ def save(platform, p):
                'root_application_id': plan['root_application_id'], 'revision_digest': plan['preview_digest'], 'created_at': now()}
         obj['digest'] = digest(obj)
         platform.store.put('applications', obj)
+        platform.robot_models.bind_skills(obj)                  # issue #48
         platform.audit('application.revised', {'application_id': obj['id'], 'parent_application_id': plan['source_id']}, obj['project_id'])
         return obj

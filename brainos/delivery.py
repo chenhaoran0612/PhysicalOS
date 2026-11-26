@@ -53,6 +53,7 @@ def evidence(platform, app, robot):
     latest = reports[0] if reports else None
     unresolved = next((o for o in platform.store.list('operations')
                        if o.get('application_id') == app['id'] and o.get('kind') == 'onsite'
+                       and o.get('robot_id', robot['id']) == robot['id']      # issue #48: another robot's test does not hold this one
                        and o.get('status') in ('dispatching', 'running', 'unknown')
                        and (not latest or o['created_at'] >= latest['created_at'])), None)
     return latest, unresolved
@@ -79,7 +80,7 @@ def latest_simulation(platform, app, robot):
 
 def readiness(platform, p):
     app = platform.same_project('applications', p.get('application_id'), p.get('project_id'))
-    robot, cases = platform.application_checks(app)
+    robot, cases = platform.application_checks(app, p.get('robot_id'))     # issue #48: the robot named, of the application's brand and model
     onsite, unresolved = evidence(platform, app, robot)
     static = next((e for e in platform.store.list('evaluations') if e.get('scope') == 'static'
                    and e.get('application_id') == app['id'] and e.get('application_digest') == app['digest']
@@ -117,7 +118,11 @@ def readiness(platform, p):
     return {'application': app,
             'robot': {**{k: robot.get(k) for k in ('id', 'name', 'status', 'family', 'manifest_digest')},
                       'simulated': simulated, 'vendor': (robot.get('manifest') or {}).get('vendor'),
-                      'model': (robot.get('manifest') or {}).get('model')},
+                      'model': (robot.get('manifest') or {}).get('model'), 'product': robot.get('product')},
+            # Issue #48: the robots of the application's brand and model; any of them can be chosen here.
+            'robots': [{'id': r['id'], 'name': r['name'], 'status': r.get('status'),
+                        'simulated': (r.get('manifest') or {}).get('simulated') is True or bool(r.get('sim'))}
+                       for r in platform.robot_models.robots_for(app)],
             'simulation_report': simulation,
             'simulation_notice': SIMULATION_EVIDENCE_MESSAGE if simulated or simulation else None,
             'estop': estop, 'can_reset': estop['latched'] and robot.get('status') == 'connected',

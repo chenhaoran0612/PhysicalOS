@@ -22,6 +22,9 @@ const path = require('path');
 const NAME = '云端技能验收';
 let failed = async () => {};
 
+// Issue #48: what the simulated quadruped reports as its brand and model; the releases are published for it.
+const SIM_PRODUCT = {vendor: 'neuxmind-sim', model: 'sim-quadruped'};
+
 (async () => {
   const cfg = JSON.parse(fs.readFileSync(process.argv[2]));
   const shots = process.argv[3] || 'artifacts';
@@ -70,6 +73,14 @@ let failed = async () => {};
 
   // 3 · One action publishes the app's own examples; the library then shows them.
   await main.locator('.empty [data-cloudskill-action="examples"]').click();
+  // Issue #48: a release is for one brand and model; the examples are published for the one that is typed.
+  const productForm = dialog.locator('form[data-form="engine-rm-examples"]');
+  await productForm.waitFor();
+  must(await productForm.locator('[name=vendor][required]').count() === 1 && await productForm.locator('[name=model][required]').count() === 1,
+       'The examples can be published without a brand and model');
+  await productForm.locator('[name=vendor]').fill(SIM_PRODUCT.vendor);
+  await productForm.locator('[name=model]').fill(SIM_PRODUCT.model);
+  await productForm.locator('[type=submit]').click();
   await dialog.locator('.cloud-skill-example').first().waitFor();
   const published = await dialog.locator('.cloud-skill-example').count();
   must(published >= 6, `Expected the six bundled examples, saw ${published}`);
@@ -77,6 +88,9 @@ let failed = async () => {};
   await shot('03-examples-published');
   await dialog.locator('.dialog-footer [data-action="close"]').click();
   await main.locator('[data-cloudskill="patrol"]').waitFor();
+  must((await main.locator('[data-cloudskill="patrol"] .robot-model-tag').innerText()) === `${SIM_PRODUCT.vendor} ${SIM_PRODUCT.model}`,
+       'A card does not show the brand and model of its latest release');
+  must((await fixture('state')).products.every(p => p && p.model === SIM_PRODUCT.model), 'The cloud did not get the brand and model');
   must(await main.locator('.cloud-skill-card').count() === published, 'The library does not show one card per published skill');
   must((await main.locator('[data-cloudskill="patrol"]').innerText()).includes('会让机器人运动'), 'A skill that moves the robot does not say so');
   must((await main.locator('[data-cloudskill="status_report"]').innerText()).includes('不会让机器人运动'), 'A skill that does not move is not told apart');
@@ -108,6 +122,9 @@ let failed = async () => {};
   must(await page.evaluate(() => window.__markupRan) === undefined, 'Markup in a skill title was run');
   await shot('05-publish-preview');
   await publishForm.locator('[name=notes]').fill('验收脚本发布的版本');
+  must(await publishForm.locator('[name=vendor][required]').count() === 1, 'A folder can be published without a brand and model');
+  await publishForm.locator('[name=vendor]').fill(SIM_PRODUCT.vendor);
+  await publishForm.locator('[name=model]').fill(SIM_PRODUCT.model);
   await publishForm.locator('[type=submit]').click();
   await page.waitForFunction(() => document.querySelector('[data-cloudskill="status_report"]')?.innerText.includes('最新版本 0.2.0'));
   must((await main.locator('[data-cloudskill="status_report"]').innerText()).includes('另有 1 个版本'), 'The earlier version is not counted');

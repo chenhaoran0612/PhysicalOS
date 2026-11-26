@@ -69,7 +69,7 @@ let failed = async () => {};
   const connect = async (name, family, port) => {
     await page.locator('[data-action="engine-ssh"]').first().click();
     await fill('name', name); await fill('host', '127.0.0.1'); await fill('port', port);
-    await page.locator('#dialog [name=family]').selectOption(family);    // issue #32: a new device needs a type from the list
+    await page.locator('#dialog [name=family]').selectOption(family); await require('./robot_model_helper.cjs').fillBrandAndModel(page);    // issue #32: a new device needs a type from the list
     await fill('username', cfg.ssh_user); await fill('password', cfg.ssh_login);
     await submit();
     await page.locator('#dialog input[type=checkbox]').check();          // the host fingerprint
@@ -254,7 +254,7 @@ let failed = async () => {};
   check(await entry(COMPLETE).count() === 0, 'a device of a type outside the list got an entry');
   // Changing the type to one of the list: the kept profile is judged at once.
   await card(COMPLETE).locator('[data-action="engine-body-type"]').first().click();
-  await page.locator('#dialog [name=family]').selectOption('quadruped');
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await submit();
   await card(COMPLETE).getByText('运控接口 2 项待确认').waitFor({timeout: 15000});
 

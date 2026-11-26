@@ -48,7 +48,7 @@ let failurePage = null, failureShots = 'artifacts';
     await page.goto(cfg.url + '/#robots');
     await page.locator('[data-action="engine-ssh"]').first().click();
     await fill('name', NAMES[name]); await fill('host', '127.0.0.1'); await fill('port', robot.port);
-    await page.locator('#dialog [name=family]').selectOption('quadruped');
+    await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
     await fill('username', cfg.robot_user); await fill('password', robot.login);
     await submit();
     await dialog.getByText('确认 SSH 主机指纹', {exact: true}).waitFor();

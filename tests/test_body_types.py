@@ -676,7 +676,7 @@ class HttpTests(unittest.TestCase):
         listed = [t['id'] for t in self.request('/api/state', cookie=cookie)[1]['body_types']]
         self.assertEqual(listed, BUILT_IN + [added['id']])
 
-        status, robot, _ = self.request('/api/robots', {'project_id': pid, 'name': 'Patrol 1', 'family': added['id']}, cookie)
+        status, robot, _ = self.request('/api/robots', {'vendor': 'Acme', 'model': 'X1', 'project_id': pid, 'name': 'Patrol 1', 'family': added['id']}, cookie)
         self.assertEqual(status, 200)
 
         status, refusal, _ = self.request('/api/body-types/remove', {'body_type_id': added['id']}, cookie)
@@ -696,7 +696,7 @@ class HttpTests(unittest.TestCase):
         added = self.request('/api/body-types', WHEELED, mine)[1]
 
         self.assertEqual([t['id'] for t in self.request('/api/state', cookie=theirs)[1]['body_types']], BUILT_IN)
-        status = self.request('/api/robots', {'project_id': their_project, 'name': 'Theirs', 'family': added['id']}, theirs)[0]
+        status = self.request('/api/robots', {'vendor': 'Acme', 'model': 'X1', 'project_id': their_project, 'name': 'Theirs', 'family': added['id']}, theirs)[0]
         self.assertEqual(status, 400)
         self.assertEqual(self.request('/api/body-types/remove', {'body_type_id': added['id']}, theirs)[0], 400)
 

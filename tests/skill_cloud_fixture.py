@@ -173,16 +173,31 @@ class FakeSkillCloud:
         if not isinstance(body.get('package'), dict):
             raise Refusal(400, 'invalid_skill_package', 'package 须为对象')
         release = self._release(body['package'], body.get('notes') or '')
+        release['product'] = self._product(body)                # issue #48: the brand and model it is for, or None
         key = (release['skill_id'], release['version'])
         held = self.releases.get(key)
         if held:
             if held['release']['digest'] != release['digest']:
                 raise Refusal(409, 'skill_version_exists', '%s@%s 已存在且内容不同' % key)
+            if release['product'] and held['release']['product'] and not self._same(release['product'], held['release']['product']):
+                raise Refusal(409, 'skill_other_model', '%s@%s 已经发布给另一个品牌型号' % key)
+            held['release']['product'] = held['release']['product'] or release['product']
             return 200, {**held['release'], 'existing': True}
         if len(self.releases) >= self.quota:
             raise Refusal(409, 'skill_quota_exceeded', '份数已到上限')
         self.releases[key] = {'release': release, 'package': body['package']}
         return 201, release
+
+    @staticmethod
+    def _product(body, required=False):
+        vendor, model = (' '.join(str(body.get(k) or '').split()) for k in ('vendor', 'model'))
+        if bool(vendor) != bool(model) or (required and not vendor):
+            raise Refusal(400, 'invalid_product', '品牌和型号要一起给')
+        return {'vendor': vendor, 'model': model} if vendor else None
+
+    @staticmethod
+    def _same(a, b):
+        return all(a[k].casefold() == b[k].casefold() for k in ('vendor', 'model'))
 
     def _of(self, skill_id):
         found = sorted((held['release'] for key, held in self.releases.items() if key[0] == skill_id),
@@ -218,6 +233,12 @@ class FakeSkillCloud:
                 if self.tamper:
                     package = self.tamper(package) or package
                 return 200, {'release': held['release'], 'package': package}
+            if method == 'PUT' and parts[3:] == ['product']:
+                product = self._product(self._json(raw), required=True)
+                if held['release']['product'] and not self._same(product, held['release']['product']):
+                    raise Refusal(409, 'skill_product_set', '这个版本已经属于另一个品牌型号')
+                held['release']['product'] = held['release']['product'] or product
+                return 200, held['release']
             if method == 'DELETE' and len(parts) == 3:
                 del self.releases[(parts[0], parts[2])]
                 return 200, {'deleted': True}

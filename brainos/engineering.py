@@ -298,7 +298,7 @@ class Engineering:
         if p.get('robot_id'):
             robot=self.platform.same_project('robots',p['robot_id'],p['project_id'])
         else:
-            robot=self.platform.add_robot({'project_id':p['project_id'],'name':p.get('name'),'family':p.get('family','custom')})
+            robot=self.platform.add_robot({'project_id':p['project_id'],'name':p.get('name'),'family':p.get('family','custom'),'vendor':p.get('vendor'),'model':p.get('model')})   # issue #48: the brand and model typed in the form
             robot=self.store.get('robots',robot['id'])
         secret=ssh_edit.secret_to_save(connection,secret)   # issue #15: per hop, only what its login method uses is kept
         connection['robot_id']=robot['id'];self.store.put('agent_secrets',{'id':connection['id'],**secret});self.store.put('device_connections',connection)

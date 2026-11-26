@@ -144,7 +144,7 @@ let failed = async () => {};
     // Without a type the form does not go out: the field is required.
     await dialog.locator('button[type=submit]').click();
     must(await dialog.locator('form').evaluate(f => !f.checkValidity()), `${action} can be sent without a type`);
-    await dialog.locator('select[name=family]').selectOption(added.id);
+    await dialog.locator('select[name=family]').selectOption(added.id); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
     if (action === 'robot-add') await shot('3-add-device');
     await submit();
     if (action === 'engine-ssh') {
@@ -190,7 +190,7 @@ let failed = async () => {};
   await card(plain.id).locator(CHANGE).click();
   await dialog.getByText('修改本体类型', {exact: true}).waitFor();
   must(await dialog.locator('select[name=family]').inputValue() === added.id, 'The current type is not preselected');
-  await dialog.locator('select[name=family]').selectOption('quadruped');
+  await dialog.locator('select[name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await toastGone();
   await submit();
   await toast('本体类型已修改');
@@ -225,7 +225,7 @@ let failed = async () => {};
   await click('close');
   must((await appState()).robots.find(r => r.id === earlier.old).family === 'mobile', 'Closing the form changed the type');
   await card(earlier.old).locator(CHANGE).click();
-  await dialog.locator('select[name=family]').selectOption('manipulator');
+  await dialog.locator('select[name=family]').selectOption('manipulator'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await submit();
   await expectText(card(earlier.old), ['机械臂']);
   must(await card(earlier.old).locator('.body-type-flag').count() === 0, 'A listed type is still marked as old');
