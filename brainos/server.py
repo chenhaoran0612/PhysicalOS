@@ -182,6 +182,8 @@ def make_handler(application):
             extra=extra or {'/cloud_skills.js':('cloud_skills.js','text/javascript; charset=utf-8'),'/cloud_skills.css':('cloud_skills.css','text/css; charset=utf-8'),'/remote_calls.js':('remote_calls.js','text/javascript; charset=utf-8'),'/remote_calls.css':('remote_calls.css','text/css; charset=utf-8'),'/robot_bundle.js':('robot_bundle.js','text/javascript; charset=utf-8'),'/robot_bundle.css':('robot_bundle.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #48: a robot's brand and model; applications and skills by brand and model.
             extra=extra or {'/robot_model.js':('robot_model.js','text/javascript; charset=utf-8'),'/robot_model.css':('robot_model.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #50: the page of a task (its bound applications), and binding on 机器人应用.
+            extra=extra or {'/task_apps.js':('task_apps.js','text/javascript; charset=utf-8'),'/task_apps.css':('task_apps.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
@@ -326,6 +328,8 @@ def make_handler(application):
                         'robots/remove':service.robot_remove.remove,
                         # Issue #44: delete a task (任务项目) of the signed-in account; refused while it has robots or running work
                         'projects/remove':service.task_remove.remove,
+                        # Issue #50: a task binds applications of the account (and lets go of them); it does not make them
+                        'task-apps/bind':service.task_apps.bind,'task-apps/unbind':service.task_apps.unbind,
                         # Issue #22: safety limits a person fills in per device; the signed-in account is recorded as who
                         'robots/limits':service.safety_limits.read,
                         'robots/limits/save':lambda p:service.safety_limits.save(p,user),

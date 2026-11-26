@@ -389,7 +389,8 @@ def typed_application(platform, app):
             if decls:
                 step = {**step, 'parameters': typed_parameters(decls, step['parameters'])}
         out_steps.append(step)
-    from . import robot_model
+    from . import robot_model, task_apps
+    app = task_apps.as_made(app)                              # issue #50: a moved application is sent as it was made
     return robot_model.wire({**app, 'steps': out_steps})     # issue #48: a brand and model added afterwards is not in the digest
 
 

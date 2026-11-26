@@ -40,6 +40,10 @@ ROUTES = ('robots', 'sims', 'engineering/start', 'skills/examples')
 PREFIXES = ('robots/', 'sims/', 'engineering/ssh/', 'engineering/hardware/', 'engineering/profile',
             'engineering/investigation/', 'engineering/adaptation/', 'skills/package-', 'library/deliver/',
             'cloud-skills/install')
+# Issue #50: applications, their skills, tests and releases belong to the account too (brainos/task_apps.py);
+# binding one to a task (task-apps/...) is a request for that task.
+ROUTES += ('skills', 'applications', 'harness', 'onsite', 'deployments')
+PREFIXES += ('applications/', 'onsite/')
 # The task that was open in the page when a request about a robot was sent (a simulated robot's
 # first run opens a task for the trial; see brainos/sim_robots.py).
 TASK_FIELD = 'task_project_id'

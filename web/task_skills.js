@@ -33,7 +33,11 @@ const tsWhen = value => {
 
 // Issue #42: robots belong to the account (st.robot_home), and so does what was installed or run on them directly.
 const tsOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id ||
-  (['robots', 'operations'].includes(kind) && Boolean(st.robot_home) && x.project_id === st.robot_home));
+  (['robots', 'operations', 'skills'].includes(kind) && Boolean(st.robot_home) && x.project_id === st.robot_home));
+// Issue #50: a task works with the applications it has bound (web/task_apps.js), and with the robots of
+// the account those can be used with: the robots of the task's brand and model.
+const tsApps = (st, task) => taBound(st, task);
+const tsRobots = (st, task) => [...new Set(tsApps(st, task).flatMap(app => taRobots(st, app)))];
 
 // ---------------------------------------------------------------- what a robot knows
 
@@ -117,7 +121,7 @@ function tsRobotView(st, task, robot, live) {
       entry(String(o.skill_id), {version: o.version || '', installed: 'record', installedAt: o.created_at || null});
     }
   }
-  for (const app of tsOf(st, 'applications', task).filter(a => a.robot_id === robot.id)) {
+  for (const app of tsApps(st, task).filter(a => taRobots(st, a).includes(robot))) {
     const steps = Array.isArray(app.steps) ? app.steps : [];
     steps.forEach((step, index) => {
       const skill = registered.find(s => s.id === step.skill_id);
@@ -147,7 +151,7 @@ function tsRobotView(st, task, robot, live) {
 
 // The robots whose skills are read from the device, and the key under which an answer is kept: another
 // successful install on the robot (or a change of its connection) is a reason to ask again.
-const tsWanted = (st, task) => tsOf(st, 'robots', task).filter(r => r.status === 'connected' && r.endpoint);
+const tsWanted = (st, task) => tsRobots(st, task).filter(r => r.status === 'connected' && r.endpoint);
 // Whether the device is asked (again): never while an answer is kept or awaited, except a failure that is old enough.
 const tsShouldRead = (kept, now) => !kept || (kept.failed === true && now - kept.at >= TS_RETRY_MS);
 function tsLiveKey(st, robot) {
@@ -217,11 +221,12 @@ function tsRobotMarkup(view) {
 
 // The whole section. `lives` holds what the devices answered, by tsLiveKey.
 function tsSectionMarkup(st, task, lives) {
-  const robots = tsOf(st, 'robots', task);
-  const head = '<div class="section-head"><h2>技能与配置</h2><span>这个任务的机器人装了哪些技能、用到哪些、各自怎样配置</span></div>';
+  const robots = tsRobots(st, task);
+  if (!tsApps(st, task).length) return '';         // issue #50: nothing is configured for a task before it has an application
+  const head = '<div class="section-head"><h2>技能与配置</h2><span>这个品牌型号的机器人装了哪些技能、绑定的应用用到哪些、各自怎样配置</span></div>';
   const body = robots.length
     ? robots.map(robot => tsRobotMarkup(tsRobotView(st, task, robot, lives[tsLiveKey(st, robot)]))).join('')
-    : `<div class="ts-empty"><p>这个任务还没有机器人。连接机器人并安装技能后，这里会列出每个技能和它的配置。</p>${button('去连接机器人', 'go-robots', 'small')}</div>`;
+    : `<div class="ts-empty"><p>账号里还没有这个品牌型号的机器人。接入一台以后，这里会列出它装了哪些技能，以及绑定的应用怎样配置它们。</p>${button('去我的机器人', 'go-robots', 'small')}</div>`;
   return `<section class="ts" id="task-skills" aria-label="技能与配置">${head}${body}</section>`;
 }
 
@@ -255,13 +260,13 @@ function tsForget(robotId, keep = '') {
   for (const key of Object.keys(tsLives)) if (key !== keep && key.startsWith(robotId + '|')) delete tsLives[key];
 }
 
-// Called by web/task_workbench.js while it draws the page of a task.
+// Called by web/task_apps.js while it draws the page of a task.
 function taskSkillsSection() {
   const task = project();
   if (!task) return '';
   const wanted = tsWanted(state, task);
   // A robot that is not connected now is asked afresh once it is back: its skills may have changed meanwhile.
-  for (const robot of tsOf(state, 'robots', task)) if (!wanted.includes(robot)) tsForget(robot.id);
+  for (const robot of tsRobots(state, task)) if (!wanted.includes(robot)) tsForget(robot.id);
   for (const robot of wanted) tsRead(robot);
   return tsSectionMarkup(state, task, tsLives);
 }

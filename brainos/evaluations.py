@@ -83,7 +83,8 @@ def poll(platform, p):
     """One status read for a running asynchronous on-site test (GET only)."""
     from .service import now
     operation = platform.store.get('operations', p.get('operation_id'))
-    if p.get('project_id') and operation.get('project_id') != p['project_id']:
+    from . import robot_scope
+    if robot_scope.elsewhere(operation, p.get('project_id')):     # issue #50: a test of an application of the account is every task's
         raise ValueError('该现场测试不属于当前项目')
     if operation.get('kind') != 'onsite':
         raise ValueError('这不是现场测试记录')

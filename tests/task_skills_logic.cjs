@@ -13,7 +13,8 @@ const button = (text, action, cls = '', id = '', disabled = false) =>
 const badge = (text, cls = '') => `<span class="status ${cls}"><i class="dot"></i>${h(text)}</span>`;
 const sandbox = {h, button, badge, date: v => (v ? 'D' + v : '—')};
 vm.createContext(sandbox);
-const page = vm.runInContext(readFileSync('web/task_skills.js', 'utf8') +
+// Issue #50: the applications and robots of a task are the ones it has bound (web/task_apps.js).
+const page = vm.runInContext(readFileSync('web/task_apps.js', 'utf8') + '\n' + readFileSync('web/task_skills.js', 'utf8') +
   '\n;({tsWhen, tsPlaces, tsNames, tsValue, tsRows, tsRobotView, tsLiveKey, tsWanted, tsShouldRead, tsSectionMarkup, TS_RUN_STATUS, TS_RETRY_MS})', sandbox);
 
 let checks = 0;
@@ -50,7 +51,10 @@ const state = {
       {skill_id: 's1', entrypoint: 'patrol_places', parameters: {places: '会议室、二楼', return_to: '', loops: 2}, timeout_s: 600},
       {skill_id: 's2', entrypoint: 'grasp', parameters: {target: 'cup'}, timeout_s: 30}]},
     {id: 'app2', project_id: 't', name: '机械臂应用', robot_id: 'r2', version: '1', steps: [{skill_id: 's2', entrypoint: 'grasp', parameters: {}, timeout_s: 30}]},
+    {id: 'app9', project_id: 't', name: '没有绑定的应用', robot_id: 'r9', version: '1', steps: [{skill_id: 's2', entrypoint: 'grasp', parameters: {}, timeout_s: 30}]},
   ],
+  // The task has bound two applications, each made for one robot without brand and model (data from before issue #48).
+  task_applications: [{id: 'b1', project_id: 't', application_id: 'app1', created_at: '1'}, {id: 'b2', project_id: 't', application_id: 'app2', created_at: '2'}],
   operations: [
     {id: 'o1', project_id: 't', robot_id: 'r1', kind: 'skill_install', skill_id: 'patrol_places', version: '0.1.0', status: 'succeeded', created_at: '2026-11-24T03:00'},
     {id: 'o2', project_id: 't', robot_id: 'r1', kind: 'skill_run', skill_id: 'patrol', status: 'accepted', created_at: '2026-11-24T04:00',
@@ -164,7 +168,8 @@ const state = {
   same(page.tsShouldRead(live, 1e9), false, 'an answer is kept');
   same(page.tsShouldRead({available: false, failed: true, at: 1000}, 1000 + page.TS_RETRY_MS - 1), false, 'a failure is not asked again at once');
   same(page.tsShouldRead({available: false, failed: true, at: 1000}, 1000 + page.TS_RETRY_MS), true, 'but again later');
-  const noAddress = page.tsSectionMarkup({projects: [task], robots: [{id: 'n', project_id: 't', name: 'N', status: 'connected'}]}, task, {});
+  const noAddress = page.tsSectionMarkup({projects: [task], robots: [{id: 'n', project_id: 't', name: 'N', status: 'connected'}],
+    applications: [{id: 'a', project_id: 't', name: 'A', robot_id: 'n', steps: []}], task_applications: [{id: 'b', project_id: 't', application_id: 'a'}]}, task, {});
   ok(noAddress.includes('没有设备地址') && !noAddress.includes('现在没有连接'), 'a connected robot without an address is not called disconnected');
 }
 
@@ -173,8 +178,8 @@ const state = {
   const html = page.tsSectionMarkup(state, task, {[page.tsLiveKey(state, dog)]: live});
   ok(html.startsWith('<section class="ts" id="task-skills"'), 'one section with a fixed id');
   ok(html.includes('技能与配置'), 'named');
-  same(count(html, 'data-ts-robot='), 2, 'one block per robot of the task');
-  ok(!html.includes('别人的'), 'robots of other tasks are not here');
+  same(count(html, 'data-ts-robot='), 2, 'one block per robot the bound applications can be used with');
+  ok(!html.includes('别人的') && !html.includes('没有绑定的应用'), 'a robot only an application the task did not bind is for is not here');
   ok(html.includes('出发点') && html.includes('这台机器人认识的地点'), 'the places the robot knows');
   ok(html.includes('没有报告') && html.includes('坐标'), 'and that it reported names only, no coordinates or map');
   ok(html.includes('<ol class="ts-route"') && html.indexOf('会议室</li>') < html.indexOf('二楼</li>'), 'the order of places as an ordered list, in the saved order');
@@ -188,13 +193,22 @@ const state = {
 
   const loading = page.tsSectionMarkup(state, task, {[page.tsLiveKey(state, dog)]: {loading: true}});
   ok(loading.includes('正在读取这台机器人上的技能'), 'reading is said while it lasts');
-  const none = page.tsSectionMarkup({projects: [task]}, task, {});
-  ok(none.includes('这个任务还没有机器人'), 'a task without robots says what is missing');
+  same(page.tsSectionMarkup({projects: [task], robots: [dog]}, task, {}), '', 'a task that bound no application has no such section');
+  const gone = {projects: [task], robots: [], applications: [{id: 'a', project_id: 't', name: 'A', robot_id: 'r1', steps: [], product: {vendor: 'V', model: 'M'}}],
+                task_applications: [{id: 'b', project_id: 't', application_id: 'a'}]};
+  const none = page.tsSectionMarkup(gone, task, {});
+  ok(none.includes('账号里还没有这个品牌型号的机器人'), 'a task whose brand and model has no robot says what is missing');
   ok(none.includes('data-action="go-robots"'), 'and where to go');
+  // One brand and model: every robot of it, and no other.
+  const twin = {...dog, id: 'r3', name: '二号', product: {vendor: 'V', model: 'M'}}, same1 = {...dog, product: {vendor: 'v', model: 'm'}};
+  const model = page.tsSectionMarkup({...gone, robots: [same1, twin, arm]}, task, {});
+  same(count(model, 'data-ts-robot='), 2, 'the robots of the task\'s brand and model, compared without regard to case');
+  ok(!model.includes('机械臂'), 'a robot of another brand and model is not the task\'s');
 
   const evil = {id: 'e', project_id: 't', name: '<img src=x>', status: 'unconnected', manifest_v2: manifest(['<b>p</b>'])};
   const bad = page.tsSectionMarkup({projects: [task], robots: [evil], skills: [{id: 's', project_id: 't', name: '<u>s</u>', entrypoint: '<i>e</i>'}],
-    applications: [{id: 'a', project_id: 't', name: '<script>1</script>', robot_id: 'e', steps: [{skill_id: 's', entrypoint: '<i>e</i>', parameters: {'<k>': '<v>'}, timeout_s: 1}]}]}, task, {});
+    applications: [{id: 'a', project_id: 't', name: '<script>1</script>', robot_id: 'e', steps: [{skill_id: 's', entrypoint: '<i>e</i>', parameters: {'<k>': '<v>'}, timeout_s: 1}]}],
+    task_applications: [{id: 'b', project_id: 't', application_id: 'a'}]}, task, {});
   ok(!/<(img|b|u|i|script|k|v)>/.test(bad.replace(/<i class="dot"><\/i>/g, '')) && !bad.includes('<img'), 'nothing a person or a device wrote is markup');
 }
 

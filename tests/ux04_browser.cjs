@@ -89,11 +89,10 @@ function writeSkill() {
   await click('close');
 
   // ---------------------------------------------------------------- Q5-12 #4: trial project is not a described task
-  await go('task');      // issue #44: the five steps are on the task's own page
-  const first = page.locator('#main .journey-step').first();
-  if (await first.count()) {
-    assert(!(await first.evaluate(el => el.classList.contains('has-record'))), '自动建的试用项目不应算作“明确任务 · 已有记录”');
-    assert((await first.innerText()).includes('自动创建'), '第一步应说明试用项目是自动创建的');
+  await go('overview');  // issue #50: a task has no five steps any more; its card says it is the trial task
+  const trial = page.locator('#main .tw-card').first();
+  if (await trial.count()) {
+    assert((await trial.innerText()).includes('试用任务'), '自动建的试用任务应在卡片上标明');
     await shot('02-journey');
   }
 

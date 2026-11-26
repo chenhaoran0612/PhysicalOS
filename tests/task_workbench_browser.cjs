@@ -81,7 +81,9 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   // 3. Creating a task leads into it: the page of one task, known to the sidebar and the breadcrumb.
   await create('仓库夜间巡检', LONG);
   check(await hash() === '#task', `A new task does not open as its own page: ${await hash()}`);
-  await main.locator('.journey-next').getByText('连接你的机器人', {exact: true}).waitFor();
+  // Issue #50: the page of a task shows what it has bound; a new task has bound nothing and develops nothing.
+  await main.locator('.ta-empty').getByText('这个任务还没有绑定应用', {exact: true}).waitFor();
+  check(await main.locator('.journey-next, .journey-step').count() === 0, 'The page of a task still has the step-by-step view');
   check(await main.locator('h1').innerText() === '仓库夜间巡检', 'The page of a task is not titled with its name');
   check(await page.locator('#breadcrumb').innerText() === '任务工作台 / 仓库夜间巡检', 'The breadcrumb does not name the task');
   check(await page.locator('#navigation a[aria-current="page"]').getAttribute('href') === '#overview', 'The sidebar does not mark 任务工作台');
@@ -100,7 +102,7 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   check(await count() === 1, 'The count is not 1 after the first task');
   check(await main.locator('.tw-names button').allInnerTexts().then(t => t.join('|').includes('仓库夜间巡检')), 'The dashboard does not name the task');
   check(await card('仓库夜间巡检').locator('.tw-objective').innerText() === LONG, 'The card does not show the goal');
-  check((await card('仓库夜间巡检').locator('.tw-track-text').innerText()).includes('下一步：连接机器人'), 'The card does not say what is next');
+  check((await card('仓库夜间巡检').locator('.tw-track-text').innerText()).includes('还没有绑定应用'), 'The card does not say that nothing is bound yet');     // issue #50
 
   // 5. More tasks: the count and the names follow; the wall has columns, and every card is the same size
   //    although one goal is a paragraph and another a few words.
@@ -157,9 +159,12 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
     await refresh(true);
     return task.id;
   });
+  // Issue #50: a card names the robots of the brand and model its task is for, once it has bound an application;
+  // the board counts the robots of the account.
   for (const name of ['园区巡逻', '工位上下料']) {
-    check((await card(name).locator('.tw-holds').innerText()).includes('巡逻狗'), `The card of ${name} does not name the account's robot`);
+    check((await card(name).locator('.tw-holds').innerText()).includes('绑定应用后确定'), `The card of ${name} does not say its robots follow from its applications`);
   }
+  check(/机器人\s*1\b/.test((await main.locator('.tw-figures').innerText()).replace(/\n/g, ' ')), 'The board does not count the robot of the account');
   await card('园区巡逻').locator('[data-action="task-remove"]').click();
   await dialog.locator('[data-action="task-remove-confirm"]').waitFor();
   check(!(await dialog.innerText()).includes('台机器人'), 'Deleting a task talks about the robots of the account');
@@ -178,7 +183,20 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   check(await dialog.locator('[data-action="task-remove-confirm"]').count() === 1, 'A robot of the account took the confirmation away');
   await page.locator('#dialog [data-action="close"]').first().click();
   check(await count() === 3, 'An unconfirmed deletion changed the count');
-  check((await card('园区巡逻').locator('.tw-holds').innerText()).includes('上料臂'), 'The second robot is not named on the other task\'s card');
+  // Issue #50: once a task has bound an application, its card names the brand and model and every robot of it.
+  await page.evaluate(async id => {
+    const robot = state.robots.find(r => r.name === '巡逻狗');
+    const skill = await api('skills', {project_id: id, robot_id: robot.id, name: '沿外圈走', version: '1', requires: ['navigation.goal'], entrypoint: 'navigate',
+                                       success_condition: '走完一圈', stop_condition: '超时', model_ids: []});
+    const made = await api('applications', {project_id: id, name: '外圈巡逻', version: '1', robot_id: robot.id,
+                                            steps: [{skill_id: skill.id, parameters: {}, timeout_s: 60}]});
+    await api('task-apps/bind', {project_id: id, application_id: made.id});
+    await refresh(true);
+  }, patrol);
+  const holds = await card('园区巡逻').locator('.tw-holds').innerText();
+  check(['示例机器人公司 X1', '外圈巡逻', '巡逻狗', '上料臂'].every(t => holds.includes(t)), `The card of a task with an application does not say what it is for: ${holds}`);
+  check((await card('园区巡逻').locator('.tw-track-text').innerText()).includes('绑定了 1 个应用 · 0 个已发布'), 'The card does not count the bound application');
+  check((await card('工位上下料').locator('.tw-holds').innerText()).includes('绑定应用后确定'), 'A task that bound nothing names robots');
   // Inside a task: no "one of N tasks", no 新建任务项目 or 使用指南 in its head (the skills section has its own script).
   await card('园区巡逻').locator('[data-action="task-open"]').click();
   await main.locator('.tw-back').waitFor();

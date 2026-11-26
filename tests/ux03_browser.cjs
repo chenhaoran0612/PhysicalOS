@@ -44,7 +44,8 @@ const shots = process.argv[3] || 'artifacts/ux03';
   const assert = (ok, message) => { if (!ok) throw Error(message); };
   const go = async hash => { await page.goto(cfg.url + '/#' + hash); await page.waitForTimeout(400); };
   const st = () => page.evaluate(async () => { await refresh(true); return state; });
-  const nextAction = () => page.locator('#main .journey-next [data-action]').first().getAttribute('data-action');
+  const nextAction = async () => (await page.locator('#main .journey-next [data-action]').count()
+    ? page.locator('#main .journey-next [data-action]').first().getAttribute('data-action') : null);
 
   // ---------------------------------------------------------------- (e) sidebar at 1440x900
   await go('overview');
@@ -74,14 +75,14 @@ const shots = process.argv[3] || 'artifacts/ux03';
 
   // ---------------------------------------------------------------- (a) workbench: the sim path, not the assistant
   await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
-  assert(await nextAction() === 'sim-run-pick', '只有仿真机器人时，工作台应推荐“运行技能”，而不是 ' + await nextAction());
-  const next = await page.locator('#main .journey-next').innerText();
-  assert(next.includes('不需要助手模型') && !next.includes('让助手准备'), '工作台推荐文案不对：' + next);
-  assert(await page.locator('#main .journey-next [data-action="go-simulation"]').count() === 1, '工作台应提供“去仿真试运行”');
-  assert(!(await page.locator('#main .journey-next [data-action="journey-prepare"]').count()), '不应推荐被模型挡住的工程助手');
+  // Issue #50: the page of a task binds applications and recommends no development step, so never the assistant.
+  await page.locator('#main .ta-empty').waitFor();
+  assert(await nextAction() === null, '任务页面不应再有“现在做这一步”：' + await nextAction());
+  assert(!(await page.locator('#main [data-action="journey-prepare"], #main [data-action="go-agents"]').count()), '任务页面不应推荐工程助手');
   await shot('01-workbench-sim-first');
-  // The recommended button really works: it offers the example skills (nothing installed yet).
-  await page.locator('#main .journey-next [data-action="sim-run-pick"]').click();
+  // Running a skill on the simulated robot starts from 仿真试运行: it offers the example skills (nothing installed yet).
+  await go('simulation');
+  await page.locator('#main [data-action="sim-run-pick"]').first().click();
   await dlg('.gallery-item[data-example="patrol"]').waitFor();
   await click('skillpkg-example', quad + '|patrol');
   await dlg(':text("兼容：可以安装")').first().waitFor();
@@ -106,7 +107,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
 
   // The workbench follows: an installed skill but none in the project -> still the sim path.
   await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
-  assert(await nextAction() === 'sim-run-pick', '技能已安装、未加入项目时仍应推荐运行技能');
+  assert(await nextAction() === null, '任务页面不应再推荐下一步（issue #50）');
 
   // ---------------------------------------------------------------- (c) application steps use the generated form
   await go('skills');
@@ -117,7 +118,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
   assert(adopted && adopted.parameters.map(p => p.name).join() === 'waypoints,loops,tolerance', '加入项目的技能应保存参数说明：' + JSON.stringify(adopted));
   await click('close');
   await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
-  assert(await nextAction() === 'application-add', '技能加入项目后应推荐创建应用，而不是 ' + await nextAction());
+  assert(await nextAction() === null, '任务页面不应再推荐下一步（issue #50）');
 
   await go('skills');
   await page.evaluate(() => action('application-add'));
@@ -170,9 +171,8 @@ const shots = process.argv[3] || 'artifacts/ux03';
 
   // With an application on a simulated robot, the workbench still never points at the assistant.
   await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard
-  const appNext = await nextAction();
-  assert(['harness-run', 'deliver-open'].includes(appNext), '有仿真应用时工作台推荐不对：' + appNext);
-  assert(!(await page.locator('#main .journey-next [data-action="journey-prepare"]').count()), '有仿真应用时不应推荐工程助手');
+  await page.locator('#main .ta-head').waitFor();
+  assert(!(await page.locator('#main [data-action="journey-prepare"], #main [data-action="go-agents"]').count()), '有仿真应用时任务页面不应推荐工程助手');
 
   // Manual registration: plain language; optional parameter declarations drive the step form.
   await go('skills');

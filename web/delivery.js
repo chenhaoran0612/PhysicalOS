@@ -20,15 +20,15 @@ async function deliveryOpen(id){
 }
 function deliveryReportLine(r,label){return `<div class="contract-line"><b>${label} · ${r.passed?'通过':'未通过'}</b><p>${date(r.created_at)}</p>${button('查看报告','deliver-report','secondary small',r.id)}</div>`;}
 async function deliveryAction(type,id){
- if(!state.user)return auth();if(!project())return action('project-add');
+ if(!state.user)return auth();/* issue #50: applications are the account's; no task has to be open */
  if(type==='deliver-open')return deliveryOpen(id);
  if(type==='deliver-create'){
   if(!rows('robots').length||!rows('skills').length)return dialog('先准备机器人和工作技能','应用用于安排已实现的设备能力，不会自动生成设备程序。',`<div class="dialog-body">${!rows('robots').length?notice('还没有目标机器人。先连接设备，让平台了解它的能力。')+button('连接机器人','journey-connect'):notice('还没有可执行技能。让工程助手开发接入程序与测试，完成设备端安装后登记技能。')+button('让助手准备','journey-prepare')+button('登记已有技能','skill-add','secondary')}</div>`);
-  form('安排机器人的工作步骤','选择目标机器人，按顺序添加已有技能。保存应用不会执行机器人动作。',field('应用名称',input('name','',project().name))+field('版本',input('version','','1.0'))+picker('robots','robot_id','目标机器人')+(rows('robots').some(isSimRobot)?notice('<b>仿真</b> 目标选仿真机器人时，这个应用只能做仿真测试，不能发布到设备；要部署，请选择真机。'):'')+`<div id="steps-container"></div>${button('添加工作步骤','step-add','secondary small')}`,'application','保存并查看交付清单');return action('step-add');
+  form('安排机器人的工作步骤','选择目标机器人，按顺序添加已有技能。保存应用不会执行机器人动作。',field('应用名称',input('name','',project()?.name||''))+field('版本',input('version','','1.0'))+picker('robots','robot_id','目标机器人')+(rows('robots').some(isSimRobot)?notice('<b>仿真</b> 目标选仿真机器人时，这个应用只能做仿真测试，不能发布到设备；要部署，请选择真机。'):'')+`<div id="steps-container"></div>${button('添加工作步骤','step-add','secondary small')}`,'application','保存并查看交付清单');return action('step-add');
  }
  if(type==='deliver-pick')return dialog('选择要继续交付的应用','检查、现场测试、发布与运行会始终对应所选应用版本。',`<div class="dialog-body">${rows('applications').map(a=>{const sim=isSimRobot(find('robots',a.robot_id));return `<div class="contract-line"><b>${h(a.name)} · ${h(a.version)}</b><p>${h(named('robots',a.robot_id))}${sim?' '+simBadge()+' 只能做仿真测试，不能发布到设备':''}</p>${button('查看交付清单','deliver-open','small',a.id)}</div>`;}).join('')||empty('还没有机器人应用','先安排机器人需要完成的工作步骤。',button('创建应用','deliver-create'))}</div>`);
  if(type==='deliver-report'){
-  const r=find('evaluations',id);if(!r||r.project_id!==projectId)throw Error('报告不在当前项目中');
+  const r=find('evaluations',id);if(!r||(r.project_id!==projectId&&!robotShared('evaluations',r)))throw Error('报告不在当前项目中');/* issue #50: a report of an application of the account is every task's */
   return dialog(isSimReport(r)?'仿真测试报告':r.scope==='onsite'?'现场测试报告':'应用配置检查',h(named('applications',r.application_id)),`<div class="dialog-body delivery-detail">${badge(r.passed?'通过':'未通过',r.passed?'good':'warn')}${isSimReport(r)?' '+simBadge():''}<p class="subtitle">${isSimReport(r)?h(SIMULATION_NOTE)+'。':r.scope==='onsite'?'结果由设备端返回，绑定本次应用与机器人版本。':'这是配置检查，不是现场执行结果。'}</p>${isSimReport(r)&&r.simulation_reasons?r.simulation_reasons.map(x=>`<div class="contract-line"><b>仿真依据</b><p>${h(x)}</p></div>`).join(''):''}${(r.cases||[]).map(c=>`<div class="contract-line"><b>${c.passed?'✓':'待处理'} · ${h(c.name)}</b><p>${h(c.detail)}</p></div>`).join('')}${r.evidence_ref?`<div class="contract-line"><b>${isSimReport(r)?'仿真证据（非现场）':'现场证据'}</b><p class="output-reference">${h(r.evidence_ref)}</p></div>`:''}${button('返回应用交付清单','deliver-open','',r.application_id)}<details class="page-purpose"><summary>完整报告与设备记录</summary>${json(r)}</details></div>`);
  }
  if(type==='deliver-check'){await api('harness',{application_id:id});await refresh(true);return deliveryOpen(id);}

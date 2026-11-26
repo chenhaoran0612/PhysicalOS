@@ -14,9 +14,10 @@ const badge = (text, cls = '') => `<span class="status ${cls}"><i class="dot"></
 const notice = (text, warn = false) => `<div class="notice ${warn ? 'warn' : ''}"><span>↗</span><div>${text}</div></div>`;
 const sandbox = {h, button, badge, notice, icon: k => `<svg data-icon="${k}"></svg>`, date: v => (v ? 'D' + v : '—')};
 vm.createContext(sandbox);
-const page = vm.runInContext(readFileSync('web/task_workbench.js', 'utf8') +
-  '\n;({twFacts, twTotals, twBlocked, twPlan, twRemoveDialog, twCard, twBoard, twDashboardMarkup, twTaskMarkup, twGuideOnce, twHeadButtons,' +
-  ' TW_STAGES, TW_INDEX_SHOWN, TW_OLD_LIST, TW_OPTIONS_HEAD, TW_GUIDE_SEEN, TW_CARD_ROWS, TW_SESSION_ACTIVE, TW_FLOW_RUNNING, TW_JOB_ACTIVE})', sandbox);
+// Issue #50: what a task has bound comes from web/task_apps.js (its own checks: tests/task_apps_logic.cjs).
+const page = vm.runInContext(readFileSync('web/task_apps.js', 'utf8') + '\n' + readFileSync('web/task_workbench.js', 'utf8') +
+  '\n;({twFacts, twTotals, twBlocked, twPlan, twRemoveDialog, twCard, twBoard, twDashboardMarkup, twGuideOnce,' +
+  ' TW_MARKS, TW_INDEX_SHOWN, TW_GUIDE_SEEN, TW_CARD_ROWS, TW_SESSION_ACTIVE, TW_FLOW_RUNNING, TW_JOB_ACTIVE})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -28,11 +29,17 @@ const A = task('a'), B = task('b', {auto_created: true}), C = task('c');
 const state = {
   user: {email: 'me@example.test', name: 'Me'},
   projects: [A, B, C],
-  robots: [{id: 'r1', project_id: 'a', name: '巡检狗', status: 'connected'}, {id: 'r2', project_id: 'a', name: '机械臂', status: 'unconnected'},
+  robots: [{id: 'r1', project_id: 'a', name: '巡检狗', status: 'connected', product: {vendor: 'Acme', model: 'X1'}},
+           {id: 'r2', project_id: 'a', name: '机械臂', status: 'unconnected'},
            {id: 'r3', project_id: 'b', name: '仿真四足', status: 'unconnected', inventory_id: 'inv'}],
-  applications: [{id: 'app1', project_id: 'a', name: '夜间巡检'}],
-  evaluations: [{id: 'e1', project_id: 'a', scope: 'static', passed: true}, {id: 'e2', project_id: 'a', scope: 'onsite', passed: true}],
-  deployments: [{id: 'd1', project_id: 'a', status: 'deployed'}],
+  // Issue #50: applications are the account's ('home'); task a has bound one, which is released on r1.
+  applications: [{id: 'app1', project_id: 'home', name: '夜间巡检', version: '1', digest: 'd1', robot_id: 'r1', steps: [],
+                  product: {vendor: 'Acme', model: 'X1'}, created_at: '2026-11-24'},
+                 {id: 'app2', project_id: 'home', name: '没人用的应用', version: '1', digest: 'd2', robot_id: 'r2', steps: [], created_at: '2026-11-25'}],
+  task_applications: [{id: 'b1', project_id: 'a', application_id: 'app1', created_at: '2026-11-24'}],
+  evaluations: [{id: 'e1', project_id: 'home', application_id: 'app1', application_digest: 'd1', scope: 'static', passed: true},
+                {id: 'e2', project_id: 'home', application_id: 'app1', application_digest: 'd1', scope: 'onsite', passed: true}],
+  deployments: [{id: 'd1', project_id: 'home', application_id: 'app1', application_digest: 'd1', robot_id: 'r1', status: 'deployed'}],
   models: [{id: 'm1', project_id: 'a'}, {id: 'm2', project_id: 'c'}],
   datasets: [], skills: [{id: 's1', project_id: 'a'}], services: [],
   agent_sessions: [{id: 'ses1', project_id: 'c', status: 'completed'}, {id: 'ses2', project_id: 'b', status: 'running'}],
@@ -45,19 +52,19 @@ const facts = t => page.twFacts(state, t);
   const a = facts(A), b = facts(B), c = facts(C);
   same(a.robots.length, 2, 'a task counts its own robots');
   same(a.online, 1, 'and how many are connected');
-  same(a.done, 5, 'every step of a deployed task has a record');
-  same(a.next, -1, 'so no step is next');
-  ok(a.deployed, 'it is deployed');
+  same(a.applications.length, 1, 'a task has the applications it has bound, not every application of the account');
+  same(a.applications[0].id, 'app1', 'the one it bound');
+  same(a.bound.label, 'Acme X1', 'and is for the brand and model of that application');
+  same(a.bound.robots.length, 1, 'whose robots are the ones of that brand and model');
+  same(a.released, 1, 'the application is released');
+  ok(a.deployed, 'so the task is deployed');
   same(a.working, 0, 'nothing of it is at work');
-  same(b.stages[0], false, 'a trial task made automatically was not described by a person');
-  same(b.stages[1], true, 'a robot with an inventory counts as connected once');
-  same(b.next, 0, 'its next step is the first');
+  same(b.applications.length, 0, 'a task that bound nothing has no application');
+  same(b.deployed, false, 'and is not deployed');
+  same(b.bound.label, '', 'nor for a brand and model yet');
   same(b.working, 1, 'a running session is work');
-  same(c.done, 1, 'a described task without anything else has one step');
-  same(c.next, 1, 'and connects a robot next');
   same(c.models, 1, 'records of other tasks are not counted');
   same(c.robots.length, 0, 'nor their robots');
-  same(page.TW_STAGES.length, a.stages.length, 'one mark per step');
   for (const status of page.TW_SESSION_ACTIVE) {
     same(page.twFacts({...state, agent_sessions: [{id: 'x', project_id: 'c', status}]}, C).working, 1, `a session that is ${status} is work`);
   }
@@ -67,7 +74,7 @@ const facts = t => page.twFacts(state, t);
   for (const status of page.TW_JOB_ACTIVE) {
     same(page.twFacts({...state, jobs: [{id: 'x', project_id: 'c', status}]}, C).working, 1, `a job that is ${status} is work`);
   }
-  same(page.twFacts({projects: [C]}, C).done, 1, 'a state without the other lists is read as empty');
+  same(page.twFacts({projects: [C]}, C).applications.length, 0, 'a state without the other lists is read as empty');
 }
 
 // ---- the numbers over all tasks
@@ -76,7 +83,9 @@ const facts = t => page.twFacts(state, t);
   same(totals.tasks, 3, 'three tasks');
   same(totals.robots, 3, 'three robots over all of them');
   same(totals.online, 1, 'one connected');
-  same(totals.applications, 1, 'one application');
+  same(totals.applications, 1, 'one application is bound');
+  const shared = {...state, task_applications: [...state.task_applications, {id: 'b2', project_id: 'c', application_id: 'app1', created_at: '2026-11-25'}]};
+  same(page.twTotals(shared.projects.map(t => [t, page.twFacts(shared, t)])).applications, 1, 'an application two tasks bound counts once');
   same(totals.deployed, 1, 'one task deployed');
   same(totals.working, 1, 'one task with work going on');
   same(page.twTotals([]).tasks, 0, 'no task, no numbers');
@@ -124,29 +133,35 @@ const facts = t => page.twFacts(state, t);
   const evil = task('x', {name: '<img src=x onerror=1>', objective: '"><script>1</script>'});
   const html = page.twDashboardMarkup({user: {email: '<b>@x'}, projects: [evil], robots: [{id: 'r', project_id: 'x', name: '<i>bot</i>'}]}, 'x', '');
   ok(!html.includes('<img') && !html.includes('<script>') && !html.includes('<i>bot') && !html.includes('<b>@x'), 'names, goals and addresses are escaped');
-  const [title, sub, body] = page.twRemoveDialog(evil, page.twPlan(evil, page.twFacts({projects: [evil], applications: [{id: 'a', project_id: 'x', name: '<u>app</u>'}]}, evil)));
+  const bound = {projects: [evil], applications: [{id: 'a', project_id: 'home', name: '<u>app</u>', product: {vendor: '<s>v', model: 'm'}}],
+                 task_applications: [{id: 'b', project_id: 'x', application_id: 'a'}]};
+  ok(!page.twCard(evil, page.twFacts(bound, evil), false).includes('<s>v') && !page.twCard(evil, page.twFacts(bound, evil), false).includes('<u>app'),
+     'a brand and the name of an application are escaped on the card');
+  const [title, sub, body] = page.twRemoveDialog(evil, page.twPlan(evil, page.twFacts(bound, evil)));
   ok(!(title + sub + body).includes('<img') && !body.includes('<u>app'), 'in the dialog too');
 }
 
 // ---- a card
 {
   const a = page.twCard(A, facts(A), false), b = page.twCard(B, facts(B), true), c = page.twCard(C, facts(C), false);
-  same(count(a, '<i class="done"'), 5, 'five marks filled for a deployed task');
-  ok(a.includes('五步都已有记录'), 'said in words too');
-  ok(a.includes('2 台 · 1 台已连接') && a.includes('巡检狗、机械臂'), 'the robots are counted and named');
-  ok(a.includes('夜间巡检'), 'the application is named');
-  ok(a.includes('模型 1 · 技能 1'), 'what is prepared is counted');
+  same(count(a, '<i class="done"'), 1, 'one mark per bound application, filled when it is released');
+  same(count(a, '<div class="tw-track"') && count(a, '<i class="'), page.TW_MARKS, 'the row of marks has the same length on every card');
+  ok(a.includes('绑定了 1 个应用 · 1 个已发布'), 'said in words too');
+  ok(a.includes('Acme X1'), 'the brand and model the task is for');
+  ok(a.includes('1 台 · 1 台已连接 · 巡检狗') && !a.includes('机械臂'), 'the robots of that brand and model are counted and named, no others');
+  ok(a.includes('1 个 · 夜间巡检') && !a.includes('没人用的应用'), 'the bound application is named, not the others of the account');
   ok(b.includes('试用任务') && b.includes('上次打开') && b.includes('1 项工作进行中'), 'the tags say what is special about a task');
-  ok(c.includes('下一步：连接机器人'), 'the next step is named');
-  same(count(c, '<i class="next"'), 1, 'and marked');
-  ok(c.includes('模型 1'), 'what is prepared is shown without a robot too');
+  ok(c.includes('还没有绑定应用') && c.includes('绑定应用后确定'), 'a task that bound nothing says so');
+  same(count(c, '<i class="next"') + count(c, '<i class="done"'), 0, 'and has no mark filled');
+  const waiting = {...state, deployments: []};
+  same(count(page.twCard(A, page.twFacts(waiting, A), false), '<i class="next"'), 1, 'a bound application that is not released is marked as on its way');
   // Issue #46: every card has the same parts, whatever the task holds, so every card is the same size.
   const bare = task('bare'), bareCard = page.twCard(bare, page.twFacts({projects: [bare]}, bare), false);
   const long = task('long', {name: '名'.repeat(100), objective: '很长的目标。'.repeat(300)});
   const longCard = page.twCard(long, page.twFacts({projects: [long]}, long), true);
   const shape = card => card.replace(/>[^<]*</g, '><').replace(/ (title|aria-label|data-id|data-task|datetime)="[^"]*"/g, '')
     .replace(/ class="(done|next)?"/g, '').replace(/ none"/g, '"').replace(/<span class="status[^>]*><i class="dot"><\/i><\/span>/g, '').replace(' current', '');
-  for (const [card, what] of [[a, 'a full task'], [c, 'a task with a model only'], [bareCard, 'an empty task'], [longCard, 'a task with very long texts']]) {
+  for (const [card, what] of [[a, 'a full task'], [c, 'a task that bound nothing'], [bareCard, 'an empty task'], [longCard, 'a task with very long texts']]) {
     same(count(card, '<div class="tw-hold'), page.TW_CARD_ROWS.length, `${what} has every row`);
     same(shape(card), shape(bareCard), `${what} has the same parts as any other card`);
   }
@@ -191,31 +206,13 @@ const facts = t => page.twFacts(state, t);
   same(none.lines.length, 0, 'an empty task lists nothing');
   ok(page.twRemoveDialog(bare, none)[2].includes('只删除任务本身'), 'and says only the task goes');
 
-  const apps = {projects: [C], applications: [{id: 'a1', project_id: 'c', name: '甲'}], evaluations: [{id: 'e', project_id: 'c'}], deployments: []};
-  ok(page.twPlan(C, page.twFacts(apps, C)).lines[0].includes('1 个机器人应用（甲），以及 1 份测试报告'), 'applications go with their reports');
-}
-
-// ---- inside a task
-{
-  const old = '<div class="page-head">HEAD</div><section class="journey-next">NEXT</section>' + page.TW_OLD_LIST + '<span>3 项</span></div><div class="cards">OLD</div>';
-  const html = page.twTaskMarkup(old, '');
-  ok(html.includes('href="#overview"') && html.includes('全部任务'), 'the way back to all tasks');
-  ok(html.indexOf('tw-back') < html.indexOf('HEAD'), 'above the head');
-  ok(html.includes('journey-next'), 'the steps of the task are kept');
-  ok(!html.includes('OLD') && !html.includes('我的任务项目'), 'the old list of tasks at the foot is gone');
-  same(page.twTaskMarkup('<p>other</p>', '').endsWith('<p>other</p>'), true, 'a view of another shape is kept whole');
-  // Issue #46: no "one of N tasks", no 新建任务项目 / 使用指南 in the head of a task.
-  ok(!html.includes('个任务之一'), 'the page does not say how many tasks there are');
-  const headed = '<div class="page-head"><div><h1>T</h1></div><div class="button-row">' + page.twHeadButtons() + '</div></div>' +
-    '<section class="journey-next">NEXT<button data-action="journey-guide">查看完整流程</button></section>' + page.TW_OPTIONS_HEAD + '<span>x</span></div>OPTIONS';
-  ok(page.twHeadButtons().includes('新建任务项目') && page.twHeadButtons().includes('使用指南'), 'the buttons the step view puts in its head');
-  const task1 = page.twTaskMarkup(headed, '<section id="task-skills">SKILLS</section>');
-  ok(!task1.includes('新建任务项目') && !task1.includes('使用指南'), 'both are gone from the head of a task');
-  ok(task1.includes('查看完整流程'), 'the link to the whole flow inside the step stays');
-  ok(task1.indexOf('journey-next') < task1.indexOf('task-skills') && task1.indexOf('task-skills') < task1.indexOf('OPTIONS'),
-     'the skills of the task come after its steps and before the optional abilities');
-  ok(page.twTaskMarkup('<p>other</p>', '<section id="task-skills">S</section>').endsWith('<section id="task-skills">S</section>'),
-     'in a view of another shape they come last');
+  // Issue #50: the applications are the account's; only the binding goes with the task.
+  const apps = {projects: [C], applications: [{id: 'a1', project_id: 'home', name: '甲'}], task_applications: [{id: 'b', project_id: 'c', application_id: 'a1'}],
+                evaluations: [{id: 'e', project_id: 'home', application_id: 'a1'}], deployments: []};
+  const appsPlan = page.twPlan(C, page.twFacts(apps, C));
+  same(appsPlan.lines.length, 1, 'a task with a bound application lists the binding');
+  ok(appsPlan.lines[0].includes('和 1 个机器人应用的绑定（甲）') && !appsPlan.lines[0].includes('测试报告'), 'the binding goes, not the reports');
+  ok(page.twRemoveDialog(C, appsPlan)[2].includes('绑定的应用本身不会删除'), 'and the dialog says the applications stay');
 }
 
 // ---- the first-run guide is for the first visit only (issue #46)

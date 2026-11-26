@@ -11,7 +11,7 @@ function revisionEdit(){
 function revisionValue(value){if(value===null)return '<p>无此步骤</p>';if(typeof value!=='object')return `<p class="output-reference">${h(value)}</p>`;return `<p>${h(value.skill)} · ${h(value.version)} · 最长 ${h(value.timeout_s)} 秒</p><details><summary>工作参数</summary>${json(value.parameters)}</details>`;}
 async function revisionAction(type,id,el){
  if(type==='revision-edit'){
-  const a=find('applications',id);if(!a||a.project_id!==projectId)throw Error('请在应用所属项目中打开');
+  const a=find('applications',id);if(!a||(a.project_id!==projectId&&!robotShared('applications',a)))throw Error('请在应用所属项目中打开');/* issue #50: applications are the account's */
   revisionDraft={project_id:projectId,source_application_id:id,name:a.name,version:'',robot_id:a.robot_id,steps:a.steps.map(s=>({skill_id:s.skill_id,parameters:structuredClone(s.parameters),timeout_s:s.timeout_s}))};return revisionEdit();
  }
  if(type==='revision-back')return revisionEdit();
