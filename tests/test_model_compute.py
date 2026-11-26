@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import tokenfans_fixture as tkf
+from brainos import robot_scope
 from brainos.service import Platform
 
 
@@ -120,7 +121,8 @@ class ModelComputeTests(unittest.TestCase):
         self.mc.connect_key({'api_key': tkf.API_KEY})
         later = self.app.add_project({'name': 'After', 'objective': 'Created after connecting'})['id']
         profiles = {m['project_id']: m for m in self.tokenfans_profiles()}
-        self.assertEqual(set(profiles), {self.pid, later})
+        # issue #42: and the robots' home, whose investigations and repairs use the default model too
+        self.assertEqual(set(profiles), {self.pid, later, robot_scope.HOME})
         for m in profiles.values():
             self.assertEqual(m['model'], 'gpt-5.5-codex')
             self.assertEqual(m['base_url'], self.fixture.url + '/codex/v1')
@@ -128,7 +130,7 @@ class ModelComputeTests(unittest.TestCase):
             self.assertNotIn('api_key', m)
         self.mc.set_default({'model': 'kimi-k2.6'})
         self.assertEqual({m['model'] for m in self.tokenfans_profiles()}, {'kimi-k2.6'})
-        self.assertEqual(len(self.tokenfans_profiles()), 2)
+        self.assertEqual(len(self.tokenfans_profiles()), 3)      # the two tasks and the robots' home
         with self.assertRaisesRegex(ValueError, '模型'):
             self.mc.set_default({'model': 'not-listed'})
         self.assertEqual(self.mc.summary()['default_model'], 'kimi-k2.6')
@@ -160,7 +162,9 @@ class ModelComputeTests(unittest.TestCase):
         self.assertEqual(self.app.snapshot()['agent_models'], [])
         self.mc.connect_key({'api_key': tkf.API_KEY})
         offered = self.app.snapshot()['agent_models']
-        self.assertEqual([m['billing'] for m in offered], ['tokenfans'])
+        # issue #42: the robots' home has its own TokenFans profile; the pages do not offer it in a task
+        self.assertEqual([m['billing'] for m in offered if m['project_id'] != robot_scope.HOME], ['tokenfans'])
+        self.assertEqual([m['billing'] for m in offered if m['project_id'] == robot_scope.HOME], ['tokenfans'])
         # A session or workflow made earlier with another model still resolves (it is only hidden).
         self.assertEqual(self.app.engineering.resolve_model(self.pid, own['id'])['id'], own['id'])
 

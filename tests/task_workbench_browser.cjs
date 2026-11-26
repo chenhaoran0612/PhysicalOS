@@ -149,37 +149,36 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   const kept = await page.evaluate(async () => (await api('state')).projects.map(p => p.name));
   check(!kept.includes('前台接待') && kept.length === 3, `The server still has the task: ${kept}`);
 
-  // 8. A task with a robot is not deleted: the dialog says why and leads to that task's robots.
+  // 8. Issue #42: robots belong to the account. A robot added while one task is open is named on every card,
+  //    and it does not stand in the way of deleting a task.
   const patrol = await page.evaluate(async () => {
     const task = state.projects.find(p => p.name === '园区巡逻');
     await api('robots', {project_id: task.id, name: '巡逻狗', family: 'quadruped'});
     await refresh(true);
     return task.id;
   });
-  check((await card('园区巡逻').locator('.tw-holds').innerText()).includes('巡逻狗'), 'The card does not name the task\'s robot');
+  for (const name of ['园区巡逻', '工位上下料']) {
+    check((await card(name).locator('.tw-holds').innerText()).includes('巡逻狗'), `The card of ${name} does not name the account's robot`);
+  }
   await card('园区巡逻').locator('[data-action="task-remove"]').click();
-  await dialog.getByText('还有 1 台机器人（巡逻狗）').waitFor();
-  check(await dialog.locator('[data-action="task-remove-confirm"]').count() === 0, 'A task with a robot can be confirmed for deletion');
-  await shot('5-delete-blocked');
-  await dialog.locator('[data-action="task-robots"]').click();
-  await main.locator('article.card', {hasText: '巡逻狗'}).waitFor();
-  check(await hash() === '#robots', 'The way to the robots does not open 我的机器人');
-  check(await page.evaluate(id => projectId === id, patrol), 'The robots shown are not those of that task');
-  await page.evaluate(() => { location.hash = 'overview'; });
-  await main.locator('.tw-board').waitFor();
+  await dialog.locator('[data-action="task-remove-confirm"]').waitFor();
+  check(!(await dialog.innerText()).includes('台机器人'), 'Deleting a task talks about the robots of the account');
+  await shot('5-delete-with-account-robots');
+  await page.locator('#dialog [data-action="close"]').first().click();
+  check(await page.evaluate(id => state.projects.some(p => p.id === id), patrol), 'Closing the dialog deleted the task');
 
-  // 9. The server decides: a robot added after the dialog opened keeps the task, and the dialog says why.
+  // 9. A robot added while the dialog is open changes nothing either: the task can still be confirmed.
   await card('工位上下料').locator('[data-action="task-remove"]').click();
   await page.locator('#dialog [data-action="task-remove-confirm"]').waitFor();
   await page.evaluate(async () => {
     const task = state.projects.find(p => p.name === '工位上下料');
     await api('robots', {project_id: task.id, name: '上料臂', family: 'manipulator'});
+    await refresh(true);
   });
-  await page.locator('#dialog [data-action="task-remove-confirm"]').click();
-  await dialog.getByText('还有 1 台机器人（上料臂）').waitFor();
-  check(await dialog.locator('[data-action="task-remove-confirm"]').count() === 0, 'The refused deletion can be confirmed again');
+  check(await dialog.locator('[data-action="task-remove-confirm"]').count() === 1, 'A robot of the account took the confirmation away');
   await page.locator('#dialog [data-action="close"]').first().click();
-  check(await count() === 3, 'A refused deletion changed the count');
+  check(await count() === 3, 'An unconfirmed deletion changed the count');
+  check((await card('园区巡逻').locator('.tw-holds').innerText()).includes('上料臂'), 'The second robot is not named on the other task\'s card');
   // Inside a task: no "one of N tasks", no 新建任务项目 or 使用指南 in its head (the skills section has its own script).
   await card('园区巡逻').locator('[data-action="task-open"]').click();
   await main.locator('.tw-back').waitFor();
@@ -190,7 +189,7 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   await home();
 
   // 10. Every width: nothing scrolls sideways, the wall goes down to one column, and the cards stay the same
-  //     size: by now one task has a long goal, two have a robot, and a fourth has the longest name allowed.
+  //     size: by now one task has a long goal, the account has two robots, and a fourth has the longest name allowed.
   await page.evaluate(async () => { await api('projects', {name: '名称很长的任务'.repeat(14) + '到头', objective: '短'}); await refresh(true); });
   await main.locator('.tw-wall .tw-card').nth(3).waitFor();
   for (const width of [320, 375, 768, 1024, 1440, 1920]) {

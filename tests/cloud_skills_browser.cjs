@@ -1,4 +1,4 @@
-// Issue #43 browser acceptance: the 云端技能 page and the two new sections of a robot's page.
+// Issue #43 browser acceptance: the 技能发布 and 技能加载 pages and the two new sections of a robot's page.
 //  * 云端技能: signed out of the cloud it says so; the app's own examples are published in one action; a
 //    local folder is previewed, then published; the same content is not published twice and other
 //    content under the same version is refused with what to do; a version is deleted; a release is
@@ -43,16 +43,30 @@ let failed = async () => {};
 
   // 1 · The page is in the navigation; without a cloud login it says where to sign in.
   await page.locator('#navigation a[href="#cloud-skills"]').click();
-  await main.locator('h1', {hasText: '云端技能'}).waitFor();
+  await main.locator('h1', {hasText: '技能发布'}).waitFor();
   must((await main.innerText()).includes('请先登录云平台账户'), 'Signed out of the cloud, the page does not say to sign in');
   must(await main.locator('[data-cloudskill-action]').count() === 0, 'Something to publish with is offered without a cloud login');
   await shot('01-signed-out');
+  // Publishing and loading are two pages; the other one says the same while signed out.
+  await page.locator('#navigation a[href="#cloud-skill-load"]').click();
+  await main.locator('h1', {hasText: '技能加载'}).waitFor();
+  must((await main.innerText()).includes('请先登录云平台账户'), 'Signed out of the cloud, 技能加载 does not say to sign in');
+  must(await main.locator('[data-cloudskill-action]').count() === 0, 'Something to install with is offered without a cloud login');
+  await page.locator('#navigation a[href="#cloud-skills"]').click();
+  await main.locator('h1', {hasText: '技能发布'}).waitFor();
 
   // 2 · Signed in: an empty library with the way to fill it.
   await fixture('cloud-login');
   await reload();
   await main.locator('.empty', {hasText: '云端技能库还是空的'}).waitFor();
   await shot('02-empty');
+  // 技能加载 with an empty library publishes nothing itself: it points to 技能发布.
+  await page.locator('#navigation a[href="#cloud-skill-load"]').click();
+  await main.locator('.empty', {hasText: '云端技能库里还没有技能'}).waitFor();
+  must(await main.locator('[data-cloudskill-action="examples"], [data-cloudskill-action="publish"]').count() === 0, '技能加载 offers to publish');
+  await shot('02b-load-empty');
+  await main.locator('.empty [data-action="go-cloud-skills"]').click();
+  await main.locator('.empty', {hasText: '云端技能库还是空的'}).waitFor();
 
   // 3 · One action publishes the app's own examples; the library then shows them.
   await main.locator('.empty [data-cloudskill-action="examples"]').click();
@@ -68,6 +82,7 @@ let failed = async () => {};
   must((await main.locator('[data-cloudskill="status_report"]').innerText()).includes('不会让机器人运动'), 'A skill that does not move is not told apart');
   must((await fixture('state')).releases.length === published, 'The cloud does not hold the published examples');
   must((await main.locator('#cloud-skill-examples').innerText()).includes('已在云端'), 'The examples are not shown as published');
+  must(await main.locator('[data-cloudskill-action="install"]').count() === 0, '技能发布 offers to install on a robot');
   await shot('04-library');
   result.examples = published;
 
@@ -120,6 +135,7 @@ let failed = async () => {};
   await main.locator('[data-cloudskill="status_report"] [data-cloudskill-action="versions"]').click();
   await dialog.locator('[data-cloudskill-release="0.2.0"]').waitFor();
   must(await dialog.locator('.cloud-skill-release').count() === 2, 'The versions dialog does not list both versions');
+  must(await dialog.locator('[data-cloudskill-action="install"]').count() === 0, 'The versions dialog of 技能发布 offers to install');
   must((await dialog.locator('[data-cloudskill-release="0.2.0"]').innerText()).includes('验收脚本发布的版本'), 'The notes of a version are missing');
   await shot('07-versions');
   await dialog.locator('[data-cloudskill-release="0.2.0"] [data-cloudskill-action="delete"]').click();
@@ -134,6 +150,19 @@ let failed = async () => {};
   // 6 · Install on a simulated robot (a real runtime): download, verify, explain, install, then the run form.
   const sim = await page.evaluate(async () => { const robot = await api('sims', {kind: 'quadruped'}); await refresh(true); return robot; });
   await page.waitForFunction(id => find('robots', id)?.status === 'connected', sim.id);
+  //     Loading is its own page: the same library, nothing that publishes or deletes.
+  await main.locator('.section-head [data-action="go-cloud-skill-load"]').click();
+  await main.locator('h1', {hasText: '技能加载'}).waitFor();
+  await main.locator('[data-cloudskill="wave"]').waitFor();
+  must(await main.locator('.cloud-skill-card').count() === (await fixture('state')).releases.length, '技能加载 does not show the library');
+  must(await main.locator('[data-cloudskill-action="publish"], [data-cloudskill-action="examples"], [data-cloudskill-action="versions"]').count() === 0
+    && await main.locator('#cloud-skill-examples').count() === 0, '技能加载 offers to publish or to delete');
+  await main.locator('[data-cloudskill="status_report"] [data-cloudskill-action="versions-load"]').click();
+  await dialog.locator('[data-cloudskill-release="0.1.0"]').waitFor();
+  must(await dialog.locator('[data-cloudskill-action="delete"]').count() === 0, 'The versions dialog of 技能加载 offers to delete');
+  must(await dialog.locator('[data-cloudskill-release="0.1.0"] [data-cloudskill-action="install"]').count() === 1, 'A version cannot be installed from the versions dialog of 技能加载');
+  await shot('07b-load-page');
+  await dialog.locator('.dialog-footer [data-action="close"]').click();
   await main.locator('[data-cloudskill="wave"] [data-cloudskill-action="install"]').click();
   const chooseForm = dialog.locator('form[data-cloudskill-form="install-preview"]');
   await chooseForm.waitFor();

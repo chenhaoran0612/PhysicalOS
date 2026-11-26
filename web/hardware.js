@@ -9,7 +9,7 @@ const HW_OUTCOMES={fixed:['已修复','good'],pending_reboot:['重启后生效',
 const HW_SUDO={none:'不需要',root:'以 root 账号执行',sudo_password:'通过 sudo 执行，用已保存的 SSH 登录密码完成验证（密码不会发送给模型）',sudo_nopasswd:'通过 sudo -n 执行（该账号需要配置免密 sudo，否则命令会失败）'};
 const HW_RISK={low:['低风险','good'],medium:['中风险','warn'],high:['高风险','bad']};
 let hardwareView=null;
-const hwList=k=>(state[k]||[]).filter(x=>x.project_id===projectId);
+const hwList=k=>(state[k]||[]).filter(x=>x.project_id===projectId||robotShared(k,x));
 const hwFind=(k,id)=>(state[k]||[]).find(x=>x.id===id);
 const hwScans=robotId=>hwList('hardware_scans').filter(s=>s.robot_id===robotId).sort((a,b)=>b.created_at.localeCompare(a.created_at));
 const hwLatest=robotId=>hwScans(robotId)[0];

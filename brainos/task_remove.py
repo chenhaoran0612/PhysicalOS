@@ -34,6 +34,7 @@ that was interrupted (the app was closed) leaves the task on the list, and delet
 Not covered: a robot or another record that is being added to the task at the very moment it is
 deleted (the check of the task and the write are two steps there) can be left behind without a task.
 """
+from . import robot_scope
 from .engineering import ACTIVE
 from .workflows import RUNNING
 
@@ -86,6 +87,8 @@ class TaskRemoval:
         return {'removed': project['id'], 'deleted': deleted}
 
     def _task(self, key):
+        if robot_scope.is_home(key):                # issue #42: the robots' home is not a task and is never on the list
+            raise ValueError(GONE)
         try:
             return self.platform.project(key)
         except ValueError:

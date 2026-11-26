@@ -39,6 +39,7 @@ import time
 from pathlib import Path
 
 from . import device_transfer, package_fetch
+from . import robot_scope
 from . import device_transfer_target as target
 from .cloud_account import CloudError
 from .errors import CodedError
@@ -410,7 +411,7 @@ class PackageDelivery:
         job_id = p.get('job_id')
         with self.lock:
             job = self.jobs.get(job_id) if isinstance(job_id, str) else None
-            if job is None or job['project_id'] != p.get('project_id'):
+            if job is None or robot_scope.elsewhere(job, p.get('project_id'), required=True):      # issue #42: kept with the robot, whichever task asks
                 raise ValueError('找不到这次传送；应用重启后正在进行的传送不会保留，可以重新开始，已经传到的部分会接着用')
             return job
 

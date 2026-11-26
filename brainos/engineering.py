@@ -13,6 +13,7 @@ from .contracts import required_text
 from .service import now, uid
 from . import hardware_init  # issue #2: hardware scan and repair sessions
 from . import ssh_edit, ssh_route  # issue #15: several jump hosts in a row
+from . import robot_scope  # issue #42: a task's assistant sees every robot of the account
 
 ACTIVE=('starting','running','waiting_input','cancelling')
 # §5.3: a Codex 0.146.1 request is ~50 KB (instructions + tool schemas); the
@@ -380,10 +381,10 @@ class Engineering:
             if p.get('data_authorized') is not True:raise ValueError('请确认继续将设备信息交给所选模型分析')
             if s.get('robot_id') and any(x['robot_id']==s['robot_id'] and x['status'] in ACTIVE for x in self.store.list('agent_sessions')):raise ValueError('该本体已有另一个调查会话运行')
             message=required_text(p.get('message'),'继续调查的内容',5000)
-            resumed=self.store.get('agent_models',s['model_id'])
+            resumed=robot_scope.kept(lambda:self.store.get('agent_models',s['model_id']))     # issue #42: the task it was chosen in may be gone
             self.platform.model_compute.check(resumed);self._cloud_ready(resumed,s['max_tokens'])
             if self.closing or len(self.live)>=4:raise ValueError('应用正在退出或并发会话已满')
-            self.extensions.runtime_selection(s)
+            robot_scope.kept(lambda:self.extensions.runtime_selection(s))
             # Dynamic tool sets belong to a native thread. Upgrade older sessions
             # through a new thread with their persisted evidence, never silently
             # tell the model that tools were added to an immutable old thread.
@@ -676,8 +677,8 @@ class Engineering:
             engineering=s.get('mode')=='engineering'
             work=root/'workspace';work.mkdir(parents=True,exist_ok=True)
             if engineering:
-                context={'project':self.platform.project(s['project_id']),'robots':[r for r in self.platform.snapshot()['robots'] if r['project_id']==s['project_id']],
-                         'inventories':[r for r in self.store.list('robot_inventories') if r['project_id']==s['project_id']]}
+                context={'project':self.platform.project(s['project_id']),'robots':[r for r in self.platform.snapshot()['robots'] if r['project_id'] in (s['project_id'],robot_scope.HOME)],
+                         'inventories':[r for r in self.store.list('robot_inventories') if r['project_id'] in (s['project_id'],robot_scope.HOME)]}
                 (work/'PROJECT.json').write_text(json.dumps(context,ensure_ascii=False,indent=2))
             else:
                 if (s.get('investigation') or {}).get('full_flow'):self.platform.investigation.flow_scan(sid,handle)   # issue #6: a full run scans the hardware first

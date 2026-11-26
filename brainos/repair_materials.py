@@ -38,7 +38,7 @@ from .service import now
 
 FILE_NAME = 'LIBRARY_MATERIALS.json'
 USABLE = 'usable'
-NOT_YET = ('parsing', 'parsed', 'failed')
+NOT_YET = ('parsing', 'parsed', 'failed')     # not 'stored' (issue #45): such a document waits for nobody
 KINDS = ('document', 'urdf', 'package')
 # The items of each kind (cloud/neuxmind_cloud/material_fields.py). Only these are passed on, even if a cloud
 # answer lists more; an item added there later is left out here until it is added here too.

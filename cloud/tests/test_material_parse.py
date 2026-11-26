@@ -212,7 +212,7 @@ class DocumentParseTest(ParseCase):
         self.fake.answer = answer_by_question({**DOC_ANSWERS, "driver_name": {
             **DOC_ANSWERS["driver_name"], "ros2_distro": None, "source": "资料中未提及"}})
         result = self.upload_parsed("sheet.xlsx", lib.xlsx_bytes())
-        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["status"], "stored")
         self.assertEqual(result["missing"], ["从哪里取驱动", "适用的 ROS 2 发行版"])
         self.assertIn("缺：从哪里取驱动、适用的 ROS 2 发行版", result["status_detail"])
         done = self.ok(self.confirm(result["material"]["id"], {"revision": result["revision"],
@@ -223,7 +223,7 @@ class DocumentParseTest(ParseCase):
     def test_an_answer_that_is_not_json_leaves_its_items_empty(self):
         self.fake.answer = lambda question, ids: "我不知道。<script>alert(1)</script>"
         result = self.upload_parsed("notes.md", b"# notes\n\njust text\n")
-        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["status"], "stored")
         self.assertEqual(len([w for w in result["warnings"] if "格式" in w]), 3)
         self.assertEqual(self.fake.uploads[0]["fileName"], "notes.md")
 
@@ -301,6 +301,73 @@ class DocumentParseTest(ParseCase):
             self.assertEqual(s.query(MaterialParse).count(), 0)
 
 
+class StoredTest(ParseCase):
+    """Issue #45, the owner's note of 2026-11-25: the library keeps information. A document that the
+    knowledge service has indexed is a success, whether or not the driver's items could be read from it."""
+
+    NOTHING = staticmethod(lambda question, ids: json.dumps(
+        {"driver_name": None, "driver_version": None, "source": None, "os": None, "ros2_distro": None}
+        if '"driver_name"' in question else {"install_steps": None, "topics": None, "actions": None}))
+
+    def test_a_document_without_any_driver_item_is_stored(self):
+        self.fake.answer = self.NOTHING
+        result = self.upload_parsed("paper.md", b"# A paper\n\nnothing about a driver\n")
+        self.assertEqual((result["status"], result["error"], result["stage"]), ("stored", "", "done"))
+        self.assertIn("已存入知识库", result["status_detail"])
+        self.assertIn("没有读出驱动信息", result["status_detail"])
+        self.assertEqual(len(result["missing"]), 7)
+        self.assertEqual(len(self.fake.uploads), 1)
+
+    def test_stored_documents_are_listed_by_their_state(self):
+        self.fake.answer = self.NOTHING
+        stored = self.upload_parsed("paper.md", b"# A paper\n")["material"]["id"]
+        self.fake.answer = answer_by_question(DOC_ANSWERS)
+        self.upload_parsed("manual.md", b"# demo_motion_driver 1.4.0\n")
+        listed = self.ok(self.get("/library/materials?status=stored", self.owner))
+        self.assertEqual([m["id"] for m in listed["materials"]], [stored])
+
+    def test_a_stored_document_stays_stored_while_items_are_missing_and_can_be_confirmed_when_filled(self):
+        self.fake.answer = self.NOTHING
+        result = self.upload_parsed("paper.md", b"# A paper\n")
+        material_id = result["material"]["id"]
+        self.error(self.confirm(material_id, {"revision": result["revision"]}), 409, "parse_incomplete")
+        edited = self.ok(self.put(material_id, {"revision": result["revision"], "values": {"driver_name": "demo"}}))
+        self.assertEqual(edited["status"], "stored")
+        self.assertIn("缺：驱动版本", edited["status_detail"])
+        self.assertNotIn("驱动名称", edited["status_detail"])
+        keys = [f["key"] for f in edited["fields"] if f["required"] and f["key"] != "driver_name"]
+        done = self.ok(self.confirm(material_id, {"revision": edited["revision"], "values": {}, "not_applicable": keys}))
+        self.assertEqual(done["status"], "usable")
+
+    def test_the_same_file_for_another_device_is_stored_as_well(self):
+        self.fake.answer = self.NOTHING
+        first = self.upload_parsed("paper.md", b"# A paper\n", device_id="robot-0123456789ab", device_name="一号机")
+        second = self.upload_parsed("paper.md", b"# A paper\n", device_id="robot-0123456789ac", device_name="二号机")
+        self.assertEqual((first["status"], second["status"], len(self.fake.uploads)), ("stored", "stored", 1))
+
+    def test_a_document_the_service_could_not_index_is_still_a_failure(self):
+        self.fake.fail_parse = lambda upload: "docreader crashed"
+        result = self.upload_parsed("broken.pdf", lib.pdf_bytes())
+        self.assertEqual(result["status"], "failed")
+        edited = self.ok(self.put(result["material"]["id"], {"revision": result["revision"],
+                                                             "values": {"driver_name": "demo"}}))
+        self.assertEqual(edited["status"], "failed")
+
+    def test_documents_that_ended_as_failures_before_are_stored_when_the_worker_starts(self):
+        self.fake.answer = self.NOTHING
+        indexed = self.upload_parsed("paper.md", b"# A paper\n")["material"]["id"]
+        self.fake.fail_parse = lambda upload: "docreader crashed"
+        broken = self.upload_parsed("broken.pdf", lib.pdf_bytes())["material"]["id"]
+        urdf = self.upload_parsed("arm.urdf", files.URDF_GAPS)["material"]["id"]
+        from neuxmind_cloud.library_models import Material
+        with self.db.transaction() as s:
+            s.get(Material, indexed).status = "failed"          # as versions before this one left it
+        self.assertEqual(material_parse.adopt_stored(self.db), 1)
+        self.assertEqual(material_parse.adopt_stored(self.db), 0)
+        self.assertEqual([self.result(i)["status"] for i in (indexed, broken, urdf)], ["stored", "failed", "failed"])
+        self.assertIn("已存入知识库", self.result(indexed)["status_detail"])
+
+
 class HardeningTest(ParseCase):
     """What the security review of issue #34 found: every step ends in an outcome for its one material."""
 
@@ -313,7 +380,7 @@ class HardeningTest(ParseCase):
         self.assertEqual(result["stage"], "done")
         self.assertIsNone(result["values"]["driver_name"])
         self.assertEqual(result["values"]["source"], "x")
-        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["status"], "stored")
 
     def test_a_huge_number_from_a_person_is_refused_quietly(self):
         result = self.upload_parsed("manual.docx", lib.docx_bytes())

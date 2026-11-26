@@ -352,7 +352,7 @@ issue #43 又加了四个权限范围，都不在默认范围里（见“云端�
 
 上传完成的资料由云平台的解析线程自动解析；结果给人看、可以改，人确认后才是“可用”。做法、状态、提取的项目和不可信内容的处理写在 [docs/MATERIAL_PARSING.md](../docs/MATERIAL_PARSING.md)，这里只列接口和要点。
 
-- 四个状态：`parsing`（解析中）→ `parsed`（待确认）→ `usable`（可用，人确认后）；`failed`（没解析出来，`status_detail` 写明原因或缺哪一项，人填好后确认也变 `usable`）。只有 `usable` 的资料能被后面的流程使用（#31、#30）。
+- 五个状态：`parsing`（解析中）→ `parsed`（待确认）→ `usable`（可用，人确认后）；`stored`（已入库，issue #45：文档已在 WeKnora 向量化入库，驱动信息没读全也算成功）；`failed`（没解析出来，`status_detail` 写明原因或缺哪一项，人填好后确认也变 `usable`）。只有 `usable` 的资料能被后面的流程使用（#31、#30）。
 - 文档（Word、Excel、PDF、文本）交给 WeKnora（`weknora.py`）解析和存储，再经它的问答接口问模型、只限这一份文档。**文档的内容会发给 WeKnora 里配置的模型服务。** 没配 `NEUXMIND_WEKNORA_URL` / `_API_KEY` / `_KB_ID` 时文档标“没解析出来”，可以手工填写后确认。
 - URDF（关节、连杆、每个关节的位置 / 速度 / 力矩上限）和驱动安装包（名称、版本、架构、校验值；内容不解析）在子进程里用规则读（`material_extract.py`，由 `material_sandbox.py` 启动，CPU、内存、时间、输出都有上限）。
 - 权限沿用资料库：读要 `library:read`；改、确认、重新解析要 `library:write` 和已验证的邮箱。

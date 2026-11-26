@@ -27,6 +27,7 @@ import urllib.request
 from pathlib import Path
 
 from . import robot_caps
+from . import robot_scope
 from . import cloud_auto_login          # issue #36 (imports this module back; only used inside functions)
 from .connector import NoRedirect
 
@@ -455,7 +456,7 @@ class CloudAccount:
     def models(self, p):
         """Models from the cloud catalogue that fit the chosen robot's manifest."""
         robot = self.platform.store.get('robots', p.get('robot_id'))
-        if p.get('project_id') and robot.get('project_id') != p['project_id']:
+        if robot_scope.elsewhere(robot, p.get('project_id')):      # issue #42: a robot of the account is every task's
             raise ValueError('该机器人不属于当前项目')
         manifest = robot_caps.cloud_manifest(robot)
         _, result = self._request('POST', '/catalog/models/compatible', {'manifest': manifest})

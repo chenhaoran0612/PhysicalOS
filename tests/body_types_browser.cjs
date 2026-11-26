@@ -172,7 +172,9 @@ let failed = async () => {};
   await openList();
   await expectText(row('轮式底盘'), ['2 台']);
   await row('轮式底盘').locator('[data-action="engine-body-types-remove"]').click();
-  await expectText(dialog, ['这个类型现在不能删除', '2 台设备', PLAIN_ROBOT, SSH_ROBOT, '园区巡检']);
+  await expectText(dialog, ['这个类型现在不能删除', '2 台设备', PLAIN_ROBOT, SSH_ROBOT]);
+  // issue #42: robots belong to the account, so no task is named next to them
+  must(!(await dialog.locator('.body-type-users').innerText()).includes('园区巡检'), 'A device of the account is listed under a task');
   must(await dialog.locator('[data-action="engine-body-types-remove-confirm"]').count() === 0, 'A type in use offers a way to remove it');
   await shot('4-in-use');
   await click('close');

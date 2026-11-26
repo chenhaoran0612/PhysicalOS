@@ -16,6 +16,7 @@ from .service import Platform
 from .commerce import Commerce
 from .material_parse import MaterialParse   # issue #34: parsing results of library materials
 from . import cloud_auto_login              # issue #36: an app sign-in signs into the cloud too
+from . import robot_scope                   # issue #42: robots belong to the account, not to the task that is open
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -187,7 +188,7 @@ def make_handler(application):
                 filename,mime=files[path]
                 return self.respond((ROOT/'web'/filename).read_bytes(),mime=mime)
             if path=='/api/health':
-                return self.respond({'status':'ok','version':'0.21.8'})
+                return self.respond({'status':'ok','version':'0.21.11'})
             if path=='/api/me':
                 me=application.identity.user(self.token())
                 if not me:
@@ -396,6 +397,7 @@ def make_handler(application):
                         'model-compute/disconnect':service.model_compute.disconnect}
                 if path.removeprefix('/api/') not in routes:
                     return self.respond({'error':'未知操作'},404)
+                payload=robot_scope.request(path.removeprefix('/api/'),payload)     # issue #42: a request about a robot is answered for the robots' home, whichever task is open
                 return self.respond(routes[path.removeprefix('/api/')](payload))
             except ValueError as exc:
                 # ux04: a structured body (code, device_status, field) so the browser never has to guess.

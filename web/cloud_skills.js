@@ -1,16 +1,22 @@
 'use strict';
-// Issue #43: the 「云端技能」 page. Skill packages are kept in the cloud platform, private to the
-// organisation. This page lists them, publishes a local skill folder (or the app's own examples) and
-// installs one version on a robot: the backend downloads it, checks its digest, explains whether it
-// fits the robot, and only then sends it through the same install as a local folder. After a
-// successful install the flow goes on in skillInstallResult (web/robot_detail.js), as every install does.
-// Loaded after web/app.js and web/robot_detail.js. It adds its page to the navigation, listens for its
+// Issue #43: the 「技能发布」 and 「技能加载」 pages. Skill packages are kept in the cloud platform, private
+// to the organisation. Publishing and loading are two pages (the issue asks for that):
+//  * 技能发布 lists what the organisation has published, publishes a local skill folder (or the app's own
+//    examples), shows the versions of a skill and deletes one. Nothing on it touches a robot.
+//  * 技能加载 lists the same library and installs one version on a robot: the backend downloads it, checks
+//    its digest, explains whether it fits the robot, and only then sends it through the same install as a
+//    local folder. Nothing on it changes the library. After a successful install the flow goes on in
+//    skillInstallResult (web/robot_detail.js), as every install does.
+// Loaded after web/app.js and web/robot_detail.js. It adds its pages to the navigation, listens for its
 // own data-cloudskill-* attributes and wraps robotDetailRender, so no other page script is edited.
 // Titles, descriptions and notes come from other people: every one of them goes through h().
 
-const CLOUD_SKILLS_ROUTE = 'cloud-skills';
+const CLOUD_SKILLS_ROUTE = 'cloud-skills';            // 技能发布
+const CLOUD_SKILLS_LOAD_ROUTE = 'cloud-skill-load';   // 技能加载
+const CLOUD_SKILLS_PAGE_NAMES = {[CLOUD_SKILLS_ROUTE]: '技能发布', [CLOUD_SKILLS_LOAD_ROUTE]: '技能加载'};
 const CLOUD_SKILLS_DIGEST_SHOWN = 12;
-const CLOUD_SKILLS_SIGN_IN = '技能库保存在云平台。请先登录云平台账户，再发布或安装技能。';
+const CLOUD_SKILLS_SIGN_IN = '技能库保存在云平台。请先登录云平台账户，再发布技能。';
+const CLOUD_SKILLS_LOAD_SIGN_IN = '技能库保存在云平台。请先登录云平台账户，再把技能安装到机器人上。';
 const CLOUD_SKILLS_PUBLISH_STATES = {
   new: ['可以发布', '云端还没有这个技能的这个版本。发布后，只有你的组织能看到它。'],
   same: ['云端已经有完全相同的这个版本', '内容一模一样，不需要再发布。'],
@@ -49,9 +55,10 @@ function cloudSkillPathProblem(path) {
   return '';
 }
 
-// Robots of the current project a release can be installed on: connected ones.
+// Robots a release can be installed on: connected ones. Issue #42: robots belong to the account, so the task
+// that is open (`project`, kept for the callers) does not narrow them.
 function cloudSkillRobots(robots, project) {
-  return (robots || []).filter(r => r.project_id === project && r.status === 'connected');
+  return (robots || []).filter(r => r.status === 'connected');
 }
 
 // Who published a release, for showing. The cloud records an account or key number, which says nothing to a reader.
@@ -103,8 +110,12 @@ function dialogError(root, err) {
 const cloudSkillButton = (text, action, cls = '', id = '', disabled = false) =>
   `<button type="button" class="button ${cls}" data-cloudskill-action="${action}" ${id !== '' ? `data-id="${h(id)}"` : ''} ${disabled ? 'disabled' : ''}>${text}</button>`;
 
-// ---------------------------------------------------------------- the page
-function cloudSkillCard(row) {
+// ---------------------------------------------------------------- the two pages
+// Which of the two pages is showing: the same library, different things to do with it.
+const cloudSkillOnLoadPage = () => current === CLOUD_SKILLS_LOAD_ROUTE;
+const cloudSkillOnAPage = () => current === CLOUD_SKILLS_ROUTE || current === CLOUD_SKILLS_LOAD_ROUTE;
+
+function cloudSkillCard(row, loading = cloudSkillOnLoadPage()) {
   const latest = row.latest, more = row.versions.length - 1;
   return `<article class="card cloud-skill-card" data-cloudskill="${h(row.id)}"><div class="card-body">` +
     `<div class="card-top"><span class="agent-avatar">${icon('skills')}</span>${cloudSkillMotionBadge(latest)}</div>` +
@@ -112,19 +123,24 @@ function cloudSkillCard(row) {
     `${more > 0 ? ` · 另有 ${more} 个版本` : ''}</p><p>${h(row.summary)}</p>` +
     `<div class="tags">${latest.requires.map(r => `<span class="tag" title="${h(r.id)}">${h(r.title)}</span>`).join('')}</div></div>` +
     `<div class="card-bottom"><small>${h(cloudSkillWhen(latest.created_at))}</small><div class="button-row">` +
-    `${cloudSkillButton('版本', 'versions', 'secondary small', row.id)}` +
-    `${cloudSkillButton('安装到机器人', 'install', 'small', row.id + '|' + latest.version)}</div></div></article>`;
+    (loading ? cloudSkillButton('版本', 'versions-load', 'secondary small', row.id) +
+      cloudSkillButton('安装到机器人', 'install', 'small', row.id + '|' + latest.version)
+      : cloudSkillButton('版本', 'versions', 'secondary small', row.id)) + `</div></div></article>`;
 }
 
-function cloudSkillList() {
+function cloudSkillList(loading = cloudSkillOnLoadPage()) {
   const lib = cloudSkills;
   if (lib.error) return `<section class="panel">${notice(h(lib.error) + ' ' + cloudSkillButton('重试', 'refresh', 'secondary small'), true)}</section>`;
   if (!lib.loaded) return `<section class="panel">${notice('正在读取云端技能库…')}</section>`;
+  if (!lib.skills.length && loading) {
+    return `<section class="panel">${empty('云端技能库里还没有技能', '先在“技能发布”页把技能发布到云端，再回到这里安装到机器人上。',
+      button('去技能发布页', 'go-' + CLOUD_SKILLS_ROUTE, 'secondary small'))}</section>`;
+  }
   if (!lib.skills.length) {
     return `<section class="panel">${empty('云端技能库还是空的', '把自己写的技能文件夹发布上来，或者先把应用自带的示例技能发布到自己的技能库。',
       cloudSkillButton('发布应用自带的示例技能', 'examples', 'secondary small'))}</section>`;
   }
-  return `<div class="cards">${lib.skills.map(cloudSkillCard).join('')}</div>`;
+  return `<div class="cards">${lib.skills.map(row => cloudSkillCard(row, loading)).join('')}</div>`;
 }
 
 function cloudSkillExamples() {
@@ -141,24 +157,47 @@ function cloudSkillExamples() {
     cloudSkillButton(missing ? `一键发布到我的技能库（${missing} 个还没有发布）` : '再发布一次', 'examples', missing ? 'small' : 'secondary small'));
 }
 
-function cloudSkillsPage() {
-  const lib = cloudSkills, account = state.cloud_account || {logged_in: false};
-  const title = ['CLOUD SKILLS', '云端技能', '技能包存放在云平台，只有你的组织能看到。在这里发布技能，或者把一个版本安装到机器人上。'];
-  if (!account.logged_in) return heading(...title) + cloudSignInNotice(CLOUD_SKILLS_SIGN_IN);
-  if ((!lib.loaded || lib.loadedFor !== cloudSignInKey()) && !lib.pending) setTimeout(cloudSkillsLoad);
-  return heading(...title, cloudSkillButton('发布技能', 'publish') + cloudSkillButton('刷新', 'refresh', 'secondary')) +
-    `<div class="section-head"><h2>技能库 <span class="badge-count" id="cloud-skill-count">${lib.skills.length}</span></h2>` +
-    `<span>安装前会在这台电脑上核对内容，并检查机器人是否具备技能需要的能力</span></div>` +
-    `<div id="cloud-skill-list">${cloudSkillList()}</div><div id="cloud-skill-examples">${cloudSkillExamples()}</div>`;
+// The part both pages share: the count and the list, redrawn in place by cloudSkillsDraw.
+function cloudSkillLibrary(title, hint, loading) {
+  return `<div class="section-head"><h2>${title} <span class="badge-count" id="cloud-skill-count">${cloudSkills.skills.length}</span></h2>` +
+    `<span>${hint}</span></div><div id="cloud-skill-list">${cloudSkillList(loading)}</div>`;
 }
 
-// The library changed: redraw the list, the count and the examples in place. False when the page is not showing them.
+function cloudSkillsWanted() {
+  const lib = cloudSkills;
+  if ((!lib.loaded || lib.loadedFor !== cloudSignInKey()) && !lib.pending) setTimeout(cloudSkillsLoad);
+}
+
+// 技能发布: what is in the cloud and how it gets there. No robot is involved.
+function cloudSkillsPage() {
+  const account = state.cloud_account || {logged_in: false};
+  const title = ['PUBLISH SKILLS', CLOUD_SKILLS_PAGE_NAMES[CLOUD_SKILLS_ROUTE], '把技能包发布到云平台，只有你的组织能看到。发布不会改动任何机器人；要把技能装到机器人上，去“技能加载”页。'];
+  if (!account.logged_in) return heading(...title) + cloudSignInNotice(CLOUD_SKILLS_SIGN_IN);
+  cloudSkillsWanted();
+  return heading(...title, cloudSkillButton('发布技能', 'publish') + cloudSkillButton('刷新', 'refresh', 'secondary')) +
+    cloudSkillLibrary('已发布的技能', `版本发布后不能改；改了内容请提高版本号再发布 ${button('去技能加载页', 'go-' + CLOUD_SKILLS_LOAD_ROUTE, 'secondary small')}`, false) +
+    `<div id="cloud-skill-examples">${cloudSkillExamples()}</div>`;
+}
+
+// 技能加载: from the cloud onto a robot. Nothing here publishes or deletes.
+function cloudSkillLoadPage() {
+  const account = state.cloud_account || {logged_in: false};
+  const title = ['LOAD SKILLS', CLOUD_SKILLS_PAGE_NAMES[CLOUD_SKILLS_LOAD_ROUTE], '把云端技能库里的一个版本安装到机器人上。发布和删除版本在“技能发布”页。'];
+  if (!account.logged_in) return heading(...title) + cloudSignInNotice(CLOUD_SKILLS_LOAD_SIGN_IN);
+  cloudSkillsWanted();
+  return heading(...title, cloudSkillButton('刷新', 'refresh', 'secondary')) +
+    cloudSkillLibrary('可以加载的技能', '安装前会在这台电脑上核对内容，并检查机器人是否具备技能需要的能力', true);
+}
+
+// The library changed: redraw the list, the count and (技能发布 only) the examples in place. False when
+// neither page is showing them.
 function cloudSkillsDraw() {
   const list = document.querySelector('#cloud-skill-list'), count = document.querySelector('#cloud-skill-count');
-  if (current !== CLOUD_SKILLS_ROUTE || !list || !count) return false;
+  if (!cloudSkillOnAPage() || !list || !count) return false;
   list.innerHTML = cloudSkillList();
   count.textContent = String(cloudSkills.skills.length);
-  document.querySelector('#cloud-skill-examples').innerHTML = cloudSkillExamples();
+  const examples = document.querySelector('#cloud-skill-examples');
+  if (examples) examples.innerHTML = cloudSkillExamples();
   return true;
 }
 
@@ -174,7 +213,7 @@ async function cloudSkillsFetch() {
   }
   lib.loaded = true;
   lib.loadedFor = cloudSignInKey();
-  if (!cloudSkillsDraw() && current === CLOUD_SKILLS_ROUTE) render();
+  if (!cloudSkillsDraw() && cloudSkillOnAPage()) render();
 }
 
 function cloudSkillsLoad() {
@@ -230,21 +269,22 @@ async function cloudSkillPublishExamples() {
 }
 
 // ---------------------------------------------------------------- versions of one skill
-function cloudSkillReleaseRow(release) {
+// One version in the versions dialog. Opened from 技能发布 it can be deleted, from 技能加载 installed.
+function cloudSkillReleaseRow(release, loading = false) {
   const key = release.skill_id + '|' + release.version;
   return `<div class="contract-line cloud-skill-release" data-cloudskill-release="${h(release.version)}"><div class="section-head">` +
     `<b>版本 ${h(release.version)} ${cloudSkillMotionBadge(release)}</b><div class="button-row">` +
-    `${cloudSkillButton('删除', 'delete', 'secondary small', key)}${cloudSkillButton('安装到机器人', 'install', 'small', key)}</div></div>` +
+    `${loading ? cloudSkillButton('安装到机器人', 'install', 'small', key) : cloudSkillButton('删除', 'delete', 'secondary small', key)}</div></div>` +
     `<p>${h(cloudSkillWhen(release.created_at))}${cloudSkillPublisher(release.created_by) ? ' · ' + h(cloudSkillPublisher(release.created_by)) : ''} · ${release.files.length} 个文件，` +
     `${cloudSkillSize(release.size)} · 摘要 <span class="mono" title="${h(release.digest)}">${h(release.digest.slice(0, CLOUD_SKILLS_DIGEST_SHOWN))}…</span></p>` +
     `${release.notes ? `<p class="cloud-skill-notes">${h(release.notes)}</p>` : ''}</div>`;
 }
 
-async function cloudSkillVersions(skillId) {
+async function cloudSkillVersions(skillId, loading = false) {
   const result = await api('cloud-skills/detail', {skill_id: skillId});
   const title = result.releases[0]?.title || skillId;
   dialog(h(title), `${h(skillId)} · 云端的 ${result.releases.length} 个版本`,
-    `<div class="dialog-body"><div class="form-error" role="alert"></div>${result.releases.map(cloudSkillReleaseRow).join('') ||
+    `<div class="dialog-body"><div class="form-error" role="alert"></div>${result.releases.map(r => cloudSkillReleaseRow(r, loading)).join('') ||
       empty('这个技能在云端已经没有版本了', '可能刚被删除。')}</div><div class="dialog-footer">${button('关闭', 'close')}</div>`);
 }
 
@@ -261,13 +301,13 @@ function cloudSkillDeleteAsk(key) {
 async function cloudSkillInstallForm(fixed) {
   if (!project()) return toast('请先创建或选择一个项目');
   if (!state.cloud_account?.logged_in) {
-    return dialog('从云端安装技能', '云端技能库', `<div class="dialog-body">${cloudSignInNotice(CLOUD_SKILLS_SIGN_IN)}</div>`);
+    return dialog('从云端安装技能', '云端技能库', `<div class="dialog-body">${cloudSignInNotice(CLOUD_SKILLS_LOAD_SIGN_IN)}</div>`);
   }
   if (!cloudSkills.loaded || cloudSkills.loadedFor !== cloudSignInKey()) await cloudSkillsLoad();
   const robots = cloudSkillRobots(state.robots, projectId), skills = cloudSkills.skills;
   if (!skills.length) {
     return dialog('从云端安装技能', '云端技能库', `<div class="dialog-body">${empty('云端技能库里还没有技能',
-      h(cloudSkills.error) || '先在“云端技能”页发布一个技能，或把应用自带的示例技能发布上去。', button('去云端技能页', 'go-' + CLOUD_SKILLS_ROUTE, 'secondary small'))}</div>`);
+      h(cloudSkills.error) || '先在“技能发布”页发布一个技能，或把应用自带的示例技能发布上去。', button('去技能发布页', 'go-' + CLOUD_SKILLS_ROUTE, 'secondary small'))}</div>`);
   }
   if (!robots.length) {
     return dialog('从云端安装技能', '选择机器人', `<div class="dialog-body">${empty('当前项目里没有已连接的机器人',
@@ -306,6 +346,7 @@ async function cloudSkillAction(type, id) {
   if (type === 'publish') return cloudSkillPublishForm(id || '');
   if (type === 'examples') return cloudSkillPublishExamples();
   if (type === 'versions') return cloudSkillVersions(id);
+  if (type === 'versions-load') return cloudSkillVersions(id, true);
   if (type === 'delete') return cloudSkillDeleteAsk(id);
   if (type === 'install') {
     const [skillId, version, robotId] = String(id || '').split('|');
@@ -383,8 +424,11 @@ function cloudSkillAttach(robot) {
   robotDetailRender = d => { baseRender(d); cloudSkillAttach(d.robot); };
 }
 
-// Register the page: one more entry at the end of the navigation, its icon and its view.
+// Register the two pages: two more entries at the end of the navigation, their icons and their views.
 icons[CLOUD_SKILLS_ROUTE] = 'M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A4.5 4.5 0 0 1 17 18z M12 11v5 M9.5 13.5 12 11l2.5 2.5';
-navigation.push([CLOUD_SKILLS_ROUTE, '云端技能']);
+icons[CLOUD_SKILLS_LOAD_ROUTE] = 'M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.3A4.5 4.5 0 0 1 17 18z M12 11v5 M9.5 13.5 12 16l2.5-2.5';
+navigation.push([CLOUD_SKILLS_ROUTE, CLOUD_SKILLS_PAGE_NAMES[CLOUD_SKILLS_ROUTE]]);
+navigation.push([CLOUD_SKILLS_LOAD_ROUTE, CLOUD_SKILLS_PAGE_NAMES[CLOUD_SKILLS_LOAD_ROUTE]]);
 views[CLOUD_SKILLS_ROUTE] = cloudSkillsPage;
-if (location.hash.slice(1) === CLOUD_SKILLS_ROUTE) route();      // app.js routed before this file was loaded
+views[CLOUD_SKILLS_LOAD_ROUTE] = cloudSkillLoadPage;
+if (Object.hasOwn(CLOUD_SKILLS_PAGE_NAMES, location.hash.slice(1))) route();      // app.js routed before this file was loaded

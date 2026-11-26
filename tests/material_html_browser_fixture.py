@@ -37,7 +37,13 @@ def _fake_weknora():
     return module
 
 
-def _answer(question, _ids):
+KNOWLEDGE = None        # the stand-in, once it runs
+
+
+def _answer(question, ids):
+    # A page that is not about a driver (its file name says so): the model finds none of the items.
+    if any('论文' in KNOWLEDGE.knowledge[k]['upload']['fileName'] for k in ids if k in KNOWLEDGE.knowledge):
+        return '{}'
     for key, value in ANSWERS.items():
         if f'"{key}"' in question:
             return json.dumps(value, ensure_ascii=False)
@@ -48,7 +54,7 @@ if __name__ == '__main__':
     config_path = sys.argv[1] if len(sys.argv) > 1 else '/tmp/neuxmind-material-html-ui.json'
     tmp = tempfile.TemporaryDirectory()
     weknora = _fake_weknora()
-    knowledge = weknora.FakeWeKnora()
+    knowledge = KNOWLEDGE = weknora.FakeWeKnora()
     knowledge.answer = _answer
     cloud = cloud_fixture.CloudServer(models=(), weknora_url=knowledge.url, weknora_api_key=weknora.API_KEY,
                                       weknora_kb_id=knowledge.kb_id, library_parse_interval_seconds=1,
