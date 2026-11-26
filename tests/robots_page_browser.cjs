@@ -46,10 +46,13 @@ const ROBOT = '巡检机器人';
   await page.goto(cfg.url + '/#robots');
   await main.locator('.robot-entry').waitFor();
   check(await main.locator('.robot-entry .journey-option').count() === 3, 'An empty page does not show the three ways to add a robot');
-  check(await main.locator('.page-head button').count() === 0, 'The empty page repeats the three ways as buttons in its head');
+  check(await main.locator('.page-head button:visible').count() === 0, 'The empty page repeats the three ways as buttons in its head');
   check(await main.locator('article.card').count() === 0, 'A card is shown without a robot');
-  check(await main.locator('details[open]').count() === 0, 'A fold is open before anyone opened it');
-  check(await main.locator('.rp-folds > details').count() >= 3, 'The explanations and settings are not folds at the foot');
+  check(await main.locator('details[open]').count() === 0, 'Something is open before anyone opened it');
+  check(await main.locator('.page-purpose, .rp-folds').count() === 0, 'The page still has folds of explanations');
+  check(await main.locator('h1').innerText() === '我的机器人' && await main.locator('.page-head .subtitle, .section-head').count() === 0,
+        'The empty page explains itself above the three ways');
+  check(await main.locator('.page-head details.rp-settings').count() === 1, 'The empty page has no 设置');
   check(!(await main.locator('.notice:visible').count()), 'A notice is in sight on the empty page');
   check(await noSidewaysScroll(), 'The empty page scrolls sideways');
   await shot('1-empty');
@@ -70,7 +73,9 @@ const ROBOT = '巡检机器人';
   check(await main.locator('.robot-entry').count() === 0, 'The three ways to add a robot still fill the page once there is a robot');
   check(await main.locator('h1').innerText() === '我的机器人', 'The page with a robot is not titled 我的机器人');
   check((await main.locator('.page-head .eyebrow').innerText()).includes('1 台真机'), 'The head does not say how many robots there are');
-  check(await main.locator('.page-head button').count() === 1, 'The head has more than the one button');
+  check(await main.locator('.page-head button:visible').count() === 1, 'The head has more than the one button');
+  check(await main.locator('.page-head details.rp-settings > summary').isVisible(), 'The head has no 设置');
+  check(await main.locator('.page-purpose, .rp-folds').count() === 0, 'The page with a robot still has folds of explanations');
   const seen = await inSight(ROBOT);
   check(seen.length === 3 && seen[2] === '更多功能', `The card shows ${JSON.stringify(seen)} instead of two buttons and the list`);
   check(seen[1] === '实时状态', 'The live state is not the second button');
@@ -157,15 +162,47 @@ const ROBOT = '巡检机器人';
   await page.keyboard.press('Escape');
   await shot('5-two-robots');
 
-  // 5. The folds at the foot stay as the person left them when the page is drawn again.
-  check(await main.locator('.rp-folds details[open]').count() === 0, 'A fold is open before anyone opened it');
-  await main.locator('details[data-rp-fold="models"] > summary').click();
-  await main.locator('details[data-rp-fold="models"] [data-action="engine-models"]').first().waitFor();
+  // 5. Cards line up: each is a name, a line of state, one line of what and where. What only explains
+  //    is in the list.
+  const lines = name => card(name).evaluate(el => { const top = s => el.querySelector(s)?.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    return {name: top('h3'), state: top('.hb-line, .rp-state'), what: top('.rp-what'), whatLines: el.querySelector('.rp-what')?.getClientRects().length,
+            bottom: top('.card-bottom'), height: el.getBoundingClientRect().height}; });
+  const a = await lines(ROBOT), b = await lines('仿真四足机器人');
+  for (const key of ['name', 'state', 'what', 'bottom', 'height']) {
+    check(Number.isFinite(a[key]) && Math.abs(a[key] - b[key]) <= 1, `The two cards do not line up at "${key}": ${JSON.stringify([a, b])}`);
+  }
+  check(!(await sim.locator('.card-body .inline-note').count()) && !(await sim.locator('.card-body').innerText()).includes('地址和令牌'),
+        'A note that only explains is still on the simulated robot\'s card');
+  check(await sim.locator('.card-top .status').count() === 1 && (await sim.locator('.rp-state').innerText()).trim() === '运行中',
+        'Whether the simulation runs is not the line under its name');
+  await openRobotMenu(sim);
+  check((await sim.locator('.robot-menu-notes').innerText()).includes('不能作为现场证据'), 'The note about simulated results is not in the list');
+  await page.keyboard.press('Escape');
+
+  // 5b. 「设置」 in the head: the two settings that are not a robot's, each in a dialog. It stays open
+  //     when the page is drawn again, and closes like a card's list.
+  const settings = main.locator('.page-head details.rp-settings');
+  await settings.locator('summary').click();
+  const offered = await settings.locator('.robot-menu-item').evaluateAll(els => els.map(el => el.dataset.action));
+  check(offered.join() === 'engine-models,engine-body-types-open', `设置 offers ${offered.join()}`);
+  const box = await settings.locator('.robot-menu-panel').boundingBox();
+  check(box && box.x >= 0 && box.x + box.width <= 1440, 'The list of 设置 leaves the window');
   await page.evaluate(() => refresh(true));
-  check(await main.locator('details[data-rp-fold="models"]').evaluate(el => el.open), 'A fold closed when the page was drawn again');
-  await main.locator('details[data-rp-fold="models"] > summary').click();
-  await page.evaluate(() => refresh(true));
-  check(!(await main.locator('details[data-rp-fold="models"]').evaluate(el => el.open)), 'A fold opened again by itself');
+  check(await settings.evaluate(el => el.open), '设置 closed when the page was drawn again');
+  await openRobotMenu(card(ROBOT));
+  check(!(await settings.evaluate(el => el.open)), '设置 stayed open next to a card\'s list');
+  await page.keyboard.press('Escape');
+  await settings.locator('summary').click();
+  await settings.locator('[data-action="engine-body-types-open"]').click();
+  await dialog.locator('.rp-types tbody tr').first().waitFor();
+  check((await dialog.locator('.dialog-head h2').innerText()) === '本体类型清单', 'The list of body types is not a dialog of its own');
+  check(!(await settings.evaluate(el => el.open)), '设置 stayed open behind its dialog');
+  await page.locator('#dialog [data-action="close"]').first().click();
+  await settings.locator('summary').click();
+  await settings.locator('[data-action="engine-models"]').click();
+  await page.locator('#dialog[open] .dialog-head').waitFor();
+  await page.locator('#dialog [data-action="close"]').first().click();
+  await shot('5b-settings');
 
   // 6. Narrow windows: nothing scrolls sideways, and the list stays inside the window.
   for (const width of [320, 375, 768, 1024, 1920]) {

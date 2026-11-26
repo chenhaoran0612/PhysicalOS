@@ -141,7 +141,7 @@ const ROBOT = '巡检机器人';
 
   // 6. The robot's network is cut. The card says so by itself, in place: the same card, an opened
   //    explanation stays open. What a request gets meanwhile is said on the card.
-  await page.locator('details.page-purpose summary').last().click();
+  await page.locator('details.rp-settings > summary').click();          // issue #41: the page has no folds; 「设置」 is what can be open
   await card().evaluate(el => { el.dataset.sameCard = 'yes'; });
   await control('/cut');
   text = await lineSays(['已断开', '正在自动重连', '请求不会发出', '不需要手工操作'], 'After the network was cut');
@@ -150,7 +150,7 @@ const ROBOT = '巡检机器人';
   check(await line().locator('.hb-reason').count() >= 1, 'The reason is not shown');
   check(await line().locator('[data-action="engine-runtime-link-retry"]').count() === 1, 'Trying now is not offered');
   check(await card().getAttribute('data-same-card') === 'yes', 'The cards were drawn again because the link dropped');
-  check(await page.locator('details.page-purpose').last().evaluate(el => el.open), 'An opened explanation was closed by the drop');
+  check(await page.locator('details.rp-settings').evaluate(el => el.open), 'An opened explanation was closed by the drop');
   await page.screenshot({path: `${shots}/runtime-link-down.png`});
   // On a phone the line and its reason wrap; nothing scrolls sideways.
   await page.setViewportSize({width: 390, height: 844});

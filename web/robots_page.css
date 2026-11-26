@@ -44,15 +44,26 @@
 .rp-add .journey-option h3{margin:4px 0 2px}
 .rp-add .journey-option p{margin:0 0 12px}
 
-/* ---- the folds at the foot of the page: one quiet stack */
-.rp-folds{margin-top:6px;border-top:1px solid #e0e8dc}
-.rp-folds .page-purpose{margin:0;padding:11px 0}
-.rp-folds .page-purpose[open]>summary{margin-bottom:8px}
-.rp-folds .section-head{margin-top:6px}
-.rp-folds .notice{margin-bottom:4px}
-.rp-folds .cards:empty{display:none}
-/* the fold's own line already says what this is */
-.rp-folds [data-rp-fold="models"] .section-head{justify-content:flex-end;margin:0 0 10px}
-.rp-folds [data-rp-fold="models"] .section-head h2{display:none}
+/* ---- cards line up: under the name a line of state, then one line of what and where */
+.rp-cards{align-items:stretch}
+.rp-card{display:flex;flex-direction:column}
+.rp-card .card-body{flex:1 1 auto}
+.rp-card .hb-line,.rp-card .rp-state{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-height:24px;margin:10px 0 0}
+.rp-card .rp-what{margin:8px 0 0;font-size:12px;line-height:1.6;color:#6f7f6c}
+.rp-card .rp-what .body-type-name{color:var(--ink)}
+.rp-sep{color:#b3bfae}
+
+/* ---- notes in a card's list: what explains rather than reports */
+.robot-menu-note{margin:0;padding:3px 10px;font-size:11px;line-height:1.6;color:#7c8b74;min-height:0}
+
+/* ---- 「设置」 in the page head: the same list, hung from the head */
+.rp-head .button-row{position:relative;flex-wrap:nowrap;align-items:stretch}
+.rp-settings>summary{height:100%;min-height:40px}
+.rp-settings{margin-left:0}
+.rp-settings>.robot-menu-panel{right:0;top:calc(100% + 6px);width:230px;max-width:calc(100vw - 34px)}
+.robot-menu-count{margin-left:auto;padding-left:12px;font-size:11px;color:#93a08f}
+
+/* ---- the list of body types, in its dialog */
+.rp-types .body-types-lead{margin-top:0}
 
 @media(max-width:850px){.robot-menu-panel{right:18px}}
