@@ -1,5 +1,5 @@
 // Browser acceptance for issue #49 (功能简化): 「工程助手」(with 协作流程), 「助手工具」 and 「自有服务」 are
-// hidden for now. They are not in the sidebar or the account menu, their addresses open 任务工作台, and
+// hidden for now. They are not in the sidebar or the account menu, their addresses open 工作台, and
 // no other page or dialog still leads to them; with the test switch on, the pages are back unchanged.
 //   node tests/hidden_pages_browser.cjs <fixture-config.json> [screenshot-dir]
 // Fixture: tests/ux01_browser_fixture.py (a fresh state directory; the server needs NEUXMIND_MAIL_DEV_ECHO=1).
@@ -39,7 +39,7 @@ const NAV_BEFORE = 18;          // tests/ux03_browser.cjs counts the sidebar the
   const nav = await navTexts(page);
   check(!nav.some(t => Object.values(HIDDEN).includes(t)), `The sidebar still lists a hidden page: ${nav}`);
   check(nav.length === NAV_BEFORE - 3, `The sidebar lost or gained something else: ${nav}`);
-  for (const kept of ['任务工作台', '我的机器人', '机器人应用', '模型库', '平台模型与算力', '用量与账单', '云平台账户']) {
+  for (const kept of ['工作台', '我的机器人', '机器人应用', '模型库', '平台模型与算力', '用量与账单', '云平台账户']) {
     check(nav.includes(kept), `The sidebar lost 「${kept}」: ${nav}`);
   }
   await page.locator('#user-menu-toggle').click();
@@ -51,7 +51,7 @@ const NAV_BEFORE = 18;          // tests/ux03_browser.cjs counts the sidebar the
   await page.screenshot({path: `${shots}/hidden-pages-1-sidebar-and-menu.png`});
   await page.keyboard.press('Escape');
 
-  // 2. The address of a hidden page opens 任务工作台, typed in the address bar or opened afresh.
+  // 2. The address of a hidden page opens 工作台, typed in the address bar or opened afresh.
   for (const route of Object.keys(HIDDEN)) {
     await page.evaluate(r => { location.hash = r; }, route);
     await page.waitForFunction(() => location.hash === '#overview');
@@ -64,8 +64,8 @@ const NAV_BEFORE = 18;          // tests/ux03_browser.cjs counts the sidebar the
     await page.goto('about:blank');
     await page.goto(cfg.url + '/#' + route);
     await main.locator('.tw-board').waitFor();
-    check(await page.evaluate(() => location.hash) === '#overview', `Opening #${route} afresh did not end on 任务工作台`);
-    check((await page.locator('#breadcrumb').innerText()).trim() === '任务工作台', `The breadcrumb of #${route}: ${await page.locator('#breadcrumb').innerText()}`);
+    check(await page.evaluate(() => location.hash) === '#overview', `Opening #${route} afresh did not end on 工作台`);
+    check((await page.locator('#breadcrumb').innerText()).trim() === '工作台', `The breadcrumb of #${route}: ${await page.locator('#breadcrumb').innerText()}`);
   }
 
   // 3. The page of a task: five steps as before, 准备能力 opens 机器人应用, and no card sends people to 工程助手.
