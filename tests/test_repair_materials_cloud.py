@@ -93,13 +93,22 @@ class RepairMaterialsCloudTest(unittest.TestCase):
         for _ in range(5):
             material_parse.run_pending(context.db, context.settings)
 
-    def test_a_repair_reads_only_its_devices_confirmed_results(self):
+    def robot(self, platform, robot_id, name, model):
+        """A robot of this workspace with a brand and model (issue #51: its materials are those of that brand and model)."""
+        platform.store.put('robots', {'id': robot_id, 'project_id': 'project-fixture', 'name': name, 'family': 'quadruped',
+                                      'product': {'vendor': LABELS['vendor'], 'model': model, 'source': 'manual'}})
+
+    def test_a_repair_reads_only_the_confirmed_results_of_its_robots_brand_and_model(self):
         self.ok('cloud/configure', {'base_url': self.cloud.url})
         self.ok('cloud/login', {'email': self.email, 'password': cloud_fixture.PASSWORD})
         platform = self.app.workspace(self.user)
+        self.robot(platform, ROBOT['device_id'], ROBOT['device_name'], 'Q1')
+        self.robot(platform, 'robot-0123456789ac', '同型号的另一台', 'q1')
+        self.robot(platform, OTHER['device_id'], OTHER['device_name'], 'Q2')
         confirmed = self.upload('driver-manual.md', MANUAL, **ROBOT)
         waiting = self.upload('draft.md', MANUAL + b'draft\n', **ROBOT)
-        other = self.upload('other.md', MANUAL + b'other\n', **OTHER)
+        other = self.upload('other.md', MANUAL + b'other\n', **OTHER, model='Q2')
+        self.assertEqual(confirmed.get('device_id', ''), '')
         self.parse()
         result = self.ok('library/parse', {'material_id': confirmed['id']})
         self.assertEqual(result['status'], 'failed', 'no knowledge service: a person fills it in')
@@ -115,9 +124,13 @@ class RepairMaterialsCloudTest(unittest.TestCase):
         self.assertEqual({k: entry['values'][k] for k in VALUES}, VALUES)
         self.assertEqual((entry['kind'], entry['filename'], entry['driver']), ('document', 'driver-manual.md', True))
         self.assertEqual((mine['driver_materials'], mine['not_confirmed']), (1, 1))
+        self.assertEqual(mine['product'], {'vendor': LABELS['vendor'], 'model': 'Q1'})
         text = json.dumps(mine, ensure_ascii=False)
         for left_out in (self.email, waiting['id'], other['id'], 'other_driver', '示例驱动'):
             self.assertNotIn(left_out, text)
+
+        same_model = repair_materials.collect(platform, 'robot-0123456789ac')         # the same brand and model: the same materials
+        self.assertEqual([m['material_id'] for m in same_model['materials']], [confirmed['id']])
 
         theirs = repair_materials.collect(platform, OTHER['device_id'])
         self.assertEqual([m['material_id'] for m in theirs['materials']], [other['id']])

@@ -442,7 +442,7 @@ class Engineering:
         if not work.exists():return result
         for path in work.rglob('*'):
             if len(result)>=200:break
-            if path.is_symlink() or not path.is_file() or path.name in ('PROJECT.json','DEVICE_CONTEXT.json','WORKFLOW.json','UPSTREAM.json','ADAPTATION.json'):continue
+            if path.is_symlink() or not path.is_file() or path.name in ('PROJECT.json','DEVICE_CONTEXT.json','WORKFLOW.json','UPSTREAM.json','ADAPTATION.json','SIMULATION.json'):continue
             if path.relative_to(work).parts[0]=='UPSTREAM':continue
             relative=str(path.relative_to(work))
             if '.git' in path.relative_to(work).parts:continue

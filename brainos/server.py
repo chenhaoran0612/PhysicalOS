@@ -6,7 +6,7 @@ import threading
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .auth import CODE_RESEND_S, CODE_TTL_S, Identity
 from .mailer import Mailer
@@ -162,6 +162,9 @@ def make_handler(application):
             extra=extra or {'/material_parse.js':('material_parse.js','text/javascript; charset=utf-8'),'/material_parse.css':('material_parse.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #30: what a repair session found in the library, likewise.
             extra=extra or {'/repair_materials.js':('repair_materials.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # issue #51: the library by brand and model, and MuJoCo simulation environments
+            extra=extra or {'/model_library.js':('model_library.js','text/javascript; charset=utf-8'),'/model_library.css':('model_library.css','text/css; charset=utf-8'),
+                            '/mujoco_sim.js':('mujoco_sim.js','text/javascript; charset=utf-8'),'/mujoco_sim.css':('mujoco_sim.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #36: why the cloud is not signed in (the automatic sign-in), likewise.
             extra=extra or {'/cloud_auto_login.js':('cloud_auto_login.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #42: running an installed skill on a real robot (the confirmations of the run form), likewise.
@@ -203,6 +206,13 @@ def make_handler(application):
             user=self.user()
             if not user:
                 return
+            if path in ('/api/sims/frame','/api/sim/mujoco/preview'):       # issue #51: the picture of a simulation (PNG)
+                wanted=parse_qs(urlparse(self.path).query).get('id',[''])[0]
+                mujoco=application.workspace(user).mujoco
+                picture=mujoco.frame(wanted) if path=='/api/sims/frame' else mujoco.preview(wanted)
+                if picture is None:
+                    return self.respond({'error':'还没有画面'},404)
+                return self.respond(picture,mime='image/png')
             if path=='/api/state':
                 operator=bool(application.operator_email and user['email']==application.operator_email)
                 data={**application.workspace(user).snapshot(),'user':{**user,'operator':operator},
@@ -354,6 +364,11 @@ def make_handler(application):
                         'sims/restart':service.sims.api_restart,
                         'sims/remove':service.sims.remove,
                         'robots/live':service.robot_live,
+                        # issue #51: simulation environments (the task's) and the MuJoCo robot started in one (the robots' home)
+                        'sim/mujoco/overview':service.mujoco.overview,'sim/mujoco/generate':service.mujoco.generate,
+                        'sim/mujoco/empty':service.mujoco.empty,'sim/mujoco/scene':service.mujoco.scene,
+                        'sim/mujoco/review':service.mujoco.review,'sim/mujoco/remove':service.mujoco.remove,
+                        'sims/mujoco':service.mujoco.add_robot,'sims/view':service.mujoco.view,
                         'robots/run-skill':service.run_robot_skill,
                         # ux05-fix (Q7-03): global safety watch (stop not obeyed, latch guard, calibration)
                         'robots/safety':service.robot_safety,
@@ -376,6 +391,9 @@ def make_handler(application):
                         'library/upload/start':service.library.start,'library/upload/status':service.library.status,
                         'library/upload/complete':service.library.complete,'library/upload/cancel':service.library.cancel,
                         'library/delete':service.library.remove,
+                        # issue #51: the library by brand and model (overview with the brands and models, a robot's materials, one material moved)
+                        'library/products':service.model_library.overview,'library/robot':service.model_library.robot,
+                        'library/move':service.model_library.move,
                         # Issue #31: send a usable driver package from the library to a robot and verify it there
                         'library/deliver/start':service.package_delivery.start,'library/deliver/status':service.package_delivery.status,
                         'library/deliver/stop':service.package_delivery.stop,'library/deliver/list':service.package_delivery.list,

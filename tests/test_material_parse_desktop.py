@@ -101,11 +101,11 @@ class MaterialParseRelayTest(unittest.TestCase):
 
     def test_a_device_material_is_parsed_edited_and_confirmed_through_the_desktop(self):
         material = self.upload('arm.urdf', URDF, **DEVICE)
-        self.assertEqual((material['device_id'], material['device_name']), (DEVICE['device_id'], DEVICE['device_name']))
+        self.assertEqual((material.get('device_id', ''), material.get('device_name', '')), ('', ''))   # issue #51: its brand and model's
         self.parse()
-        listing = self.ok('library/list', {'device_id': DEVICE['device_id']})
+        listing = self.ok('library/list', {'vendor': LABELS['vendor'], 'model': LABELS['model'].lower()})
         self.assertEqual([(m['id'], m['status']) for m in listing['materials']], [(material['id'], 'failed')])
-        self.assertEqual(self.ok('library/list', {'device_id': 'robot-ffffffffffff'})['materials'], [])
+        self.assertEqual(self.ok('library/list', {'vendor': LABELS['vendor'], 'model': 'A2'})['materials'], [])
         result = self.ok('library/parse', {'material_id': material['id']})
         self.assertEqual((result['kind'], result['status']), ('urdf', 'failed'))
         self.assertIn('关节 j2', result['status_detail'])

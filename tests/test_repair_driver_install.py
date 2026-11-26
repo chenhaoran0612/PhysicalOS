@@ -51,6 +51,7 @@ class InstallCase(unittest.TestCase):
         self.robot_id, self.connection_id = 'robot-chassis', 'connection-chassis'
         # The body's safety state is latched before the repair, as R1-10 asks it to stay.
         self.store.put('robots', {'id': self.robot_id, 'project_id': self.pid, 'name': '底盘机器人', 'family': 'quadruped',
+                                  'product': {'vendor': '示例厂家', 'model': 'X1', 'source': 'manual'},   # issue #51: the stand-in library's packages are this brand and model's
                                   'connection_id': self.connection_id, 'estop_latched': True, 'estop_reason': '急停已按下', 'estop_checked_at': now()})
         self.store.put('device_connections', {**connection, 'id': self.connection_id, 'robot_id': self.robot_id, 'project_id': self.pid})
         self.store.put('agent_secrets', {**secret, 'id': self.connection_id})

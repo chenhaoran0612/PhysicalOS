@@ -81,7 +81,8 @@ if __name__ == '__main__':
     device.answer_others = b'Linux test-fixture\nCPU: ARM protocol fixture\n'
     device.outputs.update({device_status.status_command([]): STATUS_OUTPUT, device_software.SOFTWARE_EXEC: software().encode()})
     cloud = ListingLibrary()
-    material = cloud.add(NAME, PACKAGE)
+    # Issue #51: a package is its brand and model's; the script adds the robot as 示例机器人公司 X1 (robot_model_helper.cjs).
+    material = cloud.add(NAME, PACKAGE, vendor='示例机器人公司', model='X1')
     DriverInstallModel.requests = []
     DriverInstallModel.material = material
     DriverInstallModel.path = '%s/neuxmind-pkg/library/%s/%s' % (device.home, sha(PACKAGE)[:32], NAME)

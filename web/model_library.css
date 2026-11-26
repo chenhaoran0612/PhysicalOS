@@ -1,0 +1,19 @@
+/* Issue #51: the library by brand and model, and the robot models (web/model_library.js). Tokens of style.css. */
+.ml-models { display: grid; }
+.ml-model-row { display: grid; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--line, #e2e8e2); }
+.ml-model-row:first-child { border-top: 0; }
+.ml-model-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.ml-model-head b { font-size: 13px; color: var(--ink, #24332e); overflow-wrap: anywhere; }
+.ml-model-head .cell-sub { flex: 1 1 200px; font-family: inherit; }
+.ml-model-files { display: grid; gap: 8px; }
+.ml-model-file { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 12px; border-radius: 8px; background: #fbfcfa; }
+.ml-model-file .cell-main { overflow-wrap: anywhere; }
+.ml-model-file .cell-sub { font-family: inherit; }
+.ml-model-file .button-row { margin-left: auto; }
+.ml-model-none { font-size: 11px; color: var(--amber, #9b702a); }
+.ml-model-older summary { cursor: pointer; font-size: 11px; color: var(--muted, #7b8780); }
+.ml-model-older[open] summary { margin-bottom: 8px; }
+.ml-typed { display: grid; gap: 4px; padding: 12px 14px; margin-bottom: 14px; border: 1px dashed #dbe4d1; border-radius: 10px; }
+.ml-typed[hidden] { display: none; }
+@media (max-width: 560px) { .ml-model-file .button-row { margin-left: 0; } }
+.ml-note { margin: 0; padding: 4px 20px 16px; }

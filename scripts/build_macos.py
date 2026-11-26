@@ -41,6 +41,12 @@ PACKAGES=['brainos','neuxmind_spec','neuxmind_runtime']
 # Imported lazily (inside functions or by name) and therefore named explicitly.
 HIDDEN=['brainos.sim_child','brainos.sim_robots','brainos.runtime_bridge','neuxmind_runtime.cli',
         'neuxmind_runtime.adapters.sim_quadruped','neuxmind_runtime.adapters.sim_arm']
+# Issue #51: MuJoCo simulation. The engine runs only in the simulation's own child processes (the body named by
+# --adapter brainos.mujoco_body:body, and the checking tool behind --nx-mujoco-tool); its off-screen renderer and
+# the platform's OpenGL context are found by name at run time. Its plugin libraries are loaded from its folder.
+HIDDEN+=['brainos.mujoco_body','brainos.mujoco_tool','mujoco','mujoco.renderer','mujoco.gl_context',
+         'mujoco.rendering.classic.gl_context']+(['mujoco.cgl'] if sys.platform=='darwin' else [])
+BINARIES=['mujoco']
 
 
 def run(args):
@@ -55,6 +61,8 @@ def pyinstaller_args(distpath,workpath,specpath):
         args+=['--collect-submodules',package]
     for module in HIDDEN:
         args+=['--hidden-import',module]
+    for package in BINARIES:
+        args+=['--collect-binaries',package]
     for source,target in DATA:
         args+=['--add-data',f'{source}{os.pathsep}{target}']
     return args+['--distpath',distpath,'--workpath',workpath,'--specpath',specpath,ROOT/'desktop/launcher.py']
@@ -83,6 +91,8 @@ def check():
     launcher=(ROOT/'desktop/launcher.py').read_text(encoding='utf-8')
     if '--nx-sim-child' not in launcher:
         problems.append('desktop/launcher.py 不处理 --nx-sim-child（打包后无法启动仿真机器人）')
+    if '--nx-mujoco-tool' not in launcher:
+        problems.append('desktop/launcher.py 不处理 --nx-mujoco-tool（打包后无法检查仿真环境）')   # issue #51
     code=('import importlib,sys\n'
           f'sys.path[:0]={[str(p) for p in PATHS]!r}\n'
           f'for m in {PACKAGES+HIDDEN!r}: importlib.import_module(m)\n'
@@ -147,6 +157,32 @@ def smoke(backend,state_dir):
             process.kill()
 
 
+MUJOCO_SMOKE_URDF=b"""<?xml version="1.0"?>
+<robot name="freeze"><link name="trunk"><inertial><mass value="5"/><inertia ixx="0.05" iyy="0.05" izz="0.05" ixy="0" ixz="0" iyz="0"/></inertial>
+<collision><geometry><box size="0.4 0.2 0.1"/></geometry></collision></link>
+<link name="leg"><inertial><origin xyz="0 0 -0.1"/><mass value="0.5"/><inertia ixx="0.005" iyy="0.005" izz="0.005" ixy="0" ixz="0" iyz="0"/></inertial>
+<collision><origin xyz="0 0 -0.1"/><geometry><cylinder radius="0.02" length="0.2"/></geometry></collision></link>
+<joint name="hip" type="revolute"><parent link="trunk"/><child link="leg"/><axis xyz="0 1 0"/><limit lower="-1" upper="1" velocity="5" effort="20"/></joint>
+</robot>"""
+
+
+def mujoco_smoke(backend,work):
+    """Issue #51: the frozen backend builds a MuJoCo scene from a URDF in its own child process and draws it."""
+    sys.path.insert(0,str(ROOT))
+    from brainos import mujoco_model,mujoco_scene
+    work=pathlib.Path(work);(work/'robot.urdf').write_bytes(MUJOCO_SMOKE_URDF)
+    mujoco_model.prepare(work/'robot.urdf','urdf',work/'model')
+    (work/'check.json').write_text(json.dumps({'model_dir':str(work/'model'),'scene':mujoco_scene.EMPTY,'family':'quadruped'}))
+    env={k:v for k,v in os.environ.items() if k not in ('PYTHONPATH','PYTHONHOME')}
+    done=subprocess.run([str(backend),'--nx-mujoco-tool','check',str(work/'check.json'),str(work/'out')],capture_output=True,text=True,timeout=180,env=env,cwd=str(work))
+    lines=done.stdout.strip().splitlines()
+    assert done.returncode==0 and lines,(done.returncode,done.stderr[-800:])
+    result=json.loads(lines[-1])
+    assert result.get('ok') is True and result['summary']['joints']==['hip'],result
+    # The picture needs OpenGL, which a build machine without a display may lack: reported, not required.
+    return {'mujoco':'ok','mujoco_preview':result.get('preview') is True,'mujoco_render_error':result.get('render_error','')}
+
+
 def freeze_check(out=None):
     """Freeze the backend with the same arguments as the Mac build (current OS) and smoke-test it."""
     out=pathlib.Path(out or tempfile.mkdtemp(prefix='neuxmind-freeze-'))
@@ -156,6 +192,8 @@ def freeze_check(out=None):
     backend=out/'dist'/'brainos-server'/'brainos-server'
     with tempfile.TemporaryDirectory(prefix='neuxmind-freeze-state-') as state:
         result=smoke(backend,pathlib.Path(state))
+    with tempfile.TemporaryDirectory(prefix='neuxmind-freeze-mujoco-') as work:
+        result.update(mujoco_smoke(backend,work))   # issue #51
     print(json.dumps({'ok':True,'bundle':str(out/'dist'/'brainos-server'),**result},ensure_ascii=False,indent=2))
     return result
 

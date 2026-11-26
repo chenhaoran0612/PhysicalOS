@@ -45,6 +45,8 @@ MATERIAL_KEYS = ('id', 'filename', 'kind', 'format', 'body_type', 'vendor', 'mod
 LIST_FILTERS += ('device_id',)
 START_FIELDS += ('device_id', 'device_name')
 MATERIAL_KEYS += ('device_id', 'device_name')
+# Issue #51: ``kind: "model"`` asks for the upload to be kept as the robot model of its brand and model.
+START_FIELDS += ('kind',)
 UPLOAD_KEYS = ('id', 'status', 'resumed', 'filename', 'kind', 'format', 'size', 'sha256', 'chunk_bytes',
                'chunk_count', 'received_count', 'received_bytes', 'expires_at')
 CHUNK_KEYS = ('upload_id', 'index', 'received_count', 'chunk_count', 'received_bytes')
@@ -68,6 +70,15 @@ def _counts(source, keys):
     """The listed keys that hold a non-negative whole number (totals, sizes, positions)."""
     return {k: source[k] for k in keys
             if isinstance(source.get(k), int) and not isinstance(source[k], bool) and source[k] >= 0}
+
+
+def _model_formats(source):
+    """What the cloud takes as a robot model (issue #51): its suffixes and size limit; None from an older cloud."""
+    if not isinstance(source, dict):
+        return None
+    extensions = [e for e in source.get('extensions', []) if isinstance(e, str) and len(e) <= 16][:16] \
+        if isinstance(source.get('extensions'), list) else []
+    return {'extensions': extensions, **_counts(source, ('max_bytes',))} if extensions else None
 
 
 def _upload_id(value):
@@ -170,7 +181,8 @@ class MaterialLibrary:
         limits = result.get('limits') if isinstance(result.get('limits'), dict) else {}
         return {'formats': formats, 'extensions': [e for f in formats for e in f['extensions']],
                 'supported': result.get('supported') if isinstance(result.get('supported'), str) else '',
-                'limits': _scalars(limits, ('document_bytes', 'package_bytes', 'org_quota_bytes', 'chunk_bytes'))}
+                'limits': _scalars(limits, ('document_bytes', 'package_bytes', 'org_quota_bytes', 'chunk_bytes')),
+                'model': _model_formats(result.get('model'))}          # issue #51: what a robot model may be
 
     # ------------------------------------------------------------- operations
     def list(self, p=None):

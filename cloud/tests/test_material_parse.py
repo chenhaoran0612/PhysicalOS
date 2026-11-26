@@ -178,8 +178,7 @@ class PackageParseTest(ParseCase):
 
 class DocumentParseTest(ParseCase):
     def test_a_document_goes_to_the_knowledge_service_and_its_answers_fill_the_items(self):
-        result = self.upload_parsed("manual.docx", lib.docx_bytes("驱动手册"), device_id="robot-0123456789ab",
-                                    device_name="一号机")
+        result = self.upload_parsed("manual.docx", lib.docx_bytes("驱动手册"))
         values = result["values"]
         self.assertEqual((values["driver_name"], values["driver_version"], values["ros2_distro"]),
                          ("demo_motion_driver", "1.4.0", ["humble"]))
@@ -189,7 +188,7 @@ class DocumentParseTest(ParseCase):
         sent = self.fake.uploads[0]
         self.assertTrue(sent["fileName"].endswith(".docx"))
         self.assertEqual(sent["metadata"]["neuxmind_material_id"], result["material"]["id"])
-        self.assertEqual(sent["metadata"]["neuxmind_device_id"], "robot-0123456789ab")
+        self.assertNotIn("neuxmind_device_id", sent["metadata"])      # issue #51: a material is not one device's
         self.assertEqual(sent["sha256"], result["material"]["sha256"])
         self.assertEqual(len(self.fake.questions), 3)
         knowledge_id = next(iter(self.fake.knowledge))
@@ -284,10 +283,10 @@ class DocumentParseTest(ParseCase):
         self.assertEqual(result["status"], "failed")
         self.assertIn("NEUXMIND_WEKNORA_API_KEY", result["status_detail"])
 
-    def test_the_same_file_for_two_devices_is_asked_about_once_and_removed_with_the_last(self):
+    def test_the_same_file_for_two_models_is_asked_about_once_and_removed_with_the_last(self):
         data = lib.docx_bytes("同一本手册")
-        first = self.upload_parsed("manual.docx", data, device_id="robot-aaaaaaaaaaaa")
-        second = self.upload_parsed("manual.docx", data, device_id="robot-bbbbbbbbbbbb")
+        first = self.upload_parsed("manual.docx", data, model="X1")
+        second = self.upload_parsed("manual.docx", data, model="X2")
         self.assertNotEqual(first["material"]["id"], second["material"]["id"])
         self.assertEqual(second["values"]["driver_name"], "demo_motion_driver")
         self.assertEqual((len(self.fake.uploads), len(self.fake.questions)), (1, 3))
@@ -339,10 +338,10 @@ class StoredTest(ParseCase):
         done = self.ok(self.confirm(material_id, {"revision": edited["revision"], "values": {}, "not_applicable": keys}))
         self.assertEqual(done["status"], "usable")
 
-    def test_the_same_file_for_another_device_is_stored_as_well(self):
+    def test_the_same_file_for_another_model_is_stored_as_well(self):
         self.fake.answer = self.NOTHING
-        first = self.upload_parsed("paper.md", b"# A paper\n", device_id="robot-0123456789ab", device_name="一号机")
-        second = self.upload_parsed("paper.md", b"# A paper\n", device_id="robot-0123456789ac", device_name="二号机")
+        first = self.upload_parsed("paper.md", b"# A paper\n", model="X1")
+        second = self.upload_parsed("paper.md", b"# A paper\n", model="X2")
         self.assertEqual((first["status"], second["status"], len(self.fake.uploads)), ("stored", "stored", 1))
 
     def test_a_document_the_service_could_not_index_is_still_a_failure(self):
@@ -571,13 +570,12 @@ class WorkerTest(ParseCase):
         with self.db.transaction() as s:
             self.assertEqual(s.query(MaterialParse).count(), 0)
 
-    def test_devices_keep_their_own_materials(self):
-        labels = {"device_id": "robot-aaaaaaaaaaaa", "device_name": "一号机"}
-        first = self.upload(self.owner, "arm.urdf", files.URDF_OK, **labels)
-        self.assertEqual((first["device_id"], first["device_name"]), ("robot-aaaaaaaaaaaa", "一号机"))
-        other = self.upload(self.owner, "arm.urdf", files.URDF_OK, device_id="robot-bbbbbbbbbbbb")
+    def test_models_keep_their_own_materials(self):
+        """Issue #51: what separates two copies of a file is the brand and model, not the device."""
+        first = self.upload(self.owner, "arm.urdf", files.URDF_OK, model="X1")
+        other = self.upload(self.owner, "arm.urdf", files.URDF_OK, model="X2")
         self.assertNotEqual(first["id"], other["id"])
-        self.error(self.start_raw(self.owner, "arm.urdf", files.URDF_OK, **labels), 409, "material_exists")
-        listed = self.ok(self.get("/library/materials?device_id=robot-aaaaaaaaaaaa", self.owner))
+        self.error(self.start_raw(self.owner, "arm.urdf", files.URDF_OK, model="x1"), 409, "material_exists")
+        listed = self.ok(self.get("/library/materials?model=x1", self.owner))
         self.assertEqual([m["id"] for m in listed["materials"]], [first["id"]])
         self.error(self.start_raw(self.owner, "x.urdf", files.URDF_OK, device_id="../../etc"), 400)

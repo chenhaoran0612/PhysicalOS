@@ -66,22 +66,26 @@ class Bundles(LibraryCase):
         package = self.upload(self.user, "driver.tar.gz", self.data, kind="package")
         self.assertEqual((package["kind"], package["status"]), ("package", "parsing"))
 
-    def test_an_unfinished_upload_of_the_other_kind_is_not_continued(self):
-        """The same file for the same device, once as a driver package and once as a bundle: the second
-        must not silently become a continuation of the first (and so be stored as the wrong kind)."""
+    def test_the_same_file_as_a_package_and_as_a_bundle_are_two_uploads(self):
+        """The same file, once as a driver package and once as a bundle: the second must not silently
+        become a continuation of the first (and so be stored as the wrong kind). Since issue #51 a
+        package belongs to its brand and model and a bundle to one device, so the two never meet:
+        each is its own upload and is stored as what its request said."""
         for index, (first, second) in enumerate((({}, {"kind": "bundle"}), ({"kind": "bundle"}, {}), ({"kind": "bundle"}, {"kind": "package"}))):
             with self.subTest(first=first, second=second):
                 name = f"walk-{index}.tar.gz"
                 data = lib.tar_gz_bytes(f"walk {first} {second}".encode())
                 opened = self.start(self.user, name, data, **DEVICE, **first)
-                refused = self.error(self.start_raw(self.user, name, data, **DEVICE, **second), 409,
-                                     "upload_kind_conflict")
-                self.assertEqual((refused["upload_id"], refused["kind"]), (opened["id"], opened["kind"]))
+                other = self.start(self.user, name, data, **DEVICE, **second)
+                self.assertNotEqual(other["id"], opened["id"])
+                self.assertEqual((other["resumed"], other["kind"]), (False, "bundle" if second.get("kind") == "bundle" else "package"))
                 again = self.start(self.user, name, data, expect=200, **DEVICE, **first)   # the same kind continues
                 self.assertEqual((again["id"], again["resumed"], again["kind"]), (opened["id"], True, opened["kind"]))
-                self.ok(self.delete(f"/library/uploads/{opened['id']}", self.user))
-                wanted = "bundle" if second.get("kind") == "bundle" else "package"
-                self.assertEqual(self.upload(self.user, name, data, **DEVICE, **second)["kind"], wanted)
+                for upload, fields in ((opened, first), (other, second)):
+                    for part_index, part in enumerate(self.parts(upload, data)):
+                        self.ok(self.put_chunk(self.user, upload["id"], part_index, part))
+                    stored = self.ok(self.complete(self.user, upload["id"]), 201)
+                    self.assertEqual(stored["kind"], "bundle" if fields.get("kind") == "bundle" else "package")
 
     def test_without_the_field_a_tar_gz_is_a_driver_package_as_before(self):
         material = self.upload(self.user, "driver.tar.gz", self.data, **DEVICE)

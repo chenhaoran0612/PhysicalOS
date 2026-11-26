@@ -65,7 +65,7 @@ class SimProcess:
         self._token = token
         self._lines = []
 
-    def start(self):
+    def start(self, timeout=START_TIMEOUT_S):
         self.state_dir.mkdir(parents=True, exist_ok=True)
         args = ['serve', '--adapter', self.adapter, '--host', '127.0.0.1', '--port', '0',
                 '--state-dir', str(self.state_dir / 'runtime'), '--sandbox', runtime_bridge.sandbox_mode()]
@@ -94,7 +94,7 @@ class SimProcess:
             found.set()
 
         threading.Thread(target=reader, name='nx-sim-log-' + self.robot_id, daemon=True).start()
-        found.wait(START_TIMEOUT_S)
+        found.wait(timeout)
         if not self.url:
             self.stop()
             tail = '；'.join(x for x in self._lines[-3:] if x) or '没有输出'
@@ -203,7 +203,7 @@ class SimRobots:
             self.platform.store.put('robots', robot)
             proc = SimProcess(robot_id, robot['sim']['adapter'], self.root / robot_id, robot['token'])
             try:
-                url = proc.start()
+                url = proc.start(robot['sim'].get('start_timeout_s') or START_TIMEOUT_S)   # issue #51: a MuJoCo body builds its model first
             except (ValueError, OSError) as exc:
                 robot = self.platform.store.get('robots', robot_id)
                 robot['sim'].update(state='failed', error=str(exc))

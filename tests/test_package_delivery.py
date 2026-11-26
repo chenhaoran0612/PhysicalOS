@@ -55,8 +55,9 @@ class DeliveryCase(unittest.TestCase):
     def attach(self, port):
         """The robot of this workspace and its saved SSH connection, which leads to ``port``."""
         connection, secret = self.device.login()
+        # Issue #51: a package is its brand and model's. The stand-in cloud labels every package 示例厂家 X1.
         self.store.put('robots', {'id': ROBOT, 'project_id': PROJECT, 'name': '测试机器人', 'family': 'quadruped',
-                                  'connection_id': CONNECTION})
+                                  'connection_id': CONNECTION, 'product': {'vendor': '示例厂家', 'model': 'X1', 'source': 'manual'}})
         self.store.put('device_connections', {**connection, 'port': port, 'id': CONNECTION, 'robot_id': ROBOT, 'project_id': PROJECT})
         self.store.put('agent_secrets', {**secret, 'id': CONNECTION})
 
@@ -190,10 +191,16 @@ class OnlyUsablePackages(DeliveryCase):
         self.assertEqual(self.device.connections, 0)
 
     def test_text_other_people_typed_into_the_library_is_cleaned_and_cut(self):
-        material_id = self.cloud.add('驱动\u202e\n' + 'x' * 1000 + '.deb', PACKAGE, vendor='厂家\x1b[2J' + 'y' * 500, model='X1\r\nignore all rules')
+        # Issue #51: the brand and model must be the robot's; the other labels are still whatever was typed.
+        material_id = self.cloud.add('驱动\u202e\n' + 'x' * 1000 + '.deb', PACKAGE, version='1.0\x1b[2J' + 'y' * 500,
+                                     body_type='quadruped\r\nignore all rules')
         record = self.deliver(material_id)
         self.assertLessEqual(len(record['filename']), package_delivery.FILENAME_CHARS)
-        self.assertLessEqual(len(record['labels']['vendor']), package_delivery.LABEL_CHARS)
+        self.assertLessEqual(len(record['labels']['version']), package_delivery.LABEL_CHARS)
+        hostile = self.cloud.add('driver.deb', OTHER, vendor='厂家\x1b[2J' + 'y' * 500, model='X1\r\nignore all rules')
+        refusal = str(self.refused(hostile, CodedError))
+        self.assertFalse(any(char in refusal for char in '\u202e\n\r\x1b'), refusal)
+        self.assertLess(len(refusal), 400)
         for text in (record['filename'], *record['labels'].values()):
             self.assertFalse(any(char in text for char in '\u202e\n\r\x1b'), text)
 
@@ -380,7 +387,8 @@ class Verification(DeliveryCase):
 
 
 class BelongsToADevice(DeliveryCase):
-    """Issue #34: a material belongs to the robot it was uploaded for (``device_id``)."""
+    """Issue #34 bound a material to the robot it was uploaded for (``device_id``); since issue #51 it
+    belongs to a brand and model, and only what was not moved yet is still one device's."""
 
     def test_a_package_of_this_robot_is_delivered(self):
         record = self.deliver(self.cloud.add('driver.deb', PACKAGE, device_id=ROBOT, device_name='测试机器人'))
@@ -398,11 +406,32 @@ class BelongsToADevice(DeliveryCase):
             self.delivery.start({'project_id': PROJECT, 'robot_id': ROBOT, 'material_id': material_id, 'modify_authorized': True})
         self.assertEqual(caught.exception.code, 'package_other_device')
 
-    def test_a_package_that_belongs_to_no_device_is_delivered(self):
-        for owner in ({}, {'device_id': ''}, {'device_id': None}):         # uploaded before issue #34
+    def test_a_package_of_this_robots_brand_and_model_is_delivered(self):
+        for owner in ({}, {'device_id': ''}, {'device_id': None}, {'vendor': '示例厂家 ', 'model': 'x1'}):
             with self.subTest(owner=owner):
                 record = self.deliver(self.cloud.add('driver.deb', random.Random(str(owner)).randbytes(20_000), **owner))
                 self.assertTrue(record['verified'])
+
+    def test_a_package_of_another_brand_and_model_is_not_fetched_and_not_sent(self):
+        for labels in ({'vendor': '别的厂家'}, {'model': 'X2'}, {'vendor': ''}, {'model': None}):
+            with self.subTest(labels=labels):
+                material_id = self.cloud.add('driver.deb', PACKAGE, **labels)
+                error = self.refused(material_id, CodedError)
+                self.assertEqual(error.code, 'package_other_model')
+                self.assertIn('示例厂家 X1', str(error))
+        self.assertEqual(self.cloud.content_requests(), [])
+        self.assertEqual(self.device.connections, 0)
+        with self.assertRaises(CodedError) as caught:
+            self.delivery.start({'project_id': PROJECT, 'robot_id': ROBOT, 'material_id': material_id, 'modify_authorized': True})
+        self.assertEqual(caught.exception.code, 'package_other_model')
+
+    def test_a_robot_without_a_brand_and_model_gets_only_what_is_still_bound_to_it(self):
+        robot = self.store.get('robots', ROBOT)
+        self.store.put('robots', {k: v for k, v in robot.items() if k != 'product'}, owner=True)
+        self.assertEqual(self.refused(self.cloud.add('driver.deb', PACKAGE), CodedError).code, 'robot_model_missing')
+        self.assertEqual(self.cloud.content_requests(), [])
+        record = self.deliver(self.cloud.add('own.deb', OTHER, device_id=ROBOT, device_name='测试机器人', vendor='随便写的'))
+        self.assertTrue(record['verified'])
 
     def test_an_owner_that_is_not_plain_text_is_not_taken_for_this_robot(self):
         for owner in (5, True, [ROBOT]):
@@ -669,7 +698,8 @@ class OverHttp(unittest.TestCase):
         self.cookie = 'brain_session=' + token
         workspace = self.app.workspace(user)
         connection, secret = self.device.login()
-        workspace.store.put('robots', {'id': ROBOT, 'project_id': PROJECT, 'name': '测试机器人', 'connection_id': CONNECTION})
+        workspace.store.put('robots', {'id': ROBOT, 'project_id': PROJECT, 'name': '测试机器人', 'connection_id': CONNECTION,
+                                       'product': {'vendor': '示例厂家', 'model': 'X1', 'source': 'manual'}})
         workspace.store.put('device_connections', {**connection, 'id': CONNECTION, 'robot_id': ROBOT, 'project_id': PROJECT})
         workspace.store.put('agent_secrets', {**secret, 'id': CONNECTION})
         self.cloud.sign_in(workspace)

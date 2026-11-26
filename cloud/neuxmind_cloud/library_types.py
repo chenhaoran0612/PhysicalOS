@@ -31,6 +31,9 @@ KINDS = (DOCUMENT, PACKAGE)
 # Issue #43: a robot's programs and scene data: a tar.gz that is stored and never parsed (library_bundle.py).
 BUNDLE = "bundle"
 KINDS = (*KINDS, BUNDLE)
+# Issue #51: the robot model of a brand and model: one .urdf, or an archive with its meshes (library_model.py).
+MODEL = "model"
+KINDS = (*KINDS, MODEL)
 
 
 @dataclass(frozen=True)
