@@ -34,7 +34,17 @@ MARK = '@@NX-INSTALL:'
 BEGIN = MARK + 'begin@@'
 _WORD = re.compile(r'^@@NX-INSTALL:([a-z]+)@@$')
 _KEY = re.compile(r'^([a-z_]+)=(.*)$')
-STEPS = ('install', 'start', 'remove')
+STEPS = ('install', 'start', 'remove', 'restart')     # restart (issue #38): stop, then start, as one job
+# Issue #38, a real body (device_install.sh's NX_ADAPTER=ros2). The console sends two more files into the
+# package's directory, over the upload channel like the wheels: BODY_FILE (the ROS 2 settings the install is
+# made with, one KEY=VALUE per line, and whether a device configuration comes with it) and CONFIG_FILE (the
+# device configuration, which a start puts into the install directory as ros2-config.json).
+BODY_FILE, CONFIG_FILE = 'body.env', 'ros2-config.json'
+CONFIG_MARK = '.console-body-config'    # in the install directory: its device configuration was put there by a console
+ROS_KEYS = ('ROS_DOMAIN_ID', 'ROS_LOCALHOST_ONLY', 'RMW_IMPLEMENTATION', 'FASTRTPS_DEFAULT_PROFILES_FILE',
+            'CYCLONEDDS_URI', 'ZENOH_SESSION_CONFIG_URI')
+BODY_KEYS = ('NX_ROS_SETUP', *ROS_KEYS)
+CONFIG_READ_LIMIT = 24 * 1024       # a device configuration larger than this is not read back (``rosprobe``)
 JOB_FILES = tuple('%s.%s' % (step, kind) for step in STEPS for kind in ('job', 'exit', 'exit.tmp', 'log', 'pid'))
 COMMAND = 'sh -s --'
 _ARGUMENT = re.compile(r'[A-Za-z0-9._+-]{1,80}')
@@ -110,6 +120,7 @@ say root "$state"
 console=; version=; running=no; port=
 if [ "$state" = installed ] || [ "$state" = unfinished ]; then
   console=$(first "$root/.console-package")
+  say adapter "$(first "$root/adapter")"
   for found in "$root"/venv/lib/python*/site-packages/neuxmind_runtime-*.dist-info; do
     [ -d "$found" ] || continue
     version=${found##*/neuxmind_runtime-}; version=${version%.dist-info}
@@ -140,13 +151,32 @@ echo '@@NX-INSTALL:probed@@'
 # $2 step, $3 job id, $4 port, $5 adapter (the console's, from the body type; start prefers the recorded one).
 # Starts the step once per job id, detached.
 _JOB_BODY = ('cd "$1" || exit 1\n'
-             'bash ./device_install.sh "$2" >"$2.log" 2>&1 </dev/null\n'
-             'code=$?\n'
+             'c=$NX_ROOT/CONFIGFILE\n'
+             'if [ "$2" = restart ]; then\n'
+             '  { bash ./device_install.sh stop && bash ./device_install.sh start; } >"$2.log" 2>&1 </dev/null\n'
+             '  code=$?\n'
+             # Issue #38: a restart that does not come up with the device configuration it was given goes back to
+             # the one before (or to none) and starts again, so that a bad file does not leave the robot without
+             # its management layer. The step still fails: the configuration was not applied.
+             '  back=\n'
+             '  if [ "$code" -ne 0 ]; then\n'
+             '    if [ -f "$c.nxprev" ]; then mv -f -- "$c.nxprev" "$c" && back=earlier\n'
+             '    elif [ -f "$c.nxnone" ]; then rm -f -- "$c" "$NX_ROOT/CONFIGMARK"; back=none; fi\n'
+             '    if [ -n "$back" ]; then\n'
+             '      { echo "the management layer did not start with the new device configuration; going back to the $back one";\n'
+             '        bash ./device_install.sh start; } >>"$2.log" 2>&1 </dev/null\n'
+             '    fi\n'
+             '  fi\n'
+             'else\n'
+             '  bash ./device_install.sh "$2" >"$2.log" 2>&1 </dev/null\n'
+             '  code=$?\n'
+             'fi\n'
+             'if [ "$2" != remove ] && [ -d "$NX_ROOT" ]; then rm -f -- "$c.nxprev" "$c.nxnone"; fi\n'
              'if [ "$2" = install ] && [ "$code" -eq 0 ]; then printf "%s\\n" "$4" >"$NX_ROOT/.console-package" || code=90; fi\n'
              'printf "%s %s\\n" "$3" "$code" >"$2.exit.tmp" && mv -f "$2.exit.tmp" "$2.exit"\n'
              'exit 0\n')     # not the mv: sh would become it and no longer name the package (job_state: alive)
 JOB_SCRIPT = _PRELUDE + r'''step=$2; job=$3; port=$4; adapter=$5
-case $step in install|start|remove) ;; *) echo '@@NX-INSTALL:refused@@'; exit 2;; esac
+case $step in install|start|remove|restart) ;; *) echo '@@NX-INSTALL:refused@@'; exit 2;; esac
 if ! pkg_in_place || [ ! -f "$pkg/device_install.sh" ] || [ -L "$pkg/device_install.sh" ]; then echo '@@NX-INSTALL:nopackage@@'; exit 3; fi
 read -r cur_job cur_code cur_alive <<EOF
 $(job_state "$step")
@@ -157,23 +187,67 @@ fi
 if [ "$cur_alive" = yes ]; then echo '@@NX-INSTALL:busy@@'; exit 4; fi
 # The body the install recorded (issue #21's install script keeps it in ~/neuxmind/adapter) is the one start runs; the
 # console's guess from the card would override it. An install without that record (before #21) gets the console's.
-if [ "$step" = start ]; then
+if [ "$step" = start ] || [ "$step" = restart ]; then
   recorded=$(first "$root/adapter")
   case $recorded in sim_quadruped|sim_arm|ros2) adapter=$recorded;; esac
+fi
+# A real body (issue #38): install is made with the ROS 2 settings of the body file and nothing the login brought;
+# a start puts the device configuration that came with it into the install directory. Checked before the job is
+# recorded, so a refusal here leaves the earlier job's files as they were.
+# A start of an install that came without a body file (made by hand) runs it as it is.
+body=$pkg/BODYFILE; config=no
+if [ "$adapter" = ros2 ] && [ "$step" = install ]; then
+  if [ ! -f "$body" ] || [ -L "$body" ]; then echo '@@NX-INSTALL:nobody@@'; exit 6; fi
+fi
+if [ "$adapter" = ros2 ] && [ "$step" != remove ] && [ -f "$body" ] && [ ! -L "$body" ]; then
+  unset BODYKEYS
+  while IFS= read -r line || [ -n "$line" ]; do
+    key=${line%%=*}; value=${line#*=}
+    case $line in *=*) ;; *) echo '@@NX-INSTALL:badbody@@'; exit 6;; esac
+    case $key in
+      BODYCASE) if [ "$step" = install ]; then export "$key=$value"; fi;;
+      NX_BODY_CONFIG) config=$value;;
+      *) echo '@@NX-INSTALL:badbody@@'; exit 6;;
+    esac
+  done < "$body"
+  # The device configuration is this console's while its mark is there: one it put there is replaced or, when
+  # the body has none any more, taken away; a file someone else put there is only ever replaced. What was there
+  # is kept until the job ends (.nxprev, or .nxnone for "nothing"): a restart that fails goes back to it.
+  if [ "$step" != install ] && [ -d "$root" ] && [ ! -L "$root" ]; then
+    cfg=$root/CONFIGFILE; mark=$root/CONFIGMARK
+    rm -f -- "$cfg.nxprev" "$cfg.nxnone" "$cfg.nxtmp"
+    if [ "$config" = yes ]; then
+      src=$pkg/CONFIGFILE
+      if [ ! -f "$src" ] || [ -L "$src" ]; then echo '@@NX-INSTALL:noconfig@@'; exit 6; fi
+      if [ -f "$cfg" ] && [ ! -L "$cfg" ]; then
+        ( umask 077; cat "$cfg" > "$cfg.nxprev" ) || { rm -f -- "$cfg.nxprev"; echo '@@NX-INSTALL:unwritable@@'; exit 5; }
+      else
+        : > "$cfg.nxnone" || { echo '@@NX-INSTALL:unwritable@@'; exit 5; }
+      fi
+      if ! ( umask 077; cat "$src" > "$cfg.nxtmp" ) || ! mv -f -- "$cfg.nxtmp" "$cfg" || ! : > "$mark"; then
+        rm -f -- "$cfg.nxtmp" "$cfg.nxprev" "$cfg.nxnone"; echo '@@NX-INSTALL:unwritable@@'; exit 5
+      fi
+    elif [ -f "$mark" ] && [ -f "$cfg" ] && [ ! -L "$cfg" ]; then
+      mv -f -- "$cfg" "$cfg.nxprev" || { echo '@@NX-INSTALL:unwritable@@'; exit 5; }
+    fi
+  elif [ "$step" != install ] && [ "$config" = yes ]; then
+    echo '@@NX-INSTALL:noconfig@@'; exit 6
+  fi
 fi
 rm -f -- "$pkg/$step.job" "$pkg/$step.exit" "$pkg/$step.exit.tmp" "$pkg/$step.log" "$pkg/$step.pid"
 printf '%s\n' "$job" > "$pkg/$step.job" || { echo '@@NX-INSTALL:unwritable@@'; exit 5; }
 detach=
 if command -v setsid >/dev/null 2>&1; then detach=setsid; fi
-body='BODY'
+body='JOBSTEPS'
 NX_ROOT=$root NX_PORT=$port NX_ADAPTER=$adapter nohup $detach sh -c "$body" nx-install-job "$pkg" "$step" "$job" "$pkg_id" >/dev/null 2>&1 </dev/null &
 printf '%s\n' "$!" > "$pkg/$step.pid"
 echo '@@NX-INSTALL:started@@'
-'''.replace('BODY', _JOB_BODY)
+'''.replace('JOBSTEPS', _JOB_BODY).replace('BODYFILE', BODY_FILE).replace('CONFIGFILE', CONFIG_FILE) \
+    .replace('CONFIGMARK', CONFIG_MARK).replace('BODYKEYS', ' '.join(BODY_KEYS)).replace('BODYCASE', '|'.join(BODY_KEYS))
 
 # $2 step. Read only: the job's state, then the end of its log, each line after "| ".
 POLL_SCRIPT = _PRELUDE + r'''step=$2
-case $step in install|start|remove) ;; *) echo '@@NX-INSTALL:refused@@'; exit 2;; esac
+case $step in install|start|remove|restart) ;; *) echo '@@NX-INSTALL:refused@@'; exit 2;; esac
 echo '@@NX-INSTALL:begin@@'
 printf 'job=%s\n' "$(job_state "$step")"
 echo '@@NX-INSTALL:polled@@'
@@ -184,7 +258,7 @@ if [ -f "$pkg/$step.log" ] && [ ! -L "$pkg/$step.log" ]; then tail -n LINES "$pk
 CLEAN_SCRIPT = _PRELUDE + r'''echo '@@NX-INSTALL:begin@@'
 if [ ! -e "$pkg" ] && [ ! -L "$pkg" ]; then echo '@@NX-INSTALL:cleaned@@'; exit 0; fi
 if ! pkg_in_place; then echo '@@NX-INSTALL:moved@@'; exit 8; fi
-for step in install start remove; do
+for step in install start remove restart; do
   read -r j c a <<EOF
 $(job_state "$step")
 EOF
@@ -195,7 +269,7 @@ for f in "$pkg"/* "$pkg"/.[!.]* "$pkg"/..?*; do
   [ -e "$f" ] || [ -L "$f" ] || continue
   name=${f##*/}
   case $name in
-    device_install.sh|neuxmind_spec-*.whl|neuxmind_runtime-*.whl|JOBFILES) ;;
+    device_install.sh|neuxmind_spec-*.whl|neuxmind_runtime-*.whl|BODYFILE|CONFIGFILE|JOBFILES) ;;
     .*.nxpart-*|.*.nxtmp-*) ;;
     *) kept="$kept $name"; continue;;
   esac
@@ -205,10 +279,61 @@ done
 rmdir -- "$pkg" 2>/dev/null
 rmdir -- "$HOME/neuxmind-pkg/console" 2>/dev/null
 if [ -n "$kept" ]; then printf 'kept=%s\n' "${kept# }"; echo '@@NX-INSTALL:kept@@'; else echo '@@NX-INSTALL:cleaned@@'; fi
-'''.replace('JOBFILES', '|'.join(JOB_FILES))
+'''.replace('JOBFILES', '|'.join(JOB_FILES)).replace('BODYFILE', BODY_FILE).replace('CONFIGFILE', CONFIG_FILE)
 
-SCRIPTS = {'probe': PROBE_SCRIPT, 'job': JOB_SCRIPT, 'poll': POLL_SCRIPT, 'clean': CLEAN_SCRIPT}
-ARITY = {'probe': 1, 'job': 5, 'poll': 2, 'clean': 1}
+# Read only (issue #38): what the robot says about its own ROS 2, for a person who fills in a real body. The setup
+# files below /opt/ros; the ROS settings of the programs of this login that run with ROS 2 (the set with the most
+# settings: a robot's nodes often run on a domain the login shell does not set); and, when ~/neuxmind is an install,
+# the body it was made for, the settings it recorded and its device configuration (as hexadecimal, when small).
+ROSPROBE_SCRIPT = _PRELUDE + r'''say() { printf '%s=%s\n' "$1" "$2"; }
+lower() { printf '%s' "$1" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz'; }
+echo '@@NX-INSTALL:begin@@'
+setups=
+for f in /opt/ros/*/setup.bash; do
+  if [ -f "$f" ]; then setups="$setups $f"; fi
+done
+say setups "${setups# }"
+count=0; best=; best_n=0
+for d in /proc/[0-9]*; do
+  case ${d#/proc/} in "$$"|"$PPID") continue;; esac      # not this read itself: a login may set ROS variables too
+  [ -r "$d/environ" ] || continue
+  vals=$(tr '\0' '\n' < "$d/environ" 2>/dev/null | grep -E '^(ROS_DISTRO|ROSKEYS)=') || continue
+  case "
+$vals" in *"
+ROS_DISTRO="*) ;; *) continue;; esac
+  count=$((count + 1))
+  n=$(printf '%s\n' "$vals" | grep -c .)
+  if [ "$n" -gt "$best_n" ]; then best=$vals; best_n=$n; fi
+done
+say run_count "$count"
+if [ -n "$best" ]; then
+  printf '%s\n' "$best" | while IFS= read -r line; do say "run_$(lower "${line%%=*}")" "${line#*=}"; done
+fi
+state=none
+if [ -f "$root/.neuxmind-device-install" ] && [ ! -L "$root/.neuxmind-device-install" ] && [ ! -L "$root" ]; then
+  if [ "$(first "$root/.neuxmind-device-install")" = state=installed ]; then state=installed; fi
+fi
+say root "$state"
+if [ "$state" = installed ]; then
+  say adapter "$(first "$root/adapter")"
+  if [ -f "$root/ros2.env" ] && [ ! -L "$root/ros2.env" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      case ${line%%=*} in ROS_SETUP|ROSCASE) say "rec_$(lower "${line%%=*}")" "${line#*=}";; esac
+    done < "$root/ros2.env"
+  fi
+  c=$root/CONFIGFILE
+  if [ -f "$c" ] && [ ! -L "$c" ]; then
+    size=$(wc -c < "$c" | tr -d ' ')
+    say config_bytes "$size"
+    case $size in ''|*[!0-9]*) ;; *) if [ "$size" -le READLIMIT ]; then say config_hex "$(od -An -v -tx1 "$c" | tr -d ' \n')"; fi;; esac
+  fi
+fi
+echo '@@NX-INSTALL:rosprobed@@'
+'''.replace('ROSKEYS', '|'.join(ROS_KEYS)).replace('ROSCASE', '|'.join(ROS_KEYS)).replace('CONFIGFILE', CONFIG_FILE) \
+    .replace('READLIMIT', str(CONFIG_READ_LIMIT))
+
+SCRIPTS = {'probe': PROBE_SCRIPT, 'job': JOB_SCRIPT, 'poll': POLL_SCRIPT, 'clean': CLEAN_SCRIPT, 'rosprobe': ROSPROBE_SCRIPT}
+ARITY = {'probe': 1, 'job': 5, 'poll': 2, 'clean': 1, 'rosprobe': 1}
 
 
 def command(kind, *arguments):

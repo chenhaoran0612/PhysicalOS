@@ -274,6 +274,14 @@ const UX_CODES = {
   install_login_refused: ['network', '机器人（或跳板机）拒绝了 SSH 登录，安装停下了，没有反复重试（以免账号被锁）。', '核对卡片上“配置连接”里的账号、密码或私钥后再安装'],
   install_unreachable: ['network', '安装途中连不上机器人，等到了时限。设备上已经开始的那一步会在设备上继续做完。', '网络恢复后再点“安装管理层”，会接着已经做完的部分'],
   install_nothing_to_clean: ['state', '这台机器人没有需要清理的安装记录：上一次安装没有在设备上留下这个控制台的东西。', '不需要清理'],
+  // ---- issue #38: a robot's body (brainos/robot_body.py) and putting its device configuration on the robot.
+  body_settings_invalid: ['input', '本体设置里有一项填得不对：ROS 2 环境文件和中间件配置文件要是机器人上的绝对路径，域编号是 0–232 的整数。', '按提示改正；不确定就点“从机器人读取”'],
+  body_config_invalid: ['input', '本体配置不能用：它不是合法的 JSON，或者里面有管理层不认识的内容。什么都没有保存，也没有发给机器人。', '按提示里指出的位置改正，再点“检查并预览”'],
+  body_detect_failed: ['network', '没能从机器人读到它的 ROS 2 情况。机器人上什么都没有改。', '确认机器人的 SSH 连接可用后再点“从机器人读取”，或者自己填'],
+  body_apply_not_real: ['state', '这台机器人的本体是仿真本体，没有要放到机器人上的本体配置。', '在“本体设置”里选真实本体'],
+  body_apply_reinstall: ['state', '本体的种类或 ROS 2 环境改过了，这些只有重新安装管理层才会生效。', '点“安装管理层”，选“删除后重新安装”'],
+  body_apply_no_install: ['state', '机器人上没有和这个控制台同一版本的真实本体管理层，本体配置没有地方放。机器人上什么都没有改。', '先点“安装管理层”'],
+  install_body_missing: ['service', '机器人上缺少这次安装要用的本体设置或本体配置（上传没有完成）。', '重新点“安装管理层”'],
   // ---- issue #20: starting the management layer at boot (brainos/runtime_autostart.py). Nothing ran as root for any of these.
   autostart_not_installed: ['state', '这台机器人还没有用控制台安装管理层，没有可以开机自启的东西。', '先点“安装管理层”'],
   autostart_not_console: ['state', '机器人上的管理层不是这个控制台装的，控制台不给它设开机自启。', '要开机自启，点“安装管理层”选“删除后重新安装”'],

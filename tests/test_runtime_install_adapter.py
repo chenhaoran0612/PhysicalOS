@@ -49,11 +49,13 @@ class RecordedBodyTests(InstallCase):
 
     def test_an_arm_installed_before_the_record_existed_is_still_started_as_an_arm(self):
         connection = self.installed_and_stopped(family='manipulator')
+        os.remove(self.device.local('neuxmind/adapter'))       # an install from before issue #21 has no record
         self.assertIsNone(self.device.read('neuxmind/adapter'))
         self.assertEqual(self.started_again(connection), 'sim_arm')
 
     def test_a_quadruped_without_a_record_gets_the_card_s_body(self):
         connection = self.installed_and_stopped()
+        os.remove(self.device.local('neuxmind/adapter'))
         self.assertEqual(self.started_again(connection), 'sim_quadruped')
 
     def test_a_record_that_names_no_known_body_or_is_a_link_is_not_followed(self):

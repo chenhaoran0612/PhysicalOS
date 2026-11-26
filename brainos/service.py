@@ -119,6 +119,8 @@ class Platform:
         self.safety_limits = SafetyLimits(self)     # issue #22: safety limits a person fills in per device
         from .runtime_install import RuntimeInstall
         self.runtime_install = RuntimeInstall(self)     # issue #19: install the management layer from the console (after runtime_link, robot_remove)
+        from .robot_body import RobotBody
+        self.robot_body = RobotBody(self)           # issue #38: a robot's body, simulated or its own ROS 2, and its device configuration
         from .cloud_skills import CloudSkills
         self.cloud_skills = CloudSkills(self)       # issue #43: skill packages kept in the cloud; publish, download, install on a robot
         from .remote_calls import RemoteCalls
@@ -157,6 +159,10 @@ class Platform:
         for obj in result['robots']:
             if obj.get('sim'):
                 obj['sim'] = self.sims.process_view(obj)
+            if 'body' in obj or 'body_applied' in obj:      # issue #38: as the page shows it, with how it relates to the robot
+                from . import robot_body
+                obj['body'] = robot_body.view(obj)
+                obj.pop('body_applied', None)
         result['sim_kinds'] = self.sims.kinds()
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
                       system={'version': '0.21.11', 'mode': 'local-preview', 'identity': 'workspace-isolated'})

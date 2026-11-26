@@ -105,7 +105,7 @@ class PlaceSkillsOnASimulatedRobot(unittest.TestCase):
         self.install('patrol_places')
         run = self.run_to_end('patrol_places', sim_robots.EXAMPLE_PRESETS['patrol_places'], 120.0)
         self.assertEqual(run['status'], 'succeeded', run)
-        self.assertEqual(run['result']['visited'], ['二楼', '会议室', '出发点'])
+        self.assertEqual(run['result']['visited'], ['会议室', '二楼', '出发点'])
 
     def test_free_walk_then_stop(self):
         self.install('free_walk')

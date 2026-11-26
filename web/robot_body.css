@@ -1,0 +1,52 @@
+/* Issue #38 — a robot's body for the management layer (web/robot_body.js).
+   Follows web/runtime_install.css: the card line sits next to .ri-line, the dialog uses its type scale. */
+
+/* On the card, above the tags: a real body and how it relates to the robot. */
+.rb-line{display:flex;flex-wrap:wrap;align-items:center;gap:5px 9px;margin:6px 0 2px;padding:7px 10px;font-size:11px;line-height:1.6;color:#5d6b63;background:#fbfcf9;border:1px solid #e6ebe1;border-radius:6px}
+.rb-line .status{font-size:10px;font-weight:550;padding:4px 8px;white-space:normal}
+
+/* The dialog. */
+.rb-how{margin:0 0 14px;line-height:1.8}
+.rb-kinds{margin-bottom:14px}
+.rb-kind small{display:block;margin-top:3px;font-size:11px;line-height:1.7;color:#6b7c66;font-weight:400}
+.rb-real[hidden]{display:none}
+.rb-detect{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #e3eadc;border-radius:7px;background:#fafcf7;font-size:11px;line-height:1.7;color:#5c7050}
+.rb-detect b{display:block;font-weight:600;color:#3f5a45}
+.rb-detect .button{flex:none}
+.rb-found{margin:8px 0 0;font-size:11px;line-height:1.8;color:#5d6b63;overflow-wrap:anywhere}
+.rb-found:empty{display:none}
+.rb-found.is-good{color:#28674f}
+.rb-found.is-warn{color:#8a6420}
+.rb-found.is-bad{color:#b44a42}
+.rb-found.is-busy{color:#3f6577}
+.rb-h{margin:20px 0 10px;font-size:12px;font-weight:600;color:#24332e;letter-spacing:.02em}
+.rb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 14px}
+.rb-note{margin:0 0 10px;font-size:11px;line-height:1.8;color:#6b7c66}
+.rb-tools{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.rb-import{cursor:pointer}
+.rb-import:focus-within{outline:2px solid #5d8293;outline-offset:2px}
+.rb-config{width:100%;border:1px solid #dbe4d1;border-radius:6px;padding:10px 12px;background:#fff;color:#24332e;min-height:180px;resize:vertical;font-family:ui-monospace,SFMono-Regular,monospace;font-size:11px;line-height:1.6;tab-size:2;white-space:pre;overflow:auto}
+.rb-preview{margin-top:12px}
+.rb-none,.rb-declares{margin:0 0 10px;font-size:11px;line-height:1.9;color:#5c7050}
+.rb-chip{display:inline-block;margin:0 0 0 6px;padding:1px 8px;border:1px solid #d6e2cf;border-radius:10px;background:#f4f8f0;color:#31443a;font-size:11px}
+.rb-bad{margin:0;padding:12px 14px;border:1px solid #efd4cf;border-left:3px solid #b44a42;border-radius:6px;background:#fdf6f4;font-size:11px;line-height:1.8;color:#8a4a43;overflow-wrap:anywhere}
+.rb-places{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:8px}
+.rb-places>li{padding:10px 12px;border:1px solid #e3eadc;border-radius:7px;background:#fff;font-size:11px;line-height:1.7;color:#5d6b63}
+.rb-places>li>b{font-size:12px;font-weight:600;color:#24332e}
+.rb-places>li>small{margin-left:8px;color:#8a968c}
+.rb-route{margin-top:6px}
+.rb-route em{font-style:normal;color:#3f6577}
+.rb-route ol{margin:4px 0 0;padding-left:18px}
+.rb-route ol li{margin:2px 0}
+.rb-route ol li span{color:#31443a}
+.rb-route code{display:block;font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;color:#3f5a45;background:#eef3ea;padding:2px 6px;border-radius:3px;overflow-wrap:anywhere;margin:2px 0}
+.rb-route small{color:#8a968c}
+.rb-route p{margin:4px 0 0;color:#8a968c}
+.rb-todo{margin:14px 0 0;font-size:12px;line-height:1.9;color:#31443a}
+
+/* The install form: a real body is said plainly. */
+.ri-body-type.is-real{border-color:#eddcb4;background:#fcf9f0;color:#7d6331}
+.ri-body-type.is-real b{color:#6b5221}
+.ri-body-type code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;overflow-wrap:anywhere}
+.rb-other{color:#8a6420}
+.rb-config:focus{outline:none;border-color:#7fa08c;box-shadow:0 0 0 2px #e3eee4}

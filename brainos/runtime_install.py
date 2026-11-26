@@ -36,10 +36,12 @@ The progress of an install changes all the time, so it is not part of the worksp
 redraws itself from: the page asks for it apart (``status``). Only the outcome is saved, on the robot.
 """
 import logging
+import os
+import tempfile
 import threading
 import time
 
-from . import connector, device_access, device_transfer, runtime_package
+from . import connector, device_access, device_transfer, robot_body, robot_caps, runtime_package
 from . import runtime_autostart
 from . import runtime_install_device as dev
 from . import runtime_install_plan as planning
@@ -52,10 +54,11 @@ LOG = logging.getLogger(__name__)
 
 STAGES = (('check', '检查设备'), ('upload', '上传安装包'), ('remove', '删除原有的管理层'), ('install', '安装'),
           ('start', '启动'), ('autostart', '开机自启'), ('link', '接入并检查'))     # autostart: issue #20, only when asked for
-LABELS = dict(STAGES, wait_install='安装', clean='清理')
+LABELS = dict(STAGES, wait_install='安装', clean='清理', restart='重新启动')
 LABELS.update(runtime_autostart.LABELS)
 BUDGETS = {'check': 180, 'upload': 2700, 'remove': 180, 'install': 1200, 'start': 300, 'link': 300, 'clean': 180,
-           'look': 45}                     # the last read-only look after a failure: what is left
+           'look': 45,                     # the last read-only look after a failure: what is left
+           'restart': 300}                 # issue #38: stop, then start, after a changed device configuration
 BUDGETS.update(runtime_autostart.BUDGETS)   # issue #20: its stages, and how long it waits for a person
 POLL_SECONDS = 2
 RETRY_WAITS = (2, 5, 10, 20, 30)
@@ -72,6 +75,19 @@ BUSY = '这台机器人正在安装管理层；请等它结束，或先停止'
 INSTALLING = '这台机器人正在安装管理层；请等安装结束，或先停止安装，再删除'
 BODY = '本体类型“{family}”没有对应的仿真本体，管理层装不上。请先在卡片上选择四足或机械臂'
 NOTHING_TO_CLEAN = '这台机器人没有需要清理的安装记录'
+# Issue #38: a real body (the robot's own ROS 2) and the job that puts a changed device configuration there.
+BODY_MODE, BODY_STEPS = 'body', ('check', 'upload', 'restart', 'link')
+BODY_OUTCOME, BODY_APPLIED = 'body_apply', 'body_applied'
+BODY_NOT_REAL = '这台机器人的本体是仿真本体，没有要放到机器人上的本体配置。请先在「本体设置」里选真实本体'
+BODY_REINSTALL = ('本体的种类或 ROS 2 环境改过了，这些只有重新安装管理层才会生效。'
+                  '请点「安装管理层」，选“删除后重新安装”')
+BODY_NO_INSTALL = '机器人上没有和这个控制台同一版本的真实本体管理层（找到：{found}）。请先点「安装管理层」'
+BODY_OTHER_SETTINGS = ('机器人上这份管理层是用另一套 ROS 2 环境装的，和这里保存的不一样；这只有重新安装才会改。'
+                       '机器人上什么都没有改。要沿用机器人上的，在「本体设置」里点「从机器人读取」再保存；'
+                       '要改成这里的，点「安装管理层」选“删除后重新安装”')
+BODY_REFUSALS = {'nobody': '设备上没有这次安装要用的本体设置文件（上传没有完成）；请重新安装',
+                 'badbody': '设备上的本体设置文件不是这个控制台写的格式，没有使用；请重新安装',
+                 'noconfig': '设备上找不到要放进管理层的本体配置（上传没有完成，或 ~/neuxmind 不在了）；请重新安装'}
 CHANGED = '这台机器人的 SSH 连接在安装途中被修改或删除了；安装已停止，请重新开始'
 REMOVED = '这台机器人在安装途中被删除了'
 
@@ -99,7 +115,7 @@ class Job:
     """One install (or clean-up) of one robot, on a thread of its own."""
 
     def __init__(self, service, robot, connection, package, port, adapter, existing=None, confirm=False,
-                 mode='install', previous=None):
+                 mode='install', previous=None, body=None):
         self.service, self.platform = service, service.platform
         self.robot_id, self.project_id, self.connection_id = robot['id'], robot['project_id'], connection['id']
         self.revision, self.package, self.port, self.adapter = _revision(connection), package, port, adapter
@@ -111,6 +127,14 @@ class Job:
         self.left, self.cleanup, self.can_clean = [], '', False
         self.created_install = bool(self.previous.get('created_install')) if mode == 'clean' else False
         self.uploaded = False
+        # Issue #38: the body as it was saved when the job began, and what of it reached the robot.
+        self.body, self.body_installed, self.body_configured = body, False, False
+        self.device_install = None          # the mark of the ROS settings an install found on the robot recorded
+        # Only a body a person set is held against what is installed. A robot whose body nobody set keeps the rule
+        # of issue #21: the install's own record says which body a start runs (an arm, or ros2 installed by hand).
+        self.body_chosen = isinstance(robot.get('body'), dict)
+        if mode == BODY_MODE:
+            self.steps = list(BODY_STEPS)
         self.autostart = runtime_autostart.Step(self)                  # issue #20
         self.console_install = bool(self.previous.get('console_install')) if mode == 'clean' else False
         if mode in runtime_autostart.MODES:
@@ -184,7 +208,8 @@ class Job:
         final = 'failed'
         try:
             final = (self._clean() if self.mode == 'clean' else runtime_autostart.run_mode(self)
-                     if self.mode in runtime_autostart.MODES else self._install())
+                     if self.mode in runtime_autostart.MODES else self._apply_body() if self.mode == BODY_MODE
+                     else self._install())
         except Failure as failure:
             self._failed(failure)
         except Changed:
@@ -238,7 +263,8 @@ class Job:
             raise Failure('check', 'install_probe_failed', '设备没有完成检查（%s）' % (word or '没有答复'))
         port_state = self.session.port_state(self.port, deadline)
         self.service._heard(self.connection_id)
-        decision = planning.plan(probe, port_state, self.package, self.port, self.existing, self.confirm)
+        decision = planning.plan(probe, port_state, self.package, self.port, self.existing, self.confirm,
+                                 self.adapter if self.body_chosen else None)
         self.console_install = decision.creates_install or decision.found.get('console_package') == self.package.id
         self.done.add('check')
         if decision.kind == 'refuse':
@@ -259,28 +285,99 @@ class Job:
         steps = {'upload': self._upload, 'remove': self._remove, 'install': self._install_step,
                  'wait_install': self._wait_install, 'start': self._start, 'link': self._link}
         steps[runtime_autostart.ON] = self.autostart.turn_on
+        if self._sends_body() and 'install' not in decision.steps:
+            self.device_install = self._recorded_install(self._deadline('check'))    # an install that is there already
         for step in decision.steps:
             steps[step]()
             self.done.add(step)
+            self.body_installed = self.body_installed or step == 'install'
+            self.body_configured = self.body_configured or (step == 'start' and self._sends_body())
         return 'succeeded'
+
+    def _recorded_install(self, deadline):
+        """Issue #38: the mark of the ROS settings the real-body install on the robot recorded (read only), or
+        None when they could not be read. Compared with the saved body's: only a new install changes them."""
+        try:
+            word, keys, _ = self.session.run('rosprobe', self.package.id, seconds=30, deadline=deadline)
+        except dev.Unreachable:
+            return None
+        installed = robot_body.read_probe(keys)['installed'] if word == 'rosprobed' else None
+        if not installed or installed['adapter'] != planning.REAL_BODY or not installed['setup']:
+            return None
+        return robot_body.install_digest(installed['setup'], installed['settings'])
+
+    def _apply_body(self):
+        """Issue #38: put the saved device configuration on a robot that has a real-body management layer of this
+        console's runtime version, and start the layer again so that it reads it."""
+        self._enter('check')
+        word, probe, _ = self.session.run('probe', self.package.id, seconds=60, deadline=self._deadline('check'))
+        if word != 'probed':
+            raise Failure('check', 'install_probe_failed', '设备没有完成检查（%s）' % (word or '没有答复'))
+        self.service._heard(self.connection_id)
+        found = planning.found_of(probe)
+        # Like the install's "start this existing one" (runtime_install_plan): a finished real-body install of the
+        # same runtime version is started with this console's copy of the install script, whoever installed it. (An
+        # upgraded console has another package id than the one that installed; the layer on the robot is the same.)
+        if found['root'] != 'installed' or found['adapter'] != planning.REAL_BODY or found['version'] != self.package.runtime_version:
+            what = ('没有装好的管理层' if found['root'] != 'installed' else '仿真本体的管理层' if
+                    found['adapter'] != planning.REAL_BODY else '另一个版本（%s）的管理层' % (found['version'] or '未知'))
+            raise Failure('check', 'body_apply_no_install', BODY_NO_INSTALL.format(found=what))
+        self.device_install = self._recorded_install(self._deadline('check'))
+        if self.device_install is not None and self.device_install != robot_body.digests(self.body)['install']:
+            raise Failure('check', 'body_apply_reinstall', BODY_OTHER_SETTINGS)
+        self.port = found['running_port'] or self.port
+        self.done.add('check')
+        for step, run in (('upload', self._upload), ('restart', self._restart), ('link', self._link)):
+            run()
+            self.done.add(step)
+        self.body_configured = True
+        return 'succeeded'
+
+    def _restart(self):
+        self._enter('restart')
+        self._job('restart')
+
+    def _sends_body(self):
+        return self.adapter == planning.REAL_BODY and self.body is not None
+
+    def _body_files(self, directory):
+        """The two files of a real body (issue #38), written to ``directory`` to go over the upload channel."""
+        files = [(dev.BODY_FILE, robot_body.body_env(self.body))]
+        if self.body['config'] is not None:
+            files.append((dev.CONFIG_FILE, robot_body.config_text(self.body['config'])))
+        entries = []
+        for name, text in files:
+            path = os.path.join(directory, name)       # ``directory`` is this job's own, made 0700
+            with open(path, 'w', encoding='utf-8', newline='\n') as handle:   # the robot reads it line by line: LF only
+                handle.write(text)
+            os.chmod(path, 0o600)
+            entries.append({'role': 'body', 'name': name, 'bytes': os.path.getsize(path), 'path': path})
+        return entries
 
     def _upload(self):
         self._enter('upload')
-        deadline, total, sent, damaged = self._deadline('upload'), self.package.total_bytes, 0, 0
-        for entry in self.package.files:
+        with tempfile.TemporaryDirectory(prefix='nx-body-') as scratch:
+            extra = self._body_files(scratch) if self._sends_body() else []
+            self._upload_files([*self.package.files, *extra])
+
+    def _upload_files(self, entries):
+        deadline, sent, damaged = self._deadline('upload'), 0, 0
+        total = sum(entry['bytes'] for entry in entries)
+        for entry in entries:
             self._enter('upload')
             remote = (PACKAGE_DIR % self.package.id) + '/' + entry['name']
-            mode = 0o755 if entry['role'] == 'script' else 0o644
+            mode = 0o755 if entry['role'] == 'script' else 0o600 if entry['role'] == 'body' else 0o644
+            local = entry.get('path') or str(self.package.path(entry['role']))
 
             def progress(event, before=sent, name=entry['name']):
                 self.progress = {'sent': before + int(event.get('sent') or 0), 'total': total, 'file': name}
             while True:
                 try:
                     sent_file = device_transfer.send_to_robot(
-                        self.platform, self.connection_id, str(self.package.path(entry['role'])), remote, mode=mode,
+                        self.platform, self.connection_id, local, remote, mode=mode,
                         on_progress=progress, stop=self.stop_event, **self.service.transfer_options)
                     self.uploaded = True
-                    if sent_file.get('sha256') != entry['sha256']:    # the file changed on this computer after the check
+                    if 'sha256' in entry and sent_file.get('sha256') != entry['sha256']:    # the file changed on this computer after the check
                         raise Failure('upload', 'install_upload_failed', '控制台自带的安装包文件 %s 在发送前被改动了，'
                                       '设备上的这份不能用；请重新安装桌面应用' % entry['name'])
                     break
@@ -325,6 +422,8 @@ class Job:
         if word == 'busy':                          # one of an earlier attempt still runs: its result counts
             _, keys, _ = self.session.run('poll', self.package.id, step, seconds=30, deadline=deadline)
             job_id = dev.job_state(keys.get('job'))[0]
+        elif word in BODY_REFUSALS:                 # issue #38
+            raise Failure(step, 'install_body_missing', BODY_REFUSALS[word])
         elif word not in ('started', 'already'):
             raise Failure(step, 'install_step_refused', '设备没有开始这一步（%s）' % (word or '没有答复'))
         self._wait(step, job_id, deadline)
@@ -367,7 +466,28 @@ class Job:
         robot = self.platform.store.get('robots', self.robot_id)
         if robot.get('status') != 'connected':
             raise Failure('link', 'install_link_failed', '管理层装好了，但连接检查没有通过：' + _clean_text(robot.get('error') or ''))
+        if self.adapter == planning.REAL_BODY:       # issue #38: what the body declares now (its places) is kept at once
+            self._keep_manifest(robot)
         self.service._heard(self.connection_id)
+
+    def _keep_manifest(self, robot):
+        """The robot's v2 manifest, read outside the robot's lock (it is a network call) and saved under it."""
+        try:
+            manifest, error = robot_caps.fetch_manifest_v2(robot), None
+        except ValueError as exc:
+            manifest, error = None, str(exc)
+        with self.platform.runtime_link._robot_lock(self.robot_id), self.platform.store.atomic():
+            try:
+                robot = self.platform.store.get('robots', self.robot_id)
+            except ValueError:
+                return
+            if manifest is not None:
+                robot['manifest_v2'] = manifest
+                robot.pop('manifest_v2_error', None)
+            else:
+                robot.pop('manifest_v2', None)
+                robot['manifest_v2_error'] = error
+            self.platform.store.put('robots', robot)
 
     # ------------------------------------------------------------------ what is left, and taking it away
 
@@ -385,6 +505,11 @@ class Job:
         package_dir, left = PACKAGE_DIR % self.package.id, []
         if self.mode in runtime_autostart.MODES:   # issue #20: its own jobs leave only what Step.leftovers finds
             self.left, self.can_clean, self.cleanup = [], False, ''
+            return
+        if self.mode == BODY_MODE:                 # issue #38: it adds nothing an install's own clean-up would not take
+            self.left, self.can_clean = [], False
+            self.cleanup = ('机器人上的管理层和它原来的本体配置没有被删除。'
+                            '如果停在「重新启动」，管理层可能没有在运行：再点一次「应用到机器人」。')
             return
         if self.mode == 'install' and self.stage == 'check':      # the check only reads
             self.left, self.can_clean, self.cleanup = [], False, '设备上没有留下任何东西。'
@@ -510,13 +635,15 @@ class RuntimeInstall:
         package = runtime_package.bundled()
         with self.platform.engineering.lock:       # a robot that is being deleted is either gone here or not yet
             robot, connection = self._robot(p)
-            adapter = ADAPTERS.get(robot.get('family'))
+            body = robot_body.of(robot)                # issue #38: a real body is the robot's own ROS 2
+            adapter = planning.REAL_BODY if body['kind'] == 'ros2' else ADAPTERS.get(robot.get('family'))
             if adapter is None:
                 raise CodedError(BODY.format(family=robot.get('family') or '未设置'), 'install_body_unsupported')
             with self._guard:
                 if self._jobs.get(robot['id']) is not None and self._jobs[robot['id']].state in ACTIVE:
                     raise CodedError(BUSY, 'install_in_progress')
-                job = Job(self, robot, connection, package, port, adapter, existing, p.get('confirm_replace') is True)
+                job = Job(self, robot, connection, package, port, adapter, existing, p.get('confirm_replace') is True,
+                          body=body if adapter == planning.REAL_BODY else None)
                 job.autostart.wanted = p.get('autostart') is True      # issue #20: listed and confirmed on the way
                 self._jobs[robot['id']] = job
         self.platform.audit('robot.runtime_install_started', {'robot_id': robot['id'], 'package': package.id, 'port': port,
@@ -544,6 +671,28 @@ class RuntimeInstall:
                           outcome.get('adapter') or 'sim_quadruped', mode='clean', previous=outcome)
                 self._jobs[robot['id']] = job
         self.platform.audit('robot.runtime_install_clean', {'robot_id': robot['id'], 'package': package.id}, robot['project_id'])
+        job.thread.start()
+        return job.view()
+
+    def apply_body(self, p):
+        """``robots/runtime-install/apply-body`` (issue #38): put this robot's saved device configuration on it and
+        start its management layer again. Only for a real-body install of this console's runtime version; a
+        changed kind of body or ROS 2 environment needs a new install and is refused here."""
+        package = runtime_package.bundled()
+        with self.platform.engineering.lock:
+            robot, connection = self._robot(p)
+            body = robot_body.of(robot)
+            if body['kind'] != 'ros2':
+                raise CodedError(BODY_NOT_REAL, 'body_apply_not_real')
+            if robot_body.state_of(robot) == 'reinstall':
+                raise CodedError(BODY_REINSTALL, 'body_apply_reinstall')
+            port = (robot.get('runtime_link') or {}).get('port') or (robot.get(OUTCOME) or {}).get('port') or DEFAULT_PORT
+            with self._guard:
+                if self._jobs.get(robot['id']) is not None and self._jobs[robot['id']].state in ACTIVE:
+                    raise CodedError(BUSY, 'install_in_progress')
+                job = Job(self, robot, connection, package, port, planning.REAL_BODY, mode=BODY_MODE, body=body)
+                self._jobs[robot['id']] = job
+        self.platform.audit('robot.body_apply_started', {'robot_id': robot['id'], 'package': package.id}, robot['project_id'])
         job.thread.start()
         return job.view()
 
@@ -609,13 +758,36 @@ class RuntimeInstall:
                 robot = self.store.get('robots', job.robot_id)
                 if robot.get('connection_id') != job.connection_id:
                     return
-                robot[OUTCOME] = job.outcome(state)
+                if job.mode == BODY_MODE:            # issue #38: the install's own outcome stays as it was
+                    robot[BODY_OUTCOME] = {'state': state, 'stage': job.stage, 'failure': job.failure,
+                                           'finished_at': job.finished_at, 'job_id': job.id}
+                else:
+                    robot[OUTCOME] = job.outcome(state)
+                self._note_body(job, robot, state)
                 self.store.put('robots', robot)
         except ValueError:                           # the robot was deleted meanwhile
             return
         self.platform.audit('robot.runtime_install_' + state, {'robot_id': job.robot_id, 'package': job.package.id,
                                                                     'stage': job.stage, 'mode': job.mode,
                                                                     'code': (job.failure or {}).get('code')}, job.project_id)
+
+    @staticmethod
+    def _note_body(job, robot, state):
+        """Issue #38: which body the robot's install was made for and which device configuration it runs with, as
+        far as this job put them there. An install that was only linked is real or simulated, but with what
+        settings is not known (``None``); ``robot_body.state_of`` reads this."""
+        if state != 'succeeded' or job.mode not in ('install', BODY_MODE):
+            return
+        if job.adapter != planning.REAL_BODY:
+            robot[BODY_APPLIED] = {'kind': 'sim', 'at': now()}
+            return
+        before = robot.get(BODY_APPLIED) if isinstance(robot.get(BODY_APPLIED), dict) else {}
+        before = before if before.get('kind') == 'ros2' and not job.body_installed else {}
+        marks = robot_body.digests(job.body) if job.body else {}
+        # The ROS settings: this job's when it installed, else what the install on the robot recorded (read back).
+        robot[BODY_APPLIED] = {'kind': 'ros2', 'at': now(),
+                               'install': marks.get('install') if job.body_installed else job.device_install,
+                               'config': marks.get('config') if job.body_configured else before.get('config')}
 
     def close(self):
         with self._guard:

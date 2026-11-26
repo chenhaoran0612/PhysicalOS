@@ -90,6 +90,12 @@ install() {
   mkdir -p "$ROOT/venv/bin" "$ROOT/venv/lib/python3.10/site-packages/neuxmind_runtime-$version.dist-info" "$ROOT/state"
   : > "$ROOT/venv/bin/neuxmind-runtime"
   (umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$ROOT/edge-token")
+  echo "$ADAPTER" > "$ROOT/adapter"
+  # Issue #38: like the product, a real body records the ROS settings install was given; the test reads both files.
+  env | grep -E '^(NX_ROS_SETUP|ROS_[A-Z_]*|RMW_IMPLEMENTATION|FASTRTPS_DEFAULT_PROFILES_FILE|CYCLONEDDS_URI|ZENOH_SESSION_CONFIG_URI)=' > "$CONTROL/install-env"
+  if [ "$ADAPTER" = ros2 ]; then
+    (umask 077; sed 's/^NX_ROS_SETUP=/ROS_SETUP=/' "$CONTROL/install-env" > "$ROOT/ros2.env")
+  fi
   echo state=installed > "$MARKER"
   echo "token file: $ROOT/edge-token (mode 600)"
 }
@@ -97,6 +103,11 @@ start() {
   if running; then echo "already running: pid $(cat "$ROOT/runtime.pid")"; return 0; fi
   installed || { echo "not installed: run install first" >&2; exit 2; }
   wait_while hold-start
+  if [ -e "$CONTROL/fail-start-once" ]; then        # issue #38: the next start fails, the one after it does not
+    rm -f -- "$CONTROL/fail-start-once"
+    echo "runtime did not come up; last log lines:" >&2
+    exit 1
+  fi
   if [ -e "$CONTROL/fail-start" ]; then
     echo "runtime did not come up; last log lines:" >&2
     echo "neuxmind-runtime: error: the adapter did not start" >&2
