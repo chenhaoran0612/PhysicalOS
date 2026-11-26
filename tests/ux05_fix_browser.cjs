@@ -78,7 +78,7 @@ function writeSkill() {
     await go('robots');
     await page.locator('#main [data-action="robot-add"]').first().click();
     await fill('name', name);
-    await page.locator('#dialog select[name=family]').selectOption('quadruped');
+    await page.locator('#dialog select[name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
     await fill('endpoint', r.endpoint);
     await fill('token', r.token);
     await submit();

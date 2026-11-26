@@ -81,7 +81,7 @@ let failed = async () => {};
   await page.locator('[data-action="engine-ssh"]').first().waitFor({timeout: 15000});
   await page.locator('[data-action="engine-ssh"]').first().click();
   await fill('name', ROBOT); await fill('host', '127.0.0.1'); await fill('port', cfg.port);
-  await page.locator('#dialog [name=family]').selectOption('quadruped');
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await fill('username', cfg.ssh_user); await fill('password', cfg.ssh_login);
   await submit();
   await page.locator('#dialog input[type=checkbox]').check();

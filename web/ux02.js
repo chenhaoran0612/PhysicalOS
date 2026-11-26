@@ -428,14 +428,15 @@ async function uxInstalledSkills() {
   return out;
 }
 
-const uxAdopted = s => rows('skills').find(x => x.entrypoint === s.id && x.version === s.version);
+// Issue #48: a skill record is for one brand and model; the same skill on a robot of another one is added again.
+const uxAdopted = (s, robot) => rows('skills').find(x => x.entrypoint === s.id && x.version === s.version && (!robot || typeof rmSkillFits !== 'function' || rmSkillFits(x, robot)));
 
 async function ux02Action(type, id) {
   if (type === 'ux-adopt') {
     const items = await uxInstalledSkills();
     const body = items.length
       ? items.map(({robot, skill}) => {
-          const done = uxAdopted(skill);
+          const done = uxAdopted(skill, robot);
           return `<div class="contract-line"><div class="section-head"><b>${h(skill.title)}</b>${done ? badge('已加入项目', 'good')
             : button('加入项目', 'ux-adopt-one', 'small', robot.id + '|' + skill.id)}</div>` +
             `<p>${h(skill.description)}</p><small>安装在：${h(robot.name)}${isSimRobot(robot) ? ' ' + simBadge() : ''} · <span class="mono">${h(skill.id)}@${h(skill.version)}</span></small></div>`;
@@ -450,8 +451,8 @@ async function ux02Action(type, id) {
     const hit = items.find(x => x.robot.id === robotId && x.skill.id === skillId);
     if (!hit) throw Error('找不到这台机器人上的这个技能，可能已被卸载');
     const s = hit.skill;
-    if (!uxAdopted(s)) {
-      await api('skills', {project_id: projectId, name: s.title, version: s.version, entrypoint: s.id,
+    if (!uxAdopted(s, hit.robot)) {
+      await api('skills', {project_id: projectId, robot_id: robotId, name: s.title, version: s.version, entrypoint: s.id,
         requires: s.requires.map(x => x.id), model_ids: [], parameters: s.parameters || [],
         success_condition: '技能运行结束，设备报告成功',
         stop_condition: '设备报告失败、急停或超过时限时停止并报告'});

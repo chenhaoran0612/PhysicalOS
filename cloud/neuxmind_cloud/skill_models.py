@@ -39,6 +39,9 @@ class SkillRelease(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[float] = mapped_column(Float, default=now)
+    # Issue #48: the brand and model of robot the release is for ("" on both: not said yet).
+    vendor: Mapped[str] = mapped_column(String(100), default="")
+    model: Mapped[str] = mapped_column(String(100), default="")
 
 
 class DeviceLink(Base):

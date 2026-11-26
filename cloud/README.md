@@ -388,6 +388,7 @@ issue #43 又加了四个权限范围，都不在默认范围里（见“云端�
 | GET `/skills/{skill_id}` | → `{id, releases: [Release…]}`（新的在前）；没有 → 404 `skill_not_found` |
 | GET `/skills/{skill_id}/releases/{version}` | → `Release` |
 | GET `/skills/{skill_id}/releases/{version}/package` | → `{release: Release, package: skill.package.v1（含 files）}`。`package` 是校验后的规范形式加上文件；把它原样交给机器人安装，得到的 `digest` 就是 `release.digest` |
+| PUT `/skills/{skill_id}/releases/{version}/product` | issue #48：`{vendor, model}` → `Release`。给还没有品牌型号的版本指定一次；已经有且不同 → 409 `skill_product_set`。发布时也可以带 `vendor`、`model`（要一起给，否则 400 `invalid_product`；同一版本换一个品牌型号再发 → 409 `skill_other_model`）。`Release` 里的 `product` 是 `{vendor, model}` 或 `null`。见 [ROBOT_MODEL.md](../docs/ROBOT_MODEL.md) |
 | DELETE `/skills/{skill_id}/releases/{version}` | → `{deleted: true}`（已经装到机器人上的不受影响；删掉之后同一个版本号可以重新发布） |
 
 `Release` = `{skill_id, version, title, description, digest, requires: [能力 id…], optional: [能力 id…], parameters: [原样], motion, timeout_s, files: [{path, size}], size, notes, created_by, created_at}`。`created_by` 是 `user:<id>` 或 `key:<id>`。

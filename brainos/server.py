@@ -180,6 +180,8 @@ def make_handler(application):
             extra=extra or {'/safety_limits.js':('safety_limits.js','text/javascript; charset=utf-8'),'/safety_limits.css':('safety_limits.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #43: skills kept in the cloud, remote calls of a robot's skills, its programs and scene data, likewise.
             extra=extra or {'/cloud_skills.js':('cloud_skills.js','text/javascript; charset=utf-8'),'/cloud_skills.css':('cloud_skills.css','text/css; charset=utf-8'),'/remote_calls.js':('remote_calls.js','text/javascript; charset=utf-8'),'/remote_calls.css':('remote_calls.css','text/css; charset=utf-8'),'/robot_bundle.js':('robot_bundle.js','text/javascript; charset=utf-8'),'/robot_bundle.css':('robot_bundle.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #48: a robot's brand and model; applications and skills by brand and model.
+            extra=extra or {'/robot_model.js':('robot_model.js','text/javascript; charset=utf-8'),'/robot_model.css':('robot_model.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
@@ -269,7 +271,7 @@ def make_handler(application):
                         'engineering/workflows/continue':service.workflows.continue_review,
                         'engineering/workflows/artifact':service.workflows.artifact,
                         'engineering/adaptation/start':service.workflows.start_adaptation,
-                        'projects':service.add_project,'robots':service.add_robot,'robots/connect':service.connect_robot,
+                        'projects':service.add_project,'robots':service.robot_models.register,'robots/model':service.robot_models.assign,'robots/connect':service.connect_robot,
                         # Issue #32: the platform's list of body types; change the type of a registered device
                         'body-types':service.body_types.add,'body-types/remove':service.body_types.remove,
                         'robots/body-type':service.body_types.assign,
@@ -281,7 +283,7 @@ def make_handler(application):
                         'engineering/mcp/configure':service.engineering.extensions.configure_mcp,
                         'engineering/models':service.engineering.model_add,'engineering/models/use':service.engineering.use_offer,
                         'engineering/models/cloud':service.engineering.use_cloud_model,'engineering/cloud/close':service.engineering.cloud_close,
-                        'engineering/ssh/scan':service.engineering.scan,'engineering/ssh/connect':service.engineering.connect,
+                        'engineering/ssh/scan':service.engineering.scan,'engineering/ssh/connect':service.robot_models.connect_ssh,
                         'engineering/ssh/status':service.engineering.status,'engineering/ssh/services':service.engineering.watch_services,
                         # Issue #24: every robot's connection state and last heartbeat; ask one robot now instead of at the next round
                         'engineering/ssh/links':service.heartbeat.overview,'engineering/ssh/heartbeat':service.heartbeat.check,
@@ -380,7 +382,7 @@ def make_handler(application):
                         # Issue #43: the cloud skill library (list, publish a local folder or the bundled examples, install a release on a robot)
                         'cloud-skills/overview':service.cloud_skills.overview,'cloud-skills/detail':service.cloud_skills.detail,
                         'cloud-skills/publish-preview':service.cloud_skills.publish_preview,'cloud-skills/publish':service.cloud_skills.publish,
-                        'cloud-skills/publish-examples':service.cloud_skills.publish_examples,'cloud-skills/delete':service.cloud_skills.remove,
+                        'cloud-skills/publish-examples':service.cloud_skills.publish_examples,'cloud-skills/bind':service.cloud_skills.bind,'cloud-skills/delete':service.cloud_skills.remove,
                         'cloud-skills/install-preview':service.cloud_skills.install_preview,'cloud-skills/install':service.cloud_skills.install,
                         # Issue #43: the owner's switch for remote calls per installed skill; the signed-in account is recorded as who
                         'robots/remote':service.remote_calls.state,

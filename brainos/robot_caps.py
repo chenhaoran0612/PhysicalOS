@@ -389,7 +389,8 @@ def typed_application(platform, app):
             if decls:
                 step = {**step, 'parameters': typed_parameters(decls, step['parameters'])}
         out_steps.append(step)
-    return {**app, 'steps': out_steps}
+    from . import robot_model
+    return robot_model.wire({**app, 'steps': out_steps})     # issue #48: a brand and model added afterwards is not in the digest
 
 
 def parameter_views(decls, typed=False):

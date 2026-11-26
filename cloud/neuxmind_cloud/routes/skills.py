@@ -51,6 +51,13 @@ def get_package(request: Request, skill_id: str, version: str):
         return skill_store.get_package(s, principal(request, s), skill_id, version)
 
 
+@router.put("/{skill_id}/releases/{version}/product")
+def set_product(request: Request, skill_id: str, version: str, payload=Body(...)):
+    """Issue #48: ``{vendor, model}`` for a release that names none yet; 409 ``skill_product_set`` when it names another."""
+    with ctx(request).db.transaction() as s:
+        return skill_store.set_product(s, principal(request, s), skill_id, version, payload, ip=client_ip(request))
+
+
 @router.delete("/{skill_id}/releases/{version}")
 def delete_release(request: Request, skill_id: str, version: str):
     with ctx(request).db.transaction() as s:

@@ -92,7 +92,7 @@ let failed = async () => {};
   await page.goto(cfg.url + '/#robots');
   await page.locator('[data-action="robot-add"]').first().click();
   await dialog.locator('[name="name"]').fill(ROBOT);
-  await dialog.locator('[name=family]').selectOption('quadruped');
+  await dialog.locator('[name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await dialog.locator('[name="endpoint"]').fill(cfg.device.url);
   await dialog.locator('[name="token"]').fill(cfg.device.access);
   await submit();

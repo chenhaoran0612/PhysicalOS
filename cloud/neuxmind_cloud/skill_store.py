@@ -147,6 +147,39 @@ def _notes(value) -> str:
     return value.strip()
 
 
+# ---------------------------------------------------------------- brand and model (issue #48)
+MAX_PRODUCT = 100
+
+
+def _product(payload: dict, required: bool = False) -> dict | None:
+    """``{vendor, model}`` of a request: both, or neither (None). Compared without regard to case."""
+    values = {}
+    for name, label in (("vendor", "品牌"), ("model", "型号")):
+        value = payload.get(name)
+        if value is None:
+            value = ""
+        if not isinstance(value, str) or len(value) > 4 * MAX_PRODUCT or not skill_params.storable(value):
+            raise ApiError(400, "invalid_product", f"{label}须为文字，不含控制字符")
+        values[name] = " ".join(value.split())
+        if len(values[name]) > MAX_PRODUCT:
+            raise ApiError(400, "invalid_product", f"{label}最多 {MAX_PRODUCT} 个字符")
+    if not values["vendor"] and not values["model"]:
+        if required:
+            raise ApiError(400, "invalid_product", "请给出品牌和型号")
+        return None
+    if not values["vendor"] or not values["model"]:
+        raise ApiError(400, "invalid_product", "品牌和型号要一起给")
+    return values
+
+
+def product_of(release: SkillRelease) -> dict | None:
+    return {"vendor": release.vendor, "model": release.model} if release.vendor and release.model else None
+
+
+def _same_product(a: dict | None, b: dict | None) -> bool:
+    return (a is None) == (b is None) and (a is None or all(a[k].casefold() == b[k].casefold() for k in a))
+
+
 # ---------------------------------------------------------------- views
 def release_view(release: SkillRelease) -> dict:
     spec = release.spec
@@ -155,7 +188,7 @@ def release_view(release: SkillRelease) -> dict:
             "requires": [item["id"] for item in spec["requires"]], "optional": [item["id"] for item in spec["optional"]],
             "parameters": spec["parameters"], "motion": bool(release.motion), "timeout_s": spec["timeout_s"],
             "files": release.file_index, "size": release.size, "notes": release.notes,
-            "created_by": release.created_by, "created_at": release.created_at}
+            "created_by": release.created_by, "created_at": release.created_at, "product": product_of(release)}
 
 
 def is_version(version: str) -> bool:
@@ -194,21 +227,22 @@ def create_release(session: Session, p: Principal, payload, settings: Settings, 
     """``POST /skills/releases``. ``(release, created)``; the same content again is not created twice."""
     _writer(p)
     if not isinstance(payload, dict):
-        raise bad_request("请求须为对象 {package, notes?}")
+        raise bad_request("请求须为对象 {package, notes?, vendor?, model?}")
     notes = _notes(payload.get("notes"))
+    product = _product(payload)
     fields = check_package(payload.get("package"))
     advisory_lock(session, f"skills:{p.org_id}")
     existing = session.execute(select(SkillRelease).where(
         SkillRelease.org_id == p.org_id, SkillRelease.skill_id == fields["skill_id"],
         SkillRelease.version == fields["version"])).scalar_one_or_none()
     if existing is not None:
-        return _existing(existing, fields), False
+        return _existing(existing, fields, product), False
     count = session.execute(select(func.count()).select_from(SkillRelease)
                             .where(SkillRelease.org_id == p.org_id)).scalar_one()
     if count >= settings.skill_org_max_releases:
         raise conflict(f"本组织的云端技能已达上限（{settings.skill_org_max_releases} 条），请先删除不用的版本",
                        code="skill_quota_exceeded")
-    release = SkillRelease(org_id=p.org_id, notes=notes, created_by=p.actor, **fields)
+    release = SkillRelease(org_id=p.org_id, notes=notes, created_by=p.actor, **fields, **(product or {}))
     session.add(release)
     try:
         session.flush()
@@ -217,16 +251,41 @@ def create_release(session: Session, p: Principal, payload, settings: Settings, 
         raise conflict("这个版本刚刚已被发布，请重试", code="skill_version_exists") from None
     audit.record(session, "skill.release.create", p.actor, org_id=p.org_id, ip=ip,
                  target=f"{release.skill_id}@{release.version}",
-                 detail={"digest": release.digest, "size": release.size, "motion": release.motion})
+                 detail={"digest": release.digest, "size": release.size, "motion": release.motion, "product": product})
     return release_view(release), True
 
 
-def _existing(release: SkillRelease, fields: dict) -> dict:
+def _existing(release: SkillRelease, fields: dict, product: dict | None = None) -> dict:
     if release.digest != fields["digest"]:
         raise ApiError(409, "skill_version_exists",
                        f"{release.skill_id}@{release.version} 已经发布过，内容不同；版本不可变，请提升版本号",
                        digest=release.digest)
+    held = product_of(release)
+    if product is not None and held is not None and not _same_product(product, held):
+        raise ApiError(409, "skill_other_model",
+                       f"{release.skill_id}@{release.version} 已经发布给「{held['vendor']} {held['model']}」；"
+                       "一个版本只属于一个品牌型号，给另一种机器人请用另一个版本号", product=held)
+    if product is not None and held is None:                # said now for a release from before
+        release.vendor, release.model = product["vendor"], product["model"]
     return {**release_view(release), "existing": True}
+
+
+def set_product(session: Session, p: Principal, skill_id: str, version: str, payload, ip: str = "") -> dict:
+    """``PUT …/product``: say which brand and model a release is for, when it does not say yet."""
+    _writer(p)
+    if not isinstance(payload, dict):
+        raise bad_request("请求须为对象 {vendor, model}")
+    product = _product(payload, required=True)
+    release = _own_release(session, p, skill_id, version, lock=True)
+    held = product_of(release)
+    if held is not None and not _same_product(product, held):
+        raise ApiError(409, "skill_product_set",
+                       f"这个版本已经属于「{held['vendor']} {held['model']}」，不能改；给另一种机器人请发布另一个版本", product=held)
+    if held is None:
+        release.vendor, release.model = product["vendor"], product["model"]
+        audit.record(session, "skill.release.product", p.actor, org_id=p.org_id, ip=ip,
+                     target=f"{release.skill_id}@{release.version}", detail={"product": product})
+    return release_view(release)
 
 
 def list_skills(session: Session, p: Principal) -> dict:

@@ -55,7 +55,7 @@ const fs = require('fs');
     await page.goto(cfg.url + '/#robots');
     await click('engine-ssh');
     await fill('name', name); await fill('host', '127.0.0.1'); await fill('port', cfg.target_port);
-    await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
+    await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #32: a new device needs a type from the list
     await fill('username', cfg.target_user); await fill('password', cfg.target_password);
   };
 
@@ -167,7 +167,7 @@ const fs = require('fs');
   await page.screenshot({path: 'artifacts/ssh-command-filled.png'});
   // The fixtures only know passwords, so the two logins are switched back before connecting.
   await fill('name', '粘贴命令接入的机器人');
-  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #32: a new device needs a type from the list
   await page.locator('#dialog [name=auth]').selectOption('password');
   await page.locator('#dialog [name=jump_auth]').selectOption('password');
   await fill('password', cfg.target_password); await fill('jump_password', cfg.jump_password);
@@ -192,7 +192,7 @@ const fs = require('fs');
   const wanted = {host: 'dog', port: '', username: '', route: 'jump', jump_port: String(cfg.jump_port), resolve: true};
   if (JSON.stringify(nested) !== JSON.stringify(wanted)) throw Error('Nested command filled: ' + JSON.stringify(nested));
   await fill('name', '跳板机上叫 dog 的机器人');
-  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #32: a new device needs a type from the list
   await page.locator('#dialog [name=auth]').selectOption('password');
   await page.locator('#dialog [name=jump_auth]').selectOption('password');
   await fill('password', cfg.target_password); await fill('jump_password', cfg.jump_password);
@@ -362,7 +362,7 @@ const fs = require('fs');
   await command.dispatchEvent('change');
   await expectText(page.locator('#ssh-command-result'), ['目标名称 pup', 'ProxyJump']);
   await fill('name', '配置里还有一级的机器人');
-  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #32: a new device needs a type from the list
   await page.locator('#dialog [name=auth]').selectOption('password');
   await page.locator('#dialog [name=jump_auth]').selectOption('password');
   await fill('password', cfg.target_password); await fill('jump_password', cfg.jump_password);

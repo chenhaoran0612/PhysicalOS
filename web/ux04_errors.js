@@ -329,6 +329,18 @@ const UX_CODES = {
   ledger_conflict: ['state', '账本记录冲突（同时有别的操作）。', '刷新后再试'],
   // Issue #32: the platform's list of body types (brainos/body_types.py, web/body_types.js)
   body_type_required: ['input', '这台设备还没有从本体类型清单里选类型。', '在“本体类型”里选一个类型后再提交'],
+  // Issue #48: a robot's brand and model; applications and skills belong to one brand and model (brainos/robot_model.py).
+  robot_model_required: ['input', '还缺这台机器人的品牌和型号：设备没有上报，需要填写。', '填写品牌和型号（两项要一起填）后再提交'],
+  robot_model_invalid: ['input', '品牌或型号的写法不对。', '每项最多 100 个字符，不要有换行以外的控制字符'],
+  robot_model_from_device: ['input', '这台机器人的品牌和型号是设备自己上报的，不能手工修改。', '要改的话，请修改设备端接入程序上报的品牌和型号，再做一次连接检查'],
+  robot_model_missing: ['input', '这台机器人还没有填写品牌和型号。', '先在“我的机器人”里给它填写品牌型号，再回来操作'],
+  app_other_model: ['input', '这个应用属于另一个品牌型号的机器人，不能用在这台机器人上。', '换一台同品牌型号的机器人，或为这种机器人另建一个应用'],
+  app_no_robot: ['input', '现在没有可以使用这个应用的机器人：它所属品牌型号的机器人都不在了。', '在“我的机器人”里接入一台这个品牌型号的机器人'],
+  skill_other_model: ['input', '这个技能属于另一个品牌型号的机器人，不能用在这里。', '换成这个品牌型号自己的技能，或为它另外登记、发布一份'],
+  skill_product_required: ['input', '还没有选择这个技能是给哪个品牌型号的机器人用的。', '选择品牌型号后再发布'],
+  skill_product_missing: ['input', '云端的这个版本还没有说明给哪个品牌型号用。', '在“技能发布”页打开它的版本列表，点“指定品牌型号”'],
+  skill_product_set: ['input', '这个版本已经属于一个品牌型号，不能改到另一个。', '给另一种机器人用，请换一个版本号重新发布'],
+  invalid_product: ['input', '品牌和型号要一起给，每项最多 100 个字符。', '检查后重新提交'],
   body_type_unknown: ['notfound', '清单里已经没有这个本体类型了，可能刚被删除。', '刷新页面后重新选择'],
   body_type_builtin: ['state', '这是内置的本体类型，不能删除。'],
   body_type_in_use: ['state', '还有设备在用这个本体类型，所以不能删除。', '先把这些设备改成别的类型，或删除这些设备', '然后再删除这个类型'],

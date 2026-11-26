@@ -93,6 +93,8 @@ class Platform:
         self.model_compute = ModelCompute(self)
         from .body_types import BodyTypes
         self.body_types = BodyTypes(self)           # issue #32: the platform's list of body types; a device has the type a person chose
+        from .robot_model import RobotModels
+        self.robot_models = RobotModels(self)       # issue #48: a robot's brand and model; applications and skills belong to one (after body_types)
         from .sim_robots import SimRobots
         self.sims = SimRobots(self, self.store.root)
         from .hardware_init import HardwareInit
@@ -192,6 +194,7 @@ class Platform:
         obj = {'id': uid('robot'), 'project_id': project['id'], 'name': required_text(p.get('name'), '本体名称', 100),
                'family': p['family'], 'endpoint': endpoint, 'token': self.token(p), 'status': 'unconnected',
                'capabilities': [], 'created_at': now()}
+        obj.update(self.robot_models.initial(p))    # issue #48: the brand and model, when the caller names them
         with self.store.atomic():                   # issue #32: the type is not removed between the check and the save
             self.body_types.require(obj['family'])
             self.store.put('robots', obj)
@@ -256,6 +259,7 @@ class Platform:
             self.store.put('robots', obj)
             raise
         self.store.put('robots', obj)
+        obj = self.robot_models.note_device(obj)    # issue #48: what the device reports is the robot's brand and model
         self.audit('robot.connected', {'robot_id': obj['id'], 'capabilities': obj['capabilities']}, obj['project_id'])
         return self.redact(obj)
 
@@ -473,6 +477,7 @@ class Platform:
             decls = robot_caps.parameter_views(decls, typed=True)   # Q7b-04: stored with their declared types
             if decls:
                 obj['parameters'] = decls
+        obj.update(self.robot_models.skill_fields(p))   # issue #48: the brand and model the skill is for
         obj['digest'] = digest(obj)
         self.store.put('skills', obj)
         self.audit('skill.registered', {'skill_id': obj['id']}, p['project_id'])
@@ -484,7 +489,7 @@ class Platform:
         steps = p.get('steps')
         if not isinstance(steps, list) or not 1 <= len(steps) <= 50:
             raise ValueError('应用需要 1–50 个技能步骤')
-        normalized = []
+        normalized, used = [], []
         for step in steps:
             if not isinstance(step, dict):
                 raise ValueError('每个步骤须为 JSON 对象')
@@ -493,18 +498,21 @@ class Platform:
             if not isinstance(params, dict) or isinstance(timeout, bool) or not isinstance(timeout, (int,float)) or not 0 < timeout <= 86400:
                 raise ValueError('步骤需要 JSON 参数及 0–86400 秒超时')
             params = robot_caps.typed_parameters(skill.get('parameters'), params)   # ux05-fix (Q7-04)
+            used.append(skill)
             normalized.append({'skill_id': skill['id'], 'skill_digest': skill['digest'], 'entrypoint': skill['entrypoint'],
                                'parameters': params, 'timeout_s': timeout, 'requires': skill['requires'],
                                'success_condition': skill['success_condition'], 'stop_condition': skill['stop_condition'],
                                'model_digests': skill['model_digests']})
         return {'project_id': p['project_id'], 'name': required_text(p.get('name'), '应用名称',100),
                'robot_id': robot['id'], 'steps': normalized, 'failure_policy': 'stop_and_report', 'schema': 'robot.application.v1',
-               'version': required_text(p.get('version'), '版本')}
+               'version': required_text(p.get('version'), '版本'),
+               **self.robot_models.application_fields(robot, used)}     # issue #48: the brand and model it belongs to
 
     def add_application(self, p):
         obj = {**self.application_manifest(p), 'id': uid('app'), 'created_at': now()}
         obj['digest'] = digest(obj)
         self.store.put('applications', obj)
+        self.robot_models.bind_skills(obj)          # issue #48
         self.audit('application.created', {'application_id': obj['id']}, p['project_id'])
         return obj
 
@@ -516,8 +524,8 @@ class Platform:
         from .revisions import save
         return save(self, p)
 
-    def application_checks(self, app):
-        robot = self.same_project('robots', app['robot_id'], app['project_id'])
+    def application_checks(self, app, robot_id=None):
+        robot = self.robot_models.target(app, robot_id)     # issue #48: any robot of the application's brand and model
         required = set(c for s in app['steps'] for c in s['requires'])
         missing = sorted(required-set(robot['capabilities']))
         models = [self.store.get('models', m) for s in app['steps'] for m in s['model_digests']]
@@ -539,7 +547,7 @@ class Platform:
 
     def harness(self, p):
         app = self.store.get('applications', p.get('application_id'))
-        robot, cases = self.application_checks(app)
+        robot, cases = self.application_checks(app, p.get('robot_id'))
         obj = {'id':uid('check'), 'project_id':app['project_id'], 'application_id':app['id'], 'application_digest':app['digest'],
                'robot_id':robot['id'], 'robot_manifest_digest':robot.get('manifest_digest'), 'cases':cases,
                'passed':all(c['passed'] for c in cases), 'scope':'static', 'created_at':now()}
@@ -566,7 +574,11 @@ class Platform:
         reports=[]
         if agent['id'] in ('integration','application','testing','release'):
             for app in apps:
-                report=self.harness({'application_id':app['id']})
+                try:
+                    report=self.harness({'application_id':app['id']})
+                except CodedError as exc:                # issue #48: no robot of its brand and model: said, and the rest goes on
+                    findings.append(f"{app['name']}：{exc}")
+                    continue
                 reports.append(report['id'])
                 findings.extend(f"{app['name']}：{c['name']} — {c['detail']}" for c in report['cases'] if not c['passed'])
         if agent['id']=='release':
@@ -705,10 +717,10 @@ class Platform:
         if p.get('hardware_authorized') is not True:
             raise ValueError('现场测试可能产生机器人动作，需要明确确认现场条件')
         app=self.store.get('applications',p.get('application_id'))
-        static=self.harness({'application_id':app['id']})
+        static=self.harness({'application_id':app['id'],'robot_id':p.get('robot_id')})
         if not static['passed']:
             raise ValueError('先修复静态 Harness 检查中的缺项')
-        robot=self.store.get('robots',app['robot_id'])
+        robot=self.store.get('robots',static['robot_id'])
         # Refresh identity and capability manifest before every physical request.
         self.connect_robot({'robot_id':robot['id']})
         robot=self.store.get('robots',robot['id'])
@@ -736,7 +748,7 @@ class Platform:
     def deploy(self,p):
         app=self.store.get('applications',p.get('application_id'))
         report=self.same_project('evaluations',p.get('report_id'),app['project_id'])
-        robot=self.store.get('robots',app['robot_id'])
+        robot=self.robot_models.target(app,p.get('robot_id') or report.get('robot_id'))   # issue #48: the robot the evidence is from
         if robot['status']!='connected':
             raise ValueError('机器人未连接')
         self.connect_robot({'robot_id':robot['id']})
@@ -747,7 +759,7 @@ class Platform:
             raise ValueError('部署需要该应用与该本体当前版本通过的现场测试证据')
         from .delivery import require_current_evidence
         require_current_evidence(self, app, robot, report)
-        check=self.harness({'application_id':app['id']})
+        check=self.harness({'application_id':app['id'],'robot_id':robot['id']})
         if not check['passed']:
             raise ValueError('当前依赖检查未通过，不能发布')
         obj={'id':uid('release'),'project_id':app['project_id'],'application_id':app['id'],'application_digest':app['digest'],
@@ -787,7 +799,7 @@ class Platform:
             app=self.store.get('applications',release['application_id'])
             from .delivery import require_current_evidence
             require_current_evidence(self, app, robot, report)
-            _, cases=self.application_checks(app)
+            _, cases=self.application_checks(app,robot['id'])
             if not all(c['passed'] for c in cases):
                 raise ValueError('当前应用依赖检查未通过，请修复后再启动')
         obj={'id':uid('operation'),'project_id':release['project_id'],'release_id':release['id'],'robot_id':robot['id'],

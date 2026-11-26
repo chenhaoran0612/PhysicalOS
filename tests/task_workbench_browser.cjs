@@ -153,7 +153,7 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   //    and it does not stand in the way of deleting a task.
   const patrol = await page.evaluate(async () => {
     const task = state.projects.find(p => p.name === '园区巡逻');
-    await api('robots', {project_id: task.id, name: '巡逻狗', family: 'quadruped'});
+    await api('robots', {vendor:'示例机器人公司',model:'X1',project_id: task.id, name: '巡逻狗', family: 'quadruped'});
     await refresh(true);
     return task.id;
   });
@@ -172,7 +172,7 @@ const LONG = '每天晚上十点到早上六点，沿仓库 A 区和 B 区的主
   await page.locator('#dialog [data-action="task-remove-confirm"]').waitFor();
   await page.evaluate(async () => {
     const task = state.projects.find(p => p.name === '工位上下料');
-    await api('robots', {project_id: task.id, name: '上料臂', family: 'manipulator'});
+    await api('robots', {vendor:'示例机器人公司',model:'X1',project_id: task.id, name: '上料臂', family: 'manipulator'});
     await refresh(true);
   });
   check(await dialog.locator('[data-action="task-remove-confirm"]').count() === 1, 'A robot of the account took the confirmation away');

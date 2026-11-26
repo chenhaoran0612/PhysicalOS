@@ -108,6 +108,9 @@ function writeSkill() {
   await page.keyboard.press('Escape').catch(() => {});
   await go('skills');
   await page.evaluate(() => action('skill-add'));
+  await page.locator('#dialog form[data-form="skill"]').waitFor();
+  // Issue #48: a skill names the brand and model it is for: here, those of the robot the application below is made for.
+  await require('./robot_model_helper.cjs').fillBrandAndModel(page, await page.evaluate(id => find('robots', id).product, mixed));
   await page.locator('form[data-form=skill]').waitFor();
   await fill('name', '速度档位（手工登记）'); await fill('version', '0.1.0'); await fill('entrypoint', 'ux05fix2_float');
   await fill('requires', 'system.health'); await fill('success_condition', '返回参数'); await fill('stop_condition', '超时');

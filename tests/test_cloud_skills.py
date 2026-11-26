@@ -22,6 +22,9 @@ from brainos.errors import CodedError  # noqa: E402
 from brainos.service import Platform  # noqa: E402
 from skill_cloud_fixture import FakeSkillCloud  # noqa: E402
 
+# Issue #48: a release is published for one brand and model; these are the ones the simulated quadruped reports.
+SIM = {'vendor': 'neuxmind-sim', 'model': 'sim-quadruped'}
+
 EXAMPLES = runtime_bridge.examples_dir()
 
 
@@ -48,7 +51,7 @@ class CloudSkillsCase(unittest.TestCase):
 
     def publish(self, path, **more):
         preview = self.skills.publish_preview({'path': path})
-        return self.skills.publish({'path': path, 'digest': preview['digest'], **more})
+        return self.skills.publish({**SIM, 'path': path, 'digest': preview['digest'], **more})
 
     def events(self, action):
         return [e for e in self.platform.store.list('events') if e['action'] == action]
@@ -73,7 +76,7 @@ class Library(CloudSkillsCase):
         self.assertFalse(preview['motion'])
         self.assertEqual(self.cloud.releases, {})                    # the preview sent nothing
 
-        result = self.skills.publish({'path': path, 'digest': preview['digest'], 'notes': '第一次发布'})
+        result = self.skills.publish({**SIM, 'path': path, 'digest': preview['digest'], 'notes': '第一次发布'})
         self.assertTrue(result['digest_matches'])
         release = result['release']
         self.assertEqual((release['skill_id'], release['version'], release['digest'], release['notes']),
@@ -95,7 +98,7 @@ class Library(CloudSkillsCase):
         with open(os.path.join(path, 'skill.py'), 'a', encoding='utf-8') as handle:
             handle.write('\n# changed after the preview\n')
         with self.assertRaises(CodedError) as caught:
-            self.skills.publish({'path': path, 'digest': preview['digest']})
+            self.skills.publish({**SIM, 'path': path, 'digest': preview['digest']})
         self.assertEqual(caught.exception.code, 'skill_changed_since_preview')
         self.assertEqual(self.cloud.releases, {})
 
@@ -111,7 +114,7 @@ class Library(CloudSkillsCase):
         preview = self.skills.publish_preview({'path': other})
         self.assertEqual((preview['state'], preview['can_publish']), ('conflict', False))
         with self.assertRaises(CloudError) as caught:
-            self.skills.publish({'path': other, 'digest': preview['digest']})
+            self.skills.publish({**SIM, 'path': other, 'digest': preview['digest']})
         self.assertEqual(caught.exception.code, 'skill_version_exists')
         self.assertIn('提高版本号', str(caught.exception))
 
@@ -160,20 +163,20 @@ class Library(CloudSkillsCase):
 class BundledExamples(CloudSkillsCase):
     def test_one_action_publishes_every_bundled_example_and_doing_it_again_changes_nothing(self):
         names = sorted(d.name for d in EXAMPLES.iterdir() if (d / 'skill.json').is_file())
-        result = self.skills.publish_examples()
+        result = self.skills.publish_examples(SIM)
         self.assertEqual(sorted(r['example'] for r in result['results']), names)
         self.assertEqual({r['status'] for r in result['results']}, {'published'})
         self.assertTrue(all(r['digest_matches'] for r in result['results']))
         self.assertEqual(len(self.cloud.releases), len(names))
 
-        self.assertEqual(self.skills.publish_examples()['published'], len(names))
+        self.assertEqual(self.skills.publish_examples(SIM)['published'], len(names))
         self.assertEqual(len(self.cloud.releases), len(names))
         examples = self.skills.overview()['examples']
         self.assertTrue(all(e['published'] and e['same_content'] for e in examples), examples)
 
     def test_an_example_whose_version_holds_other_content_is_reported_and_the_rest_still_go(self):
         self.publish(self.folder('wave', description='改过的内容'))
-        result = self.skills.publish_examples()
+        result = self.skills.publish_examples(SIM)
         by_name = {r['example']: r for r in result['results']}
         self.assertEqual(by_name['wave']['status'], 'conflict')
         self.assertEqual(by_name['patrol']['status'], 'published')
@@ -183,7 +186,7 @@ class BundledExamples(CloudSkillsCase):
     def test_a_refusal_that_holds_for_all_of_them_is_said_once(self):
         self.cloud.quota = 0
         with self.assertRaises(CloudError) as caught:
-            self.skills.publish_examples()
+            self.skills.publish_examples(SIM)
         self.assertEqual(caught.exception.code, 'skill_quota_exceeded')
 
 
@@ -191,7 +194,7 @@ class InstallOnARobot(CloudSkillsCase):
     def setUp(self):
         super().setUp()
         self.robot = self.platform.add_sim_robot({'kind': 'quadruped'})
-        self.skills.publish_examples()
+        self.skills.publish_examples(SIM)
 
     def ask(self, skill_id='patrol', **more):
         ask = {'robot_id': self.robot['id'], 'project_id': self.robot['project_id'], 'skill_id': skill_id, 'version': '0.1.0', **more}
@@ -312,3 +315,55 @@ class PageScript(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class BrandAndModel(CloudSkillsCase):
+    """Issue #48: a release is for one brand and model, and goes only onto robots of it."""
+
+    def setUp(self):
+        super().setUp()
+        self.robot = self.platform.add_sim_robot({'kind': 'quadruped'})
+
+    def ask(self, **more):
+        return {'robot_id': self.robot['id'], 'project_id': self.robot['project_id'], 'skill_id': 'status_report', 'version': '0.1.0', **more}
+
+    def refused(self, code, call, *args):
+        with self.assertRaises(CodedError) as caught:
+            call(*args)
+        self.assertEqual(caught.exception.code, code)
+
+    def test_the_console_does_not_publish_without_a_brand_and_model(self):
+        path = self.folder()
+        preview = self.skills.publish_preview({'path': path})
+        self.assertIsNone(preview['product'])
+        self.refused('skill_product_required', self.skills.publish, {'path': path, 'digest': preview['digest']})
+        self.refused('skill_product_required', self.skills.publish_examples, {})
+        self.assertEqual(self.cloud.releases, {})
+        release = self.publish(path)['release']
+        self.assertEqual(release['product'], SIM)
+        self.assertEqual(self.skills.overview()['skills'][0]['latest']['product'], SIM)
+
+    def test_the_simulated_robot_has_the_brand_and_model_it_reports(self):
+        self.assertEqual(self.platform.store.get('robots', self.robot['id'])['product']['source'], 'device')
+
+    def test_a_release_of_another_brand_and_model_is_not_previewed_or_installed(self):
+        path = self.folder()
+        preview = self.skills.publish_preview({'path': path})
+        self.skills.publish({'vendor': 'Acme', 'model': 'X1', 'path': path, 'digest': preview['digest']})
+        self.refused('skill_other_model', self.skills.install_preview, self.ask())
+        # No preview was shown for it, so the install is refused before anything is downloaded.
+        self.refused('skill_preview_required', self.skills.install,
+                     self.ask(request_id='r-1', authorized=True, package_digest=self.cloud.releases[('status_report', '0.1.0')]['release']['digest']))
+        self.assertEqual([o for o in self.platform.store.list('operations') if o['kind'] == 'skill_install'], [])
+
+    def test_a_release_that_names_none_is_told_once_and_then_installs(self):
+        path = self.folder()
+        package = self.skills._local({'path': path})[0]
+        self.cloud._publish(json.dumps({'package': package}).encode())           # as a client from before published it
+        self.refused('skill_product_missing', self.skills.install_preview, self.ask())
+        self.refused('skill_product_required', self.skills.bind, {'skill_id': 'status_report', 'version': '0.1.0'})
+        self.assertEqual(self.skills.bind({'skill_id': 'status_report', 'version': '0.1.0', **SIM})['release']['product'], SIM)
+        with self.assertRaises(CloudError) as caught:
+            self.skills.bind({'skill_id': 'status_report', 'version': '0.1.0', 'vendor': 'Acme', 'model': 'X1'})
+        self.assertEqual(caught.exception.code, 'skill_product_set')
+        self.assertTrue(self.skills.install_preview(self.ask())['can_install'])
