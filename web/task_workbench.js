@@ -40,8 +40,10 @@ const TW_GUIDE_SEEN = 'nx-first-run-guide-seen';                                
 // ---------------------------------------------------------------- what a task holds
 
 // Issue #42: robots belong to the account (st.robot_home), so every task has all of them.
-const twOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id ||
-  (kind === 'robots' && Boolean(st.robot_home) && x.project_id === st.robot_home));
+// The robot a task was created with (task.robot_id) is its robot; without a choice, all of them are.
+const twOf = (st, kind, task) => (st[kind] || []).filter(x => (x.project_id === task.id ||
+  (kind === 'robots' && Boolean(st.robot_home) && x.project_id === st.robot_home)) &&
+  (kind !== 'robots' || !task.robot_id || x.id === task.robot_id));
 
 // From the state the page already has. Issue #50: `applications` are the ones the task has bound
 // (web/task_apps.js), `bound` says what they are for and how far each is.

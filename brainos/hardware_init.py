@@ -27,7 +27,7 @@ from .service import digest, now, uid
 from . import repair_materials      # issue #30: the library's usable materials of the device, as reference
 
 SKILL_NAME = 'hardware-init'
-SKILL_VERSION = '1.3.0'      # issue #29: install and start the motion driver (1.2.0, #28: missing motion interfaces; 1.1.0, #13: software only)
+SKILL_VERSION = '1.4.0'      # issue #47: a motion program that already runs is not doubled (1.3.0, #29: install and start the motion driver; 1.2.0, #28: missing motion interfaces; 1.1.0, #13: software only)
 SKILL_DIR = Path(__file__).resolve().parent / 'skills' / SKILL_NAME
 TOOL_NAMES = ('hardware_rescan', 'device_fix', 'save_repair_report')
 TOOL_NAMES += driver_repair.TOOL_NAMES       # issue #29: the library's driver packages
@@ -229,6 +229,15 @@ CHAT_INSTRUCTIONS = f'''
 '''
 
 
+def _by_todays_rules(scan):
+    """A saved scan as it is shown (issue #47). One that cannot be regraded is shown as saved: the state
+    snapshot must not fail over one record."""
+    try:
+        return hardware_scan.regraded(scan)
+    except Exception:
+        return scan
+
+
 def _compact(scan):
     return {k: v for k, v in scan.items() if k != 'raw'}
 
@@ -342,6 +351,25 @@ class HardwareInit:
         self.scanning = set()
         self.policy = repair_policy.RepairPolicy(platform)      # issue #13
         self.driver = driver_repair.DriverRepair(platform, self)        # issue #29: on-site confirmations, driver packages
+        self._regrade_saved()
+
+    def _regrade_saved(self):
+        """Issue #47: scans saved under earlier rules are replaced by what today's rules make of them, once,
+        when the workspace opens. The page, the repair flow and the assistant then read one grading.
+        A record that cannot be read is left as it is and named in the audit log: an old scan must never be
+        what keeps a workspace from opening."""
+        failed = []
+        try:
+            old = [scan for scan in self.store.list('hardware_scans') if scan.get('rules') != hardware_scan.RULES]
+        except Exception as error:
+            return self.platform.audit('hardware_scan.regrade_failed', {'error': str(error)[:500]})
+        for scan in old:
+            try:
+                self.store.put('hardware_scans', hardware_scan.regraded(scan))
+            except Exception as error:              # this one stays as saved; the others are still done
+                failed.append({'scan_id': str(scan.get('id'))[:80], 'error': f'{type(error).__name__}: {error}'[:200]})
+        if failed:
+            self.platform.audit('hardware_scan.regrade_failed', {'scans': failed[:20], 'count': len(failed)})
 
     # ---- state --------------------------------------------------------------
     def snapshot(self):
@@ -349,12 +377,12 @@ class HardwareInit:
         for scan in sorted(self.store.list('hardware_scans'), key=lambda x: x['created_at'], reverse=True):
             if shown.get(scan['robot_id'], 0) < SNAPSHOT_SCANS:
                 shown[scan['robot_id']] = shown.get(scan['robot_id'], 0) + 1
-                scans.append(_compact(scan))
+                scans.append(_compact(_by_todays_rules(scan)))      # issue #47
         return {'hardware_scans': scans, 'hardware_repairs': self.store.list('hardware_repairs'),
                 'hardware_skill': skill_info(), **self.policy.snapshot(scans)}      # issue #13: hardware_blocks
 
     def scan_detail(self, p):
-        scan = self.platform.same_project('hardware_scans', p.get('scan_id'), p.get('project_id'))
+        scan = _by_todays_rules(self.platform.same_project('hardware_scans', p.get('scan_id'), p.get('project_id')))
         try:
             raw = {k: v for k, v in self.store.get('hardware_scan_raw', scan['id']).items() if k != 'id'}
         except ValueError:

@@ -37,7 +37,7 @@ const fullRow = (lead = button('开始调研', 'engine-discover', 'small', ID)) 
   button('硬件初始化', 'hardware-open', 'secondary small', ID) + lead + button('实时状态', 'engine-status', 'secondary small', ID) +
   button('设备档案', 'engine-profile', 'secondary small', ID) + verify + button('配置连接', 'engine-ssh-edit', 'secondary small', ID) +
   button('接入管理层', 'engine-runtime-link', 'secondary small', ID) + button('安装管理层', 'engine-runtime-install', 'secondary small', ID) + remove;
-const fullTags = badge('硬件 17 项 · 5 个问题', 'bad') + '<span class="tag">硬件与软件待调查</span><span class="tag">控制通道：未连接</span>';
+const fullTags = badge('硬件故障 2 项', 'bad') + '<span class="tag">硬件与软件待调查</span><span class="tag">控制通道：未连接</span>';
 const robot = {id: ID, name: '巡检机器人', status: 'unconnected', connection_id: 'c1'};
 
 const shown = html => html.slice(0, html.indexOf('<details class="robot-menu"'));       // what is in sight without opening anything
@@ -76,7 +76,7 @@ const actions = html => [...html.matchAll(/data-action="([^"]+)"/g)].map(m => m[
   ok(shown(after).includes('data-hb-robot'), 'online / offline stays in sight');
   ok(!shown(after).includes('data-ra-robot') && m.includes('data-ra-robot'), 'start-at-boot moves into the list');
   // Of the tags, only what asks for attention stays in sight.
-  ok(shown(after).includes('硬件 17 项 · 5 个问题'), 'a problem stays in sight');
+  ok(shown(after).includes('硬件故障 2 项'), 'a problem stays in sight');
   ok(!shown(after).includes('控制通道：未连接') && m.includes('控制通道：未连接'), 'a plain fact moves into the list');
   ok(!shown(after).includes('修改类型') && m.includes('engine-body-type'), 'changing the type moves into the list');
   ok(shown(after).includes('四足机器人') && shown(after).includes('robot@192.0.2.10:22'), 'type and address stay in sight');
@@ -139,11 +139,11 @@ const actions = html => [...html.matchAll(/data-action="([^"]+)"/g)].map(m => m[
 
 // ---- tags
 {
-  const [seen, quiet] = page.rpSplitTags(badge('调研中 · 读取硬件', 'blue') + '<span class="tag">3 项设备能力</span>' + badge('硬件 17 项正常', 'good') +
-    '<span class="tag body-type-flag">设备自报：轮式底盘</span>' + badge('运控驱动缺 2 项', 'bad') + ' ' + badge('锁存守护已放宽', 'warn'));
-  ok(seen.includes('调研中') && seen.includes('运控驱动缺 2 项') && seen.includes('锁存守护已放宽') && seen.includes('设备自报'), 'work in progress, problems and warnings stay');
-  ok(quiet.includes('3 项设备能力') && quiet.includes('硬件 17 项正常'), 'plain facts and "all fine" go into the list');
-  ok(!seen.includes('3 项设备能力') && !quiet.includes('运控驱动缺'), 'each tag is in one place');
+  const [seen, quiet] = page.rpSplitTags(badge('调研中 · 读取硬件', 'blue') + '<span class="tag">3 项设备能力</span>' + badge('硬件 17 项 · 未发现故障', 'good') +
+    '<span class="tag body-type-flag">设备自报：轮式底盘</span>' + badge('硬件故障 2 项', 'bad') + ' ' + badge('锁存守护已放宽', 'warn'));
+  ok(seen.includes('调研中') && seen.includes('硬件故障 2 项') && seen.includes('锁存守护已放宽') && seen.includes('设备自报'), 'work in progress, problems and warnings stay');
+  ok(quiet.includes('3 项设备能力') && quiet.includes('硬件 17 项 · 未发现故障'), 'plain facts and "all fine" go into the list');
+  ok(!seen.includes('3 项设备能力') && !quiet.includes('硬件故障'), 'each tag is in one place');
   const [, kept] = page.rpSplitTags('<span class="tag">一</span><a href="#x">链接</a> 文字 <span class="tag">二</span><button data-action="x">按钮</button>');
   ok(kept.includes('<a href="#x">链接</a>') && kept.includes('文字') && kept.includes('<button data-action="x">按钮</button>'), 'what is not a tag is not dropped');
 }

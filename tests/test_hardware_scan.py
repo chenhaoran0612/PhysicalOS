@@ -54,10 +54,10 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(devices['disk:nvme0n1']['name'], 'SAMSUNG MZVL2256HCHQ-00B00')
         self.assertEqual(devices['input:js0']['name'], 'Logitech Gamepad F710')
         # Status follows the problems found for the device.
-        self.assertEqual(devices['pci:0008:01:00.0']['status'], 'error')
+        self.assertEqual(devices['pci:0008:01:00.0']['status'], 'warning')
         self.assertEqual(devices['pci:0008:01:00.0']['name'], 'Intel Corporation Wi-Fi 6 AX200')
         self.assertEqual(devices['usb:1-4']['status'], 'warning')
-        self.assertEqual(devices['serial:/dev/ttyUSB0']['status'], 'warning')
+        self.assertEqual(devices['serial:/dev/ttyUSB0']['status'], 'ok', 'the port works; only the SSH account cannot open it (issue #47)')
         self.assertEqual(devices['net:can0']['status'], 'warning')
         self.assertEqual(devices['camera:1-3']['status'], 'ok')
         self.assertEqual(devices['usb:1-1.2']['status'], 'ok')
@@ -72,8 +72,9 @@ class ParseTests(unittest.TestCase):
         # The NVMe controller is the disk's own row.
         self.assertNotIn('pci:0004:01:00.0', devices)
         self.assertEqual((devices['disk:nvme0n1']['bus'], devices['disk:nvme0n1']['driver']), ('PCIe 0004:01:00.0', 'nvme'))
-        self.assertEqual(issues['pci-driver:0008:01:00.0']['severity'], 'error')
-        self.assertEqual(result['issues'][0]['severity'], 'error', 'errors first')
+        self.assertEqual(issues['pci-driver:0008:01:00.0']['severity'], 'warning', 'seen without a driver; not known to block anything')
+        self.assertEqual(result['issues'][0]['severity'], 'warning', 'the heaviest first')
+        self.assertEqual(issues['serial-perm:/dev/ttyUSB0']['severity'], 'info')
         self.assertEqual(result['summary']['categories']['serial'], 2)
         self.assertEqual(result['notes'], [])
 
@@ -119,11 +120,11 @@ class ParseTests(unittest.TestCase):
     def test_nvidia_without_driver_full_disk_and_no_route(self):
         result = hardware_scan.parse(X86_NVIDIA)
         issues, devices = by_id(result['issues']), by_id(result['devices'])
-        self.assertEqual(issues['nvidia-driver']['severity'], 'error')
+        self.assertEqual(issues['nvidia-driver']['severity'], 'warning')
         self.assertIn('nvidia-smi', issues['nvidia-driver']['detail'])
         self.assertEqual(issues['nvidia-driver']['device_id'], 'pci:0000:01:00.0')
         self.assertNotIn('pci-driver:0000:01:00.0', issues, 'one issue for the GPU, not two')
-        self.assertEqual(devices['pci:0000:01:00.0']['status'], 'error')
+        self.assertEqual(devices['pci:0000:01:00.0']['status'], 'warning')
         self.assertEqual(devices['pci:0000:01:00.0']['name'], 'NVIDIA 设备 10de:2504')
         self.assertNotIn('pci-driver:0000:00:00.0', issues, 'host bridges need no driver')
         self.assertIn('rootfs-full', issues)

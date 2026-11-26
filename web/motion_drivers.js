@@ -7,13 +7,15 @@
 // device, except through what already exists: "重新核对" reads the device profile again (issue #27),
 // "交给修复助手" goes through the hardware page's own scan and repair form (issue #2).
 //
-// A robot's card gets an entry only while something is missing: a device with its drivers shows nothing.
+// A robot's card gets the button while something is not in the listing, and a plain tag only when that
+// listing can be believed. It never gets a red one (issue #47): a listing says which standard ROS 2
+// interfaces could be seen, not whether the body moves. A device with its drivers shows nothing.
 //
 // Loaded after hardware.js, repair_policy.js, body_types.js, live_status.js and device_profile.js. It wraps
 // engineRobotCard / engineAction / engineRefresh / dialog and the profile dialog's body and read.
 
 const MD_PREFIX = 'motion-driver:';
-const MD_STATE = {present: ['在', 'good'], missing: ['缺少', 'bad'], wrong_type: ['类型不对', 'bad'],
+const MD_STATE = {present: ['在', 'good'], missing: ['清单里没有', 'warn'], wrong_type: ['类型不对', 'warn'],
                   unverified: ['核对不了', ''], unchecked: ['没有核对', '']};
 const MD_KIND = {topic: '话题', action: '动作'};
 const MD_ACTIONS = ['engine-drivers', 'engine-drivers-recheck', 'engine-drivers-repair'];
@@ -37,7 +39,12 @@ const mdWaiting = (robotId, check) => mdLacking(check).filter(i => typeof rpLock
 function mdSummary(check) {
   const lacking = mdLacking(check), type = check.body_type ? h(check.body_type.name) : '';
   if (check.status === 'missing') {
-    return `按本体类型“${type}”，这台设备缺 ${lacking.length} 项运控接口：${mdTitles(lacking)}。运控驱动没有安装，或者没有在运行。`;
+    if (check.credible === false) {
+      return `这一次读 ROS 2 时没有读到任何正在运行的节点，所以清单里没有本体类型“${type}”应有的 ${lacking.length} 项运控接口（${mdTitles(lacking)}）不说明问题：` +
+        '读不到节点时接口自然也读不到。节点可能由别的账号运行，或用了别的 ROS_DOMAIN_ID、RMW。确认运控程序在运行后重新核对。';
+    }
+    return `按本体类型“${type}”应有的运控接口里，有 ${lacking.length} 项不在这台设备的 ROS 2 清单里：${mdTitles(lacking)}。` +
+      '这只说明平台的 ROS 2 标准接口在这台设备上接不上，不说明本体不能运动：本体可能用厂家自己的方式运动，也可能是运控驱动没有安装或没有在运行。';
   }
   if (check.status === 'ok') {
     const checked = check.items.filter(i => i.state === 'present'), unverified = check.items.filter(i => i.state === 'unverified');
@@ -49,13 +56,14 @@ function mdSummary(check) {
 
 // ---------------------------------------------------------------- the robot card
 
-// Only a device that lacks something gets the tag and the button.
+// Only a device whose listing lacks something gets the button; the tag needs a listing that can be believed.
 function mdCard(html, robot) {
   if (robot.sim || !robot.connection_id) return html;
   const check = mdCheck(robot.id), lacking = mdLacking(check);
   if (check?.status !== 'missing' || !lacking.length) return html;
   const bottom = '<div class="card-bottom"><div class="button-row">';
-  return html.replace('<div class="tags">', () => '<div class="tags">' + badge(`运控驱动缺 ${lacking.length} 项`, 'bad'))
+  const tag = check.credible === false ? '' : `<span class="tag md-card-tag">运控接口 ${lacking.length} 项待确认</span>`;
+  return html.replace('<div class="tags">', () => '<div class="tags">' + tag)
     .replace(bottom, () => bottom + button('运控驱动', 'engine-drivers', 'secondary small', robot.id));
 }
 
@@ -189,7 +197,7 @@ function mdAction(type, id) {
 // ---------------------------------------------------------------- the device profile dialog
 
 // A line above the profile's tabs: what the check made of the listing that is shown below.
-const mdBannerSig = check => [check.status, check.checked_at, check.family, mdIssueIds(check).join(',')].join('|');
+const mdBannerSig = check => [check.status, check.checked_at, check.family, mdIssueIds(check).join(','), check.credible === false ? 'unseen' : ''].join('|');
 
 function mdBanner(robotId) {
   const check = mdCheck(robotId);

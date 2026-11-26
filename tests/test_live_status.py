@@ -299,14 +299,14 @@ class HardwareViewTests(unittest.TestCase):
 
         self.assertEqual(len(view['devices']), len(hardware_scan.parse(jetson())['devices']))     # all of them
         wifi = devices['pci:0008:01:00.0']                            # Wi-Fi card without firmware: no driver bound
-        self.assertEqual((wifi['driver_state'], wifi['status']), ('missing', 'error'))
+        self.assertEqual((wifi['driver_state'], wifi['status']), ('missing', 'warning'))
         self.assertIn('未加载驱动', wifi['issue'])
         ethernet = devices['net:eth0']
         self.assertEqual((ethernet['driver_state'], ethernet['driver'], ethernet['status'], ethernet['issue']),
                          ('loaded', 'r8168', 'ok', ''))
         self.assertEqual((devices['net:can0']['driver_state'], devices['net:can0']['status']), ('loaded', 'warning'))
         self.assertIn('未启用', devices['net:can0']['issue'])
-        self.assertEqual(devices['serial:/dev/ttyUSB0']['status'], 'warning')        # driver bound, but no permission
+        self.assertEqual(devices['serial:/dev/ttyUSB0']['status'], 'ok')     # driver bound; the SSH account's groups are a note (issue #47)
         self.assertEqual(devices['serial:/dev/ttyUSB0']['driver_state'], 'loaded')
         self.assertIn('无权', devices['serial:/dev/ttyUSB0']['issue'])
         self.assertEqual(devices['compute:cpu']['driver_state'], 'none')             # nothing to load for a processor

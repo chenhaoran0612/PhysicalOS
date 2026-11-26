@@ -93,9 +93,9 @@ const STATUS_API = '/api/engineering/ssh/status';
   const total = Number(await status.locator('.ls-tiles b').first().innerText());
   check(total === 17 && await status.locator('tbody tr').count() === total, 'The table does not list every device');
   await expectText(status.locator('.ls-tiles'), ['已识别硬件', '工作正常', '需要处理', '未加载驱动', '未确认']);
-  await expectText(rowOf('Wi-Fi 6 AX200'), ['网络', '未加载', '异常', '未加载驱动']);
+  await expectText(rowOf('Wi-Fi 6 AX200'), ['网络', '未加载', '需处理', '未加载驱动']);
   await expectText(rowOf('eth0'), ['已加载', 'r8168', '正常']);
-  await expectText(rowOf('ttyUSB0'), ['已加载', 'ch341-uart', '需处理', '无权读写串口']);
+  await expectText(rowOf('ttyUSB0'), ['已加载', 'ch341-uart', '正常', '无权读写串口']);
   await expectText(rowOf('can0'), ['CAN 总线', '需处理', '未启用']);
   await expectText(rowOf('Cortex-A78AE'), ['处理器与内存', '正常']);
   await expectText(status, ['不代表已经通过功能测试', '去硬件初始化处理这些问题']);
@@ -103,7 +103,8 @@ const STATUS_API = '/api/engineering/ssh/status';
   const chip = id => status.locator(`.ls-chip[data-id="${id}"]`);
   await chip('!attention').focus();                    // from the keyboard: a click does not focus a button in Safari
   await page.keyboard.press('Enter');
-  check(await status.locator('tbody tr').count() === 5, 'The "needs handling" filter does not show the 5 devices with problems');
+  // Issue #47: the two serial ports work; that the SSH account is not in their group is a note about the account.
+  check(await status.locator('tbody tr').count() === 3, 'The "needs handling" filter does not show the 3 devices seen not working');
   check(await status.locator('tbody tr .status.good').count() === 0, 'A working device is listed under "needs handling"');
   check(await chip('!attention').getAttribute('aria-pressed') === 'true', 'The chosen filter is not marked as pressed');
   check(await page.evaluate(() => document.activeElement?.dataset.id) === '!attention', 'Keyboard focus left the filter after it was chosen');

@@ -5,7 +5,9 @@
 // nothing is developed inside a task. Decided with the owner (2026-11-26):
 //   * an application belongs to the account (as a robot does): made and changed on 「机器人应用」;
 //   * a task binds applications, many to many; unbinding removes the relation and nothing else;
-//   * a task is for one brand and model: the first application bound to it says which.
+//   * a task is for one brand and model: the first application bound to it says which;
+//   * the robot a task was created with (issue #42, task.robot_id) decides instead when there is one:
+//     the task is for that robot's brand and model, and its pages show that robot.
 // The rules are kept by brainos/task_apps.py; the page only explains beforehand what the server will say.
 //
 // What this file draws:
@@ -65,6 +67,15 @@ function taLabel(st, app) {
   return robot ? `${robot.name}（未填写品牌型号）` : '未填写品牌型号';
 }
 
+// What a robot is compared by: as taKind of an application made for it.
+function taRobotKind(robot) {
+  const p = taProduct(robot);
+  return p ? 'product:' + p.vendor.toLowerCase() + '\n' + p.model.toLowerCase() : 'robot:' + robot.id;
+}
+
+// The robot the task was created with (issue #42), when it still exists.
+const taChosen = (st, task) => (task.robot_id ? (st.robots || []).find(r => r.id === task.robot_id) || null : null);
+
 // The robots of the account an application can be used with (issue #48).
 function taRobots(st, app) {
   const p = taProduct(app);
@@ -83,12 +94,15 @@ function taProgress(st, app) {
 
 // A task as the pages need it: what it has bound, and the brand and model it is for.
 function taFacts(st, task) {
-  const apps = taBound(st, task), first = apps[0] || null;
-  const kind = first ? taKind(first) : null;
-  const items = apps.map(app => ({app, fits: taKind(app) === kind, robots: taRobots(st, app), progress: taProgress(st, app),
+  const apps = taBound(st, task), first = apps[0] || null, chosen = taChosen(st, task);
+  const kind = chosen ? taRobotKind(chosen) : first ? taKind(first) : null;
+  const label = chosen ? (taProduct(chosen) ? taProductLabel(taProduct(chosen)) : `${chosen.name}（未填写品牌型号）`) : first ? taLabel(st, first) : '';
+  // With a robot chosen, the task works with that robot; without, with every robot of its brand and model.
+  const usable = app => (chosen ? (taKind(app) === kind ? [chosen] : []) : taRobots(st, app));
+  const items = apps.map(app => ({app, fits: taKind(app) === kind, robots: usable(app), progress: taProgress(st, app),
                                   versions: (st.applications || []).filter(a => taRoot(a) === taRoot(app)).length}));
-  const robots = first ? taRobots(st, first) : [];
-  return {apps, items, kind, label: first ? taLabel(st, first) : '', product: first ? taProduct(first) : null, robots,
+  const robots = chosen ? [chosen] : first ? taRobots(st, first) : [];
+  return {apps, items, kind, label, product: chosen ? taProduct(chosen) : first ? taProduct(first) : null, robots, chosen,
           online: robots.filter(r => r.status === 'connected').length,
           released: items.filter(i => i.progress.done[2]).length};
 }
@@ -122,12 +136,13 @@ function taSteps(progress) {
 function taItem(st, task, item) {
   const {app, robots, progress} = item;
   const online = robots.filter(r => r.status === 'connected').length;
-  const where = robots.length ? `${robots.length} 台可用 · ${online} 台已连接 · ${taNames(robots)}` : '账号里没有这个品牌型号的机器人';
+  const where = robots.length ? `${robots.length} 台可用 · ${online} 台已连接 · ${taNames(robots)}`
+    : item.fits ? '账号里没有这个品牌型号的机器人' : '这个任务的机器人用不了这个应用';
   const skills = (app.steps || []).map(s => (st.skills || []).find(x => x.id === s.skill_id)?.name || s.entrypoint || s.skill_id);
   return `<article class="ta-app${item.fits ? '' : ' other'}" role="listitem" data-app="${h(taRoot(app))}">` +
     `<header><h3 title="${h(app.name)}">${h(app.name)}</h3><span class="ta-version">v${h(app.version)}${item.versions > 1 ? ` · 共 ${item.versions} 个版本` : ''}</span>` +
     `<span class="ta-tag">${h(taLabel(st, app))}</span></header>` +
-    (item.fits ? '' : `<p class="ta-warn" role="note">它的品牌型号和这个任务的不一样（升级前绑定的）。可以继续使用，也可以解除绑定。</p>`) +
+    (item.fits ? '' : `<p class="ta-warn" role="note">它的品牌型号和这个任务的不一样（升级前绑定的）。可以在「机器人应用」里继续使用，也可以解除绑定。</p>`) +
     `<dl class="ta-facts"><div><dt>工作步骤</dt><dd title="${h(skills.join(' → '))}">${(app.steps || []).length} 步 · ${h(skills.join(' → '))}</dd></div>` +
     `<div class="${robots.length ? '' : 'none'}"><dt>机器人</dt><dd title="${h(where)}">${h(where)}</dd></div></dl>` +
     `${taSteps(progress)}` +
@@ -141,7 +156,13 @@ function taTaskMarkup(st, task, skills) {
   const head = '<div class="tw-back"><a href="#overview">← 全部任务</a></div>' +
     `<div class="page-head ta-head"><div><div class="eyebrow">TASK</div><h1>${h(task.name)}</h1><p class="subtitle">${h(task.objective)}</p></div>` +
     `<div class="button-row">${button(icon('plus') + ' 绑定应用', 'taskapp-pick')}${button('去创建应用', 'taskapp-create', 'secondary')}</div></div>`;
-  const model = facts.apps.length
+  // Issue #42, third part: the line that says which robot the task is done with, and changes it (web/task_robot.js).
+  const robotLine = typeof taskRobotLine === 'function' ? taskRobotLine(st.robots || [], task) : '';
+  const model = facts.chosen
+    ? `<section class="ta-model" aria-label="任务的品牌型号"><div><span class="ta-model-label">品牌型号</span><strong>${h(facts.label)}</strong></div>` +
+      `<p>由这个任务用的机器人「${h(facts.chosen.name)}」决定：只能绑定这个品牌型号的应用。` +
+      `${facts.apps.length ? '要换成另一个品牌型号的机器人，先解除全部应用。' : '更换机器人，品牌型号跟着变。'}</p></section>`
+    : facts.apps.length
     ? `<section class="ta-model" aria-label="任务的品牌型号"><div><span class="ta-model-label">品牌型号</span><strong>${h(facts.label)}</strong></div>` +
       `<p>这个任务只绑定这个品牌型号的应用。账号里有 ${facts.robots.length} 台这样的机器人，${facts.online} 台已连接。` +
       '解除全部应用后，可以改绑另一个品牌型号。</p></section>'
@@ -153,7 +174,7 @@ function taTaskMarkup(st, task, skills) {
     : '<section class="ta-empty"><h2>这个任务还没有绑定应用</h2>' +
       `<p>任务工作台不开发应用。${any ? '从账号已有的应用里选一个绑定；没有合适的，就到「机器人应用」里创建。' : '账号里还没有应用：先到「机器人应用」里创建一个，再回来绑定。'}</p>` +
       `<div class="button-row">${any ? button('绑定应用', 'taskapp-pick') : ''}${button('去创建应用 ' + icon('arrow'), 'taskapp-create', any ? 'secondary' : '')}</div></section>`;
-  return head + model + list + (skills || '');
+  return head + robotLine + model + list + (skills || '');
 }
 
 // ---------------------------------------------------------------- binding: the two dialogs
@@ -178,7 +199,8 @@ function taPickDialog(st, task) {
           (can.bound ? badge('已绑定', 'good') : button('绑定', 'taskapp-bind', 'small', taRoot(app), !can.ok)) + '</div>';
       }).join('') + '</section>';
   }).join('');
-  const lead = facts.kind ? `这个任务用的是「${h(facts.label)}」的应用，只能再绑定同一品牌型号的。` : '绑定第一个应用后，这个任务就固定为它的品牌型号。';
+  const lead = facts.chosen ? `这个任务用「${h(facts.chosen.name)}」来做，只能绑定「${h(facts.label)}」的应用。`
+    : facts.kind ? `这个任务用的是「${h(facts.label)}」的应用，只能再绑定同一品牌型号的。` : '绑定第一个应用后，这个任务就固定为它的品牌型号。';
   return ['绑定应用', h(task.name), `<div class="dialog-body ta-pick"><div class="form-error" role="alert"></div><p class="ta-pick-lead">${lead}</p>${body}` +
     `<div class="button-row ta-pick-foot">${button('去创建应用', 'taskapp-create', 'secondary small')}${button('关闭', 'close', 'secondary small')}</div></div>`];
 }

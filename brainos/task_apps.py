@@ -11,6 +11,10 @@ are not interchangeable between models (issue #48). What was decided with the ow
   unbinding removes it and nothing else. Deleting a task takes its bindings and leaves the applications.
 * **A task is for one brand and model.** The first application bound to it says which; after that
   only applications of the same one can be bound. A task with no application is free again.
+* **The robot a task was created with decides** (issue #42, third part: ``robot_id`` of the task;
+  decided with the owner on 2026-11-26): such a task is for the brand and model of that robot from
+  the start, whatever it has bound; an application of another one is refused, and while applications
+  are bound the robot cannot be changed to one of another brand and model (:meth:`TaskApps.check_robot`).
 
 How it is kept:
 
@@ -54,6 +58,12 @@ def kind_of(application):
     one, the robot it was made for (issue #48: such a robot is in a class of its own)."""
     product = robot_model.of(application)
     return ('product', robot_model.key(product)) if product else ('robot', application.get('robot_id'))
+
+
+def robot_kind(robot):
+    """What a robot is compared by: as :func:`kind_of` of an application made for it."""
+    product = robot_model.of(robot)
+    return ('product', robot_model.key(product)) if product else ('robot', robot['id'])
 
 
 def as_made(application):
@@ -157,11 +167,45 @@ class TaskApps:
         found = (self._newest(b['application_id'], every) for b in self.bindings(project_id))
         return [a for a in found if a]
 
+    def _robot(self, task):
+        """The robot the task was created with (issue #42), when it still exists."""
+        key = task.get('robot_id') if isinstance(task, dict) else None
+        try:
+            return self.store.get('robots', key) if isinstance(key, str) and key else None
+        except ValueError:
+            return None
+
+    def _for(self, task):
+        """What the task is for, as ``(kind, label)``: its robot's brand and model when it has a robot,
+        else that of its oldest binding; ``(None, '')`` while neither says."""
+        robot = self._robot(task)
+        if robot:
+            return robot_kind(robot), self._robot_label(robot)
+        first = next(iter(self.applications(task['id'])), None)
+        return (kind_of(first), self._label(first)) if first else (None, '')
+
     def product(self, project_id):
-        """The brand and model the task is for: that of its oldest binding. None while it has no
-        application, or when that application has no brand and model."""
+        """The brand and model the task is for: that of the robot it was created with, else that of
+        its oldest binding. None while neither says, or when that one has no brand and model."""
+        try:
+            robot = self._robot(self.platform.project(project_id))
+        except ValueError:
+            robot = None
+        if robot:
+            return robot_model.of(robot)
         first = next(iter(self.applications(project_id)), None)
         return robot_model.of(first) if first else None
+
+    def check_robot(self, task, robot_id):
+        """Before the task's robot is changed to ``robot_id`` (brainos/task_robot.py): refused while
+        the task has applications of another brand and model than that robot. No robot is no check."""
+        first = next(iter(self.applications(task['id'])), None)
+        if not robot_id or not first:
+            return
+        robot = self.store.get('robots', robot_id)
+        if robot_kind(robot) != kind_of(first):
+            raise CodedError(f"这个任务已经绑定了「{self._label(first)}」的应用，不能改用「{robot['name']}」"
+                             f"（{self._robot_label(robot)}）；请先解除这些应用的绑定，再更换机器人", 'task_robot_other_model')
 
     # ------------------------------------------------------------------ binding
     def bind(self, p):
@@ -173,10 +217,10 @@ class TaskApps:
             saved = next((b for b in self.store.list(KIND) if b['id'] == binding['id']), None)
             if saved:
                 return saved
-            first = next(iter(self.applications(task['id'])), None)
+            wanted, label = self._for(task)
             newest = self._newest(binding['application_id']) or application
-            if first and kind_of(first) != kind_of(newest):
-                raise CodedError(f"这个任务用的是「{self._label(first)}」的应用，只能再绑定同一品牌型号的应用；"
+            if wanted and wanted != kind_of(newest):
+                raise CodedError(f"这个任务用的是「{label}」的应用，只能绑定同一品牌型号的应用；"
                                  f"「{newest['name']}」属于「{self._label(newest)}」", 'task_other_model')
             from .service import now
             binding = self.store.put(KIND, {**binding, 'created_at': now()})
@@ -206,6 +250,11 @@ class TaskApps:
             return f"{self.store.get('robots', application.get('robot_id'))['name']}（未填写品牌型号）"
         except ValueError:
             return robot_model.label(None)
+
+    @staticmethod
+    def _robot_label(robot):
+        product = robot_model.of(robot)
+        return robot_model.label(product) if product else f"{robot['name']}（未填写品牌型号）"
 
     # ------------------------------------------------------------------ when a task is deleted
     def keep_models(self, project_id):

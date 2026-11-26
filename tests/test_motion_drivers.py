@@ -237,7 +237,7 @@ class AssessTests(unittest.TestCase):
 
         self.assertLessEqual(set(scan_issue), set(issue))
         self.assertEqual((issue['severity'], issue['category'], issue['fixable'], issue['source'], issue['device_id']),
-                         ('error', 'motion', 'auto', 'ros2_profile', None))
+                         ('warning', 'motion', 'auto', 'ros2_profile', None))       # never a fault (issue #47)
         self.assertLessEqual(len(issue['title']), 200)
         self.assertLessEqual(len(issue['detail']), 800)
         self.assertLessEqual(len(issue['hint']), 600)
@@ -400,7 +400,8 @@ class ScanIssueTests(DriverCase):
         self.assertEqual([issue['id'] for issue in issues], [VELOCITY, ODOMETRY])
         self.assertEqual({issue['source'] for issue in issues}, {'ros2_profile'})
         self.assertEqual(len(scan['issues']), len(hardware_only['issues']) + 2, 'the hardware problems are all still there')
-        self.assertEqual(scan['summary']['errors'], hardware_only['summary']['errors'] + 2)
+        self.assertEqual((scan['summary']['errors'], scan['summary']['warnings']),
+                         (hardware_only['summary']['errors'], hardware_only['summary']['warnings'] + 2))
         self.assertEqual([issue['severity'] for issue in scan['issues']],
                          sorted((issue['severity'] for issue in scan['issues']), key=lambda s: -hardware_scan.SEVERITY_ORDER[s]))
         self.assertEqual(scan['motion_drivers']['status'], 'missing')
@@ -876,7 +877,7 @@ class SkillTests(unittest.TestCase):
         for said in ('needs_user', 'hardware_rescan', 'expected'):
             self.assertIn(said, section)
         self.assertRegex(section, '不要.*(启动|安装)')
-        self.assertEqual(hardware_init.skill_info()['version'], '1.3.0', 'the Skill text changed: so does its version')
+        self.assertEqual(hardware_init.skill_info()['version'], '1.4.0', 'the Skill text changed: so does its version')
 
     def test_the_rules_of_the_repair_still_refuse_motion(self):
         # Issue #29 allows installing and starting the motion driver (tests/test_repair_driver_rules.py); motion stays refused.
