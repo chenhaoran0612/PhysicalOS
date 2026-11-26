@@ -181,6 +181,7 @@ const ROBOT = '巡检机器人';
   check(await dialog.locator('.journey-option p, .entry-eyebrow').count() === 0 && !(await dialog.locator('.dialog-head p').innerText()).trim(), 'The dialog of 添加机器人 still describes the ways');
   await shot('4-add-dialog');
   await dialog.locator('[data-action="sim-add"]').click();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'quadruped');   // issue #54: type, brand and model
   await dialog.locator('button[type=submit]').click();
   await main.locator('article.sim-card [data-action="sim-live"]').waitFor({timeout: 60000});
   if (await page.locator('#dialog[open] [data-action="close"]').count()) await page.locator('#dialog [data-action="close"]').first().click();

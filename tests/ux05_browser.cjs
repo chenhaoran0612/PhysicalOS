@@ -86,7 +86,7 @@ function writeSkill() {
   // step 1 from the guide (a brand-new user registers first)
   await overview();
   await guide.locator('[data-action="sim-add"]').click();
-  await page.locator('#dialog input[name=kind][value=quadruped]').check();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'quadruped');
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});
   const quad = await page.evaluate(() => state.robots[0].id);

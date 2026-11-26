@@ -69,7 +69,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
   // ---------------------------------------------------------------- fresh workspace + one simulated quadruped
   await go('robots');
   await click('sim-add');
-  await page.locator('#dialog input[name=kind][value=quadruped]').check();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'quadruped');
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});
   const quad = await page.evaluate(() => state.robots[0].id);

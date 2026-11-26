@@ -24,19 +24,19 @@ const RC_MAX = 100;
 // m(model, type, picture file without extension, other spellings)
 const rcM = (model, type, image = '', aliases = []) => ({model, type, image: image ? image + '.webp' : '', aliases});
 const ROBOT_CATALOG = [
-  {vendor: '智身科技', aliases: ['智身', 'zsibot', 'genisom', 'genisom ai'], models: [
+  {vendor: '智身科技', aliases: ['智身', 'zs', 'zsibot', 'genisom', 'genisom ai'], models: [
     rcM('钢镚 L1', 'quadruped', '', ['L1', 'ZSL-1']), rcM('钢镚 L1-W', 'wheel_legged', '', ['L1-W', 'zsl1_w']),
     rcM('钢镚 L1 Maker', 'quadruped', '', ['L1 Maker']), rcM('钢镚 L2', 'quadruped', '', ['L2']),
-    rcM('钢镚 L2-W', 'wheel_legged', '', ['L2-W']), rcM('钢镚 L2U', 'wheel_legged', 'zsibot-l2u', ['L2U', 'L2 Ultra', 'L2W Ultra']),
+    rcM('钢镚 L2-W', 'wheel_legged', '', ['L2-W']), rcM('钢镚 L2-U', 'wheel_legged', 'zsibot-l2u', ['L2U', 'L2 Ultra', 'L2W Ultra']),
     rcM('铜锤 M1', 'quadruped', '', ['M1']), rcM('铅球 SP1', 'wheel_legged', '', ['SP1']),
     rcM('银毅 NE01', 'humanoid', '', ['NE01']), rcM('破风者 RX', 'humanoid', '', ['RX'])]},
-  {vendor: '星玑', aliases: ['xingji', 'xinji'], models: [rcM('CS1', 'quadruped', 'xingji-cs1', ['CS-DOG1'])]},
+  {vendor: '星玑科技', aliases: ['星玑', 'xingji', 'xinji'], models: [rcM('CS1', 'quadruped', 'xingji-cs1', ['CS-DOG1'])]},
   {vendor: '宇树科技', aliases: ['宇树', 'unitree', 'unitree robotics'], models: [
     rcM('Go2', 'quadruped', 'unitree-go2'), rcM('Go1', 'quadruped', 'unitree-go1'), rcM('A1', 'quadruped', 'unitree-a1'),
     rcM('B2', 'quadruped'), rcM('Go2-W', 'wheel_legged'), rcM('B2-W', 'wheel_legged'),
     rcM('G1', 'humanoid', 'unitree-g1'), rcM('H1', 'humanoid', 'unitree-h1'), rcM('H1-2', 'humanoid'), rcM('R1', 'humanoid'), rcM('Z1', 'manipulator', 'unitree-z1')]},
   {vendor: '云深处科技', aliases: ['云深处', 'deep robotics'], models: [
-    rcM('绝影 Lite3', 'quadruped', '', ['Lite3']), rcM('绝影 X30', 'quadruped', '', ['X30']), rcM('山猫 M20', 'wheel_legged', '', ['M20'])]},
+    rcM('绝影 Lite3', 'quadruped', 'deeprobotics-lite3', ['Lite3']), rcM('绝影 X30', 'quadruped', '', ['X30']), rcM('山猫 M20', 'wheel_legged', 'deeprobotics-m20', ['M20'])]},
   {vendor: 'Boston Dynamics', aliases: ['波士顿动力'], models: [rcM('Spot', 'quadruped', 'boston-dynamics-spot')]},
   {vendor: 'ANYbotics', aliases: [], models: [rcM('ANYmal C', 'quadruped', 'anybotics-anymal-c'), rcM('ANYmal D', 'quadruped')]},
   {vendor: 'Universal Robots', aliases: ['优傲', 'ur'], models: [
@@ -74,7 +74,7 @@ const ROBOT_CATALOG = [
   {vendor: 'Rethink Robotics', aliases: ['rethink'], models: [rcM('Sawyer', 'manipulator', 'rethink-sawyer')]},
   {vendor: '加速进化', aliases: ['booster', 'booster robotics'], models: [rcM('T1', 'humanoid', 'booster-t1'), rcM('K1', 'humanoid')]},
   {vendor: '傅利叶', aliases: ['fourier', 'fourier intelligence'], models: [rcM('N1', 'humanoid', 'fourier-n1'), rcM('GR-1', 'humanoid'), rcM('GR-2', 'humanoid')]},
-  {vendor: '智元机器人', aliases: ['智元', 'agibot'], models: [rcM('远征 A2', 'humanoid', '', ['A2']), rcM('灵犀 X2', 'humanoid', '', ['X2']), rcM('精灵 G1', 'humanoid')]},
+  {vendor: '智元机器人', aliases: ['智元', 'agibot'], models: [rcM('A3', 'humanoid', 'agibot-a3'), rcM('远征 A2', 'humanoid', '', ['A2']), rcM('灵犀 X2', 'humanoid', '', ['X2']), rcM('精灵 G1', 'humanoid')]},
   {vendor: '优必选', aliases: ['ubtech', 'ubtech robotics'], models: [rcM('Walker S1', 'humanoid'), rcM('Walker S2', 'humanoid'), rcM('天工行者', 'humanoid', '', ['Tiangong Walker'])]},
   {vendor: '众擎机器人', aliases: ['众擎', 'engineai'], models: [rcM('SE01', 'humanoid'), rcM('PM01', 'humanoid')]},
   {vendor: '银河通用', aliases: ['galbot'], models: [rcM('Galbot G1', 'humanoid')]},

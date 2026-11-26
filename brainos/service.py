@@ -104,6 +104,8 @@ class Platform:
         self.sims = SimRobots(self, self.store.root)
         from .mujoco_sim import MujocoSim
         self.mujoco = MujocoSim(self)               # issue #51: simulation environments for applications, run with MuJoCo
+        from .sim_profiles import SimProfiles
+        self.sim_profiles = SimProfiles(self)       # issue #54: built-in profiles by type, brand and model; simulated robots are added from them
         from .hardware_init import HardwareInit
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         from .device_profile import DeviceProfile
@@ -142,6 +144,7 @@ class Platform:
                 if obj.get('status') == 'dispatching':
                     obj.update(status='unknown', error='请求期间服务中断；请到执行端核对结果，不会自动重试')
                     self.store.put(kind, obj)
+        self.sim_profiles.remove_old_sims()         # issue #54: once, the simulated robots from before the profiles go
         # Simulated robots that were on when the app closed come back (in the background).
         self.sims.resume_all()
 
@@ -173,6 +176,9 @@ class Platform:
                 obj['body'] = robot_body.view(obj)
                 obj.pop('body_applied', None)
         result['sim_kinds'] = self.sims.kinds()
+        result['sim_catalog'] = self.sim_profiles.catalog()     # issue #54
+        from . import sim_profiles
+        result['product_aliases'] = sim_profiles.aliases()      # issue #54: other spellings of a brand and model
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
                       system={'version': '0.21.12', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
@@ -970,6 +976,8 @@ class Platform:
 
     # ---- ux01: one-click simulated robots, live status, run a skill, example gallery
     def add_sim_robot(self, p):
+        if p.get('profile_id') is not None:         # issue #54: by type, brand and model
+            return self.sim_profiles.add(p)
         return self.sims.add(p)
 
     def robot_live(self, p):
