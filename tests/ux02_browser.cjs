@@ -23,6 +23,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
   fs.mkdirSync(shots, {recursive: true});
   const browser = await chromium.launch({executablePath: process.env.BRAIN_CHROMIUM_PATH});
   const page = await browser.newPage({viewport: {width: 1440, height: 900}});
+  await require('./hidden_pages_helper.cjs').showHiddenPages(page);   // issue #49: this script checks pages that are hidden for now
   require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
   page.setDefaultTimeout(20000);
   const errors = [];

@@ -168,6 +168,8 @@ def make_handler(application):
             extra=extra or {'/skill_run.js':('skill_run.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #49: the pages that are hidden for now, likewise.
+            extra=extra or {'/hidden_pages.js':('hidden_pages.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #41: the layout of "我的机器人", likewise.
             extra=extra or {'/robots_page.js':('robots_page.js','text/javascript; charset=utf-8'),'/robots_page.css':('robots_page.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #41: the one frame of a robot's dialogs, likewise.

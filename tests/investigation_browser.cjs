@@ -50,7 +50,7 @@ let failed=async()=>{};
  if(!(await page.locator('#main .card').first().innerText()).includes('调研中'))throw Error('Robot card does not say 调研中');
  await page.locator('#main button',{hasText:'调研进展'}).first().click();await page.locator('#engine-live .inv-phases').waitFor();
  if(await page.locator('#dialog form[data-form="engine-discover"]').count())throw Error('Start form offered during a run');
- await click('close');await page.goto(cfg.url+'/#agents');await page.locator('#main [data-action="engine-discover"]').first().click();
+ await click('close');/* issue #49: 工程助手 is hidden for now; the same request without a robot named, as its button made it */await page.evaluate(()=>{action('engine-discover');});
  await page.locator('#engine-live .inv-phases').waitFor();
  if(await page.locator('#dialog form[data-form="engine-discover"]').count())throw Error('Agents page offered a second investigation');
  result.runningOpensProgress=true;

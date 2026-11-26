@@ -286,6 +286,8 @@ let failed = async () => {};
   must(await value('endpoint') === 'http://127.0.0.1:9', 'Service address not filled in');
   await shot('7-plain-robot');
   await click('close');
+  // Issue #49: 自有服务 is hidden for now; its form is still checked, with the page brought back.
+  await require('./hidden_pages_helper.cjs').showHiddenPages(page); await page.reload();
   await page.goto(cfg.url + '/#services');
   await click('service-add');
   await fill('name', '团队推理服务'); await fill('endpoint', 'http://127.0.0.1:9');

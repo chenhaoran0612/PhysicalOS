@@ -9,6 +9,7 @@ const {connectTokenFans,useTokenFansModel}=require('./tokenfans_browser.cjs');  
  if(cfg.runtime==='standin'){console.log(JSON.stringify({skipped:true,reason:'needs the Codex 0.146.1 binary (NEUXMIND_TEST_AGENT_BINARY)'}));return;}
  const browser=await chromium.launch({executablePath:process.env.BRAIN_CHROMIUM_PATH});
  const page=await browser.newPage({viewport:{width:1440,height:930}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await require('./hidden_pages_helper.cjs').showHiddenPages(page);   // issue #49: this script checks pages that are hidden for now
  require('./robots_page_helper.cjs').throughRobotsPage(page);   // issue #41: opens 更多功能 / 添加机器人 before a click that needs it
  const click=async action=>{const dialog=page.locator(`#dialog[open] [data-action="${action}"]`);await (await dialog.count()?dialog:page.locator(`[data-action="${action}"]`)).first().click();};
  const fill=async(name,value)=>page.locator(`#dialog [name="${name}"]`).fill(String(value));
