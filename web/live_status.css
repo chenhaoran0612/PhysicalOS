@@ -36,6 +36,8 @@
 .ls-tiles .good b{color:var(--green)}
 .ls-tiles .bad{border-color:#efcfc8;background:#fbefec}
 .ls-tiles .bad b{color:var(--red)}
+.ls-tiles .warn{border-color:#eee4ca;background:#fbf7ed}
+.ls-tiles .warn b{color:var(--amber)}
 
 .ls-filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
 .ls-chip{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:5px 11px;border:1px solid #dbe4da;border-radius:999px;background:#fff;color:#51654f;font-size:11px;transition:background-color .15s,border-color .15s,color .15s}

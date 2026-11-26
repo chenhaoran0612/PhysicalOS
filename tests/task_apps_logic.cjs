@@ -108,6 +108,36 @@ const find = id => state.applications.find(a => a.id === id);
   ok(page.taCanBind(legacy, C, page.taFacts(legacy, C), app('again', {product: undefined, robot_id: 'r4'})).ok, 'but another one made for the same robot');
 }
 
+// ---- the robot a task was created with decides (issue #42, third part)
+{
+  const withRobot = (robotId, more = {}) => ({id: 'w', name: '选了机器人的任务', objective: 'x', robot_id: robotId, ...more});
+  const W = withRobot('r2'), st = {...state, projects: [...state.projects, W]};
+  const w = page.taFacts(st, W);
+  same([w.label, w.product, ids(w.robots), w.online, w.apps.length], ['ACME x1', {vendor: 'ACME', model: 'x1'}, ['r2'], 0, 0],
+       'a task with a robot is for its brand and model before it binds anything, and works with that robot');
+  ok(page.taCanBind(st, W, w, find('round')).ok && !page.taCanBind(st, W, w, find('pick')).ok, 'it takes applications of that brand and model only');
+  const arm = withRobot('r3'), bound = {...st, projects: [arm], task_applications: [{id: 'x', project_id: 'w', application_id: 'round', created_at: '1'}]};
+  const mismatch = page.taFacts(bound, arm);
+  same([mismatch.label, mismatch.items[0].fits, mismatch.items[0].robots.length], ['Acme X2', false, 0], 'the robot decides against what is bound: that application is set apart and has no robot here');
+  ok(page.taTaskMarkup(bound, arm, '').includes('这个任务的机器人用不了这个应用'), 'and the page says so');
+  const fitting = page.taFacts({...bound, projects: [W]}, W);
+  same([fitting.items[0].fits, ids(fitting.items[0].robots)], [true, ['r2']], 'a bound application of the robot\'s brand and model is used with that robot, not with every robot of the model');
+  const old = withRobot('r4'), o = page.taFacts(st, old);
+  same(o.label, '旧机器人（未填写品牌型号）', 'a robot without brand and model is named');
+  ok(page.taCanBind(st, old, o, find('old')).ok && !page.taCanBind(st, old, o, find('round')).ok, 'and takes only what was made for it');
+  const gone = page.taFacts(st, withRobot('deleted'));
+  same([gone.kind, gone.chosen], [null, null], 'a robot that is gone decides nothing');
+  const html = page.taTaskMarkup(st, W, '');
+  ok(html.includes('<strong>ACME x1</strong>') && html.includes('由这个任务用的机器人「巡检狗二号」决定'), 'the page says where the brand and model come from');
+  ok(page.taPickDialog(st, W)[2].includes('这个任务用「巡检狗二号」来做，只能绑定「ACME x1」的应用'), 'and so does the dialog');
+  sandbox.taskRobotLine = (robots, task) => `<section data-task-robot="${task.robot_id}">LINE ${robots.length}</section>`;
+  const lined = page.taTaskMarkup(st, W, '');
+  ok(lined.indexOf('ta-head') < lined.indexOf('data-task-robot="r2"') && lined.indexOf('data-task-robot="r2"') < lined.indexOf('ta-model'),
+     'the line of web/task_robot.js, with the way to change the robot, is under the head and above the brand and model');
+  ok(lined.includes('LINE 4'), 'and is given every robot of the account to choose from');
+  delete sandbox.taskRobotLine;
+}
+
 // ---- the page of a task
 {
   const html = page.taTaskMarkup(state, A, '<section id="task-skills">SKILLS</section>');

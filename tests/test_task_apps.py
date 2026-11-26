@@ -181,6 +181,78 @@ class Binding(Case):
         self.assertEqual(self.app.task_apps.product(self.task_id), {'vendor': 'Acme', 'model': 'X1'})
 
 
+class TaskRobot(Case):
+    """Issue #42, third part: a task can be created with the robot it is done with. That robot decides."""
+
+    def task_with(self, robot, name='With a robot'):
+        return self.app.add_project({'name': name, 'objective': 'What the robot should get done', 'robot_id': robot['id']})['id']
+
+    def choose(self, task_id, robot=None):
+        from brainos import task_robot
+        return task_robot.choose(self.app, {'project_id': task_id, 'robot_id': robot['id'] if robot else ''})
+
+    def test_a_task_with_a_robot_is_for_its_brand_and_model_from_the_start(self):
+        robot = self.robot('Dog', 'Acme', 'X1')
+        task = self.task_with(robot)
+        self.assertEqual(self.app.task_apps.product(task), {'vendor': 'Acme', 'model': 'X1'})
+
+        error = self.refused('task_other_model', self.bind, self.made('Acme', 'X2', name='Other'), task)
+        self.bind(self.made('acme', 'x1', name='Same'), task)
+
+        self.assertIn('Acme X1', str(error))
+        self.assertEqual(len(self.bound(task)), 1)
+
+    def test_the_robot_decides_even_against_what_is_bound(self):
+        # Bound before the robot was chosen (or before this rule): the robot says what may still be added.
+        first = self.made('Acme', 'X1')
+        self.bind(first)
+        robot = self.robot('Twin', 'Acme', 'X1')
+        self.choose(self.task_id, robot)
+
+        self.refused('task_other_model', self.bind, self.made('Acme', 'X2', name='Other'))
+        self.assertEqual(self.app.task_apps.product(self.task_id), {'vendor': 'Acme', 'model': 'X1'})
+
+    def test_the_robot_cannot_be_changed_to_another_brand_and_model_while_applications_are_bound(self):
+        self.bind(self.made('Acme', 'X1'))
+        other, same = self.robot('Arm', 'Acme', 'X2'), self.robot('Twin', 'ACME', 'x1')
+
+        error = self.refused('task_robot_other_model', self.choose, self.task_id, other)
+
+        self.assertIn('Arm', str(error))
+        self.assertNotIn('robot_id', self.app.project(self.task_id))            # the choice is as it was
+        self.assertEqual(self.choose(self.task_id, same)['robot_id'], same['id'])
+        self.refused('task_robot_other_model', self.choose, self.task_id, other)
+        self.assertEqual(self.app.project(self.task_id)['robot_id'], same['id'])
+        self.assertNotIn('robot_id', self.choose(self.task_id))                 # "之后再选" is always possible
+
+    def test_without_applications_the_robot_can_be_any_and_the_task_follows(self):
+        one, two = self.robot('Dog', 'Acme', 'X1'), self.robot('Arm', 'Acme', 'X2')
+        task = self.task_with(one)
+
+        self.choose(task, two)
+
+        self.assertEqual(self.app.task_apps.product(task), {'vendor': 'Acme', 'model': 'X2'})
+        self.bind(self.made('Acme', 'X2', name='For the arm'), task)
+
+    def test_a_robot_without_brand_and_model_takes_only_what_was_made_for_it(self):
+        old, other = self.robot('Old one'), self.robot('Old two')
+        task = self.task_with(old)
+        skill = self.skill()
+
+        self.bind(self.application(old, skill, 'Mine'), task)
+        self.refused('task_other_model', self.bind, self.application(other, skill, 'Not mine'), task)
+        self.refused('task_other_model', self.bind, self.made('Acme', 'X1', name='Named'), task)
+
+    def test_a_robot_that_is_gone_decides_nothing(self):
+        robot = self.robot('Dog', 'Acme', 'X1')
+        task = self.task_with(robot)
+        self.app.store.delete('robots', robot['id'])
+
+        self.assertIsNone(self.app.task_apps.product(task))
+        self.bind(self.made('Acme', 'X2', name='Other'), task)                   # as a task without a robot: the first application says
+        self.assertEqual(self.app.task_apps.product(task), {'vendor': 'Acme', 'model': 'X2'})
+
+
 class AccountScope(Case):
     def test_a_request_about_applications_is_for_the_account_whichever_task_is_open(self):
         for route in ('skills', 'applications', 'applications/readiness', 'applications/revise', 'harness', 'onsite', 'onsite/poll', 'deployments'):

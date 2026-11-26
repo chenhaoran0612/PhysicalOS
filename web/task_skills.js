@@ -32,12 +32,15 @@ const tsWhen = value => {
 };
 
 // Issue #42: robots belong to the account (st.robot_home), and so does what was installed or run on them directly.
-const tsOf = (st, kind, task) => (st[kind] || []).filter(x => x.project_id === task.id ||
-  (['robots', 'operations', 'skills'].includes(kind) && Boolean(st.robot_home) && x.project_id === st.robot_home));
-// Issue #50: a task works with the applications it has bound (web/task_apps.js), and with the robots of
-// the account those can be used with: the robots of the task's brand and model.
+// The robot a task was created with (task.robot_id) is its robot; without a choice, all of them are.
+// Issue #50: skills are the account's too.
+const tsOf = (st, kind, task) => (st[kind] || []).filter(x => (x.project_id === task.id ||
+  (['robots', 'operations', 'skills'].includes(kind) && Boolean(st.robot_home) && x.project_id === st.robot_home)) &&
+  (kind !== 'robots' || !task.robot_id || x.id === task.robot_id));
+// Issue #50: a task works with the applications it has bound (web/task_apps.js), and with the robots those
+// can be used with: the robot the task was created with, or, without one, the robots of its brand and model.
 const tsApps = (st, task) => taBound(st, task);
-const tsRobots = (st, task) => [...new Set(tsApps(st, task).flatMap(app => taRobots(st, app)))];
+const tsRobots = (st, task) => { const f = taFacts(st, task); return f.chosen ? [f.chosen] : [...new Set(f.items.flatMap(i => i.robots))]; };
 
 // ---------------------------------------------------------------- what a robot knows
 

@@ -501,7 +501,7 @@ class SkillTests(unittest.TestCase):
         for said in ('starts_motion_driver', 'ros2_env', 'driver_packages', '不发布运动或控制指令', '急停'):
             self.assertIn(said, skill)
         self.assertNotIn('不启动会驱动电机的程序', skill)
-        self.assertEqual(hardware_init.skill_info()['version'], '1.3.0', 'the Skill text changed: so does its version')
+        self.assertEqual(hardware_init.skill_info()['version'], '1.4.0', 'the Skill text changed: so does its version')
 
     def test_the_session_instructions_keep_the_motion_rule(self):
         text = hardware_init.REPAIR_INSTRUCTIONS

@@ -21,7 +21,7 @@ function journeyHeading(route){const p=pagePurposes[route];return p?{label:p[0],
 function journeyHelp(route){const p=pagePurposes[route];if(!p)return '';return `<details class="page-purpose"><summary>这个页面怎么用</summary><div class="purpose-grid"><div><b>需要准备</b><p>${h(p[3])}</p></div><div><b>完成后得到</b><p>${h(p[4])}</p></div></div></details>`;}
 function journeyContext(){
  const apps=rows('applications'),saved=sessionStorage.getItem('journey-app:'+projectId),app=apps.find(x=>x.id===saved)||apps[0];
- const robot=app?find('robots',app.robot_id):rows('robots')[0];
+ const robot=app?find('robots',app.robot_id):(rows('robots').find(r=>r.id===project()?.robot_id)||rows('robots')[0]);   // issue #42: the robot the task was created with
  const inventory=robot&&rows('robot_inventories').find(x=>x.robot_id===robot.id&&x.id===robot.inventory_id);
  const reports=app&&robot?rows('evaluations').filter(e=>e.application_id===app.id&&e.application_digest===app.digest&&e.robot_id===robot.id&&e.robot_manifest_digest===robot.manifest_digest):[];
  const check=reports.find(e=>e.scope==='static'),onsite=reports.find(e=>e.scope==='onsite');

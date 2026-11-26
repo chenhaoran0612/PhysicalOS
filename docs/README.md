@@ -29,7 +29,7 @@
 | [USER_EXPERIENCE.md](USER_EXPERIENCE.md) | 用户目的、页面如何服务用户、各版本的交互约定 |
 | [UI_STYLE.md](UI_STYLE.md) | 界面样式：下拉框、悬停与可读的展示内容（issue #7），表单里的提示框和折叠块（issue #14） |
 | [ENGINEERING_ENGINE.md](ENGINEERING_ENGINE.md) | 内置工程引擎（Codex app-server）、SSH 接入与本体调查、工程扩展、云网关计费、本体适配 |
-| [HARDWARE_INIT.md](HARDWARE_INIT.md) | 连接后的硬件扫描、内置 Skill `hardware-init`、修复命令的审批与限制 |
+| [HARDWARE_INIT.md](HARDWARE_INIT.md) | 连接后的硬件扫描、内置 Skill `hardware-init`、修复命令的审批与限制；故障、待确认和提示怎么分，旧扫描怎么重新定级（issue #47） |
 | [DEVICE_PROFILE.md](DEVICE_PROFILE.md) | 设备档案：硬件、系统、ROS 2（发行版、节点、话题、动作、服务）和资源占用合成的一份记录，ROS 2 的只读命令 |
 | [MOTION_DRIVER_CHECK.md](MOTION_DRIVER_CHECK.md) | 运控驱动检查：按本体类型核对应有的 ROS 2 话题和动作，缺少时作为一种硬件问题交给修复助手，修复后重新读取 ROS 2 核对 |
 | [REPAIR_DRIVER_INSTALL.md](REPAIR_DRIVER_INSTALL.md) | 修复助手安装并启动运控驱动：资料库里的安装包、产品加载的 ROS 2 环境、启动前的现场确认、仍然拒绝的运动和解锁命令 |
@@ -48,7 +48,7 @@
 | [CLOUD_SKILLS.md](CLOUD_SKILLS.md) | 技能在云端：技能库、程序和场景数据（资料库 `bundle` 类型）、机器人管理层向云端取调用、第三方开放接口 `/open/*`、权限范围、验证范围和已知限制（issue #43） |
 | [CLOUD_SKILLS_CONSOLE.md](CLOUD_SKILLS_CONSOLE.md) | 控制台的「技能发布」「技能加载」两页，机器人页面的「远程调用」「程序和场景数据」两节（issue #43） |
 | [SKILL_RUN.md](SKILL_RUN.md) | 直接运行已装技能，真机也可以：运行表单、真机运行前的现场确认和授权、`onsite_confirmation_required`、记录里写什么（issue #42） |
-| [ROBOT_SCOPE.md](ROBOT_SCOPE.md) | 机器人属于账号，不属于某个任务：机器人和它的记录放在哪里、哪些接口按机器人处理、旧数据怎么迁移、退回旧版本会看到什么（issue #42 第二部分） |
+| [ROBOT_SCOPE.md](ROBOT_SCOPE.md) | 机器人属于账号，不属于某个任务：机器人和它的记录放在哪里、哪些接口按机器人处理、旧数据怎么迁移、退回旧版本会看到什么（issue #42 第二部分）；创建任务时选择机器人（第三部分） |
 | [TASK_WORKBENCH.md](TASK_WORKBENCH.md) | 任务工作台：入口是任务概览（数量、名称、大小一致的卡片），一个任务的步骤页在 `#task`，上面有它的技能与配置；删除任务会带走什么、什么情况不能删（issue #44、#46） |
 | [ROBOTS_PAGE.md](ROBOTS_PAGE.md) | 「我的机器人」页面：页面跟着状态走，卡片只留下一步和实时状态，其余收进「更多功能」；以后往这个页面加内容要加在哪里；机器人的对话框共用一个框架：标题是功能、机器人名在下面，同一台机器人的对话框之间可以直接切换（issue #41） |
 | [BODY_TYPES.md](BODY_TYPES.md) | 本体类型清单：内置四足和机械臂、添加和删除类型、每类的状态机模板标识和应有的运控接口、设备自报类型与人选类型的关系 |

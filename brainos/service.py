@@ -9,6 +9,7 @@ from urllib.parse import quote
 from . import connector, robot_caps
 from . import cloud_auto_login          # issue #36
 from . import robot_scope               # issue #42: robots belong to the account; every task can use them
+from . import task_robot                # issue #42: the robot a task is done with
 from .errors import CodedError, refusal_fields
 from .contracts import FAMILIES, evaluation_simulation_reasons, required_text, string_list, validate_manifest
 from .store import Store
@@ -185,6 +186,7 @@ class Platform:
     def add_project(self, p):
         obj = {'id': uid('project'), 'name': required_text(p.get('name'), '项目名称', 100),
                'objective': required_text(p.get('objective'), '交付目标', 2000), 'created_at': now()}
+        task_robot.keep(self, obj, p)               # issue #42: the robot the task is done with, chosen when it is created
         self.store.put('projects', obj)
         self.audit('project.created', {'name': obj['name']}, obj['id'])
         self.model_compute.ensure_profile(obj['id'])

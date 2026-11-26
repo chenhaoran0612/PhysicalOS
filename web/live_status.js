@@ -8,7 +8,7 @@ const LIVE_REFRESH_SECONDS = 60;          // used until the server says how ofte
 const LIVE_RETRY_SECONDS = 5;             // another read was still running: look again soon
 const LIVE_HOPS = {jump: '跳板机', device: '目标机'};
 const LIVE_DEVICE = {ok: ['正常', 'good'], warning: ['需处理', 'warn'], error: ['异常', 'bad'], unknown: ['未确认', '']};
-const LIVE_SEVERITY = {error: ['错误', 'bad'], warning: ['警告', 'warn'], info: ['提示', '']};
+const LIVE_SEVERITY = {error: ['故障', 'bad'], warning: ['待确认', 'warn'], info: ['提示', '']};     // issue #47
 const LIVE_SERVICE = {running: ['运行中', 'good'], active: ['已启动', ''], failed: ['失败', 'bad'], restarting: ['反复重启', 'bad'],
                       activating: ['启动中', 'warn'], deactivating: ['停止中', 'warn'], reloading: ['重新加载中', ''],
                       inactive: ['未运行', ''], unknown: ['未知', '']};
@@ -142,10 +142,12 @@ function liveHardware(view, filter) {
   const s = hardware.summary;
   const tile = (n, label, cls = '') => `<div class="${cls}"><b>${n}</b><span>${label}</span></div>`;
   const incomplete = hardware.complete ? '' : notice('这次硬件扫描不完整（输出被截断或缺少结尾），表格可能缺少部分设备。', true);
+  // Issue #47: red is for a fault. A device seen without a driver, or switched off, is to be confirmed: amber.
+  const fault = hardware.devices.some(d => d.status === 'error');
   const driverFault = hardware.devices.some(d => d.driver_state === 'missing' && liveBroken(d));
   return liveStale(hardware) + incomplete +
     '<div class="ls-tiles">' + tile(s.devices, '已识别硬件') + tile(s.ok, '工作正常', 'good') +
-    tile(s.attention, '需要处理', s.attention ? 'bad' : '') + tile(s.driver_missing, '未加载驱动', driverFault ? 'bad' : '') +
+    tile(s.attention, '需要处理', s.attention ? (fault ? 'bad' : 'warn') : '') + tile(s.driver_missing, '未加载驱动', driverFault ? (fault ? 'bad' : 'warn') : '') +
     tile(s.unknown, '未确认') + '</div>' +
     (hardware.notes.length ? notice(hardware.notes.map(h).join('<br>')) : '') +
     liveDeviceTable(hardware, filter) + liveSystemIssues(hardware) +
