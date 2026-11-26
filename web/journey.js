@@ -82,7 +82,7 @@ async function journeyAction(type,id){
  ['3. 准备所需能力','优先选用已有模型和技能；缺少接入程序或测试时，让助手开发。模型效果不足时再训练。'],
  ['4. 验证实际效果','按需先仿真，查看问题并改进；部署前完成配置检查和现场测试。'],
  ['5. 部署并使用','发布验证过的应用，发起工作请求，查看结果和异常，持续改进。']
- ].map(([t,d])=>`<div class="contract-line"><b>${t}</b>${d}</div>`).join('')}<p class="subtitle">平台算力和模型按可用目录选择，提交前查看用量上限。当前开发预览需要配置真实服务、模型与设备；未接通的能力会明确显示，不会自动变成可用。</p>${button(project()?'返回任务工作台':'开始设置机器人',project()?'journey-home':'journey-start')}</div>`);
+ ].map(([t,d])=>`<div class="contract-line"><b>${t}</b>${d}</div>`).join('')}<p class="subtitle">平台算力和模型按可用目录选择，提交前查看用量上限。当前开发预览需要配置真实服务、模型与设备；未接通的能力会明确显示，不会自动变成可用。</p>${button(project()?'返回工作台':'开始设置机器人',project()?'journey-home':'journey-start')}</div>`);
  if(type==='journey-home'){$('#dialog').close();location.hash='overview';return;}
  if(type==='journey-start'){if(!state.user){journeyResume=true;return auth();}return action('project-add');}
  if(!state.user){journeyResume=true;return auth();}

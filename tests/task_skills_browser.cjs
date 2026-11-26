@@ -49,6 +49,9 @@ const fs = require('fs');
   // Issue #50: a task binds applications and develops nothing; before it has one there is nothing configured to show.
   await main.locator('.ta-empty').waitFor();
   check(await main.locator('.journey-next, .journey-step, .journey-options').count() === 0, 'The page of a task still has the steps to develop with');
+  // Issue #52: the head of a task is its name, with nothing above or under it.
+  check(await main.locator('.ta-head .eyebrow, .ta-head .subtitle').count() === 0, 'The head of a task still has a line above or under the name');
+  check(!(await main.locator('.ta-head').innerText()).includes('完成每天的办公室日常巡检任务'), 'The head of a task still shows its goal');
   check(await section.count() === 0, 'The skills section is shown for a task without an application');
   await shot('1-no-robot');
 
@@ -75,7 +78,8 @@ const fs = require('fs');
     await refresh(true);
     return {robot: robot.id};
   });
-  await section.locator(`[data-ts-robot="${ids.robot}"]`).getByText('技能列表是刚从这台机器人上读到的。').waitFor({timeout: 20000});
+  // Issue #52: a list read from the device is shown without a sentence about it (one from the records says why).
+  await section.locator(`[data-ts-robot="${ids.robot}"]:not([aria-busy]):not(:has(.ts-source))`).waitFor({timeout: 20000});
   const robot = section.locator(`[data-ts-robot="${ids.robot}"]`);
   check((await robot.locator('.ts-robot-head').innerText()).includes('已安装 3 个技能 · 这个任务用到 2 个'), `The robot's counts are wrong: ${await robot.locator('.ts-robot-head').innerText()}`);
   const places = await robot.locator('.ts-places .ts-chip').allInnerTexts();
@@ -100,11 +104,17 @@ const fs = require('fs');
   check(await noSidewaysScroll(), 'The page of the task scrolls sideways at 1440');
   await shot('2-skills');
 
-  // 3. Reading again keeps the section; nothing else on the page is drawn again by it.
-  await page.evaluate(() => { document.querySelector('.ta-model').dataset.kept = '1'; });
-  await robot.locator('[data-action="task-skills-reload"]').click();
-  await section.locator(`[data-ts-robot="${ids.robot}"]`).getByText('技能列表是刚从这台机器人上读到的。').waitFor({timeout: 20000});
-  check(await page.evaluate(() => document.querySelector('.ta-model').dataset.kept === '1'), 'Reading the skills again drew the whole page again');
+  // 3. Issue #52: the section has its name and no sentence beside it, no 「重新读取」; whether the robot is
+  //    connected stands where that button was; every skill says how its runs went.
+  check((await section.locator(':scope > .section-head').innerText()).trim() === '技能与配置', `The head of the section says more than its name: ${await section.locator(':scope > .section-head').innerText()}`);
+  check(await section.locator('[data-action="task-skills-reload"]').count() === 0 && !(await section.innerText()).includes('重新读取'), 'The section still offers to read again');
+  check(!(await section.innerText()).includes('刚从这台机器人上读到'), 'The section still says where the list came from');
+  check((await robot.locator('.ts-robot-head > :last-child').innerText()).trim() === '已连接', 'Whether the robot is connected is not the last thing in its head');
+  check(await robot.locator('.ts-robot-head').getByText('已连接').count() === 1, 'The connection is said twice in the head');
+  const ran = await skill('patrol').locator('.ts-run').innerText();
+  check(ran.includes('运行信息') && ran.includes('运行过 1 次') && ran.includes('最近一次') && ran.includes('机器人已开始运行'), `A skill that was run does not say how it went: ${ran}`);
+  check((await skill('free_walk').locator('.ts-run').innerText()).includes('还没有运行过'), 'A skill that never ran does not say so');
+  check((await skill('patrol_places').locator('.ts-run').innerText()).includes('还没有运行过'), 'A skill only an application uses does not say that it was not run directly');
 
   // 4. Every width: nothing scrolls sideways and nothing leaves the window.
   for (const width of [320, 375, 768, 1024, 1440, 1920]) {
@@ -124,7 +134,8 @@ const fs = require('fs');
   await section.locator(`[data-ts-robot="${ids.robot}"]`).getByText('按控制台的安装记录显示').waitFor({timeout: 20000});
   check((await skill('patrol_places').locator('.ts-marks').innerText()).includes('按记录已安装'), 'A skill installed by the console is not shown from its record');
   check((await row('patrol_places', 'app', '巡检地点').locator('.ts-route li').allInnerTexts()).join('>') === '会议室>二楼', 'The configuration is lost when the robot is not connected');
-  check(await section.locator('[data-action="task-skills-reload"]').count() === 0, 'A robot that is not connected is offered for reading');
+  check((await section.locator(`[data-ts-robot="${ids.robot}"] .ts-robot-head > :last-child`).innerText()).trim() === '未连接', 'A robot that stopped is not said to be disconnected');
+  check((await skill('patrol').locator('.ts-run').innerText()).includes('运行过 1 次'), 'The run information is lost when the robot is not connected');
   await shot('4-not-connected');
 
   check(!errors.length, 'Page errors: ' + errors.join(' | '));

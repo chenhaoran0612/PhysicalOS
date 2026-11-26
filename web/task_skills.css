@@ -60,3 +60,10 @@
 .ts-empty p{max-width:520px;margin:0 auto 14px;font-size:13px;line-height:1.9;color:#53625b}
 
 @media(max-width:700px){.ts-robot-head,.ts-source,.ts-places,.ts-skill{padding-left:16px;padding-right:16px}.ts-row{grid-template-columns:1fr;gap:2px}.ts-marks{margin-left:0;width:100%}.ts-rows,.ts-from{padding-left:12px;padding-right:12px}}
+/* Issue #52: whether the robot is connected, where 「重新读取」 was; and how a skill's runs went. */
+.ts-state{flex:none;padding-top:2px}
+.ts-run{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;margin:10px 0 0;font-size:12px;line-height:1.7;color:#3f5347;overflow-wrap:anywhere}
+.ts-run strong{flex:none;font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--ts-soft)}
+.ts-run.none{color:var(--muted)}
+.ts-run em{flex-basis:100%;font-style:normal;color:#9a4a2f}
+.ts-run[data-status=rejected] span,.ts-run[data-status=failed] span{color:#9a4a2f}

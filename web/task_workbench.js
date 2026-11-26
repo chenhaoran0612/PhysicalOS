@@ -16,6 +16,9 @@
 //     page of a task, and that page's 「新建任务项目」 and 「使用指南」.
 //   * The page of a task shows the skills its robots have and how they are configured (web/task_skills.js).
 //
+// Issue #52: the page is called 工作台, and the sentences that only described it are gone (under its name,
+// under the count and the three numbers, beside 全部任务); a card does not show a robot's address as its name.
+//
 // Issue #50: a task binds robot applications and does not make them. The page of one task is drawn by
 // web/task_apps.js (the step-by-step view of web/journey.js is not shown any more), and a card here says
 // which brand and model the task is for, which applications it has bound and how many are released.
@@ -35,6 +38,8 @@ const TW_JOB_ACTIVE = ['dispatching', 'submitted', 'queued', 'running', 'cancell
 const TW_NAMES_SHOWN = 3;            // robots named in a sentence, as brainos/task_remove.py does
 const TW_INDEX_SHOWN = 10;           // task names on the dashboard; the wall below has all of them
 const TW_CARD_ROWS = ['品牌型号', '机器人应用', '机器人'];                             // on every card, with or without content
+const TW_IPV4 = /^(\d{1,3}\.){3}\d{1,3}(:\d+)?$/;                                    // a robot's name that is only an address
+const TW_NAME = '工作台';                                                             // issue #52: what the page is called (was 任务工作台)
 const TW_GUIDE_SEEN = 'nx-first-run-guide-seen';                                     // browser storage, one key per account
 
 // ---------------------------------------------------------------- what a task holds
@@ -73,6 +78,14 @@ function twTotals(list) {
   const bound = new Set(list.flatMap(([, f]) => f.applications).map(a => a.root_application_id || a.id));     // issue #50: an application several tasks bound counts once
   return {tasks: list.length, robots: robots.length, online: robots.filter(r => r.status === 'connected').length, applications: bound.size,
           deployed: list.filter(([, f]) => f.deployed).length, working: list.filter(([, f]) => f.working).length};
+}
+
+// Issue #52: a robot nobody named is called by its address, and a card does not show addresses.
+function twIsAddress(robot) {
+  const name = String(robot.name ?? '').trim();
+  let host = '';
+  try { host = robot.endpoint ? new URL(robot.endpoint).hostname : ''; } catch { /* not an address the page can read */ }
+  return TW_IPV4.test(name) || (Boolean(host) && (name === host || name.startsWith(host + ':')));
 }
 
 const twNames = items => items.slice(0, TW_NAMES_SHOWN).map(x => x.name).join('、') + (items.length > TW_NAMES_SHOWN ? ' 等' : '');
@@ -152,7 +165,7 @@ function twCard(task, facts, isCurrent) {
   const rows = [
     facts.bound.label,
     facts.applications.length ? `${facts.applications.length} 个 · ${twNames(facts.applications)}` : '',
-    fitting.length ? `${fitting.length} 台 · ${facts.bound.online} 台已连接 · ${twNames(fitting)}` : '',
+    fitting.length ? [`${fitting.length} 台 · ${facts.bound.online} 台已连接`, twNames(fitting.filter(r => !twIsAddress(r)))].filter(Boolean).join(' · ') : '',
   ];
   const none = ['绑定应用后确定', '还没有绑定', facts.applications.length ? '账号里没有这个品牌型号的机器人' : '绑定应用后确定'];
   return `<article class="tw-card${isCurrent ? ' current' : ''}" role="listitem" data-task="${h(task.id)}">` +
@@ -174,23 +187,21 @@ function twBoard(list) {
       `<em>${facts.applications.length} 个应用</em></button></li>`).join('')}</ol>` +
       (more > 0 ? `<p class="tw-names-more">另有 ${more} 个，见下方的任务列表。</p>` : '')
     : '<p class="tw-names-none">还没有任务。一个任务是一项要机器人完成的工作，例如“每天巡检仓库，发现异常后生成报告”。</p>';
-  const figures = [['机器人', totals.robots, `${totals.online} 台已连接`], ['绑定的应用', totals.applications, '任务用到的机器人应用'],
-                   ['已部署的任务', totals.deployed, '应用已发布到机器人']];
+  const figures = [['机器人', totals.robots], ['绑定的应用', totals.applications], ['已部署的任务', totals.deployed]];      // issue #52: the numbers, no note under them
   return '<section class="tw-board" aria-label="任务概览">' +
     `<div class="tw-count"><span class="tw-count-label">我的任务</span><strong data-tw-count>${totals.tasks}</strong>` +
-    `<small>${totals.working ? `${totals.working} 个任务有工作正在进行` : totals.tasks ? '现在没有正在进行的工作' : '从新建一个任务开始'}</small></div>` +
+    `${totals.working ? `<small>${totals.working} 个任务有工作正在进行</small>` : ''}</div>` +      // issue #52: said only while there is some
     `<div class="tw-index"><h2>任务名称</h2>${names}</div>` +
-    `<dl class="tw-figures">${figures.map(([t, n, note]) => `<div><dt>${t}</dt><dd>${n}</dd><small>${note}</small></div>`).join('')}</dl></section>`;
+    `<dl class="tw-figures">${figures.map(([t, n]) => `<div><dt>${t}</dt><dd>${n}</dd></div>`).join('')}</dl></section>`;
 }
 
 // The whole dashboard. `guide` is the first-run guide of web/ux05.js, when it has something to show.
 function twDashboardMarkup(st, currentId, guide) {
   const list = (st.projects || []).map(task => [task, twFacts(st, task)]);
-  const head = '<div class="page-head tw-head"><div><div class="eyebrow">TASK WORKBENCH</div><h1>任务工作台</h1>' +
-    '<p class="subtitle">一个任务是一项要机器人完成的工作：它绑定「机器人应用」里的应用来完成。应用和机器人属于账号，按品牌型号对应；应用在「机器人应用」里创建。</p></div>' +
+  const head = `<div class="page-head tw-head"><div><div class="eyebrow">WORKBENCH</div><h1>${TW_NAME}</h1></div>` +      // issue #52: the name, no sentence under it
     `<div class="button-row">${button(icon('plus') + ' 新建任务', 'journey-start')}</div></div>`;
   const wall = list.length
-    ? `<div class="section-head tw-wall-head"><h2>全部任务 <span class="badge-count">${list.length}</span></h2><span>最近创建的在前</span></div>` +
+    ? `<div class="section-head tw-wall-head"><h2>全部任务 <span class="badge-count">${list.length}</span></h2></div>` +
       `<div class="tw-wall" role="list">${list.map(([task, facts]) => twCard(task, facts, task.id === currentId)).join('')}</div>`
     : '<section class="tw-empty"><h2>创建你的第一个任务</h2><p>写清机器人在哪里、做什么、怎样算完成。之后给它绑定「机器人应用」里的应用。</p>' +
       `${button('创建第一个任务 ' + icon('arrow'), 'journey-start')}</section>`;
@@ -281,7 +292,6 @@ async function twAction(type, id) {
   if (type === 'task-robots') return twSelect(id) ? twGo('robots') : undefined;
   if (type === 'task-remove') return twRemoveOpen(id);
   if (type === 'task-remove-confirm') return twRemoveConfirm(id);
-  if (type === 'task-skills-reload' && typeof taskSkillsReload === 'function') return taskSkillsReload(id);
   return undefined;
 }
 
@@ -290,7 +300,7 @@ function twChrome() {
   if (current !== 'task') return;
   const link = document.querySelector('#navigation a[href="#overview"]'), crumb = document.getElementById('breadcrumb');
   if (link) { link.classList.add('active'); link.setAttribute('aria-current', 'page'); }
-  if (crumb) crumb.textContent = '任务工作台 / ' + (project()?.name || '任务');
+  if (crumb) crumb.textContent = TW_NAME + ' / ' + (project()?.name || '任务');
 }
 
 function twInstall() {

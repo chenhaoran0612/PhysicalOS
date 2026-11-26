@@ -188,7 +188,7 @@ const state = {
   ok(html.includes(page.TS_RUN_STATUS.rejected), 'how the latest run went');
   ok(html.includes('这个任务还没有用到'), 'installed skills the task does not use are told apart');
   ok(html.includes('设备上没有这个技能'), 'and so are skills that are missing on the device');
-  ok(html.includes('data-action="task-skills-reload"'), 'the device can be read again');
+  ok(!html.includes('task-skills-reload') && html.includes('<span class="ts-state">'), 'issue #52: no button to read again; the connection stands in its place');
   ok(html.includes('按控制台的安装记录'), 'a robot that is not connected is shown from the records');
 
   const loading = page.tsSectionMarkup(state, task, {[page.tsLiveKey(state, dog)]: {loading: true}});
