@@ -229,6 +229,15 @@ CHAT_INSTRUCTIONS = f'''
 '''
 
 
+def _by_todays_rules(scan):
+    """A saved scan as it is shown (issue #47). One that cannot be regraded is shown as saved: the state
+    snapshot must not fail over one record."""
+    try:
+        return hardware_scan.regraded(scan)
+    except Exception:
+        return scan
+
+
 def _compact(scan):
     return {k: v for k, v in scan.items() if k != 'raw'}
 
@@ -346,13 +355,21 @@ class HardwareInit:
 
     def _regrade_saved(self):
         """Issue #47: scans saved under earlier rules are replaced by what today's rules make of them, once,
-        when the workspace opens. The page, the repair flow and the assistant then read one grading."""
-        old = [scan for scan in self.store.list('hardware_scans') if scan.get('rules') != hardware_scan.RULES and 'issues' in scan]
-        if not old:
-            return
-        with self.store.atomic():
-            for scan in old:
+        when the workspace opens. The page, the repair flow and the assistant then read one grading.
+        A record that cannot be read is left as it is and named in the audit log: an old scan must never be
+        what keeps a workspace from opening."""
+        failed = []
+        try:
+            old = [scan for scan in self.store.list('hardware_scans') if scan.get('rules') != hardware_scan.RULES]
+        except Exception as error:
+            return self.platform.audit('hardware_scan.regrade_failed', {'error': str(error)[:500]})
+        for scan in old:
+            try:
                 self.store.put('hardware_scans', hardware_scan.regraded(scan))
+            except Exception as error:              # this one stays as saved; the others are still done
+                failed.append({'scan_id': str(scan.get('id'))[:80], 'error': f'{type(error).__name__}: {error}'[:200]})
+        if failed:
+            self.platform.audit('hardware_scan.regrade_failed', {'scans': failed[:20], 'count': len(failed)})
 
     # ---- state --------------------------------------------------------------
     def snapshot(self):
@@ -360,12 +377,12 @@ class HardwareInit:
         for scan in sorted(self.store.list('hardware_scans'), key=lambda x: x['created_at'], reverse=True):
             if shown.get(scan['robot_id'], 0) < SNAPSHOT_SCANS:
                 shown[scan['robot_id']] = shown.get(scan['robot_id'], 0) + 1
-                scans.append(_compact(hardware_scan.regraded(scan)))      # issue #47: by today's rules
+                scans.append(_compact(_by_todays_rules(scan)))      # issue #47
         return {'hardware_scans': scans, 'hardware_repairs': self.store.list('hardware_repairs'),
                 'hardware_skill': skill_info(), **self.policy.snapshot(scans)}      # issue #13: hardware_blocks
 
     def scan_detail(self, p):
-        scan = hardware_scan.regraded(self.platform.same_project('hardware_scans', p.get('scan_id'), p.get('project_id')))
+        scan = _by_todays_rules(self.platform.same_project('hardware_scans', p.get('scan_id'), p.get('project_id')))
         try:
             raw = {k: v for k, v in self.store.get('hardware_scan_raw', scan['id']).items() if k != 'id'}
         except ValueError:

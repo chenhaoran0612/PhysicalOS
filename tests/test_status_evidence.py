@@ -8,6 +8,7 @@ off) is ``info``. Only faults make a card red.
 """
 import tempfile
 import unittest
+from unittest import mock
 
 from brainos import hardware_scan, motion_drivers, repair_policy, ros2_profile
 from brainos.service import Platform
@@ -251,6 +252,43 @@ class WorkspaceTests(unittest.TestCase):
             self.assertIs(hardware_scan.regraded(saved), saved, 'and is left alone from then on')
             shown = [scan for scan in platform.hardware.snapshot()['hardware_scans'] if scan['id'] == old['id']]
             self.assertEqual(shown, [saved])
+
+
+    def test_a_record_that_lacks_parts_is_regraded_as_having_none_of_them(self):
+        bare = {'id': 'hardware-scan-3', 'robot_id': 'robot-1',
+                'issues': [{'id': 'pci-driver:0000:01:00.0', 'severity': 'error'}, {'severity': 'fatal'}, {'id': 'net-route'}]}
+
+        shown = hardware_scan.regraded(bare)
+
+        self.assertEqual([issue['severity'] for issue in shown['issues']], ['warning', 'info', 'info'])
+        self.assertEqual((shown['devices'], shown['summary']['errors'], shown['summary']['warnings'], shown['rules']),
+                         ([], 0, 1, hardware_scan.RULES))
+        self.assertEqual(hardware_scan.regraded({'id': 'hardware-scan-4'})['issues'], [])
+
+    def test_a_scan_that_cannot_be_regraded_does_not_keep_the_workspace_from_opening(self):
+        with tempfile.TemporaryDirectory() as folder:
+            good = {**SavedScanTests()._old(), 'project_id': 'project-1', 'created_at': '2026-11-24T10:00:00+00:00'}
+            bad = {**good, 'id': 'hardware-scan-bad', 'created_at': '2026-11-24T11:00:00+00:00'}
+            store = Platform(folder).store
+            store.put('hardware_scans', good)
+            store.put('hardware_scans', bad)
+            real = hardware_scan.regraded
+
+            def regraded(scan):
+                if scan.get('id') == bad['id'] and scan.get('rules') != hardware_scan.RULES:
+                    raise KeyError('summary')
+                return real(scan)
+
+            with mock.patch.object(hardware_scan, 'regraded', regraded):
+                platform = Platform(folder)
+                shown = {scan['id']: scan for scan in platform.hardware.snapshot()['hardware_scans']}
+
+            self.assertEqual(platform.store.get('hardware_scans', good['id'])['rules'], hardware_scan.RULES, 'the others are still done')
+            self.assertEqual(platform.store.get('hardware_scans', bad['id']), bad, 'the one that failed is left as saved')
+            self.assertEqual(shown[bad['id']]['summary']['errors'], 2, 'and shown as saved')
+            (event,) = [e for e in platform.store.list('events') if e['action'] == 'hardware_scan.regrade_failed']
+            self.assertEqual((event['details']['count'], event['details']['scans'][0]['scan_id']), (1, bad['id']))
+            self.assertIn('KeyError', event['details']['scans'][0]['error'])
 
 
 class MotionInterfaceTests(unittest.TestCase):
