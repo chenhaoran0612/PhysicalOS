@@ -174,7 +174,7 @@ class Platform:
                 obj.pop('body_applied', None)
         result['sim_kinds'] = self.sims.kinds()
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
-                      system={'version': '0.21.11', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
+                      system={'version': '0.21.12', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
         result.update(self.hardware.snapshot())
         result.update(self.heartbeat.snapshot())    # issue #24: the workspace is shown, so its heartbeat runs; the states are asked for apart
