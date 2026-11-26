@@ -96,7 +96,8 @@ async function openListOf(locator, timeout) {
     await proto.waitForBeforeRobotsPage.call(target, {state: 'attached', timeout});
     await target.evaluate(el => {
       const menu = el.closest('details.robot-menu');
-      if (menu && !menu.open) menu.querySelector('summary').click();
+      // Not for the button of a list itself: clicking it is what opens the list.
+      if (menu && !menu.open && !el.closest('summary')) menu.querySelector('summary').click();
     });
   } catch { /* not there: the call that follows reports it as it always did */ }
 }

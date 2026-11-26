@@ -17,7 +17,7 @@ const path = require('path');
 const TYPE = '轮式底盘 <b id="markup-in-a-type">', TEMPLATE = 'wheeled.default';
 const PLAIN_ROBOT = '已有接入程序的小车', SSH_ROBOT = '巡检小车';
 const OLD_VALUES = ['mobile', 'humanoid', 'aerial', 'composite', 'custom'];
-const LIST = 'details.body-types', CHANGE = '[data-action="engine-body-type"]';
+const LIST = '#dialog[open] .rp-types', SETTINGS = 'details.rp-settings', CHANGE = '[data-action="engine-body-type"]';
 const WIDTHS = [320, 768, 1024, 1440];
 let failed = async () => {};
 
@@ -58,7 +58,19 @@ let failed = async () => {};
   const robotsPage = async () => { await page.goto(cfg.url + '/#robots'); await page.locator('.page-head h1').waitFor(); await reread(); };
   const card = robotId => page.locator(`article.card:has(${CHANGE}[data-id="${robotId}"])`);
   const list = page.locator(LIST);
-  const openList = async () => { if (!(await list.evaluate(d => d.open))) await list.locator('summary').click(); };
+  // Since issue #41 the list is a dialog, behind 「设置」 in the head of the page.
+  const settings = page.locator(SETTINGS), listHead = page.locator('#dialog[open] .dialog-head');
+  const openList = async () => {
+    if (await list.count()) return;
+    if (!(await settings.evaluate(d => d.open))) await settings.locator('summary').click();
+    await settings.locator('[data-action="engine-body-types-open"]').click();
+    await list.waitFor();
+  };
+  const closeList = async () => {
+    await list.waitFor();
+    await listHead.locator('[data-action="close"]').click();
+    await list.waitFor({state: 'detached'});
+  };
   const row = name => list.locator('tbody tr', {hasText: name});
   const typeOptions = () => dialog.locator('select[name=family] option').evaluateAll(options => options.map(o => [o.value, o.textContent.trim()]));
   const toastGone = () => page.evaluate(() => document.querySelector('#toast').classList.remove('show'));
@@ -75,10 +87,12 @@ let failed = async () => {};
   await submit();
   const projectId = (await appState()).projects[0].id;
 
-  // 1 · The list is at the foot of the page, folded: two built-in types that cannot be removed.
+  // 1 · The list is behind 「设置」 in the head of the page: two built-in types that cannot be removed.
   await robotsPage();
-  await expectText(list.locator('summary'), ['本体类型清单', '2 类']);
-  must(!(await list.evaluate(d => d.open)), 'The list is open before anybody opened it');
+  must(await page.locator('#main details.body-types').count() === 0, 'The list is still a fold of the page');
+  await settings.locator('summary').click();
+  await expectText(settings.locator('[data-action="engine-body-types-open"]'), ['本体类型清单', '2 类']);
+  must(!(await list.count()), 'The list is open before anybody opened it');
   await openList();
   await expectText(row('四足机器人'), ['quadruped.default', 'base.velocity', '底盘速度', '内置']);
   await expectText(row('机械臂'), ['manipulator.default', 'arm.joint_position', '内置']);
@@ -95,8 +109,8 @@ let failed = async () => {};
   await toastGone();
   await submit();
   await toast('本体类型已添加');
-  must(await list.evaluate(d => d.open), 'The list closed after a type was added');
-  await expectText(list.locator('summary'), ['3 类']);
+  await list.waitFor();                                          // adding a type leads back to the list
+  await expectText(listHead, ['本体类型清单', '3 类']);
   await expectText(row('轮式底盘'), [TYPE, TEMPLATE, 'safety.stop', 'base.velocity', 'base.odometry', '里程计']);
   must(await page.locator('#markup-in-a-type').count() === 0, 'The name of a type is rendered as markup');
   const added = (await appState()).body_types.find(t => t.name === TYPE);
@@ -108,6 +122,7 @@ let failed = async () => {};
   await send();
   await dialog.locator('.form-error [data-error-code="body_type_name_taken"]', {hasText: '已经有同名的本体类型'}).waitFor();
   await click('close');
+  await closeList();                                             // the form closed: the list is back, and is closed too
   result.typeAdded = true;
 
   // 3 · Both forms that add a device offer the list, the added type included, and none of the old values.
@@ -163,6 +178,7 @@ let failed = async () => {};
   must(await dialog.locator('[data-action="engine-body-types-remove-confirm"]').count() === 0, 'A type in use offers a way to remove it');
   await shot('4-in-use');
   await click('close');
+  await closeList();
   const refusal = await page.evaluate(id => api('body-types/remove', {body_type_id: id}).then(() => null, e => e.body), added.id);
   must(refusal?.code === 'body_type_in_use', `The server removed a type in use, or refused otherwise: ${JSON.stringify(refusal)}`);
   must(JSON.stringify(refusal.devices.map(d => d.name).sort()) === JSON.stringify([PLAIN_ROBOT, SSH_ROBOT].sort()),
@@ -189,8 +205,10 @@ let failed = async () => {};
   await toastGone();
   await click('engine-body-types-remove-confirm');
   await toast('本体类型已删除');
-  await expectText(list.locator('summary'), ['2 类']);
+  await list.waitFor();
+  await expectText(listHead, ['2 类']);
   must(await row('轮式底盘').count() === 0, 'The removed type is still listed');
+  await closeList();
   must(!(await appState()).body_types.some(t => t.id === added.id), 'The type was not removed');
   result.unusedTypeRemoved = true;
 

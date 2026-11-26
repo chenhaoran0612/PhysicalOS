@@ -124,7 +124,7 @@ const ROBOT = '巡检机器人', OLD_ROBOT = '只填了服务地址的机器人'
   // 4. The robot's network is cut. One and two minutes without a heartbeat: still online. Three: offline.
   //    None of this draws the page again: the card stays the same element, an opened explanation stays open.
   await later();                                      // a heartbeat right before the cut
-  await page.locator('details.page-purpose summary').last().click();
+  await page.locator('details.rp-settings > summary').click();          // issue #41: the page has no folds; 「设置」 is what can be open
   await card(ROBOT).evaluate(el => { el.dataset.sameCard = 'yes'; });
   await control('/cut');
   await later();
@@ -133,11 +133,16 @@ const ROBOT = '巡检机器人', OLD_ROBOT = '只填了服务地址的机器人'
   await expectLine(ROBOT, ['在线'], 'Two minutes without a heartbeat');
   check(await line(ROBOT).locator('.hb-reason').count() === 0, 'A missed heartbeat is shown as a fault before the robot is offline');
   await later();
+  // The page's clock and the fixture's are two clocks: exactly three minutes later they differ by a few
+  // milliseconds either way, and "已离线 2 分钟" or "3 分钟" was decided by that. One second more on the
+  // page settles it (no heartbeat round is due for it).
+  await page.clock.fastForward(1000);
+  await sync();
   await expectLine(ROBOT, ['离线', '已离线 3 分钟', /最近心跳 \d\d:\d\d:\d\d/, '目标机：', '重试'], 'Three minutes without a heartbeat');
   check(await line(ROBOT).locator('.status.bad').count() === 1, 'Offline is not shown in red');
   check(reads.length === 0, 'The page read the status to find out that the robot is offline');
   check(await card(ROBOT).getAttribute('data-same-card') === 'yes', 'The cards were drawn again for a heartbeat or a change of state');
-  check(await page.locator('details.page-purpose').last().evaluate(el => el.open), 'An opened explanation was closed by a heartbeat');
+  check(await page.locator('details.rp-settings').evaluate(el => el.open), 'An opened explanation was closed by a heartbeat');
   for (const action of ['engine-status', 'engine-ssh-edit', 'hardware-open', 'engine-robot-remove']) {
     check(await card(ROBOT).locator(`[data-action="${action}"]`).count() === 1, `The offline card lost its "${action}" button`);
   }
