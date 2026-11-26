@@ -8,8 +8,10 @@
 //     step and the live state. Everything else is one click away in the card's 「更多功能」 list, grouped.
 //   * The page follows its state. Without a robot it shows the three ways to add one. With a robot it
 //     shows the robots and one 「添加机器人」 button; the three ways are in that button's dialog.
-//   * Explanations and settings that are rarely needed (how the page works, the assistant's models, the
-//     list of body types) are folds at the foot of the page.
+//   * Nothing explains the page on the page. The two settings that are not a robot's (the assistant's
+//     models, the list of body types) are in the 「设置」 list of the page head, each in its own dialog.
+//   * Cards line up: every card is a name, a line of state, one line of what and where, then what asks
+//     for attention. Notes that explain rather than report are in the card's list.
 //
 // The other scripts are not edited: each still builds its part of a card by wrapping engineRobotCard.
 // rpCard() takes the finished card and moves the parts, keeping every element (and the attributes the
@@ -30,7 +32,10 @@ const RP_GROUPS = [
   ['管理层', ['engine-runtime-link', 'engine-runtime-install']],
   ['仿真', ['sim-start', 'sim-stop']],
 ];
-const RP_OTHER = '其他', RP_FACTS = '其他状态';
+const RP_OTHER = '其他', RP_FACTS = '其他状态', RP_NOTES = '说明';
+const RP_SETTINGS_LABEL = '设置', RP_PAGE = 'page';         // the list of the page head; RP_PAGE is its key where robots have their id
+const RP_EMPTY_LINE = '选择一种方式添加机器人';
+const RP_TYPES_OPEN = 'engine-body-types-open';
 const RP_REMOVE = ['engine-robot-remove', 'sim-remove'];
 const RP_ALWAYS = ['robot-reset'];                        // releasing an emergency stop is never put away
 const RP_SECOND = ['engine-status', 'sim-live', 'detail-robots', 'engine-profile'];
@@ -102,7 +107,7 @@ function rpPick(buttons, robot) {
 
 // ---------------------------------------------------------------- a card
 
-function rpMenu(robot, entries, managementLine, facts, open) {
+function rpMenu(robot, entries, managementLine, facts, open, notes = '') {
   const group = (title, body, cls = '') => (body
     ? `<div class="robot-menu-group${cls}" role="group" aria-label="${title}"><span class="robot-menu-title" aria-hidden="true">${title}</span>${body}</div>` : '');
   const of = actions => entries.filter(e => actions.includes(e.action)).sort((a, b) => actions.indexOf(a.action) - actions.indexOf(b.action))
@@ -112,9 +117,10 @@ function rpMenu(robot, entries, managementLine, facts, open) {
   const other = group(RP_OTHER, entries.filter(e => !known.includes(e.action)).map(e => e.html).join(''));
   const state = group(RP_FACTS, facts ? RP_TAGS + facts + '</div>' : '', ' robot-menu-facts');
   const remove = of(RP_REMOVE) ? `<div class="robot-menu-group robot-menu-danger">${of(RP_REMOVE)}</div>` : '';
+  const about = group(RP_NOTES, notes, ' robot-menu-notes');
   return `<details class="robot-menu" data-rp-menu="${h(robot.id)}"${open ? ' open' : ''}>` +
     `<summary class="button secondary small" aria-label="${h(robot.name || '')} 的${RP_MENU_LABEL}">${RP_MENU_LABEL}</summary>` +
-    `<div class="robot-menu-panel">${groups}${other}${state}${remove}</div></details>`;
+    `<div class="robot-menu-panel">${groups}${other}${state}${about}${remove}</div></details>`;
 }
 
 // The finished card of a robot, laid out again. A card of a shape this file does not know is returned as it is.
@@ -146,7 +152,41 @@ function rpCard(html, robot, open = false) {
     facts = quiet;
     body = body.slice(0, tagsAt) + (seen ? RP_TAGS + seen + '</div>' : '') + body.slice(tagsEnd + '</div>'.length);
   }
-  return body + RP_BOTTOM + visible + row.rest + rpMenu(robot, entries, managementLine, facts, open) + RP_END;
+  const lined = rpLines(body, robot);
+  return lined.body + RP_BOTTOM + visible + row.rest + rpMenu(robot, entries, managementLine, facts, open, lined.notes) + RP_END;
+}
+
+// The lines of a card, so that cards line up: under the name one line of state, then one line of what
+// the robot is and where. What explains rather than reports (a second line of a simulated robot, its
+// note about evidence) goes to the list as notes. Returns the body and the notes; nothing is dropped.
+function rpLines(body, robot) {
+  let notes = '';
+  const note = text => { if (text.trim()) notes += `<p class="robot-menu-note">${text.trim()}</p>`; };
+  // What and where: one line. The first plain paragraph of the card is that line.
+  let next = body.replace(/<p>([\s\S]*?)<\/p>/, (whole, inner) => {
+    const at = inner.indexOf('<br>');
+    if (at < 0) return `<p class="rp-what">${inner}</p>`;
+    const first = inner.slice(0, at), rest = inner.slice(at + '<br>'.length);
+    if (robot?.sim) { note(rest); return `<p class="rp-what">${first}</p>`; }
+    return `<p class="rp-what">${first}<span class="rp-sep" aria-hidden="true"> · </span><span class="rp-where">${rest}</span></p>`;
+  });
+  if (!robot?.sim) return {body: next, notes};
+  next = next.replace(/<p class="inline-note">([\s\S]*?)<\/p>/g, (whole, inner) => { note(inner); return ''; });
+  // Whether it runs: from the corner, where a real robot has no state, to the line under the name, where it has.
+  const top = /(<div class="card-top">[\s\S]*?<span class="button-row">)([\s\S]*?)(<\/span><\/div>)/.exec(next);
+  if (top && next.includes('</h3>')) {
+    const [kind, state] = rpSplitKind(top[2]);
+    if (state) next = next.replace(top[0], () => top[1] + kind + top[3]).replace('</h3>', () => `</h3><div class="rp-state">${state}</div>`);
+  }
+  return {body: next, notes};
+}
+
+// The badges in the corner of a simulated robot's card: [what it is (仿真), how it is (运行中)].
+function rpSplitKind(badges) {
+  const parts = badges.match(/<span class="status[^"]*">[\s\S]*?<\/span>/g) || [];
+  if (parts.join('') !== badges) return [badges, ''];                         // something else is in the corner: leave it
+  const kind = parts.filter(part => /^<span class="status[^"]*\bsim\b/.test(part));
+  return kind.length ? [kind.join(''), parts.filter(part => !kind.includes(part)).join('')] : [badges, ''];
 }
 
 // ---------------------------------------------------------------- the page
@@ -157,46 +197,57 @@ function rpSummary(list) {
   return [real ? `${real} 台真机` : '', sims ? `${sims} 台仿真` : ''].filter(Boolean).join(' · ');
 }
 
-let rpOpen = null;                      // the robot whose list is open; kept when the page is drawn again
-let rpChosenFrom = null;                // the robot whose list an entry was last chosen from: where the focus goes back to
-const rpFoldsOpen = new Set();          // the folds at the foot of the page a person opened
+let rpOpen = null;                      // whose list is open (a robot's id, or RP_PAGE); kept when the page is drawn again
+let rpChosenFrom = null;                // whose list an entry was last chosen from: where the focus goes back to
+let rpTypesBack = false;                // a form was opened from the list of body types: closing it leads back to the list
 
-const rpFold = (key, title, body) => (body
-  ? `<details class="page-purpose" data-rp-fold="${key}"${rpFoldsOpen.has(key) ? ' open' : ''}><summary>${title}</summary>${body}</details>` : '');
-
-function rpFlowFold() {
-  const steps = [['01', '连接本体', 'SSH / 密码 / 密钥'], ['02', '自主调查', '硬件 / 软件 / 配置'], ['03', '保存档案', '分类 / 证据 / 未知项'],
-                 ['04', '推进适配', '工程代码 / 测试 / 验证']];
-  return rpFold('flow', '真机接入流程说明', `<div class="pipeline">${steps.map(([n, t, s]) =>
-    `<div class="pipeline-step"><div class="pipeline-icon">${n}</div><b>${t}</b><small>${s}</small></div>`).join('')}</div>` +
-    '<p class="subtitle">串口、USB 与厂商专有链路将通过连接插件扩展。</p>');
-}
-
-// The folds at the foot: explanations and settings that are rarely needed.
-function rpFolds(hasRobots) {
-  const help = typeof journeyHelp === 'function' ? journeyHelp('robots') : '';
-  const helpBody = help.replace(/^<details class="page-purpose"><summary>[^<]*<\/summary>/, '').replace(/<\/details>$/, '');
+// 「设置」 in the page head: what is set for all robots, each in its own dialog.
+function rpSettings() {
   const models = rows('agent_models').length;
-  const folds = (hasRobots ? '' : rpFlowFold()) + rpFold('help', '这个页面怎么用', helpBody) +
-    rpFold('models', `助手使用的模型（${models ? models + ' 个' : '还没有配置'}）`, engineModelsSummary()) +
-    (typeof bodyTypesPanel === 'function' ? bodyTypesPanel() : '');
-  return folds ? `<section class="rp-folds" aria-label="说明与设置">${folds}</section>` : '';
+  const types = typeof bodyTypesPanel === 'function' && bodyTypesPanel() ? bodyTypeList().length : 0;
+  const entry = (label, count, action) => `<button type="button" class="robot-menu-item" data-action="${action}">${label}` +
+    `<span class="robot-menu-count">${count}</span></button>`;
+  const entries = entry('助手模型', models ? `${models} 个` : '未配置', 'engine-models') + (types ? entry('本体类型清单', `${types} 类`, RP_TYPES_OPEN) : '');
+  return `<details class="robot-menu rp-settings" data-rp-menu="${RP_PAGE}"${rpOpen === RP_PAGE ? ' open' : ''}>` +
+    `<summary class="button secondary" aria-label="我的机器人页面的${RP_SETTINGS_LABEL}">${RP_SETTINGS_LABEL}</summary>` +
+    `<div class="robot-menu-panel"><div class="robot-menu-group" role="group" aria-label="${RP_SETTINGS_LABEL}">${entries}</div></div></details>`;
 }
+
+// The head of the page: one line of state, the title, and on the right what can be done to the page.
+const rpHead = (line, buttons) => `<div class="page-head rp-head"><div><div class="eyebrow">${h(line)}</div><h1>我的机器人</h1></div>` +
+  `<div class="button-row">${buttons}${rpSettings()}</div></div>`;
 
 function rpPage() {
   const list = rows('robots');
+  // The list of body types is open in its dialog: it follows what the page now knows.
+  if (typeof document !== 'undefined' && document.querySelector('#dialog[open] .rp-types')) setTimeout(rpTypesRepaint, 0);
   if (!state.user) rpOpen = null;
-  if (!list.length) {
-    // No robot yet: the three ways to add one are the page.
-    const head = heading('INTELLIGENT ONBOARDING', '让 Agent 认识你的机器人。', '提供 SSH 等连接信息，由工程助手调查本体软硬件，形成持续更新的设备档案。');
-    const help = typeof journeyHelp === 'function' ? journeyHelp('robots') : '';
-    return (help ? head.replace(help, () => '') : head) +
-      '<div class="section-head"><h2>选择一种方式添加机器人</h2><span>没有真机也可以先用仿真机器人</span></div>' + engineRobotOptions() + rpFolds(false);
-  }
-  if (!list.some(r => r.id === rpOpen)) rpOpen = null;
-  return `<div class="page-head rp-head"><div><div class="eyebrow">${h(rpSummary(list))}</div><h1>我的机器人</h1></div>` +
-    `<div class="button-row">${button(icon('plus') + ' 添加机器人', 'engine-robots-add')}</div></div>` + (project() ? '' : noProject()) +
-    `<div class="cards rp-cards">${list.map(r => rpCard(engineRobotCard(r), r, rpOpen === r.id)).join('')}</div>` + rpFolds(true);
+  if (rpOpen !== RP_PAGE && !list.some(r => r.id === rpOpen)) rpOpen = null;
+  // No robot yet: the three ways to add one are the page.
+  if (!list.length) return rpHead(RP_EMPTY_LINE, '') + engineRobotOptions();
+  return rpHead(rpSummary(list), button(icon('plus') + ' 添加机器人', 'engine-robots-add')) +
+    `<div class="cards rp-cards">${list.map(r => rpCard(engineRobotCard(r), r, rpOpen === r.id)).join('')}</div>`;
+}
+
+// The list of body types, which was a fold of the page: a dialog of its own.
+const rpTypesInner = () => (typeof bodyTypesPanel === 'function' ? bodyTypesPanel() : '')
+  .replace(/^<details\b[^>]*><summary>[^<]*<\/summary>/, '').replace(/<\/details>$/, '');
+const rpTypesCount = () => `${bodyTypeList().length} 类`;
+
+function rpTypesOpen() {
+  const inner = rpTypesInner();
+  if (!inner) return;
+  dialog('本体类型清单', rpTypesCount(), `<div class="dialog-body body-types rp-types">${inner}</div>`);
+  document.getElementById('dialog').classList.add('wide');
+}
+
+// The open list, written again from the state (a type was added or removed, or a device changed its type).
+function rpTypesRepaint() {
+  const body = document.querySelector('#dialog[open] .rp-types'), inner = rpTypesInner();
+  if (!body || !inner || body.innerHTML === inner) return;
+  body.innerHTML = inner;
+  const line = document.querySelector('#dialog .dialog-head p');
+  if (line) line.textContent = rpTypesCount();
 }
 
 // 「添加机器人」 on a page that already has robots: the three ways, in a dialog.
@@ -217,7 +268,7 @@ function rpCloseMenus(focus = false) {
 
 function rpInstall() {
   const baseAction = engineAction;
-  engineAction = async (type, id) => (type === 'engine-robots-add' ? rpAddOpen() : baseAction(type, id));
+  engineAction = async (type, id) => (type === 'engine-robots-add' ? rpAddOpen() : type === RP_TYPES_OPEN ? rpTypesOpen() : baseAction(type, id));
   views.robots = rpPage;
   document.addEventListener('click', e => {
     const summary = e.target.closest?.('details.robot-menu > summary');
@@ -230,6 +281,9 @@ function rpInstall() {
       if (opening) setTimeout(() => menu.querySelector('.robot-menu-panel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'}), 0);
       return;
     }
+    // A form reached from the list of body types (add, remove): when it closes, the list is back.
+    // (The form may have replaced the list by now: the control is found by its list, not by the dialog.)
+    if (e.target.closest?.('.rp-types [data-action]:not([data-action="close"])')) rpTypesBack = true;
     const inPanel = e.target.closest?.('.robot-menu-panel');
     if (inPanel && e.target.closest('[data-action]')) rpChosenFrom = inPanel.parentNode.dataset.rpMenu;
     if (!inPanel || e.target.closest('[data-action]')) rpCloseMenus();       // a click elsewhere, or an entry was chosen
@@ -243,7 +297,9 @@ function rpInstall() {
   });
   // The dialog of an entry closed: the entry it would give the focus back to is put away, so its list's button gets it.
   document.getElementById('dialog')?.addEventListener('close', () => {
-    const from = rpChosenFrom;
+    const from = rpChosenFrom, back = rpTypesBack;
+    rpTypesBack = false;
+    if (back) return setTimeout(() => { if (!document.querySelector('dialog[open]') && current === 'robots') rpTypesOpen(); }, 0);
     rpChosenFrom = null;
     setTimeout(() => {
       const menu = from && [...document.querySelectorAll('details.robot-menu')].find(el => el.dataset.rpMenu === from);
@@ -255,11 +311,14 @@ function rpInstall() {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && rpOpen && !document.querySelector('dialog[open]')) rpCloseMenus(true);
-  });
-  // Folds at the foot of the page stay as the person left them when the page is drawn again.
-  document.addEventListener('click', e => {
-    const fold = e.target.closest?.('details[data-rp-fold] > summary')?.parentNode;
-    if (fold) rpFoldsOpen[fold.open ? 'delete' : 'add'](fold.dataset.rpFold);
+    // Tab past the last entry, or back past the list's button: the keyboard leaves the list. Closed here,
+    // not on focusout: when nothing on the page follows the list the focus leaves the page, and no
+    // focusout names where it went.
+    if (e.key === 'Tab' && rpOpen) {
+      const menu = document.querySelector('details.robot-menu[open]'), at = document.activeElement;
+      const stops = menu ? [...menu.querySelectorAll('summary, button:not([disabled]), a[href]')] : [];
+      if (stops.length && at === (e.shiftKey ? stops[0] : stops[stops.length - 1])) rpCloseMenus();
+    }
   });
   if (current === 'robots') render();
 }

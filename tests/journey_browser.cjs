@@ -21,7 +21,7 @@ const {connectTokenFans}=require('./tokenfans_browser.cjs');
  await connectTokenFans(page,cfg);
  await page.goto(cfg.url+'/#agents');await click('journey-prepare');await page.locator('[name=objective]').waitFor();if(!(await page.locator('#dialog [name=model_id]').inputValue()).startsWith('agent-model-tokenfans-'))throw Error('Plan does not use the TokenFans model');if(!(await page.locator('[name=objective]').inputValue()).includes('检查仓库通道'))throw Error('Task goal was lost');await submit();await page.getByRole('heading',{name:'启动 仓库异常巡检 · 工程准备',exact:true}).waitFor();
  const state=await page.evaluate(()=>api('state'));if(state.workflow_runs.length||state.agent_sessions.length)throw Error('Plan unexpectedly started paid execution');if(state.engineering_workflows[0].stages.length!==4)throw Error('Missing default roles');await click('close');
- for(const route of ['robots','models','skills','agents','extensions','workflows','simulation','harness','deployment','training','datasets','resources','billing','services']){
+ for(const route of ['models','skills','agents','extensions','workflows','simulation','harness','deployment','training','datasets','resources','billing','services']){
   await page.goto(cfg.url+'/#'+route);await page.locator('#main .page-purpose:has(.purpose-grid) > summary').first().click();await page.locator('#main .page-purpose:has(.purpose-grid)').first().getByText('需要准备',{exact:true}).waitFor();await page.locator('#main .page-purpose:has(.purpose-grid)').first().getByText('完成后得到',{exact:true}).waitFor();
  }
  // UI progression must not count unrelated or superseded evidence as delivery.

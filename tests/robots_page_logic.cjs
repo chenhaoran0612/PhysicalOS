@@ -14,7 +14,7 @@ const badge = (text, cls = '') => `<span class="status ${cls}"><i class="dot"></
 const sandbox = {h, button, badge, state: {robots: []}};
 vm.createContext(sandbox);
 const page = vm.runInContext(readFileSync('web/robots_page.js', 'utf8') +
-  '\n;({rpCard, rpButtons, rpPick, rpSplitTags, rpSummary, RP_MENU_LABEL})', sandbox);
+  '\n;({rpCard, rpButtons, rpPick, rpSplitTags, rpSummary, rpLines, RP_MENU_LABEL})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -114,12 +114,43 @@ const actions = html => [...html.matchAll(/data-action="([^"]+)"/g)].map(m => m[
   ok(running.startsWith('<article class="card rp-card sim-card"'), 'a simulated robot keeps its own class');
   same(actions(shown(running)).join(), 'sim-live,detail-robots', 'a running simulation: watch it, use it');
   same(actions(menu(running)).join(), 'sim-stop,sim-remove', 'stopping and deleting are in the list');
-  ok(shown(running).includes('不能作为现场证据'), 'the note about simulated results stays in sight');
+  ok(!shown(running).includes('不能作为现场证据') && menu(running).includes('<p class="robot-menu-note">仿真结果只说明逻辑是否正确，不能作为现场证据。</p>'),
+     'the note about simulated results explains, it does not report: it is in the list, whole');
+  ok(running.includes('9 项能力'), 'what the card says about the robot is still there');
   const stopped = page.rpCard(sim(button('启动仿真', 'sim-start', 'small', 'sim-1') + button('删除', 'sim-remove', 'secondary small', 'sim-1')), simRobot, false);
   same(actions(shown(stopped)).join(), 'sim-start', 'a stopped simulation: start it');
   const starting = page.rpCard(sim(''), simRobot, false);
   ok(!starting.includes('robot-menu') || starting.includes('9 项能力'), 'a card without buttons loses nothing');
   ok(!actions(starting).length, 'and gains none');
+}
+
+// ---- cards line up: a name, a line of state, one line of what and where
+{
+  const top = badges => `<div class="card-top"><span class="agent-avatar"></span><span class="button-row">${badges}</span></div>`;
+  const simBody = '<article class="card rp-card sim-card"><div class="card-body">' + top(badge('仿真', 'blue sim') + badge('运行中', 'good')) +
+    '<h3>仿真四足机器人</h3><p>仿真四足机器人 · 运行在这台电脑上<br>地址和令牌由应用自动管理</p><p class="inline-note">仿真结果只说明逻辑是否正确，不能作为现场证据。</p></div>';
+  const sim = page.rpLines(simBody, {id: 'sim-1', sim: {}});
+  ok(sim.body.includes('<p class="rp-what">仿真四足机器人 · 运行在这台电脑上</p>'), 'a simulated robot: one line of what and where');
+  ok(sim.body.includes(`</h3><div class="rp-state">${badge('运行中', 'good')}</div>`), 'whether it runs is the line under the name, as on a real robot');
+  ok(sim.body.includes(top(badge('仿真', 'blue sim'))), 'the corner keeps what it is');
+  same(sim.notes, '<p class="robot-menu-note">地址和令牌由应用自动管理</p><p class="robot-menu-note">仿真结果只说明逻辑是否正确，不能作为现场证据。</p>',
+       'the second line and the note go to the list, whole');
+  ok(!sim.body.includes('inline-note') && !sim.body.includes('地址和令牌'), 'and are not on the card twice');
+
+  const realBody = '<article class="card rp-card"><div class="card-body">' + top(badge('可发起调查')) + '<h3>巡检机器人</h3>' +
+    '<div class="hb-line" data-hb-robot="r1"></div><p><span class="body-type-name">四足机器人</span><br>robot@10.0.0.2:22</p><p class="inline-note">保留</p></div>';
+  const real = page.rpLines(realBody, {id: 'r1'});
+  ok(real.body.includes('<p class="rp-what"><span class="body-type-name">四足机器人</span><span class="rp-sep" aria-hidden="true"> · </span><span class="rp-where">robot@10.0.0.2:22</span></p>'),
+     'a real robot: its type and its address on one line, both kept');
+  same(real.notes, '', 'nothing of a real robot is put away');
+  ok(real.body.includes(top(badge('可发起调查'))) && real.body.includes('<p class="inline-note">保留</p>') && !real.body.includes('rp-state'),
+     'its corner and its notes stay where they are');
+
+  const odd = '<article class="card rp-card sim-card"><div class="card-body">' + top(badge('仿真', 'blue sim') + '<button type="button">x</button>') + '<h3>S</h3><p>一行</p></div>';
+  ok(page.rpLines(odd, {sim: {}}).body.includes(top(badge('仿真', 'blue sim') + '<button type="button">x</button>')), 'a corner with something else in it is left as it is');
+  same(page.rpLines('<article class="card rp-card"><div class="card-body"><h3>N</h3></div>', {}).notes, '', 'a card without a paragraph is returned as it is');
+  same((page.rpLines(simBody, {sim: {}}).body + sim.notes).replace(/<[^>]+>/g, '').length,
+       simBody.replace(/<[^>]+>/g, '').length, 'no text is lost on the way');
 }
 
 // ---- things this file does not know
