@@ -72,7 +72,7 @@ const ROBOT = '巡检机器人', OLD_ROBOT = '只填了服务地址的机器人'
   await page.goto(cfg.url + '/#robots');
   await page.locator('[data-action="engine-ssh"]').first().click();
   await fill('name', ROBOT); await fill('host', '127.0.0.1'); await fill('port', cfg.robot_port);
-  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #32: a new device needs a type from the list
   await fill('username', cfg.robot_user); await fill('password', cfg.robot_login);
   await submit();
   await dialog.getByText('确认 SSH 主机指纹', {exact: true}).waitFor();
@@ -108,7 +108,7 @@ const ROBOT = '巡检机器人', OLD_ROBOT = '只填了服务地址的机器人'
   // 3. A robot without an SSH connection that was never connected: 未接入, with the reason once a check failed.
   await page.locator('[data-action="robot-add"]').first().click();
   await fill('name', OLD_ROBOT); await fill('endpoint', 'http://127.0.0.1:9');
-  await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #32: a new device needs a type from the list
   await submit();
   await page.evaluate(() => refresh(true));
   await line(OLD_ROBOT).waitFor({timeout: 15000});

@@ -57,7 +57,7 @@ const ROBOT = '巡检机器人';
   // 2. A robot over SSH. The page is now the robot: the three ways are gone from it.
   await addRobotWay(page, 'engine-ssh');
   await fill('name', ROBOT); await fill('host', '127.0.0.1'); await fill('port', cfg.robot_port);
-  await page.locator('#dialog [name=family]').selectOption('quadruped');
+  await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await fill('username', cfg.robot_user); await fill('password', cfg.robot_login);
   await submit();
   await dialog.getByText('确认 SSH 主机指纹', {exact: true}).waitFor();

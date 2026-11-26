@@ -183,7 +183,7 @@ function notePlaces() {
   await click('engine-ssh');
   await laidOut('new connection, direct');
   await fill('name', DIRECT_ROBOT); await fill('host', '127.0.0.1'); await fill('port', cfg.target_port);
-  await dialog.locator('[name=family]').selectOption('quadruped');
+  await dialog.locator('[name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await fill('username', cfg.target_user); await fill('password', cfg.target_password);
   await dialog.locator('details.page-purpose summary').click();
   await laidOut('new connection, the advanced settings open', OPEN_FOLD);
@@ -198,7 +198,7 @@ function notePlaces() {
   await command.blur();                              // applies the command once, as leaving the field does
   must(await control('resolve_on_jump').isChecked(), 'The nested command did not mark the device as a name on the jump host');
   await fill('name', NAMED_ROBOT);
-  await dialog.locator('[name=family]').selectOption('quadruped');
+  await dialog.locator('[name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #48: a new robot needs a brand and model
   await control('auth').selectOption('password'); await control('jump_auth').selectOption('password');
   await fill('password', cfg.target_password); await fill('jump_password', cfg.jump_password);
   await laidOut('new connection through a jump host', JUMP);

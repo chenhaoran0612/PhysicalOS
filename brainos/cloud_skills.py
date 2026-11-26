@@ -32,7 +32,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import connector, robot_caps, skill_packages
+from . import connector, robot_caps, robot_model, skill_packages
 from .cloud_account import API_PREFIX, ERROR_MESSAGES, CloudError, _CheckedHTTPHandler, _CheckedHTTPSHandler
 from .contracts import required_text
 from .errors import CodedError
@@ -105,6 +105,7 @@ def release_view(raw):
         view[key] = value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
     if isinstance(raw.get('created_at'), str):          # a cloud that writes times as text (ISO 8601)
         view['created_at'] = raw['created_at'][:40]
+    view['product'] = robot_model.reported(raw.get('product'))     # issue #48: the brand and model it is for, or None
     return view
 
 
@@ -261,6 +262,7 @@ class CloudSkills:
         state = 'new' if existing is None else 'same' if existing['digest'] == digest else 'conflict'
         view = skill_packages._skill_view(skill)
         return {'path': info['path'], 'example': p.get('example') or None, 'digest': digest, 'skill': view,
+                'product': robot_model.typed(p),
                 'motion': moves(view['requires'], view['optional']),
                 'files': [{'path': k, 'bytes': v} for k, v in sorted(info['sizes'].items())],
                 'total_bytes': info['total_bytes'], 'state': state, 'can_publish': state != 'conflict',
@@ -279,13 +281,39 @@ class CloudSkills:
         person saw. The same content published twice is one release (the cloud answers the first)."""
         expected = required_text(p.get('digest'), '技能包摘要', 100)
         notes = self._notes(p.get('notes'))
+        product = self._product(p)
         package, _info, skill, digest = self._local(p)
         if digest != expected:
             raise CodedError('技能文件夹在预览之后发生了变化；请重新预览，确认后再发布', 'skill_changed_since_preview')
-        return self._send(package, skill, digest, notes)
+        return self._send(package, skill, digest, notes, product)
 
-    def _send(self, package, skill, digest, notes=''):
-        body = {'package': package}
+    @staticmethod
+    def _product(p):
+        """Issue #48: the brand and model a release is published for; the console does not publish without."""
+        product = robot_model.typed(p)
+        if product is None:
+            raise CodedError('请选择这个技能是给哪个品牌型号的机器人用的', 'skill_product_required', field='vendor')
+        return product
+
+    def bind(self, p):
+        """Say which brand and model a release from before is for (the cloud takes it once)."""
+        release = release_view(self._call('PUT', _release_path(p) + '/product', self._product(p)))
+        self.platform.audit('cloud_skill.product_set', {'skill': '%s@%s' % (p['skill_id'], p['version']), 'product': release['product']})
+        return {'release': release}
+
+    def _for_robot(self, release, robot):
+        """Issue #48: a release goes only onto robots of its brand and model."""
+        mine, theirs = release.get('product'), robot_model.of(robot)
+        if mine is None:
+            raise CodedError('这个版本还没有说明是给哪个品牌型号用的；请先在「技能发布」里为它指定品牌型号', 'skill_product_missing')
+        if theirs is None:
+            raise CodedError('「%s」还没有填写品牌和型号；请先在「我的机器人」里填写' % robot['name'], 'robot_model_missing')
+        if robot_model.key(mine) != robot_model.key(theirs):
+            raise CodedError('这个版本属于「%s」，不能装到「%s」（%s）上' % (robot_model.label(mine), robot['name'], robot_model.label(theirs)),
+                             'skill_other_model')
+
+    def _send(self, package, skill, digest, notes='', product=None):
+        body = {'package': package, **(product or {})}
         if notes:
             body['notes'] = notes
         release = release_view(self._call('POST', '/skills/releases', body))
@@ -298,6 +326,7 @@ class CloudSkills:
         """Publish every bundled example to the user's own library. One that is there already with the
         same content counts as done; one whose version holds other content is reported, not replaced."""
         self._require_login()
+        product = self._product(p or {})
         results = []
         for example in bundled_examples():
             row = {'example': example['example'], 'title': example.get('title') or example['example']}
@@ -306,13 +335,13 @@ class CloudSkills:
                 continue
             try:
                 package, _info, skill, digest = self._local({'example': example['example']})
-                sent = self._send(package, skill, digest)
+                sent = self._send(package, skill, digest, product=product)
                 results.append({**row, 'status': 'published', 'skill_id': skill['id'], 'version': skill['version'],
                                 'digest_matches': sent['digest_matches']})
             except CloudError as exc:
                 if exc.code in ('unauthorized', 'cloud_unreachable', 'forbidden', 'email_unverified', 'skill_quota_exceeded'):
                     raise               # the same for every example: say it once
-                status = 'conflict' if exc.code == 'skill_version_exists' else 'refused'
+                status = 'conflict' if exc.code in ('skill_version_exists', 'skill_other_model') else 'refused'
                 results.append({**row, 'status': status, 'error': str(exc), 'code': exc.code})
             except ValueError as exc:
                 results.append({**row, 'status': 'invalid', 'error': str(exc)})
@@ -383,6 +412,7 @@ class CloudSkills:
         nothing that changes the robot."""
         robot = self._robot(p)
         release, package, skill, digest = self.download(p)
+        self._for_robot(release, robot)
         manifest = robot_caps.fetch_manifest_v2(robot)
         compat = skill_packages.explain(skill, manifest)
         sizes = {path: len(text.encode('utf-8')) for path, text in package['files'].items()}
@@ -415,6 +445,7 @@ class CloudSkills:
         release, package, skill, digest = self.download(p)
         if digest != expected:
             raise CodedError('云端的这个版本在预检之后变了；请重新预检，确认后再安装', 'skill_changed_since_preview')
+        self._for_robot(release, robot)
         compat = skill_packages.explain(skill, robot_caps.fetch_manifest_v2(robot))
         if not compat['compatible']:
             raise ValueError('技能包与这台机器人不兼容，不能安装：' + '；'.join(

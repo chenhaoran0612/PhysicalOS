@@ -78,7 +78,7 @@ const WIDTHS = [320, 768, 1024, 1440];
   const connect = async (name, gates) => {
     await page.locator('[data-action="engine-ssh"]').first().click();
     await fill('name', name); await fill('host', '127.0.0.1'); await fill('port', cfg.robot.port);
-    await page.locator('#dialog [name=family]').selectOption('quadruped');   // issue #32: a new device needs a type from the list
+    await page.locator('#dialog [name=family]').selectOption('quadruped'); await require('./robot_model_helper.cjs').fillBrandAndModel(page);   // issue #32: a new device needs a type from the list
     await fill('username', cfg.robot.user); await fill('password', cfg.robot.login);
     if (gates.length) {
       await page.locator('#dialog [name=route]').selectOption('jump');

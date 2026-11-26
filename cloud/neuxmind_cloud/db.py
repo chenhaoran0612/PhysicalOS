@@ -118,6 +118,9 @@ ADDED_COLUMNS = (
     ("library_materials", "device_name", "VARCHAR(200) NOT NULL DEFAULT ''"),
     ("library_uploads", "device_id", "VARCHAR(64) NOT NULL DEFAULT ''"),
     ("library_uploads", "device_name", "VARCHAR(200) NOT NULL DEFAULT ''"),
+    # Issue #48: the brand and model of robot a skill release is for.
+    ("skill_releases", "vendor", "VARCHAR(100) NOT NULL DEFAULT ''"),
+    ("skill_releases", "model", "VARCHAR(100) NOT NULL DEFAULT ''"),
 )
 
 

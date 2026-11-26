@@ -47,16 +47,17 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
   // Assets through the same API the UI uses.
   const ids = await page.evaluate(async cfg => {
     const robot = async (name, endpoint) => {
-      const r = await api('robots', {project_id: projectId, name, family: 'quadruped', endpoint, token: cfg.token});
+      const r = await api('robots', {vendor:'示例机器人公司',model:'X1',project_id: projectId, name, family: 'quadruped', endpoint, token: cfg.token});
       await api('robots/connect', {robot_id: r.id});
       return r.id;
     };
     const sim = await robot('仿真底盘（仿真本体）', cfg.sim_device);
     const real = await robot('巡检底盘（协议替身）', cfg.real_device);
-    const skill = await api('skills', {project_id: projectId, name: '前往巡检点', version: '1', requires: ['navigation.goal'],
+    // Issue #48: the two devices report different brands and models, and a skill is for one: one skill each.
+    const skillFor = robot_id => api('skills', {project_id: projectId, robot_id, name: '前往巡检点', version: '1', requires: ['navigation.goal'],
       entrypoint: 'navigate', success_condition: '到达巡检点', stop_condition: '超时或现场停止', model_ids: []});
-    const app = (name, robot_id) => api('applications', {project_id: projectId, name, version: '1.0', robot_id,
-      steps: [{skill_id: skill.id, parameters: {}, timeout_s: 30}]});
+    const app = async (name, robot_id) => api('applications', {project_id: projectId, name, version: '1.0', robot_id,
+      steps: [{skill_id: (await skillFor(robot_id)).id, parameters: {}, timeout_s: 30}]});
     const simApp = await app('仿真巡检', sim), realApp = await app('现场巡检', real);
     await refresh(true);
     return {sim, real, simApp: simApp.id, realApp: realApp.id};

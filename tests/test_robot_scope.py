@@ -252,7 +252,7 @@ class OverHttp(unittest.TestCase):
     def test_a_robot_added_in_one_task_is_the_accounts(self):
         a, b = self.task('Site A'), self.task('Site B')
 
-        robot = self.post('robots', {'project_id': a, 'name': 'Patrol 1', 'family': 'quadruped'})
+        robot = self.post('robots', {'vendor': 'Acme', 'model': 'X1', 'project_id': a, 'name': 'Patrol 1', 'family': 'quadruped'})
 
         state = self.state()
         self.assertEqual(robot['project_id'], state['robot_home'])
@@ -261,7 +261,7 @@ class OverHttp(unittest.TestCase):
 
     def test_another_task_works_with_the_same_robot(self):
         a, b = self.task('Site A'), self.task('Site B')
-        robot = self.post('robots', {'project_id': a, 'name': 'Patrol 1', 'family': 'quadruped'})['id']
+        robot = self.post('robots', {'vendor': 'Acme', 'model': 'X1', 'project_id': a, 'name': 'Patrol 1', 'family': 'quadruped'})['id']
 
         self.post('robots/body-type', {'project_id': b, 'robot_id': robot, 'family': 'manipulator'})
         detail = self.post('robots/detail', {'project_id': b, 'robot_id': robot})
@@ -269,7 +269,7 @@ class OverHttp(unittest.TestCase):
         self.assertEqual(detail['robot']['family'], 'manipulator')
 
     def test_a_robot_can_be_added_with_no_task(self):
-        robot = self.post('robots', {'name': 'Patrol 1', 'family': 'quadruped'})
+        robot = self.post('robots', {'vendor': 'Acme', 'model': 'X1', 'name': 'Patrol 1', 'family': 'quadruped'})
 
         state = self.state()
         self.assertEqual(state['projects'], [])
@@ -277,7 +277,7 @@ class OverHttp(unittest.TestCase):
 
     def test_deleting_the_task_leaves_the_robot(self):
         a, b = self.task('Site A'), self.task('Site B')
-        robot = self.post('robots', {'project_id': a, 'name': 'Patrol 1', 'family': 'quadruped'})['id']
+        robot = self.post('robots', {'vendor': 'Acme', 'model': 'X1', 'project_id': a, 'name': 'Patrol 1', 'family': 'quadruped'})['id']
 
         self.post('projects/remove', {'project_id': a})
 
