@@ -16,6 +16,7 @@ from test_sim_profiles import ARM, BUILTIN, DOG, MADE_UP, packages
 
 HAVE_MUJOCO = importlib.util.find_spec('mujoco') is not None
 DOG_PRODUCT = {'vendor': DOG['vendor'], 'model': DOG['model']}
+GENERIC_STEPS = (('status_report', {}),)     # issue #69: the one bundled package every brand and model may install
 
 
 def make_task(app, name, product, family, steps, bind=True):
@@ -232,7 +233,7 @@ class Physics(Case):
     """A task of a profile with a robot model: the environment is built, checked, saved, and used."""
 
     def test_an_empty_floor_is_built_once_saved_and_the_robot_starts_in_it_with_the_picture(self):
-        task = self.task()
+        task = self.task(steps=GENERIC_STEPS)
         started = self.sim.build({'project_id': task['id'], 'mode': 'empty'})
         self.assertEqual((started['build']['busy'], started['environment']), (True, None))
         self.refused('sim_scene_busy', self.sim.build, {'project_id': task['id'], 'mode': 'empty'})
@@ -246,14 +247,14 @@ class Physics(Case):
         entered = self.sim.enter({'project_id': task['id']})
         robot = self.app.store.get('robots', entered['robot']['id'])
         self.assertEqual((entered['robot']['picture'], robot['sim']['profile_id'], robot['family'], {k: robot['product'][k] for k in DOG_PRODUCT}), (True, 'acme-dog', 'wheel_legged', DOG_PRODUCT))
-        self.assertEqual(entered['installed_now'], [{'id': 'patrol', 'installed': True}])
+        self.assertEqual(entered['installed_now'], [{'id': 'status_report', 'installed': True}])
         # Saved: another opening of the workspace finds it and builds nothing.
         self.app.close()
         again = self.open().task_sim.view({'project_id': task['id']})
         self.assertEqual((again['environment']['scene_id'], again['build'], again['robot']['id']), (saved['scene_id'], None, robot['id']))
 
     def test_a_new_build_replaces_the_saved_one_and_the_robot_keeps_its_skills(self):
-        task = self.task()
+        task = self.task(steps=GENERIC_STEPS)
         self.sim.build({'project_id': task['id'], 'mode': 'empty'})
         first = self.built(task)['environment']['scene_id']
         robot_id = self.sim.enter({'project_id': task['id']})['robot']['id']
@@ -267,6 +268,16 @@ class Physics(Case):
         view = self.sim.view({'project_id': task['id']})
         self.assertEqual((view['robot']['id'], view['robot']['connected']), (robot_id, True))
         self.assertTrue(view['skills'][0]['installed'])
+
+    def test_a_bundled_skill_of_another_brand_and_model_is_not_installed_and_the_simulation_is_entered_all_the_same(self):
+        # Issue #69 (merged with #66): the bundled patrol is for the example quadruped only, not for this made-up dog.
+        task = self.task()
+        self.sim.build({'project_id': task['id'], 'mode': 'empty'})
+        self.built(task)
+        entered = self.sim.enter({'project_id': task['id']})
+        self.assertEqual([(row['id'], row['installed']) for row in entered['installed_now']], [('patrol', False)])
+        self.assertIn('属于', entered['installed_now'][0]['error'])
+        self.assertTrue(self.app.store.get('robots', entered['robot']['id']))
 
     def test_a_build_that_fails_leaves_the_saved_environment_in_use(self):
         task = self.task()
