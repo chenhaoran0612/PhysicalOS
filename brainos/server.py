@@ -123,6 +123,9 @@ def make_handler(application):
             # Issue #33: one binary chunk of a material upload; every other operation stays JSON over POST.
             if not self.trusted():
                 return
+            if urlparse(self.path).path=='/api/model-hub/chunk':     # issue #71: one chunk of a model file or a data file, kept on this computer
+                from .model_hub_files import handle_chunk as hub_chunk
+                return hub_chunk(self,application)
             from .material_library import handle_chunk
             return handle_chunk(self,application)
 
@@ -170,6 +173,8 @@ def make_handler(application):
             # issue #51: the library by brand and model, and MuJoCo simulation environments
             extra=extra or {'/model_library.js':('model_library.js','text/javascript; charset=utf-8'),'/model_library.css':('model_library.css','text/css; charset=utf-8'),
                             '/mujoco_sim.js':('mujoco_sim.js','text/javascript; charset=utf-8'),'/mujoco_sim.css':('mujoco_sim.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #71: the model library, 训练与改进 and the evaluation and training sets, likewise.
+            extra=extra or {'/model_hub.js':('model_hub.js','text/javascript; charset=utf-8'),'/model_hub_pages.js':('model_hub_pages.js','text/javascript; charset=utf-8'),'/model_hub.css':('model_hub.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #36: why the cloud is not signed in (the automatic sign-in), likewise.
             extra=extra or {'/cloud_auto_login.js':('cloud_auto_login.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #42: running an installed skill on a real robot (the confirmations of the run form), likewise.
@@ -262,6 +267,9 @@ def make_handler(application):
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            if path=='/api/model-hub/file':                                 # issue #71: a model file or a data file of the model library (a download)
+                from .model_hub_files import handle_download
+                return handle_download(self,application,user)
             if path=='/api/state':
                 operator=bool(application.operator_email and user['email']==application.operator_email)
                 data={**application.workspace(user).snapshot(),'user':{**user,'operator':operator},
@@ -460,6 +468,18 @@ def make_handler(application):
                         # issue #51: the library by brand and model (overview with the brands and models, a robot's materials, one material moved)
                         'library/products':service.model_library.overview,'library/robot':service.model_library.robot,
                         'library/move':service.model_library.move,
+                        # Issue #71: the model library (models, versions, sets, evaluations, rounds; file bytes go through do_PUT)
+                        'model-hub/overview':service.model_hub.overview,'model-hub/models':service.model_hub.add_model,
+                        'model-hub/models/remove':service.model_hub.remove_model,'model-hub/versions':service.model_hub.add_version,
+                        'model-hub/skill':service.model_hub.bind_skill,
+                        'model-hub/sets':service.model_hub.add_set,'model-hub/sets/remove':service.model_hub.remove_set,
+                        'model-hub/upload/start':service.model_hub.files.start,'model-hub/upload/complete':service.model_hub.files.complete,
+                        'model-hub/upload/cancel':service.model_hub.files.cancel,
+                        'model-hub/evaluations/import':service.model_hub.import_evaluation,'model-hub/evaluations/import-training':service.model_hub.import_training,
+                        'model-hub/evaluations/run':service.model_hub.run_evaluation,'model-hub/evaluations/detail':service.model_hub.evaluation,
+                        'model-hub/evaluations/stop':service.model_hub.stop_evaluation,
+                        'model-hub/rounds':service.model_hub.open_round,'model-hub/rounds/diagnose':service.model_hub.diagnose,
+                        'model-hub/rounds/close':service.model_hub.close_round,
                         # Issue #31: send a usable driver package from the library to a robot and verify it there
                         'library/deliver/start':service.package_delivery.start,'library/deliver/status':service.package_delivery.status,
                         'library/deliver/stop':service.package_delivery.stop,'library/deliver/list':service.package_delivery.list,

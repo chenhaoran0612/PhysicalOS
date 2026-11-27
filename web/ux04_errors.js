@@ -392,6 +392,28 @@ const UX_CODES = {
   duck_robot_unknown: ['state', '没有找到这个仿真小鸭。', '回到「我的机器人」确认它还在，或重新添加一个'],
   duck_not_running: ['state', '这个仿真小鸭没有在运行。', '在「我的机器人」里启动它，再运行技能模型'],
   duck_seed_invalid: ['input', '起姿编号需要是 0 到 4294967295 之间的整数。', '改成范围内的整数再试'],
+  // Issue #71: the model library (brainos/model_hub.py, model_hub_files.py).
+  hub_model_unknown: ['state', '没有找到这个模型。', '回到「模型库」确认它还在'],
+  hub_version_unknown: ['state', '没有找到这个模型的这一版。', '回到模型的页面，重新选择版本'],
+  hub_set_unknown: ['state', '没有找到这个分类的评测集或训练集。', '在「训练与测试数据」里确认它还在，并且和模型是同一个分类'],
+  hub_round_unknown: ['state', '没有找到这一轮改进。', '回到「训练与改进」重新进入这个模型'],
+  hub_round_open: ['state', '这个模型有一轮改进还没有结束。', '先采纳、不采纳或放弃那一轮，再开始新的一轮'],
+  hub_round_state: ['state', '这一轮现在不是做这一步的时候。', '按页面上当前的步骤往下做'],
+  hub_eval_unknown: ['state', '没有找到这次评测。', '回到模型的页面查看评测记录'],
+  hub_eval_busy: ['state', '这个仿真小鸭正在跑另一次评测。', '等它结束，或先停止那次评测'],
+  hub_eval_not_runnable: ['state', '这一版不能在这台电脑的仿真里评测。', '上传的模型文件和其他分类的模型，请导入评测结果'],
+  hub_duck_needed: ['input', '要先选择一个正在运行的仿真小鸭。', '在「我的机器人」里添加并启动仿真小鸭'],
+  hub_training_missing: ['state', '训练项目的评估记录里没有这一版。', '核对这一版的训练轮次和更新次数，或手动导入评测结果'],
+  hub_skill_unknown: ['state', '没有找到这个技能。', '在「机器人应用 → 技能」里确认它还在'],
+  hub_skill_other_model: ['state', '这个技能属于另一个品牌型号。', '选同一品牌型号的技能'],
+  hub_builtin: ['state', '随应用带来的内容不能删除。', '可以另外新建自己的'],
+  hub_in_use: ['state', '它正在被使用，现在不能删除。', '等正在进行的改进或评测结束；用过的评测集和训练集要留着'],
+  hub_file_unknown: ['state', '没有找到这个文件，或者它已经用在别处了。', '重新选择文件上传'],
+  hub_upload_unknown: ['state', '这次上传已经不在了。', '重新选择文件上传'],
+  hub_upload_order: ['state', '上传的顺序乱了。', '重新选择文件上传'],
+  hub_upload_busy: ['state', '同时在上传的文件太多了。', '等正在上传的文件传完再试'],
+  hub_upload_space: ['state', '这台电脑的磁盘空间不够放这个文件。', '腾出磁盘空间后再上传'],
+  hub_upload_size: ['state', '收到的内容和文件本身的长度不一致。', '重新选择文件上传'],
 };
 
 // Codes that start like these are parameter refusals even when not listed (e.g. a new runtime code).
