@@ -1,6 +1,7 @@
 """Issue #32 (R1-11): the platform keeps the list of body types.
 
-The list is saved with the desktop workspace. Two types are built in (quadruped, manipulator); more
+The list is saved with the desktop workspace. Five types are built in (issue #58: the types of the
+simulation profiles: manipulator, wheel-legged, quadruped, biped, other); more
 can be added and removed. A type carries a name, the identifier of its state machine template and the
 motion-control interfaces a body of that type should have (standard capability ids). A type that a
 device still uses cannot be removed. What a person chose is not replaced by what the device reports.
@@ -28,7 +29,7 @@ from neuxmind_spec import capabilities as spec_caps
 from neuxmind_spec import manifest as spec_manifest
 from test_product import Server
 
-BUILT_IN = ['quadruped', 'manipulator']
+BUILT_IN = ['manipulator', 'wheel_legged', 'quadruped', 'biped', 'other']    # issue #58: the types of the profiles
 OLD_ONLY = sorted(set(FAMILIES) - set(BUILT_IN))     # the five values that are no longer offered
 WHEELED = {'name': '轮式底盘', 'state_machine_template': 'wheeled.default',
            'required_capabilities': ['safety.stop', 'base.velocity', 'base.odometry']}
@@ -75,9 +76,28 @@ class Case(unittest.TestCase):
 
 
 class BuiltInTests(Case):
-    def test_list_starts_with_quadruped_and_manipulator(self):
+    def test_list_starts_with_the_types_of_the_profiles(self):
         self.assertEqual(self.ids(), BUILT_IN)
         self.assertTrue(all(t['builtin'] for t in self.types.list()))
+
+    def test_built_in_types_are_the_profile_types_in_their_order_and_by_their_names(self):
+        # Issue #58: what 「添加机器人」 offers is what 「添加仿真机器人」 offers (brainos/sim_profiles.py).
+        from brainos import sim_profiles
+        self.assertEqual([(t['id'], t['name'], t['family']) for t in self.types.list()],
+                         [(t['id'], t['name'], t['family']) for t in sim_profiles.TYPES])
+        self.assertEqual([t['name'] for t in self.types.list()], ['机械臂', '轮足机器狗', '四足机械狗', '双足机器人', '其他'])
+
+    def test_every_built_in_type_can_be_chosen_for_a_new_device(self):
+        for type_id in BUILT_IN:
+            with self.subTest(type_id):
+                self.assertEqual(self.add_robot(type_id, name='Robot ' + type_id)['family'], type_id)
+
+    def test_standard_family_of_a_type(self):
+        expected = {'manipulator': 'manipulator', 'wheel_legged': 'quadruped', 'quadruped': 'quadruped', 'biped': 'humanoid',
+                    'other': 'custom', 'mobile': 'mobile', 'humanoid': 'humanoid', 'bodytype-1a2b': 'custom', None: 'custom', 7: 'custom'}
+        for type_id, family in expected.items():
+            with self.subTest(type_id):
+                self.assertEqual(body_types.standard_family(type_id), family)
 
     def test_every_type_has_a_name_a_template_and_standard_interfaces(self):
         for item in self.types.list():
@@ -88,12 +108,13 @@ class BuiltInTests(Case):
                 for cap_id in item['required_capabilities']:
                     self.assertIn(cap_id, spec_caps.CAPABILITIES)
 
-    def test_built_in_types_use_values_a_device_can_report(self):
-        # The standard is unchanged: a device reports one of its seven values, two of which are these.
-        self.assertLessEqual(set(BUILT_IN), set(spec_manifest.FAMILIES))
+    def test_built_in_types_name_a_value_a_device_can_report(self):
+        # The standard is unchanged: a device reports one of its seven values; each type says which one it is.
+        self.assertLessEqual({t['family'] for t in self.types.list()}, set(spec_manifest.FAMILIES))
 
     def test_simulated_bodies_have_what_their_type_expects(self):
-        for adapter, type_id in ((sim_quadruped.SimQuadruped, 'quadruped'), (sim_arm.SimArm, 'manipulator')):
+        for adapter, type_id in ((sim_quadruped.SimQuadruped, 'quadruped'), (sim_arm.SimArm, 'manipulator'),
+                                 (sim_quadruped.SimQuadruped, 'wheel_legged')):
             with self.subTest(type_id):
                 declared = spec_manifest.capability_ids(adapter().manifest())
                 expected = set(self.types.get(type_id)['required_capabilities'])

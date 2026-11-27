@@ -146,6 +146,7 @@ class Platform:
                     obj.update(status='unknown', error='请求期间服务中断；请到执行端核对结果，不会自动重试')
                     self.store.put(kind, obj)
         self.sim_profiles.remove_old_sims()         # issue #54: once, the simulated robots from before the profiles go
+        self.sim_profiles.align_types()             # issue #58: a simulated robot is of its profile's type
         # Simulated robots that were on when the app closed come back (in the background).
         self.sims.resume_all()
 

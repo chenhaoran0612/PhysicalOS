@@ -255,7 +255,7 @@ class Added(Case):
     def test_a_robot_of_the_profile_starts_from_its_package_without_the_library(self):
         robot = self.add('acme-dog')
         self.assertEqual((robot['status'], robot['sim']['kind'], robot['sim']['state'], robot['family']),
-                         ('connected', 'mujoco', 'running', 'quadruped'))
+                         ('connected', 'mujoco', 'running', 'wheel_legged'))     # issue #58: the profile's type
         self.assertEqual(robot['name'], '智身科技 钢镚 L2-U 仿真')
         saved = self.app.store.get('robots', robot['id'])
         self.assertEqual(robot_model.of(saved), {'vendor': '智身科技', 'model': '钢镚 L2-U'})

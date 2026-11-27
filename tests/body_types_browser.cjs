@@ -91,10 +91,11 @@ let failed = async () => {};
   await robotsPage();
   must(await page.locator('#main details.body-types').count() === 0, 'The list is still a fold of the page');
   await settings.locator('summary').click();
-  await expectText(settings.locator('[data-action="engine-body-types-open"]'), ['本体类型清单', '2 类']);
+  await expectText(settings.locator('[data-action="engine-body-types-open"]'), ['本体类型清单', '5 类']);
   must(!(await list.count()), 'The list is open before anybody opened it');
   await openList();
-  await expectText(row('四足机器人'), ['quadruped.default', 'base.velocity', '底盘速度', '内置']);
+  await expectText(row('四足机械狗'), ['quadruped.default', 'base.velocity', '底盘速度', '内置']);
+  for (const [name, template] of [['轮足机器狗', 'wheel_legged.default'], ['双足机器人', 'biped.default'], ['其他', 'other.default']]) await expectText(row(name), [template, '内置']);   // issue #58: the types of the profiles
   await expectText(row('机械臂'), ['manipulator.default', 'arm.joint_position', '内置']);
   must(await list.locator('[data-action="engine-body-types-remove"]').count() === 0, 'A built-in type offers "删除"');
   await shot('1-built-in');
@@ -110,7 +111,7 @@ let failed = async () => {};
   await submit();
   await toast('本体类型已添加');
   await list.waitFor();                                          // adding a type leads back to the list
-  await expectText(listHead, ['本体类型清单', '3 类']);
+  await expectText(listHead, ['本体类型清单', '6 类']);
   await expectText(row('轮式底盘'), [TYPE, TEMPLATE, 'safety.stop', 'base.velocity', 'base.odometry', '里程计']);
   must(await page.locator('#markup-in-a-type').count() === 0, 'The name of a type is rendered as markup');
   const added = (await appState()).body_types.find(t => t.name === TYPE);
@@ -126,7 +127,7 @@ let failed = async () => {};
   result.typeAdded = true;
 
   // 3 · Both forms that add a device offer the list, the added type included, and none of the old values.
-  const expected = ['', 'quadruped', 'manipulator', added.id];
+  const expected = ['', 'manipulator', 'wheel_legged', 'quadruped', 'biped', 'other', added.id];      // issue #58: the profile types, in their order
   for (const [action, name] of [['robot-add', PLAIN_ROBOT], ['engine-ssh', SSH_ROBOT]]) {
     await robotsPage();
     await click(action);
@@ -136,6 +137,15 @@ let failed = async () => {};
     must(!options.some(o => OLD_VALUES.includes(o[0])), `${action} still offers an old value`);
     must(await dialog.locator('select[name=family]').inputValue() === '', `${action} chose a type for the person`);
     must(!(await dialog.innerText()).includes('本体形态'), `${action} still shows the old field`);
+    // Issue #58: the names are the profiles' names, and a model of the list brings its type (the one of the issue's screenshot).
+    must(JSON.stringify(options.slice(1, 6).map(o => o[1])) === JSON.stringify(['机械臂', '轮足机器狗', '四足机械狗', '双足机器人', '其他']), `${action} names the types ${JSON.stringify(options)}`);
+    await dialog.locator('select[data-rc=vendor]').selectOption('智身科技'); await dialog.locator('select[data-rc=model]').selectOption('钢镚 L2-W');
+    must(await dialog.locator('select[name=family]').inputValue() === 'wheel_legged', `${action}: the type did not follow the model`);
+    must((await dialog.locator('label.field:has(select[name=family])').innerText()).includes('轮足机器狗'), `${action}: the followed type is not shown`);
+    await dialog.locator('select[data-rc=model]').selectOption('钢镚 L2');
+    must(await dialog.locator('select[name=family]').inputValue() === 'quadruped', `${action}: the type did not follow the next model`);
+    if (action === 'engine-ssh') await shot('3-type-follows-model');
+    await dialog.locator('select[name=family]').selectOption('');
     await fill('name', name);
     if (action === 'engine-ssh') {
       await fill('host', '127.0.0.1'); await fill('port', cfg.robot_port);
@@ -194,7 +204,7 @@ let failed = async () => {};
   await toastGone();
   await submit();
   await toast('本体类型已修改');
-  await expectText(card(plain.id), ['四足机器人']);
+  await expectText(card(plain.id), ['四足机械狗']);
   await page.evaluate(([project_id, robot_id]) => api('robots/body-type', {project_id, robot_id, family: 'manipulator'}), [projectId, overSsh.id]);
   await reread();
   await openList();
@@ -206,7 +216,7 @@ let failed = async () => {};
   await click('engine-body-types-remove-confirm');
   await toast('本体类型已删除');
   await list.waitFor();
-  await expectText(listHead, ['2 类']);
+  await expectText(listHead, ['5 类']);
   must(await row('轮式底盘').count() === 0, 'The removed type is still listed');
   await closeList();
   must(!(await appState()).body_types.some(t => t.id === added.id), 'The type was not removed');
@@ -233,7 +243,7 @@ let failed = async () => {};
 
   // 7 · A device that reports another listed type: the registered one stays, the card says what was reported,
   //     and one click takes it.
-  await expectText(card(earlier.differs), [cfg.differs_name, '四足机器人', '设备自报：机械臂']);
+  await expectText(card(earlier.differs), [cfg.differs_name, '四足机械狗', '设备自报：机械臂']);
   await card(earlier.differs).locator(CHANGE).click();
   await expectText(dialog, ['设备自报的类型是“机械臂”', '以这里选的为准']);
   await shot('7-reported');

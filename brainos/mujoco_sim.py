@@ -30,7 +30,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import agent_runtime, mujoco_model, mujoco_scene, package_fetch, robot_model, robot_scope, runtime_bridge
+from . import agent_runtime, body_types, mujoco_model, mujoco_scene, package_fetch, robot_model, robot_scope, runtime_bridge
 from .contracts import required_text
 from .errors import CodedError
 
@@ -129,10 +129,11 @@ class MujocoSim:
     def _family(self, application):
         robots = self.platform.robot_models.robots_for(application)
         for robot in robots:
-            if robot.get('family') in SUPPORTED:
-                return robot['family']
+            family = body_types.standard_family(robot.get('family'))      # issue #58: a type of the list → the standard's value
+            if family in SUPPORTED:
+                return family
         if robots:
-            raise CodedError(f'这一版的仿真只支持四足、轮式、人形和机械臂；这个应用的机器人是 {robots[0].get("family")}', 'sim_family_unsupported')
+            raise CodedError(f'这一版的仿真只支持四足、轮式、人形和机械臂；这个应用的机器人是 {(self.platform.body_types.get(robots[0].get("family")) or {}).get("name") or robots[0].get("family")}', 'sim_family_unsupported')
         raise CodedError(f'没有「{robot_model.label(robot_model.of(application))}」的机器人，不知道它的本体类型；'
                          '请先添加一台这个品牌型号的机器人', 'app_no_robot')
 

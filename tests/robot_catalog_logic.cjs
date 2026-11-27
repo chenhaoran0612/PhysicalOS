@@ -8,11 +8,74 @@ const assert = require('node:assert/strict');
 const sandbox = {rmInputs: () => 'the two inputs of issue #48'};
 vm.createContext(sandbox);
 const rc = vm.runInContext(readFileSync('web/robot_catalog.js', 'utf8') +
-  '\n;({ROBOT_CATALOG, RC_OTHER, rcBrand, rcFind, rcBrands, rcPicture, rcInputs, rcModelOptions, rcStart, rcOwnBrands, rmInputs})', sandbox);
+  '\n;({ROBOT_CATALOG, RC_OTHER, rcBrand, rcFind, rcBrands, rcPicture, rcInputs, rcModelOptions, rcStart, rcOwnBrands, rmInputs, rcBodyType, rcTypeFor, rcFollowType, RC_TYPE_NAMES})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
 const same = (actual, expected, what) => { assert.equal(actual, expected, what); checks += 1; };
+
+// ---- issue #58: the body type of the form follows the chosen model, by the types of the body type list
+{
+  const LISTED = ['manipulator', 'wheel_legged', 'quadruped', 'biped', 'other'];       // brainos/body_types.py
+  same(JSON.stringify(Object.keys(rc.RC_TYPE_NAMES).map(rc.rcBodyType).filter(t => !LISTED.includes(t))), '[]', 'every type of the catalogue is a listed body type');
+  for (const brand of rc.ROBOT_CATALOG) for (const m of brand.models) ok(LISTED.includes(rc.rcBodyType(m.type)), `${brand.vendor} ${m.model} has a listed body type`);
+  same(rc.RC_TYPE_NAMES.quadruped, '四足机械狗', 'named as the profiles name it');
+  same(rc.RC_TYPE_NAMES.wheel_legged, '轮足机器狗', 'named as the profiles name it');
+  same(rc.RC_TYPE_NAMES.humanoid, '双足机器人', 'named as the profiles name it');
+  same(rc.rcTypeFor('智身科技', '钢镚 L2-W'), 'wheel_legged', 'the model of the screenshot of the issue is wheel-legged');
+  same(rc.rcTypeFor('宇树科技', 'G1'), 'biped', 'a humanoid of the catalogue is 双足机器人 of the list');
+  same(rc.rcTypeFor('宇树科技', 'Z1'), 'manipulator', 'an arm');
+  same(rc.rcTypeFor('星玑科技', 'CS1'), 'quadruped', 'a quadruped');
+  same(rc.rcTypeFor('智身科技', rc.RC_OTHER), '', 'a typed model: nothing is known');
+  same(rc.rcTypeFor(rc.RC_OTHER, ''), '', 'a typed brand: nothing is known');
+  same(rc.rcTypeFor('', ''), '', 'nothing chosen');
+
+  // a form as the page has it: the picker and, in the forms that add a robot, the body type list
+  const form = (familyOptions, vendor, model, family = '') => {
+    const events = [];
+    const familyList = familyOptions && {value: family, dataset: {}, options: familyOptions.map(value => ({value})),
+                                         dispatchEvent: e => events.push(e.type)};
+    const lists = {'[data-rc="vendor"]': {value: vendor}, '[data-rc="model"]': {value: model}};
+    const formEl = {querySelector: q => (q === 'select[name="family"]' ? familyList : null)};
+    return {picker: {closest: q => (q === 'form' ? formEl : null), querySelector: q => lists[q]}, familyList, events};
+  };
+  sandbox.Event = function Event(type) { this.type = type; };
+  let f = form(['', ...LISTED], '智身科技', '钢镚 L2-W');
+  rc.rcFollowType(f.picker);
+  same(f.familyList.value, 'wheel_legged', 'choosing a model chooses its body type');
+  same(f.events.join(), 'change', 'and the form is told');
+  f.picker.querySelector('[data-rc="model"]').value = '钢镚 L2';
+  rc.rcFollowType(f.picker);
+  same(f.familyList.value, 'quadruped', 'another model: the type it chose follows again');
+  f.familyList.value = 'other';                                                      // the person chooses a type themselves
+  f.picker.querySelector('[data-rc="model"]').value = '钢镚 L2-U';
+  rc.rcFollowType(f.picker);
+  same(f.familyList.value, 'other', 'a type the person chose is theirs: a model chosen later does not change it');
+  f = form(['', ...LISTED], '智身科技', '钢镚 L2-W', 'quadruped');
+  rc.rcFollowType(f.picker);
+  same(f.familyList.value, 'quadruped', 'nor a type chosen before the model');
+  f = form(['', ...LISTED], '智身科技', '钢镚 L2-W', 'wheel_legged');
+  rc.rcFollowType(f.picker);
+  same(f.events.length, 0, 'nothing happens when the type is already the model\'s');
+  f = form(['', ...LISTED], '智身科技', rc.RC_OTHER, 'quadruped');
+  rc.rcFollowType(f.picker);
+  same(f.familyList.value, 'quadruped', 'a model that is not listed leaves the chosen type');
+  f = form(['', 'quadruped', 'manipulator'], '智身科技', '钢镚 L2-W', 'quadruped');
+  rc.rcFollowType(f.picker);
+  same(f.familyList.value, 'quadruped', 'a type the form does not offer is not chosen');
+  rc.rcFollowType(form(null, '智身科技', '钢镚 L2-W').picker);                        // the 「品牌型号」 dialog has no type list
+  rc.rcFollowType({closest: () => null, querySelector: () => null});
+  checks += 1;
+  same(rc.rcPicture({family: 'biped'}).src, '/robot_images/type-humanoid.svg', 'a robot of the type 双足机器人 is drawn as one');
+  same(rc.rcPicture({family: 'wheel_legged'}).alt, '轮足机器狗', 'a robot without brand and model is named by its type of the list');
+}
+
+{ // issue #58: pages that name a type by familyNames[r.family] have a name for the three new types
+  const app = readFileSync('web/app.js', 'utf8');
+  const names = vm.runInNewContext(app.slice(app.indexOf('const familyNames='), app.indexOf('const kindNames=')) + ';familyNames');
+  same([names.wheel_legged, names.biped, names.other, names.quadruped].join(), '轮足机器狗,双足机器人,其他,四足机器人', 'the three new types have a name');
+  same(Object.keys(names).length, 7, 'and the old seven-value field does not list them');
+}
 
 // ---- the list
 {

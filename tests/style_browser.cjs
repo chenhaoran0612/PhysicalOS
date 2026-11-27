@@ -96,13 +96,13 @@ async function dropdownInDialog(page, shots) {
   await list.waitFor();
   check((await trigger.getAttribute('aria-expanded')) === 'true', 'aria-expanded not set');
   check((await list.locator('[role=option]').count()) === (await native.locator('option').count()), 'list and select disagree on options');
-  await list.locator('[role=option]', {hasText: '四足机器人'}).hover();
+  await list.locator('[role=option]', {hasText: '四足机械狗'}).hover();
   if (shots) await page.screenshot({path: path.join(shots, 'dropdown-open.png')});
-  await list.locator('[role=option]', {hasText: '四足机器人'}).click();
+  await list.locator('[role=option]', {hasText: '四足机械狗'}).click();
   await list.waitFor({state: 'detached'});
   check((await native.inputValue()) === 'quadruped', 'picking an option did not set the select');
   check((await page.evaluate(() => window.__changes)) === 1, 'change event not fired exactly once');
-  check((await trigger.innerText()).trim() === '四足机器人', 'trigger did not follow the pick');
+  check((await trigger.innerText()).trim() === '四足机械狗', 'trigger did not follow the pick');
 
   // Keyboard: arrows move, Enter picks, Escape closes the list but not the dialog.
   await trigger.focus();
@@ -111,7 +111,7 @@ async function dropdownInDialog(page, shots) {
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
   await list.waitFor({state: 'detached'});
-  check((await native.inputValue()) === 'manipulator', `keyboard pick gave ${await native.inputValue()}`);   // issue #32: the type after 四足机器人 in the platform's list
+  check((await native.inputValue()) === 'biped', `keyboard pick gave ${await native.inputValue()}`);   // issues #32, #58: the type after 四足机械狗 in the platform's list
   await page.keyboard.press('ArrowDown');
   await list.waitFor();
   await page.keyboard.press('Escape');
@@ -129,7 +129,7 @@ async function dropdownInDialog(page, shots) {
   // Code paths: selectOption (tests) and select.value = … (app code) both show on the trigger.
   // (issue #32: the options are the platform's list of body types.)
   await native.selectOption('quadruped');
-  check((await trigger.innerText()).trim() === '四足机器人', 'selectOption not mirrored');
+  check((await trigger.innerText()).trim() === '四足机械狗', 'selectOption not mirrored');
   await native.evaluate(s => { s.value = 'manipulator'; });
   check((await trigger.innerText()).trim() === '机械臂', 'programmatic value not mirrored');
   await page.locator('#dialog [data-action=close]').first().click();

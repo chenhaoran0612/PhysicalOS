@@ -92,7 +92,7 @@ const ROBOT = '巡检机器人';
   check(await picture.isVisible() && await picture.evaluate(el => el.complete && el.naturalWidth > 0), 'The card has no picture, or the picture did not load');
   check((await card(ROBOT).locator('.rp-model').innerText()).replace(/\s+/g, ' ').trim() === '示例机器人公司 · X1', 'The card does not show the brand and model');
   const text = await card(ROBOT).evaluate(el => el.innerText);
-  for (const hidden of [address, '最近心跳', '四足机器人', '待确认', '控制通道', '开机自启', '可发起调查']) {
+  for (const hidden of [address, '最近心跳', '四足机械狗', '待确认', '控制通道', '开机自启', '可发起调查']) {
     check(!text.includes(hidden), `"${hidden}" is still in sight on the card`);
   }
   check(!/\d/.test(text.replace(ROBOT, '').replace('X1', '')), `A number is in sight on the card: ${JSON.stringify(text)}`);
@@ -105,7 +105,7 @@ const ROBOT = '巡检机器人';
   const overview = await robotStatus(page, card(ROBOT));
   await page.locator('#ssh-status').waitFor();
   const told = await overview.innerText();
-  for (const shown of [address, '最近心跳', '四足机器人', '示例机器人公司 X1', '项待确认', '控制通道', '开机自启', '可发起调查']) {
+  for (const shown of [address, '最近心跳', '四足机械狗', '示例机器人公司 X1', '项待确认', '控制通道', '开机自启', '可发起调查']) {
     check(told.includes(shown), `"${shown}" is not in 实时状态: ${JSON.stringify(told)}`);
   }
   check(await overview.evaluate(el => el.compareDocumentPosition(document.querySelector('#ssh-status')) & Node.DOCUMENT_POSITION_FOLLOWING), 'The overview is not above the live figures');

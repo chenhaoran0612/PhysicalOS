@@ -39,7 +39,7 @@ import time
 
 from .contracts import required_text
 from .service import now, uid
-from . import robot_scope
+from . import body_types, robot_scope
 from .spec_bridge import capabilities as spec_caps
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -402,7 +402,7 @@ def scaffold_spec(run,robot,mapping,caps,params):
     rows={r['id']:r for r in mapping['capabilities']}
     stop=params.get('safety.stop',{})
     module='nx_'+''.join(ch if ch.isalnum() else '_' for ch in robot['id'].lower())[-40:]
-    return {'schema':SCAFFOLD_SCHEMA,'name':module,'vendor':'待确认','model':'待确认','family':robot.get('family') if robot.get('family') in FAMILIES else 'custom',
+    return {'schema':SCAFFOLD_SCHEMA,'name':module,'vendor':'待确认','model':'待确认','family':body_types.standard_family(robot.get('family')),
             'instance_id':robot['id'],'simulated':False,'safety':{'hardware_estop':bool(stop.get('hardware_estop',False))},
             'capabilities':[{'id':cid,'params':params.get(cid,{}),'implementation':scaffold_hint(rows.get(cid,{})),
                              **({'evidence_id':rows[cid]['evidence_ids'][0]} if rows.get(cid,{}).get('evidence_ids') else {})} for cid in caps]}

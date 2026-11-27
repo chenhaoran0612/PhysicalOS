@@ -3,7 +3,9 @@
 Where the list lives: with the desktop workspace, one list per signed-in account, in the same store as
 the devices that use it. "Is this type still in use" is therefore answered exactly, also offline.
 
-Two types are built in and always there; others are added and removed by a person. A type has
+Five types are built in and always there (issue #58: the types of the simulation profiles, by the same
+ids, names and order, so 「添加机器人」 and 「添加仿真机器人」 offer the same); others are added and removed
+by a person. A type has
 
 * ``name``: what people see;
 * ``state_machine_template``: the identifier of the state machine template for such a body. The
@@ -11,10 +13,14 @@ Two types are built in and always there; others are added and removed by a perso
 * ``required_capabilities``: the motion-control interfaces such a body should have, as ids of the
   standard capability registry (the driver check of issue #28 reads them).
 
+A built-in type also has ``family``: the value of the standard a body of that type reports
+(:func:`standard_family` answers it for any type).
+
 ``robot['family']`` is the id of the type a person chose. It is not what the device reports: the
 ``family`` of a manifest is one of the seven values of the standard (``neuxmind_spec.manifest.FAMILIES``,
 unchanged) and stays readable in ``robot['manifest']``. Devices registered before the list existed keep
-the value they have, also when it is one of the five values that are not in the list. Such a value can
+the value they have, also when it is one of the five values that are not in the list (mobile, humanoid,
+aerial, composite, custom). Such a value can
 be left by hand (:meth:`BodyTypes.assign`) and cannot be chosen again.
 
 The type of a saved robot changes in one place only, :meth:`BodyTypes.assign`. The store enforces it
@@ -24,9 +30,11 @@ the device, saves it with the type the store holds at that moment.
 import re
 import unicodedata
 
+from . import sim_profiles
 from .errors import CodedError
 from .service import now, uid
 from .spec_bridge import capabilities as spec_caps
+from .spec_bridge import manifest as spec_manifest
 
 KIND = 'body_types'
 TEMPLATE_ID = re.compile(r'[a-z0-9][a-z0-9_.\-]{0,99}')    # an identifier, never a path
@@ -36,14 +44,31 @@ NAMES_IN_MESSAGE = 5        # devices named in the sentence of a refusal; the fu
 SHOWN_MAX = 100             # characters of a refused value repeated in a message
 
 
+# What a body of each profile type should have: (state machine template, motion-control interfaces).
+# A wheel-legged dog is driven like a quadruped (and the simulated quadruped stands in for it).
+_BUILT_IN = {
+    'manipulator': ('manipulator.default', ('safety.stop', 'joint.state', 'arm.joint_position')),
+    'wheel_legged': ('wheel_legged.default', ('safety.stop', 'base.velocity', 'legged.posture', 'base.odometry')),
+    'quadruped': ('quadruped.default', ('safety.stop', 'base.velocity', 'legged.posture', 'base.odometry')),
+    'biped': ('biped.default', ('safety.stop', 'base.velocity', 'legged.posture', 'joint.state')),
+    'other': ('other.default', ('safety.stop', 'system.health')),
+}
+
+
 def built_in():
-    """The two types every workspace has. Their ids are values a device can report in its manifest."""
-    return [
-        {'id': 'quadruped', 'name': '四足机器人', 'state_machine_template': 'quadruped.default',
-         'required_capabilities': ['safety.stop', 'base.velocity', 'legged.posture', 'base.odometry'], 'builtin': True},
-        {'id': 'manipulator', 'name': '机械臂', 'state_machine_template': 'manipulator.default',
-         'required_capabilities': ['safety.stop', 'joint.state', 'arm.joint_position'], 'builtin': True},
-    ]
+    """The types every workspace has: the types of the simulation profiles (``sim_profiles.TYPES``), in
+    their order and by their names. ``family`` is the value of the standard such a body reports."""
+    return [{'id': t['id'], 'name': t['name'], 'family': t['family'], 'state_machine_template': _BUILT_IN[t['id']][0],
+             'required_capabilities': list(_BUILT_IN[t['id']][1]), 'builtin': True} for t in sim_profiles.TYPES]
+
+
+def standard_family(type_id):
+    """The value of the standard (``neuxmind_spec.manifest.FAMILIES``) for a body type id: a built-in
+    type's own, an old value as it is, ``custom`` for a type a person added and for anything else."""
+    known = sim_profiles.TYPE_BY_ID.get(type_id) if isinstance(type_id, str) else None
+    if known:
+        return known['family']
+    return type_id if isinstance(type_id, str) and type_id in spec_manifest.FAMILIES else 'custom'
 
 
 def interfaces():

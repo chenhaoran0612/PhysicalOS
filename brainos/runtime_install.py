@@ -73,7 +73,7 @@ OUTCOME = 'runtime_install'                # the field of the robot record that 
 ACTIVE = ('running',)
 BUSY = '这台机器人正在安装管理层；请等它结束，或先停止'
 INSTALLING = '这台机器人正在安装管理层；请等安装结束，或先停止安装，再删除'
-BODY = '本体类型“{family}”没有对应的仿真本体，管理层装不上。请先在卡片上选择四足或机械臂'
+BODY = '本体类型“{family}”没有对应的仿真本体，管理层装不上。请先把本体类型改成四足机械狗、轮足机器狗或机械臂'
 NOTHING_TO_CLEAN = '这台机器人没有需要清理的安装记录'
 # Issue #38: a real body (the robot's own ROS 2) and the job that puts a changed device configuration there.
 BODY_MODE, BODY_STEPS = 'body', ('check', 'upload', 'restart', 'link')
