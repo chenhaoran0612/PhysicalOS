@@ -106,6 +106,15 @@ class Listing(Case):
         task = self.task(product={'vendor': 'zs', 'model': 'L2U'})
         self.assertEqual(self.sim._profile(self.app.task_apps.product(task['id']))['id'], 'acme-dog')
 
+    def test_a_task_made_with_an_example_robot_is_simulated_as_that_example_whatever_the_spelling(self):
+        # An example robot reports itself as neuxmind-sim / sim-quadruped; that is what its applications carry.
+        task = self.task('示例', product={'vendor': 'neuxmind-sim', 'model': 'sim-quadruped'})
+        row = self.sim.view({'project_id': task['id']})
+        self.assertEqual((row['problem'], row['model']['kind'], row['model']['staged']), (None, 'builtin', True))
+        arm = self.task('臂', product={'vendor': 'NeuxMind-Sim', 'model': 'sim-arm-6dof'}, family='manipulator')
+        self.assertIsNone(self.sim._profile(self.app.task_apps.product(arm['id'])))     # no arm among the made-up profiles
+        self.assertEqual(task_sim.EXAMPLE_REPORTS[('neuxmind-sim', 'sim-arm-6dof')], 'arm')
+
     def test_the_home_of_the_robots_is_not_a_task_and_an_unknown_task_is_refused(self):
         self.assertNotIn(robot_scope.HOME, [row['task']['id'] for row in self.sim.list()['tasks']])
         for key in (robot_scope.HOME, 'project-nope', None):

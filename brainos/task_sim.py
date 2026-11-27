@@ -41,6 +41,9 @@ NOTE_MAX = 2000
 MODEL_CACHE_S = 30                  # how long an answer of the library about a brand and model is used again
 STALE = '这个仿真环境是为另一个品牌型号构建的；请重新构建后再进入'
 SOURCES = {'agent': '工程助手生成', 'empty': '空场地', 'stage': '自带场地'}
+# What the two example robots say they are (runtime/neuxmind_runtime/adapters): a task whose robot or application
+# was made with one carries this spelling, not the name the profile list shows.
+EXAMPLE_REPORTS = {('neuxmind-sim', 'sim-quadruped'): 'quadruped', ('neuxmind-sim', 'sim-arm-6dof'): 'arm'}
 
 OBJECTIVE = '''请为一个机器人任务写出仿真环境的描述。
 
@@ -88,8 +91,10 @@ class TaskSim:
 
     def _profile(self, product):
         wanted = robot_model.key(product)
+        example = EXAMPLE_REPORTS.get(wanted)
         return next((p for p in self.platform.sim_profiles.profiles
-                     if robot_model.key({'vendor': p['vendor'], 'model': p['model']}) == wanted), None)
+                     if robot_model.key({'vendor': p['vendor'], 'model': p['model']}) == wanted
+                     or (example and p.get('builtin') == example)), None)
 
     def _family(self, task):
         """The standard body type of the task's robots (needed for a robot model of the library)."""
