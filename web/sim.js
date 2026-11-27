@@ -83,7 +83,7 @@ function simGalleryHead(gallery) {
 }
 
 function simGalleryLeftOut(gallery) {
-  return gallery.left_out ? `<span data-gallery-left-out="${Number(gallery.left_out)}"> · 另有 ${Number(gallery.left_out)} 个技能包属于其他品牌型号，没有列出</span>` : '';
+  return gallery.left_out ? `<span data-gallery-left-out="${Number(gallery.left_out)}"> · 另有 ${Number(gallery.left_out)} 个技能包属于别的品牌型号，没有列出</span>` : '';
 }
 
 function simGalleryScope(x) {

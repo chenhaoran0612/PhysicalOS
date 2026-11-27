@@ -74,7 +74,7 @@ const shots = process.argv[3] || 'artifacts';
   // Issue #69: the arm's package is not listed for a quadruped; the generic one is, and says so.
   assert(await dlg('.gallery-item[data-example="wave"]').count() === 0, '挥手属于机械臂，不应出现在四足的列表里');
   assert((await dlg('.gallery-item[data-example="status_report"]').innerText()).includes('通用'), '状态报告应标明通用');
-  assert((await dlg('[data-gallery-left-out]').innerText()).includes('1 个技能包属于其他品牌型号'), '应说明有 1 个技能包没有列出');
+  assert((await dlg('[data-gallery-left-out]').innerText()).includes('1 个技能包属于别的品牌型号'), '应说明有 1 个技能包没有列出');
   assert(await dlg('.folder-install').count() === 1, '缺少“从文件夹安装（高级）”');
   await shot('04-gallery');
   await click('skillpkg-example', quad + '|patrol');
