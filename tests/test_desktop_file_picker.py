@@ -55,7 +55,8 @@ class DesktopFilePickerTest(unittest.TestCase):
     @unittest.skipUnless(sys.platform == 'darwin' and shutil.which('swiftc'), 'needs the Swift compiler on macOS')
     def test_host_type_checks_against_webkit(self):
         done = subprocess.run(
-            ['swiftc', '-typecheck', '-target', 'arm64-apple-macos13.0', '-framework', 'Cocoa', '-framework', 'WebKit', str(HOST)],
+            ['swiftc', '-typecheck', '-target', 'arm64-apple-macos13.0', '-framework', 'Cocoa', '-framework', 'WebKit', str(HOST),
+             str(HOST.with_name('DataFolder.swift'))],          # issue #55: the shell is built from both files (scripts/build_macos.py)
             capture_output=True, text=True, timeout=300)
 
         self.assertEqual(done.returncode, 0, done.stderr)
