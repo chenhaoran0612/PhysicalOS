@@ -10,5 +10,8 @@ if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == '--nx-mujoco-tool':        # issue #51: check a simulation in a child process
         from brainos.mujoco_tool import main as mujoco_tool
         sys.exit(mujoco_tool(sys.argv[2:]))
+    if len(sys.argv) > 1 and sys.argv[1] == '--nx-duck-engine':        # issue #63: the physics of a simulated Microduck
+        from brainos.duck_engine import main as duck_engine
+        sys.exit(duck_engine(sys.argv[2:]))
     from brainos.server import main
     main()

@@ -48,6 +48,7 @@
 | deeprobotics-m20 | 云深处科技 山猫 M20（issue #54）。本项目用 [deep_robotics_model](https://github.com/DeepRoboticsLab/deep_robotics_model)（BSD-3-Clause，提交 `d1a3900e7faf7eda9e28f20715b42e871dbfd295`）的 URDF 模型在 MuJoCo 里渲染的图，不是厂商的产品照片；模型文件本身不在本仓库里 |
 | agibot-a3 | 智元机器人 A3（issue #54）。本项目用 [A3-A3U-robot-model](https://github.com/AgibotTech/A3-A3U-robot-model)（木兰宽松许可证第 2 版，提交 `589f508ff357447c610a3f3004419035ddc8f153`）的 URDF 模型在 MuJoCo 里渲染的图，不是厂商的产品照片；模型文件本身不在本仓库里 |
 | xingji-cs1 | 星玑科技 CS1（四足）。取自厂商《四足机器人二次开发版本开发手册》（2025-12-27）里的整机图，去掉背景和标注后缩到 360×360；手册和 CAD 文件不在本仓库里 |
+| microduck-adp102 | Microduck AD-P102（双足小鸭，issue #63）。本项目用它的第二版仿真模型在 MuJoCo 里渲染的图，不是产品照片；模型文件（供应商的打印件网格和 Pollen Robotics 的署名非商用占位网格）不在本仓库里 |
 
 同系列里没有单独图片的型号用了同系列的图（FR3 用 Panda，xArm 6 用 xArm 7，iiwa 7 用 iiwa 14，CRX-10iA 用 CRX-5iA，Rizon 4s 用 Rizon 4）。
 
