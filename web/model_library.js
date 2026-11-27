@@ -1,7 +1,7 @@
 'use strict';
 // Issue #51: the library belongs to brands and models of robot.
-//   · 「资料库」 page: an upload chooses the brand and model it is for (those of this account's robots, or one
-//     typed in); the list can be narrowed to one; a material with a wrong label can be moved.
+//   · 「资料库」 page: an upload says the brand and model it is for, in the same two controls as every other
+//     form (issue #61: chosen from the list or typed, web/robot_catalog.js); the list can be narrowed to one; a material with a wrong label can be moved.
 //   · 机器人模型: the URDF of a brand and model is kept apart from the other materials — one section, one
 //     line per brand and model, with its own upload (a single .urdf, or a .zip / .tar.gz with the meshes).
 //   · 设备档案 →「资料」: shows the materials of the robot's brand and model (shared by every robot of it);
@@ -9,7 +9,6 @@
 // Loaded after material_library.js, material_parse.js and robot_model.js; it wraps their functions and
 // listens for its own data-ml-* attributes, so those files are not edited. Rules: brainos/model_library.py.
 
-const ML_OTHER = '__other__';          // never a brand-and-model key: those contain a line break
 const ML_KIND = 'model';
 const ML_MODEL_STATES = {usable: ['当前使用', 'good'], parsed: ['待确认', 'warn'], parsing: ['解析中', 'blue'],
   failed: ['没解析出来', 'bad'], stored: ['已入库', '']};
@@ -55,17 +54,21 @@ function mlModelPrecheck(file, formats) {
   return '';
 }
 
-// The labels of an upload from the form's values; a message instead when something is missing.
+// The brand and model of the account a typed brand and model is (in any case and spacing), or null.
+function mlKnown(values, products) {
+  const typed = {vendor: String(values.vendor || '').trim(), model: String(values.model || '').trim()};
+  return typed.vendor && typed.model ? products.find(p => mlKey(p) === mlKey(typed)) || null : null;
+}
+
+// The labels of an upload from the form's values; a message instead when something is missing. A brand and
+// model the account already has is written as it is there, with its own body type.
 function mlLabels(values, products) {
   const version = String(values.version || '').trim();
   if (!version) return {error: '请填写版本'};
-  if (values.product && values.product !== ML_OTHER) {
-    const chosen = products.find(p => mlKey(p) === values.product);
-    if (!chosen) return {error: '请选择品牌型号'};
-    return {labels: {body_type: chosen.family || values.body_type, vendor: chosen.vendor, model: chosen.model, version}};
-  }
   const vendor = String(values.vendor || '').trim(), model = String(values.model || '').trim();
   if (!vendor || !model) return {error: '请填写品牌和型号（要一起填）'};
+  const known = mlKnown(values, products);
+  if (known) return {labels: {body_type: known.family || values.body_type, vendor: known.vendor, model: known.model, version}};
   if (!values.body_type) return {error: '请选择本体类型'};
   return {labels: {body_type: values.body_type, vendor, model, version}};
 }
@@ -74,30 +77,34 @@ function mlLabels(values, products) {
 const mlButton = (label, type, cls = '', id = '') =>
   `<button type="button" class="button ${cls}" data-ml-action="${type}" data-id="${h(id)}">${label}</button>`;
 
-function mlProductSelect(products, chosenKey, allowOther) {
-  const options = products.map(p => `<option value="${h(mlKey(p))}" ${mlKey(p) === chosenKey ? 'selected' : ''}>` +
-    `${h(mlLabel(p))}${p.robots?.length ? `（${h(p.robots.slice(0, 3).join('、'))}${p.robots.length > 3 ? ' 等' : ''}）` : ''}</option>`).join('');
-  const other = allowOther ? `<option value="${ML_OTHER}" ${chosenKey === ML_OTHER || !products.length ? 'selected' : ''}>其他品牌型号（手动填写）</option>` : '';
-  return `<select name="product" data-ml-product required>${options}${other}</select>`;
+// The brands and models the two controls offer first: those the account has materials or robots of.
+const ML_SOURCES = {vendor: 'mlVendorChoices', model: 'rcModelChoices', owned: 'mlOwned'};
+function mlOwned() { return mlProducts(mlState.products, state.robots).map(product => ({product})); }
+function mlVendorChoices() { return rcVendorOptions(mlOwned()); }
+
+// The brand and model of a form, and (for an upload) the body type, asked only for a brand and model the
+// account does not have yet: one it has brings its own.
+function mlProductFields(product, last, withType = true) {
+  const known = Boolean(product && mlKnown(product, mlProducts(mlState.products, state.robots)));
+  const families = Object.entries(materialFamilies());
+  return rcInputs(product, true, ML_SOURCES) + '<p class="inline-note robot-model-note">同品牌同型号的机器人共用这里的资料。</p>' +
+    (withType ? `<div class="ml-typed" data-ml-typed ${known ? 'hidden' : ''}>` +
+      field('本体类型', `<select name="body_type">${families.map(([id, name]) =>
+        `<option value="${h(id)}" ${id === last.body_type ? 'selected' : ''}>${h(name)}</option>`).join('')}</select>`) + '</div>' : '');
 }
 
-function mlProductFields(chosenKey, last) {
-  const products = mlProducts(mlState.products, state.robots);
-  const typed = chosenKey === ML_OTHER || !products.length;
-  const families = Object.entries(materialFamilies());
-  return field('品牌型号（这份资料属于哪种机器人）', mlProductSelect(products, typed ? ML_OTHER : chosenKey, true),
-    '同品牌同型号的机器人共用这里的资料。') +
-    `<div class="ml-typed" data-ml-typed ${typed ? '' : 'hidden'}><div class="material-label-row">` +
-    field('品牌', `<input name="vendor" maxlength="100" placeholder="例如：示例机器人公司" value="${h(typed ? last.vendor || '' : '')}">`) +
-    field('型号', `<input name="model" maxlength="100" placeholder="例如：X1" value="${h(typed ? last.model || '' : '')}">`) + '</div>' +
-    field('本体类型', `<select name="body_type">${families.map(([id, name]) =>
-      `<option value="${h(id)}" ${id === last.body_type ? 'selected' : ''}>${h(name)}</option>`).join('')}</select>`) + '</div>';
+// The body type is asked while the brand and model in the boxes are not ones the account has.
+function mlTypedSync(formEl) {
+  const typed = formEl?.querySelector('[data-ml-typed]');
+  if (!typed) return;
+  typed.hidden = Boolean(mlKnown({vendor: formEl.elements.vendor?.value, model: formEl.elements.model?.value}, mlProducts(mlState.products, state.robots)));
 }
 
 function mlUploadDialog(kind, productKey) {
   const lib = materialLibrary, last = lib.lastLabels || {}, model = kind === ML_KIND;
   const products = mlProducts(mlState.products, state.robots);
-  const chosen = productKey || (products.find(p => mlKey(p) === mlKey(last)) ? mlKey(last) : products[0] ? mlKey(products[0]) : ML_OTHER);
+  // What the boxes start with: the brand and model the upload was opened for, else the last one used, else the account's first.
+  const chosen = products.find(p => mlKey(p) === productKey) || (last.vendor && last.model ? last : products[0] || null);
   const accept = model ? (mlState.modelFormats?.extensions || ['.urdf', '.zip', '.tar.gz', '.tgz']).join(',') : (lib.formats?.extensions || []).join(',');
   dialog(model ? '上传机器人模型' : '上传资料', model
     ? '一个 .urdf，或把 .urdf 和它用到的网格文件打成一个 .zip / .tar.gz。解析后由人核对确认，确认的那一份用于仿真。'
@@ -106,7 +113,7 @@ function mlUploadDialog(kind, productKey) {
     field(model ? '文件' : '文件（可多选，下面的标注对所选文件都适用）',
       `<input name="files" type="file" ${model ? '' : 'multiple'} required accept="${h(accept)}">`,
       model ? '网格文件只读 .stl、.obj、.msh；别的格式（如 .dae）在仿真里不显示。' : h(lib.formats?.supported || '')) +
-    mlProductFields(chosen, last) +
+    mlProductFields(chosen ? {vendor: chosen.vendor, model: chosen.model} : null, last) +
     field('版本', `<input name="version" maxlength="50" placeholder="例如：1.0 或 2026-11" value="${h(last.version || '')}" required>`) +
     field('说明（可选）', '<textarea name="description" maxlength="2000" placeholder="这份资料是什么、适用范围"></textarea>') +
     `</div><div class="dialog-footer">${button('取消', 'close', 'secondary')}<button class="button" type="submit">开始上传</button></div></form>`);
@@ -183,12 +190,9 @@ async function mlAction(type, id) {
   if (type === 'move') {
     const m = materialLibrary.materials.concat(mlState.models).find(x => x.id === id);
     if (!m) return;
-    const products = mlProducts(mlState.products, state.robots);
-    const own = products.find(p => mlKey(p) === mlKey(m));
     return dialog('改品牌型号', h(m.filename), `<form data-ml-form="move" data-id="${h(m.id)}"><div class="dialog-body">` +
       `<div class="form-error" role="alert"></div><p class="inline-note">现在标的是「${h(mlLabel(m))}」。改到另一个品牌型号后，那种机器人就能使用它；` +
-      '那里已经有同名同版本的资料时不会覆盖。</p>' + mlProductFields(own ? mlKey(own) : products[0] ? mlKey(products[0]) : ML_OTHER, m)
-        .replace(/<label[^>]*>本体类型[\s\S]*?<\/label>/, '') +
+      '那里已经有同名同版本的资料时不会覆盖。</p>' + mlProductFields(m.vendor && m.model ? {vendor: m.vendor, model: m.model} : null, m, false) +
       `</div><div class="dialog-footer">${button('取消', 'close', 'secondary')}<button class="button" type="submit">保存</button></div></form>`);
   }
 }
@@ -196,7 +200,7 @@ async function mlAction(type, id) {
 async function mlSubmitMove(form) {
   const data = Object.fromEntries(new FormData(form).entries()), error = form.querySelector('.form-error');
   const products = mlProducts(mlState.products, state.robots);
-  const chosen = data.product && data.product !== ML_OTHER ? products.find(p => mlKey(p) === data.product) : null;
+  const chosen = mlKnown(data, products);
   const product = chosen ? {vendor: chosen.vendor, model: chosen.model} : {vendor: String(data.vendor || '').trim(), model: String(data.model || '').trim()};
   if (!product.vendor || !product.model) { error.textContent = '请填写品牌和型号（要一起填）'; return; }
   try {
@@ -224,13 +228,10 @@ document.addEventListener('submit', e => {
   if (form.dataset.mlForm === 'move') mlSubmitMove(form);
   else mlSubmitUpload(form, ML_KIND);
 });
+for (const type of ['input', 'change']) {
+  document.addEventListener(type, e => { if (e.target.matches?.('[data-rc-picker] input[data-rc]')) mlTypedSync(e.target.closest('form')); });
+}
 document.addEventListener('change', e => {
-  const select = e.target.closest('[data-ml-product]');
-  if (select) {
-    const typed = select.closest('form').querySelector('[data-ml-typed]');
-    if (typed) typed.hidden = select.value !== ML_OTHER;
-    return;
-  }
   const filter = e.target.closest('[data-ml-filter]');
   if (!filter) return;
   const product = mlProducts(mlState.products, state.robots).find(p => mlKey(p) === filter.value);

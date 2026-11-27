@@ -1,5 +1,6 @@
-// Pure-logic checks of web/robot_catalog.js (issue #53): the list of brands and models, the two
-// pick-lists that replace the two inputs of web/robot_model.js, and what a robot looks like.
+// Pure-logic checks of web/robot_catalog.js (issue #53): the list of brands and models, the brand and
+// model controls that replace the two inputs of web/robot_model.js (since issue #61 each is one control,
+// a list that can also be typed in), and what a robot looks like.
 //   node tests/robot_catalog_logic.cjs
 const {readFileSync, existsSync, readdirSync} = require('node:fs');
 const vm = require('node:vm');
@@ -7,8 +8,8 @@ const assert = require('node:assert/strict');
 
 const sandbox = {rmInputs: () => 'the two inputs of issue #48'};
 vm.createContext(sandbox);
-const rc = vm.runInContext(readFileSync('web/robot_catalog.js', 'utf8') +
-  '\n;({ROBOT_CATALOG, RC_OTHER, rcBrand, rcFind, rcBrands, rcPicture, rcInputs, rcModelOptions, rcStart, rcOwnBrands, rmInputs})', sandbox);
+const rc = vm.runInContext(readFileSync('web/combo.js', 'utf8') + '\n' + readFileSync('web/robot_catalog.js', 'utf8') +
+  '\n;({ROBOT_CATALOG, rcBrand, rcFind, rcBrands, rcPicture, rcInputs, rcVendorOptions, rcModelOptions, rcKeepsModel, rcVendorChoices, rcModelChoices, rcPickerOwned, rcChanged, rmInputs})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -94,54 +95,107 @@ const same = (actual, expected, what) => { assert.equal(actual, expected, what);
   same(rc.rcPicture(null).src, '/robot_images/type-other.svg', 'no robot');
 }
 
-// ---- the two pick-lists
+// ---- the brand and the model: one control each, chosen from its list or typed (issue #61)
 {
-  same(rc.rmInputs, rc.rcInputs, 'the forms of issue #48 draw the pick-lists');
+  same(rc.rmInputs, rc.rcInputs, 'the forms of issue #48 draw these controls');
   const count = (html, piece) => html.split(piece).length - 1;
   const empty = rc.rcInputs(null, true);
-  ok(empty.includes('data-rc-picker data-rc-required') && count(empty, '<select') === 2, 'two lists');
+  ok(empty.includes('data-rc-picker data-rc-required'), 'the picker, required');
+  same(count(empty, '<input'), 2, 'two controls: a brand and a model');
+  same(count(empty, '<select'), 0, 'no pick-list next to an input');
+  same(count(empty, '<label'), 2, 'and no second field for a name that is not listed');
+  ok(!empty.includes('其他') && !empty.includes('品牌名称') && !empty.includes('型号名称'), 'no 「其他」, no second name');
   ok(count(empty, 'name="vendor"') === 1 && count(empty, 'name="model"') === 1, 'what is sent is still vendor and model, once each');
-  ok(/<select data-rc="vendor" aria-label="品牌" required>/.test(empty), 'a required brand is required of the list');
-  ok(empty.includes('<option value="智身科技">智身科技</option>') && empty.includes(`<option value="${rc.RC_OTHER}">其他品牌</option>`), 'the brands, and a way to type another');
-  ok(!empty.includes('neuxmind-sim'), 'not the simulated brand');
-  ok(/<label class="field rc-typed" hidden>品牌名称<input name="vendor"[^>]*value=""[^>]*>/.test(empty) && !/name="vendor"[^>]*required/.test(empty),
-     'the input of a brand is out of sight, and not required while it is');
-  ok(/<select data-rc="model" aria-label="型号" disabled>/.test(empty), 'no model before a brand');
+  ok(/<label class="field">品牌<span class="combo" data-combo><input name="vendor"[^>]*role="combobox"[^>]*data-combo-source="rcVendorChoices"[^>]*data-rc="vendor"[^>]* required>/.test(empty),
+     'the brand: a list that can be typed in, required');
+  ok(/<label class="field">型号<span class="combo" data-combo><input name="model"[^>]*data-combo-source="rcModelChoices"[^>]*data-rc="model"[^>]* required>/.test(empty), 'the model likewise');
+  ok(!/<input[^>]*disabled/.test(empty), 'the model can be typed before a brand is chosen');
   const optional = rc.rcInputs(null, false);
-  ok(!optional.includes('required') && optional.includes('不选（由设备上报）'), 'where the device may report, nothing is required');
-  // A saved brand and model that are listed.
-  const listed = rc.rcInputs({vendor: '宇树科技', model: 'Go2'}, true);
-  ok(listed.includes('<option value="宇树科技" selected>') && listed.includes('<option value="Go2" selected>'), 'both lists show what is saved');
-  ok(/name="vendor"[^>]*value="宇树科技"/.test(listed) && /name="model"[^>]*value="Go2"/.test(listed), 'and the inputs hold it');
-  // A reported spelling is kept as it is.
-  const reported = rc.rcInputs({vendor: 'unitree', model: 'go2'}, true);
-  ok(reported.includes('<option value="宇树科技" selected>') && /name="vendor"[^>]*value="unitree"/.test(reported) && /name="model"[^>]*value="go2"/.test(reported),
-     'a brand in another spelling is shown as the brand it is, and sent as it was');
-  // A listed brand with a model that is not.
-  const other = rc.rcInputs({vendor: '宇树科技', model: 'X99'}, true);
-  ok(other.includes(`<option value="${rc.RC_OTHER}" selected>其他型号</option>`) && /<label class="field rc-typed">型号名称<input name="model"[^>]*value="X99"[^>]*required>/.test(other),
-     'a model that is not listed is typed, in sight');
-  // A brand that is not listed.
+  ok(!optional.includes('required') && optional.includes('设备上报时可留空'), 'where the device may report, nothing is required');
+  const saved = rc.rcInputs({vendor: 'unitree', model: 'go2'}, true);
+  ok(/name="vendor"[^>]*value="unitree"/.test(saved) && /name="model"[^>]*value="go2"/.test(saved), 'a saved brand and model are shown, and sent, as they are written');
   const typed = rc.rcInputs({vendor: 'Beta <b>', model: 'B"2'}, true);
-  ok(typed.includes(`<option value="${rc.RC_OTHER}" selected>其他品牌</option>`) && typed.includes('value="Beta &lt;b&gt;"') && typed.includes('value="B&quot;2"'),
-     'a brand that is not listed is typed, written as text');
-  ok(!/<label class="field rc-typed" hidden>/.test(typed), 'both inputs are in sight then');
-  // A brand without models yet: its model is typed.
-  ok(rc.rcModelOptions('星玑科技').includes('<option value="CS1">CS1</option>'), '星玑科技 CS1 can be chosen');
-  ok(rc.rcModelOptions('某个没有型号的品牌', '', [{product: {vendor: '某个没有型号的品牌', model: 'M'}}]).includes('<option value="M">M</option>'), 'a brand of the account with its one model');
-  ok(rc.rcModelOptions('智身科技').startsWith('<option value="" selected>请选择</option>'), 'a brand with models starts unchosen');
-  same(rc.rcStart({vendor: 'neuxmind-sim', model: 'sim-quadruped'}).vendorChoice, rc.RC_OTHER, 'the simulated brand is shown as typed while the account has no such robot');
-  // The brands of the account's own robots that the list does not offer can be chosen like a listed one.
+  ok(typed.includes('value="Beta &lt;b&gt;"') && typed.includes('value="B&quot;2"') && typed.includes('data-rc-was="Beta &lt;b&gt;"'), 'written as text');
+  const library = rc.rcInputs(null, true, {vendor: 'mlVendorChoices', model: 'rcModelChoices', owned: 'mlOwned'});
+  ok(/data-combo-source="mlVendorChoices"/.test(library) && library.includes('data-rc-owned="mlOwned"'), 'another page can offer its own brands, and say whose come first');
+  ok(!empty.includes('data-rc-owned'), 'the forms of the robots say nothing: the account\'s robots come first');
+
+  // the brands to choose from
+  const values = options => options.map(o => o.value);
+  const brands = rc.rcVendorOptions([]);
+  ok(values(brands).includes('智身科技') && values(brands).includes('宇树科技'), 'the brands of the list');
+  ok(!values(brands).includes('neuxmind-sim'), 'not the simulated brand');
+  ok(brands.find(o => o.value === '宇树科技').keys.includes('unitree'), 'with their other spellings, so typing "unitree" finds 宇树科技');
+  ok(brands.every(o => !o.note), 'nothing is marked while the account has no robot');
   const robots = [{product: {vendor: 'neuxmind-sim', model: 'sim-quadruped'}}, {product: {vendor: 'Beta <b>', model: 'B2'}}, {product: {vendor: 'beta <B>', model: 'B3'}},
-                  {product: {vendor: '宇树科技', model: 'Go2'}}, {product: null}, {}];
-  const own = rc.rcOwnBrands(robots);
-  same(own.map(b => b.vendor + ':' + b.models.map(m => m.model).join('/')).join(), 'neuxmind-sim:sim-quadruped,Beta <b>:B2/B3', 'each once, with the models the robots have; listed brands are not repeated');
-  const withOwn = rc.rcInputs({vendor: 'neuxmind-sim', model: 'sim-quadruped'}, true, robots);
-  ok(withOwn.includes('<option value="neuxmind-sim" selected>neuxmind-sim</option>') && withOwn.includes('<option value="sim-quadruped" selected>sim-quadruped</option>'),
-     'a robot one already has is chosen, not typed');
-  ok(withOwn.indexOf('value="neuxmind-sim"') < withOwn.indexOf('value="智身科技"'), 'the account\'s own brands come first');
-  ok(rc.rcInputs(null, true, robots).includes('<option value="Beta &lt;b&gt;">Beta &lt;b&gt;</option>'), 'written as text');
-  ok(rc.rcModelOptions('Beta <b>', '', robots).includes('<option value="B3">B3</option>') && rc.rcModelOptions('Beta <b>', '', robots).includes('其他型号'), 'its models, and a way to type another');
+                  {product: {vendor: 'unitree', model: 'go2'}}, {product: {vendor: '宇树科技', model: 'X99'}}, {product: null}, {}];
+  const mine = rc.rcVendorOptions(robots);
+  same(values(mine).slice(0, 4).join(), 'neuxmind-sim,Beta <b>,宇树科技,智身科技', 'the brands of the account\'s own robots come first, each once, a listed one by its name of the list');
+  same(mine.slice(0, 3).every(o => o.note === '已有') && !mine[3].note, true, 'and are marked');
+  same(values(mine).filter(v => v === '宇树科技').length, 1, 'a listed brand is not repeated further down');
+  same(mine.length, brands.length + 2, 'the rest of the list follows');
+
+  // the models to choose from
+  ok(values(rc.rcModelOptions('星玑科技', [])).includes('CS1'), '星玑科技 CS1 can be chosen');
+  same(values(rc.rcModelOptions('unitree', [])).join(), values(rc.rcModelOptions('宇树科技', [])).join(), 'a brand typed in another spelling has the models of the brand it is');
+  same(rc.rcModelOptions('', []).length, 0, 'no brand: nothing to choose, the model is typed');
+  same(rc.rcModelOptions('某个没人知道的品牌', []).length, 0, 'a brand nobody knows: likewise');
+  same(rc.rcModelOptions('neuxmind-sim', []).length, 0, 'the simulated brand is not offered to an account without such a robot');
+  same(values(rc.rcModelOptions('neuxmind-sim', robots)).join(), 'sim-quadruped', 'a brand of the account with the model its robot has');
+  same(values(rc.rcModelOptions('BETA<b>', robots)).join(), 'B2,B3', 'the models of the account\'s robots of a brand that is not listed');
+  const unitree = rc.rcModelOptions('宇树科技', robots);
+  same(values(unitree).slice(0, 3).join(), 'Go2,X99,Go1', 'the account\'s own models first (by their name of the list), also one the list does not have');
+  same(values(unitree).filter(v => v === 'Go2').length, 1, 'and not repeated');
+  ok(rc.rcModelOptions('智身科技', []).find(o => o.value === '钢镚 L2-U').keys.includes('L2U'), 'models carry their other spellings too');
+
+  // the model when the brand changes
+  same(rc.rcKeepsModel('宇树科技', '智身科技', 'Go2', []), false, 'a model of the old brand does not stay under another brand');
+  same(rc.rcKeepsModel('宇树科技', 'unitree', 'Go2', []), true, 'the same brand in another spelling: it stays');
+  same(rc.rcKeepsModel('宇树科技', '智身科技', 'X99', []), true, 'a model that was typed stays: it is the person\'s');
+  same(rc.rcKeepsModel('智身科技', '宇树科技', 'g1', []), true, 'a model the new brand has too stays');
+  same(rc.rcKeepsModel('', '宇树科技', 'Whatever', []), true, 'a model typed before any brand stays');
+  same(rc.rcKeepsModel('宇树科技', '', '', []), true, 'no model: nothing to decide');
+  same(rc.rcKeepsModel('宇树科技', '', 'Go2', []), true, 'an emptied brand box decides nothing: the model stays');
+  same(rc.rcKeepsModel('Beta <b>', '宇树科技', 'B3', robots), false, 'a model of an own brand goes with it');
+  same(rc.rcKeepsModel('Beta <b>', '宇树科技', 'B2', robots), true, 'unless the new brand has a model of that name (宇树科技 B2)');
+
+  // a change in the page
+  const fired = [];
+  const box = (value, extra = {}) => ({value, dispatchEvent: e => fired.push(e.type), ...extra});
+  const picker = (vendor, model, was, more = {}) => {
+    const boxes = {'[data-rc="vendor"]': box(vendor), '[data-rc="model"]': box(model)}, el = {dataset: {rcWas: was, ...more}, querySelector: q => boxes[q], closest: () => null};
+    for (const b of Object.values(boxes)) b.closest = q => (q === '[data-rc-picker]' ? el : null);
+    return {el, vendor: boxes['[data-rc="vendor"]'], model: boxes['[data-rc="model"]']};
+  };
+  sandbox.Event = function Event(type) { this.type = type; };
+  let p = picker('智身科技', 'Go2', '宇树科技');
+  rc.rcChanged(p.vendor);
+  same(p.model.value + '|' + p.el.dataset.rcWas + '|' + fired.join(), '|智身科技|input', 'another brand: its model is emptied, the form is told, the brand is remembered');
+  p = picker('智身科技', 'My Own', '宇树科技');
+  rc.rcChanged(p.vendor);
+  same(p.model.value, 'My Own', 'a typed model is left');
+  p = picker('宇树科技', 'Go2', '智身科技');
+  rc.rcChanged(p.model);
+  same(p.model.value + '|' + p.el.dataset.rcWas, 'Go2|智身科技', 'a change of the model changes nothing else');
+  rc.rcChanged({closest: () => null});
+  checks += 1;
+  // a picker of another page: whose brands and models count is what that page says (the library's, not the robots')
+  sandbox.state = {robots: []};
+  sandbox.libraryOwned = () => [{product: {vendor: 'Acme Robotics', model: 'Go-7'}}];
+  p = picker('宇树科技', 'Go-7', 'Acme Robotics', {rcOwned: 'libraryOwned'});
+  rc.rcChanged(p.vendor);
+  same(p.model.value, '', 'a model the library has under the old brand does not stay under another brand');
+  p = picker('宇树科技', 'Go-7', 'Acme Robotics');
+  rc.rcChanged(p.vendor);
+  same(p.model.value, 'Go-7', 'in a form of the robots that model is nobody\'s: typed, and kept');
+  same(rc.rcModelChoices(picker('acme robotics', '', '', {rcOwned: 'libraryOwned'}).model).map(o => o.value).join(), 'Go-7', 'and its model box offers what the library has');
+  same(rc.rcPickerOwned({dataset: {rcOwned: 'constructor'}}).length, 0, 'only a function the page defined is asked');
+  // what web/combo.js asks
+  sandbox.state = {robots};
+  same(values(rc.rcVendorChoices())[0], 'neuxmind-sim', 'the brands, with the account\'s own');
+  same(values(rc.rcModelChoices(picker('beta <b>', '', '').model)).join(), 'B2,B3', 'the models of the brand in the box next to it');
+  same(rc.rcModelChoices({closest: () => null}).length, 0, 'a model box on its own has no brand');
+  delete sandbox.state;
 }
 
 console.log(`robot_catalog_logic: ${checks} checks passed`);
