@@ -1,0 +1,26 @@
+/* Issue #62: why a skill cannot be installed on a robot that is not connected, and the step that fixes it. */
+:root {
+  --sg-tint: #fdf6e7;
+  --sg-rule: #efdcae;
+  --sg-edge: #c99a3a;
+  --sg-ink: #6b4e16;
+  --sg-pad: 16px;
+}
+
+.sg-notice { margin: 0 0 20px; padding: var(--sg-pad) var(--sg-pad) var(--sg-pad) 18px; border: 1px solid var(--sg-rule); border-left: 4px solid var(--sg-edge);
+  border-radius: 10px; background: var(--sg-tint); color: var(--sg-ink); }
+.sg-title { display: block; margin-bottom: 6px; font-size: 14.5px; line-height: 1.5; }
+.sg-notice p { margin: 0 0 14px; max-width: 62ch; font-size: 12.5px; line-height: 1.75; }
+.sg-notice .button-row, .sg-robot .button-row { flex-wrap: wrap; gap: 8px; }
+
+.sg-none { margin-bottom: 16px; }
+.sg-none b { display: block; margin-bottom: 4px; font-size: 14.5px; }
+.sg-none p { margin: 0; font-size: 12.5px; line-height: 1.75; color: #59704a; }
+.sg-robot { padding: 16px 18px; }
+.sg-robot + .sg-robot { margin-top: 10px; }
+.sg-robot .section-head { margin-bottom: 6px; }
+.sg-robot .section-head b { font-size: 14px; color: var(--ink, #24332e); overflow-wrap: anywhere; }
+.sg-robot p { margin: 0 0 14px; max-width: 62ch; font-size: 12.5px; line-height: 1.75; }
+
+.sg-error:empty { display: none; }
+.sg-error { margin-top: 12px; font-size: 12.5px; line-height: 1.7; color: var(--red, #b44a42); }
