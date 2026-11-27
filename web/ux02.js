@@ -106,9 +106,6 @@ function simWorkbench() {
 
 function uxInsertAfterHead(html, extra) {
   if (!extra) return html;
-  const help = typeof journeyHelp === 'function' ? journeyHelp(current) : '';
-  const at = help ? html.indexOf(help) : -1;
-  if (at >= 0) return html.slice(0, at + help.length) + extra + html.slice(at + help.length);
   const head = html.indexOf('</div></div>', html.indexOf('page-head'));
   return head >= 0 ? html.slice(0, head + 12) + extra + html.slice(head + 12) : extra + html;
 }

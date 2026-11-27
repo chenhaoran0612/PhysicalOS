@@ -18,7 +18,6 @@ const pagePurposes={
  billing:['费用管理','知道用在哪里，花了多少','查看模型、训练和仿真任务的预留额度与实际用量，核对每笔记录。','使用平台服务的账户；自有 API 的费用由对应供应商收取。','可用额度、已结算用量和待核对记录。当前支付渠道尚未开通。']
 };
 function journeyHeading(route){const p=pagePurposes[route];return p?{label:p[0],title:p[1],subtitle:p[2]}:null;}
-function journeyHelp(route){const p=pagePurposes[route];if(!p)return '';return `<details class="page-purpose"><summary>这个页面怎么用</summary><div class="purpose-grid"><div><b>需要准备</b><p>${h(p[3])}</p></div><div><b>完成后得到</b><p>${h(p[4])}</p></div></div></details>`;}
 function journeyContext(){
  const apps=rows('applications'),saved=sessionStorage.getItem('journey-app:'+projectId),app=apps.find(x=>x.id===saved)||apps[0];
  const robot=app?find('robots',app.robot_id):(rows('robots').find(r=>r.id===project()?.robot_id)||rows('robots')[0]);   // issue #42: the robot the task was created with

@@ -56,7 +56,7 @@ const NAV_BEFORE = 18;          // tests/ux03_browser.cjs counts the sidebar the
     await page.evaluate(r => { location.hash = r; }, route);
     await page.waitForFunction(() => location.hash === '#overview');
     await main.locator('.tw-board').waitFor();
-    check(!(await main.innerText()).includes('告诉助手需要解决的问题'), `#${route} still draws 工程助手`);   // issue #57: the page is titled 工程助手, this is the sentence under it
+    check(!Object.values(HIDDEN).includes((await main.locator('h1').first().innerText()).trim()), `#${route} still draws a hidden page`);   // issue #59: a page has no sentence under its name any more, so it is told by the name
     await page.evaluate(() => { location.hash = 'robots'; });
     await page.waitForFunction(() => location.hash === '#robots');
   }
@@ -128,7 +128,7 @@ const NAV_BEFORE = 18;          // tests/ux03_browser.cjs counts the sidebar the
   check(all.length === NAV_BEFORE && ['工程助手', '助手工具', '自有服务'].every(t => all.includes(t)), `With the switch the sidebar is: ${all}`);
   await shown.goto(cfg.url + '/#agents');
   await shown.locator('#main h1', {hasText: '工程助手'}).waitFor();
-  await shown.locator('#main').getByText('告诉助手需要解决的问题').waitFor();
+  check(await shown.locator('#main .page-head .subtitle').count() === 0, '工程助手 has a sentence under its name again');   // issue #59
   await shown.locator('#main [data-action="go-workflows"]').click();
   await shown.waitForFunction(() => location.hash === '#workflows');
   await shown.goto(cfg.url + '/#extensions');
