@@ -63,6 +63,21 @@ ok(sp.spPreview(catalog, {type: 'quadruped', vendor: '宇树科技', profile: 'u
 ok(sp.spPreview(catalog, {type: 'quadruped', vendor: 'NeuxMind 示例', profile: 'neuxmind-quadruped'}).includes('示例机器人'), 'the example robot says it is one');
 ok(sp.spPreview(catalog, {type: 'other', vendor: '', profile: ''}).includes('这个类型暂时没有可以仿真的型号'), 'a type without models says so');
 ok(sp.spPreview(catalog, {type: 'wheel_legged', vendor: '智身科技', profile: ''}).includes('不能添加'), 'a brand whose models cannot be added says so');
+{ // issue #65: the Microduck is listed under 「其他」; it is not built from a URDF and its preview does not say so
+  const withDuck = sp.spCatalog({types: TYPES, profiles: [...catalog.profiles, row('microduck-adp102', 'Microduck', 'AD-P102', 'other', {image: 'microduck-adp102', kit: true})]});
+  same(sp.spVendors(withDuck, 'other'), ['Microduck'], 'the type 其他 has the duck\'s brand');
+  same(sp.spFollow(withDuck, 'other', ''), {type: 'other', vendor: 'Microduck', profile: 'microduck-adp102'}, 'choosing 其他 brings the duck');
+  ok(/其他<\/b><small>1 款/.test(sp.spTypeTiles(withDuck, 'other')), 'the tile counts it');
+  const preview = sp.spPreview(withDuck, {type: 'other', vendor: 'Microduck', profile: 'microduck-adp102'});
+  ok(preview.includes('/robot_images/microduck-adp102.webp') && preview.includes('Microduck · AD-P102'), 'its picture and name are shown');
+  ok(!preview.includes('URDF') && preview.includes('技能模型'), 'and what it says is about the duck: ' + preview);
+  // the preview is one box of one size whatever it shows (web/sim_profiles.css): the dialog does not change size with the type
+  const css = readFileSync('web/sim_profiles.css', 'utf8');
+  const box = /\.sp-preview\{([^}]*)\}/.exec(css)[1], picture = /\.sp-preview img\{([^}]*)\}/.exec(css)[1];
+  const px = (rule, name) => Number((new RegExp('(?:^|;)' + name + ':(\\d+)px').exec(rule) || [])[1]);
+  const pad = Number((/(?:^|;)padding:(\d+)px/.exec(box) || [])[1]);
+  ok(px(picture, 'height') > 0 && px(box, 'min-height') === px(picture, 'height') + 2 * pad + 2, `without a picture the box is as high as with one (${px(box, 'min-height')} / ${px(picture, 'height')} + 2×${pad} + border)`);
+}
 const hostile = sp.spCatalog({types: [{id: 'quadruped', name: '<b>x</b>'}], profiles: [row('p"1', '<img src=x>', '</option><script>', 'quadruped')]});
 const drawn = sp.spBody(hostile, sp.spStart(hostile));
 ok(!drawn.includes('<img src=x>') && !drawn.includes('<script>') && !drawn.includes('<b>x</b>') && drawn.includes('p&quot;1'), 'names are text, not markup');

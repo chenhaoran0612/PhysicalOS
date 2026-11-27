@@ -132,6 +132,9 @@ class MujocoSim:
             family = body_types.standard_family(robot.get('family'))      # issue #58: a type of the list → the standard's value
             if family in SUPPORTED:
                 return family
+            reported = (robot.get('manifest') or {}).get('family')        # issue #65: of the type 其他, but the device says what it is (the Microduck)
+            if reported in SUPPORTED:
+                return reported
         if robots:
             raise CodedError(f'这一版的仿真只支持四足、轮式、人形和机械臂；这个应用的机器人是 {(self.platform.body_types.get(robots[0].get("family")) or {}).get("name") or robots[0].get("family")}', 'sim_family_unsupported')
         raise CodedError(f'没有「{robot_model.label(robot_model.of(application))}」的机器人，不知道它的本体类型；'

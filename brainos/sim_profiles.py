@@ -81,8 +81,9 @@ PROFILES = (
      'source': {'private': 'xingji-cs1', 'urdf': 'robot_description.urdf', 'stand_in_shapes': True,
                 'licence_name': '厂家文件，不公开'}},
     # Issue #63: the duck is not built from a URDF. Its model, skill models and physics engine are a kit of
-    # their own (brainos/duck_kit.py); `duck` sends 「添加仿真机器人」 there.
-    {'id': 'microduck-adp102', 'vendor': 'Microduck', 'model': 'AD-P102', 'type': 'biped', 'image': 'microduck-adp102', 'duck': True,
+    # their own (brainos/duck_kit.py); `duck` sends 「添加仿真机器人」 there. Issue #65: it is listed under 「其他」
+    # (a body of that type has a stop and its health, which is what the duck's body offers), not with the humanoids.
+    {'id': 'microduck-adp102', 'vendor': 'Microduck', 'model': 'AD-P102', 'type': 'other', 'image': 'microduck-adp102', 'duck': True,
      'source': {'licence_name': '厂家文件与署名非商用模型，不公开'}},
     {'id': 'neuxmind-quadruped', 'vendor': 'NeuxMind 示例', 'model': '通用四足', 'type': 'quadruped', 'image': '', 'builtin': 'quadruped'},
     {'id': 'neuxmind-arm', 'vendor': 'NeuxMind 示例', 'model': '通用六轴机械臂', 'type': 'manipulator', 'image': '', 'builtin': 'arm'},
@@ -204,6 +205,7 @@ class SimProfiles:
             problem = self._problem(profile, engine)
             rows.append({'id': profile['id'], 'vendor': profile['vendor'], 'model': profile['model'], 'type': profile['type'],
                          'image': profile.get('image') or '', 'builtin': bool(profile.get('builtin')),
+                         'kit': bool(profile.get('duck')),          # issue #65: simulated from a kit of its own, not from a URDF
                          'licence': (profile.get('source') or {}).get('licence_name', ''),
                          'available': not problem, 'problem': problem})
         return {'types': [{'id': t['id'], 'name': t['name']} for t in TYPES], 'profiles': rows}

@@ -27,6 +27,7 @@ const same = (actual, expected, what) => { assert.equal(actual, expected, what);
   same(rc.rcTypeFor('宇树科技', 'G1'), 'biped', 'a humanoid of the catalogue is 双足机器人 of the list');
   same(rc.rcTypeFor('宇树科技', 'Z1'), 'manipulator', 'an arm');
   same(rc.rcTypeFor('星玑科技', 'CS1'), 'quadruped', 'a quadruped');
+  same(rc.rcTypeFor('Microduck', 'AD-P102'), 'other', 'issue #65: the duck is of the type 其他');
   same(rc.rcTypeFor('智身科技', rc.RC_OTHER), '', 'a typed model: nothing is known');
   same(rc.rcTypeFor(rc.RC_OTHER, ''), '', 'a typed brand: nothing is known');
   same(rc.rcTypeFor('', ''), '', 'nothing chosen');
@@ -98,7 +99,7 @@ const same = (actual, expected, what) => { assert.equal(actual, expected, what);
     }
     const models = new Set();
     for (const m of brand.models) {
-      ok(m.model && m.model.length <= 100 && ['quadruped', 'wheel_legged', 'manipulator', 'humanoid', 'wheeled'].includes(m.type), `${brand.vendor} ${m.model} has a name and a body type`);
+      ok(m.model && m.model.length <= 100 && ['quadruped', 'wheel_legged', 'manipulator', 'humanoid', 'wheeled', 'other'].includes(m.type), `${brand.vendor} ${m.model} has a name and a body type`);
       for (const name of [m.model, ...m.aliases]) {
         const key = name.toLowerCase().replace(/[\s\-_.·]+/g, '');
         ok(!models.has(key), `${brand.vendor}: the model name "${name}" means one model`);
