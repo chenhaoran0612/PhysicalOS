@@ -84,7 +84,8 @@ for (const file of ['safety_limits', 'robot_remove', 'runtime_install', 'runtime
 }
 // Every other script of the page: only those whose pages are a task's ask whether a task is open.
 const TASK_PAGES = ['app', 'journey', 'planner', 'workflows', 'ux02', 'ux03', 'task_workbench', 'engineering', 'hardware', 'extensions',
-                    'task_robot', 'task_apps', 'task_skills', 'delivery'];
+                    'task_robot', 'task_apps', 'task_skills', 'delivery',
+                    'app_create'];        // issue #68: the form for a new application starts on the open task (a task is required)
 const asking = require('node:fs').readdirSync('web').filter(f => f.endsWith('.js') && /[^a-zA-Z.]project\(\)/.test(read('web/' + f)))
   .map(f => f.slice(0, -3)).filter(f => !TASK_PAGES.includes(f));
 same(asking, [], 'no script of a robot asks whether a task is open');
