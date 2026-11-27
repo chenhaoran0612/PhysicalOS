@@ -349,6 +349,17 @@ class RealRuntime(unittest.TestCase):
         self.assertEqual([s['id'] for s in model_skills.installed_on(self.robot)], ['status_report'])
         self.assertEqual(self.app.model_skills.install_missing(application, self.robot['id']), [])      # nothing is sent twice
 
+    def test_a_bundled_package_of_another_brand_and_model_is_not_in_the_library(self):
+        """With issue #69: what 「安装技能包」 would not offer and would refuse is not made ready or installed either."""
+        mine = {item['example'] for item in model_skills.library_for(self.robot)}
+        other = {**self.robot, robot_model.FIELD: {'vendor': 'Acme', 'model': 'X1'}}      # the same device under another brand and model
+        theirs = {item['example'] for item in model_skills.library_for(other)}
+
+        self.assertIn('patrol', mine)                     # the example quadruped's own package
+        self.assertNotIn('patrol', theirs)
+        self.assertIn('status_report', theirs)            # a generic package is for every robot
+        self.assertLessEqual(theirs, mine)
+
 
 class Wiring(unittest.TestCase):
     def test_the_page_script_is_served_and_loaded_once_after_what_it_builds_on(self):

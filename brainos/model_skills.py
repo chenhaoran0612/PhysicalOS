@@ -177,8 +177,12 @@ def installed_on(robot):
 
 
 def library_for(robot):
-    """The skills that come with the app and can run on ``robot``, each with the package it is in."""
-    from . import runtime_bridge, skill_packages
+    """The skills that come with the app, are for the brand and model of ``robot`` and can run on it, each with the package it is in.
+
+    Issue #69: a bundled package is for the brands and models its entry in runtime/examples/skills/products.json names, or
+    for every robot; one of another brand and model is not offered here, as it is not offered in 「安装技能包」 and is refused
+    when it is installed (``skill_other_model``)."""
+    from . import runtime_bridge, skill_packages, skill_products
     root = runtime_bridge.examples_dir()
     if root is None:
         return []
@@ -188,9 +192,9 @@ def library_for(robot):
         manifest = robot.get('manifest_v2')
     if not isinstance(manifest, dict):
         return []
-    items = []
+    items, product, bindings = [], robot_model.of(robot), skill_products.table()
     for folder in sorted(root.iterdir()):
-        if not (folder / 'skill.json').is_file():
+        if not (folder / 'skill.json').is_file() or not skill_products.offered(folder.name, product, bindings):
             continue
         try:
             package, _ = skill_packages.read_folder(str(folder), bundled=True)
