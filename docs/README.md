@@ -43,6 +43,9 @@
 | [PACKAGE_DELIVERY.md](PACKAGE_DELIVERY.md) | 把资料库里的驱动安装包送到设备并核对：只送「可用」的、取和送两段各自续传、三处核对校验值、文件名换名、交给修复流程的送达记录 |
 | [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md) | 资料库：页面、桌面端后台、云平台三段怎么配合，分片上传与续传；issue #51 起按品牌型号归属，见 MODEL_LIBRARY.md |
 | [MODEL_LIBRARY.md](MODEL_LIBRARY.md) | 资料库按品牌型号归属：同品牌同型号的机器人共用、旧资料怎么归过去、改一份资料的品牌型号、机器人模型（URDF，可带网格）单独一栏、接口、验证范围（issue #51） |
+| [PRODUCT_NAME.md](PRODUCT_NAME.md) | 产品名称 Physical OS、应用和安装包的名字、数据目录在第一次启动时改名、登录页（issue #55） |
+| [ROBOT_NO_TASK.md](ROBOT_NO_TASK.md) | 添加机器人不需要任务，也不会顺带建任务；任务在创建时绑定机器人（issue #56） |
+| [PAGE_TITLES.md](PAGE_TITLES.md) | 侧栏页面的标题统一按「工作台」的写法（issue #57） |
 | [SIM_PROFILES.md](SIM_PROFILES.md) | 仿真机器人按类型、品牌、型号添加：内置档案、模型包怎么打、同一品牌型号的不同写法、旧仿真机器人删除一次（issue #54） |
 | [MUJOCO_SIM.md](MUJOCO_SIM.md) | 用 MuJoCo 仿真机器人应用：交付清单里的「仿真环境」、工程助手写环境和人确认、仿真里有什么没有什么（不模拟步态）、结果不算现场证据、验证范围（只用编造的模型）（issue #51） |
 | [MAIL_SERVICE.md](MAIL_SERVICE.md) | 验证码邮件：本机 `mail.json` 里的发信账号、`init` / `check` / `test` 命令、邮件的样子、发送失败时的提示（issue #37） |
