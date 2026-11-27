@@ -203,6 +203,8 @@ def make_handler(application):
             extra=extra or {'/task_apps.js':('task_apps.js','text/javascript; charset=utf-8'),'/task_apps.css':('task_apps.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #57: every page of the sidebar is titled the way 工作台 is.
             extra=extra or {'/page_titles.js':('page_titles.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #60: 机器人应用 as a waterfall of applications, the page of one application, the page of the skills.
+            extra=extra or {'/app_gallery.js':('app_gallery.js','text/javascript; charset=utf-8'),'/app_gallery.css':('app_gallery.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
