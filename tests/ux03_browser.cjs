@@ -83,9 +83,9 @@ const shots = process.argv[3] || 'artifacts/ux03';
   assert(await nextAction() === null, '任务页面不应再有“现在做这一步”：' + await nextAction());
   assert(!(await page.locator('#main [data-action="journey-prepare"], #main [data-action="go-agents"]').count()), '任务页面不应推荐工程助手');
   await shot('01-workbench-sim-first');
-  // Running a skill on the simulated robot starts from 仿真试运行: it offers the example skills (nothing installed yet).
-  await go('simulation');
-  await page.locator('#main [data-action="sim-run-pick"]').first().click();
+  // Running a skill on the simulated robot offers the example skills (nothing installed yet). Issue #66: 仿真试运行
+  // is the list of tasks now, so the robot's own 「运行技能」 is asked for directly.
+  await page.evaluate(id => action('sim-run-pick', id), quad);
   await dlg('.gallery-item[data-example="patrol"]').waitFor();
   await click('skillpkg-example', quad + '|patrol');
   await dlg(':text("兼容：可以安装")').first().waitFor();

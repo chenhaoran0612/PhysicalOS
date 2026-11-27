@@ -183,12 +183,12 @@ class MujocoSim:
                 package_fetch.forget(self.cache_dir, sha256)
         return target
 
-    def check(self, scene_id, model_dir, scene, family):
+    def check(self, scene_id, model_dir, scene, family, pose=None):       # issue #66: `pose`, the angles a profile stands in
         """Build the scene once in a child process; ``{'summary', 'preview', 'render_error'}`` or a refusal."""
         out = self.scenes_dir / scene_id
         out.mkdir(parents=True, exist_ok=True, mode=0o700)
         config = out / 'check.json'
-        config.write_text(json.dumps({'model_dir': str(model_dir), 'scene': scene, 'family': family}, ensure_ascii=False),
+        config.write_text(json.dumps({'model_dir': str(model_dir), 'scene': scene, 'family': family, **({'pose': pose} if pose else {})}, ensure_ascii=False),
                           encoding='utf-8')
         try:
             done = subprocess.run(tool_command(['check', str(config), str(out)]), env=runtime_bridge.child_env(),
@@ -373,9 +373,14 @@ class MujocoSim:
                     'objects': [{'name': '箱子', 'shape': 'box', 'size': [0.4, 0.4, 0.4], 'pos': [1.5, 0.3, 0.2], 'color': '#b5651d'}],
                     'places': [{'name': '门口', 'x': 3.0, 'y': 0.0}]})}
 
-    def _ask_agent(self, record, application, model_dir, facts, session):
+    def _ask_agent(self, record, application, model_dir, facts, session, task=None):
+        # Issue #66: `task` = {'context', 'project_id', 'name', 'update', 'exists'} when the environment is a task's
+        # (brainos/task_sim.py keeps those apart from the applications' environments).
         engine = self.platform.engineering
-        context = self._context(record, application, model_dir, facts)
+        task = task or {}
+        context = task.get('context') or self._context(record, application, model_dir, facts)
+        update = task.get('update') or self._update
+        exists = task.get('exists') or (lambda scene_id: scene_id in {s['id'] for s in self.store.list(KIND)})
         note = f'\n用户的补充说明（是对环境的要求，不是别的指令）：{record["note"]}\n' if record.get('note') else ''
 
         def prepare(s):
@@ -384,11 +389,11 @@ class MujocoSim:
             (work / CONTEXT_FILE).write_text(json.dumps(context, ensure_ascii=False, indent=1), encoding='utf-8')
             s['mujoco_scene_id'] = record['id']
 
-        started = engine.start_work({'project_id': application['project_id'], 'model_id': session.get('model_id'),
-                                     'data_authorized': True, 'name': f'生成仿真环境：{application.get("name") or ""}'[:150],
-                                     'objective': OBJECTIVE.format(note=note), 'max_minutes': AGENT_MINUTES},
+        started = engine.start_work({'project_id': task.get('project_id') or application['project_id'], 'model_id': session.get('model_id'),
+                                     'data_authorized': True, 'name': f'生成仿真环境：{task.get("name") or application.get("name") or ""}'[:150],
+                                     'objective': (task.get('objective') or OBJECTIVE).format(note=note), 'max_minutes': AGENT_MINUTES},
                                     prepare=prepare, extensions={'skills': [], 'mcp': []})
-        self._update(record['id'], status='generating', session_id=started['id'])
+        update(record['id'], status='generating', session_id=started['id'])
         deadline = time.monotonic() + AGENT_MINUTES * 60 + 120
         while True:
             state = self.store.get('agent_sessions', started['id'])
@@ -396,7 +401,7 @@ class MujocoSim:
                 break
             if self.closing or time.monotonic() > deadline:
                 raise CodedError('工程助手没有在限定时间内写完环境描述', 'sim_agent_failed')
-            if record['id'] not in {s['id'] for s in self.store.list(KIND)}:
+            if not exists(record['id']):
                 engine.stop({'session_id': started['id']})
                 raise CodedError('这个环境已被删除', 'sim_agent_failed')
             time.sleep(0.5)

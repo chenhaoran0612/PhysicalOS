@@ -79,7 +79,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
     await shot(key === 'harness' ? '01-harness-sim-explained' : '02-deployment-sim-explained');
   }
   await go('simulation');
-  await page.locator('#main .sim-workbench-card [data-action="sim-run-pick"][data-id="' + quad + '"]').waitFor();
+  await page.locator('#main .tsim [data-tsim-part="list"]').waitFor();        // issue #66: the page is the list of tasks
   await shot('03-simulation-workbench');
   // The explanation's "go to simulation" button really goes there.
   await go('deployment');

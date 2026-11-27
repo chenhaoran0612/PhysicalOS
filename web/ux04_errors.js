@@ -377,6 +377,10 @@ const UX_CODES = {
   sim_scene_not_ready: ['state', '这个环境还没有检查完，或者还没有被确认，暂时不能用。', '等检查结束后看预览并确认'],
   sim_scene_in_use: ['state', '有仿真机器人正在使用这个环境。', '先在“我的机器人”里删除那台仿真机器人'],
   sim_profile_unknown: ['input', '没有选要添加的型号。', '在“添加仿真机器人”里选择类型、品牌和型号'],
+  // Issue #66: 仿真试运行 by task (brainos/task_sim.py).
+  task_sim_no_product: ['state', '这个任务还没有确定品牌型号，不知道要仿真哪一种机器人。', '到任务页面给它绑定一个应用，或选择它用的机器人'],
+  task_sim_not_built: ['state', '这个任务还没有仿真环境，或它的仿真机器人还没有启动。', '先构建一次仿真环境，再点“进入仿真”'],
+  task_sim_no_package: ['state', '这台电脑上没有这个技能的技能包，装不到仿真机器人上。', '点“安装技能”，从示例或技能文件夹安装'],
   sim_profile_unavailable: ['state', '这个型号现在不能添加：这个安装里没有它的机器人模型，或没有仿真引擎。', '换一个型号，或安装带有这个型号的版本'],
   // Issue #63: the Microduck's skill models (brainos/duck_kit.py).
   duck_show_missing: ['state', '这个安装里没有这个技能模型，或这个仿真小鸭添加得比它早。', '换一个有模型包的节目，或重新添加一个仿真小鸭'],
