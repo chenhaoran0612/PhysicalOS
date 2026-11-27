@@ -49,6 +49,8 @@
 | [SKILL_INSTALL_GUIDE.md](SKILL_INSTALL_GUIDE.md) | 从「机器人应用」安装技能时机器人没连上：对话框写明原因，带「安装管理层」「接入已有的管理层」「重新连接」（issue #62） |
 | [DUCK_SKILLS.md](DUCK_SKILLS.md) | Microduck AD-P102（双足小鸭）作为仿真机器人；它训练出来的技能模型在应用里按原策略真跑，「训练与改进」页看训练进展；模型文件只进安装包（issue #63） |
 | [SKILL_PRODUCTS.md](SKILL_PRODUCTS.md) | 技能包按品牌型号归属：「安装技能包」只列出这台机器人品牌型号的技能包和通用技能包，别的品牌型号的包不显示也装不上；归属表 `runtime/examples/skills/products.json`（issue #69） |
+| [RUN_RECORDS.md](RUN_RECORDS.md) | 运行数据：每次运行跟到结束并保存结果、事件和采样；「验证与测试」「部署与运行」是数字板加记录列表，「仿真试运行」加了仿真运行记录；点一行看这次运行的路线、曲线、步骤和事件（issue #70） |
+| [TASK_SIM.md](TASK_SIM.md) | 仿真试运行按任务来做：页面只列任务；任务的品牌型号决定仿真哪一种机器人，环境由工程助手按任务构建一次、保存在任务上，进入仿真时装上任务用到的技能（issue #66） |
 | [BRAND_MODEL_INPUT.md](BRAND_MODEL_INPUT.md) | 品牌、型号各一个可下拉可输入的框，添加机器人和资料库上传都用它（issue #61） |
 | [PAGE_TITLES.md](PAGE_TITLES.md) | 侧栏页面的标题统一按「工作台」的写法（issue #57） |
 | [SIM_PROFILES.md](SIM_PROFILES.md) | 仿真机器人按类型、品牌、型号添加：内置档案、模型包怎么打、同一品牌型号的不同写法、旧仿真机器人删除一次（issue #54） |
