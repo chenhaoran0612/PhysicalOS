@@ -48,6 +48,7 @@ const RP_REMOVE = ['engine-robot-remove', 'sim-remove'];
 const RP_ALWAYS = ['robot-reset'];                        // releasing an emergency stop is never put away
 const RP_BUTTON_CLASSES = ['button', 'secondary', 'small', 'danger-outline', 'text-link', 'body-type-change'];
 const RP_BODY_TYPE_LABEL = '修改本体类型';
+const RP_MENU_GAP = 8, RP_MENU_EDGE = 12;                 // issue #64: between a list and its button, and between a list and the edge of the window
 
 // ---------------------------------------------------------------- reading a card's markup
 
@@ -255,6 +256,7 @@ function rpPage() {
   if (typeof document !== 'undefined' && document.querySelector('#dialog[open] .rp-types')) setTimeout(rpTypesRepaint, 0);
   if (!state.user) rpOpen = null;
   if (rpOpen !== RP_PAGE && !list.some(r => r.id === rpOpen)) rpOpen = null;
+  if (rpOpen && rpOpen !== RP_PAGE && typeof document !== 'undefined') { queueMicrotask(rpPlace); setTimeout(rpPlace, 0); }      // drawn again: placed before it is painted
   // No robot yet: the three ways to add one are the page.
   if (!list.length) return rpHead('', '') + rpWays();
   return rpHead(rpSummary(list), button(icon('plus') + ' 添加机器人', 'engine-robots-add')) +
@@ -335,6 +337,59 @@ function rpAddOpen() {
 
 // ---------------------------------------------------------------- the list, on the page
 
+// Issue #64 — where the list of a card is put. It used to hang under its card whatever its length: a real
+// robot's list (15 entries) left the window, and the page scrolled to show what it could of it.
+//   button   the rectangle of 「更多功能」, in the window
+//   size     {width, height} of the whole list
+//   area     the part of the window the page has (not the sidebar, not the top bar)
+// -> {side, left, top, maxHeight}. Under the button while the list fits there. Otherwise beside the button,
+// as near to its height as the window allows, which is about the middle of the window; on a narrow window
+// above it, or over the page. Always inside `area`: a list higher than the window scrolls inside itself.
+function rpPlaceAt(button, size, area) {
+  const edge = RP_MENU_EDGE, gap = RP_MENU_GAP, clamp = (value, low, high) => Math.max(low, Math.min(value, high));
+  const maxHeight = Math.max(0, Math.floor(area.bottom - area.top - 2 * edge)), height = Math.min(size.height, maxHeight);
+  const minLeft = area.left + edge, maxLeft = area.right - edge - size.width, minTop = area.top + edge, maxTop = area.bottom - edge - height;
+  const under = clamp(button.right - size.width, minLeft, maxLeft);                       // its right edge on the button's
+  const level = clamp((button.top + button.bottom) / 2 - height / 2, minTop, maxTop);     // its middle at the button's
+  const at = (side, left, top) => ({side, left: Math.round(left), top: Math.round(top), maxHeight});
+  if (button.bottom + gap + height <= area.bottom - edge) return at('below', under, button.bottom + gap);
+  if (button.right + gap <= maxLeft) return at('right', button.right + gap, level);
+  if (button.left - gap - size.width >= minLeft) return at('left', button.left - gap - size.width, level);
+  if (button.top - gap - height >= minTop) return at('above', under, button.top - gap - height);
+  return at('over', under, level);
+}
+
+// Puts the open list of a card there. The place is written on the root of the document, not on the list:
+// the page is drawn again every few seconds, and the new list is where the old one was from its first frame.
+function rpPlace(scrolled = false) {
+  if (typeof document === 'undefined') return;
+  const menu = document.querySelector('.rp-card details.robot-menu[open]'), panel = menu?.querySelector('.robot-menu-panel');
+  const scroller = document.getElementById('content-scroll');
+  if (!panel || !scroller) return;
+  const button = menu.querySelector('summary').getBoundingClientRect(), box = scroller.getBoundingClientRect();
+  const area = {left: box.left, top: box.top, right: box.left + scroller.clientWidth, bottom: Math.min(box.bottom, window.innerHeight)};
+  // The person scrolled its button out of sight: the list closes. Out of sight for another reason (the page above it
+  // grew, a script opened it): the list stays, inside the page area.
+  if (scrolled && (button.bottom <= area.top || button.top >= area.bottom)) return rpCloseMenus();
+  const size = {width: panel.offsetWidth, height: panel.scrollHeight + panel.offsetHeight - panel.clientHeight};
+  const at = rpPlaceAt(button, size, area), root = document.documentElement.style;
+  root.setProperty('--rp-menu-left', at.left + 'px');
+  root.setProperty('--rp-menu-top', at.top + 'px');
+  root.setProperty('--rp-menu-max', at.maxHeight + 'px');
+  if (panel.scrollTop !== rpMenuScroll) panel.scrollTop = rpMenuScroll;          // a list drawn again is where the person had scrolled it to
+}
+
+let rpMenuScroll = 0;                   // how far the open list of a card is scrolled inside itself
+let rpPlaceQueued = false;
+// The page was scrolled or the window resized while a card's list is open: the list follows its button.
+function rpPlaceSoon(e) {
+  const own = e?.target?.closest?.('.rp-card .robot-menu-panel');
+  if (own) rpMenuScroll = own.scrollTop;
+  if (!rpOpen || rpOpen === RP_PAGE || rpPlaceQueued || own) return;      // not for the list's own scrolling
+  rpPlaceQueued = true;
+  requestAnimationFrame(() => { rpPlaceQueued = false; rpPlace(e?.type === 'scroll'); });
+}
+
 function rpCloseMenus(focus = false) {
   if (typeof document === 'undefined') return;
   rpOpen = null;
@@ -361,7 +416,10 @@ function rpInstall() {
       const menu = summary.parentNode, opening = !menu.open;
       for (const other of document.querySelectorAll('details.robot-menu[open]')) if (other !== menu) other.open = false;
       rpOpen = opening ? menu.dataset.rpMenu : null;
-      if (opening) setTimeout(() => menu.querySelector('.robot-menu-panel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'}), 0);
+      // A card's list is opened here and put in its place before it is first painted (issue #64); the page does not
+      // scroll for it, unless its button is out of sight (opened by a script, not by a person): the button is shown first.
+      if (opening && menu.closest('.rp-card')) { e.preventDefault(); menu.open = true; rpMenuScroll = 0; summary.scrollIntoView({block: 'nearest', behavior: 'instant'}); rpPlace(); }
+      else if (opening) setTimeout(() => menu.querySelector('.robot-menu-panel')?.scrollIntoView({block: 'nearest', behavior: 'smooth'}), 0);
       return;
     }
     // A form reached from the list of body types (add, remove): when it closes, the list is back.
@@ -403,6 +461,8 @@ function rpInstall() {
       if (stops.length && at === (e.shiftKey ? stops[0] : stops[stops.length - 1])) rpCloseMenus();
     }
   });
+  document.addEventListener('scroll', rpPlaceSoon, {capture: true, passive: true});
+  window.addEventListener('resize', rpPlaceSoon);
   if (current === 'robots') render();
 }
 

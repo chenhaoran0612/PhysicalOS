@@ -109,3 +109,7 @@
 .rp-overview .text-link{padding-left:10px;padding-right:10px;border:1px solid #dbe4da;border-radius:6px;background:#fff}
 @media(max-width:850px){.rp-overview{padding:12px 18px}}
 @media(prefers-reduced-motion:reduce){.rp-picture img{transition:none}}
+
+/* ================= Issue #64: a card's list is placed in the window (rpPlace), not hung under its card.
+   Under its button while it fits; a long list beside the button, about the middle of the window. */
+.rp-card .robot-menu-panel{position:fixed;left:var(--rp-menu-left,0);top:var(--rp-menu-top,0);right:auto;max-width:calc(100vw - 24px);max-height:var(--rp-menu-max,none);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#cfd9cc transparent;scroll-margin:0}
