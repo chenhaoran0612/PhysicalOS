@@ -52,6 +52,7 @@ USER_DOES = {
     'arm.ee_pose': '把机械臂末端移动到空间中的指定位置和朝向。',
     'gripper.position': '张开或合上夹爪，抓取或松开物体。',
     'policy.action_chunk': '执行 AI 策略模型（如 VLA）给出的一段连续动作。',
+    'policy.run': '运行一个为它训练好的技能模型（按名字选），由机器人自己把整个动作做完。',
     'model.install': '在机器人上安装 AI 模型（只安装，不会让机器人动）。',
     'audio.speak': '把文字念出来（语音播报）。',
 }

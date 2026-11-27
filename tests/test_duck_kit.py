@@ -349,7 +349,7 @@ class Performing(Case):
         robot = self.add()
         self.assertEqual((robot['status'], robot['family'], robot['sim']['state'], robot['sim']['duck']), ('connected', 'biped', 'running', True))
         self.assertEqual((robot['product']['vendor'], robot['product']['model']), ('Microduck', 'AD-P102'))
-        self.assertEqual(sorted(c['id'] if isinstance(c, dict) else c for c in robot['capabilities']), ['safety.stop', 'system.health'])
+        self.assertEqual(sorted(c['id'] if isinstance(c, dict) else c for c in robot['capabilities']), ['policy.run', 'safety.stop', 'system.health'])   # issue #67: its skill models are run by name
         second = self.add()
         self.assertNotEqual(second['name'], robot['name'])
 

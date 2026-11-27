@@ -29,7 +29,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-SPEC_VERSION = "1.2"
+SPEC_VERSION = "1.3"
 
 # Field type vocabulary --------------------------------------------------
 # float, int, bool, str, enum, vector (fixed-length float list),
@@ -199,6 +199,20 @@ CAPABILITIES: dict[str, Capability] = {c.id: c for c in [
                outputs=(F("executed", "int", description="实际执行步数"),),
                params=(F("action_space", "str", description="如 joint_position / ee_delta / base_velocity"),
                        F("dim", "int", positive=True), F("rate_hz", "float", "Hz", positive=True))),
+    # v1.3 (issue #67): a model trained for this body (in simulation or on the robot) is one of its
+    # skills. The body runs it itself, chosen by name; the runtime authorizes, starts, times and stops it.
+    Capability("policy.run", 1, "action", "motion", "运行已训练的技能模型",
+               "运行本体上一个已经训练好的技能模型（策略），按名字选，从头到尾做完一个动作。可以运行的模型由本体在 "
+               "policies 参数里声明；动作由本体按这个模型自己完成，运行时负责授权、开始、限时和停止（v1.3 新增）。",
+               inputs=(F("name", "str", description="模型名，须是 policies 里的一个"),
+                       F("seed", "int", required=False, nonnegative=True,
+                         description="起始编号：同一个编号从同一个起始状态开始，便于和验收记录对照（本体不支持时忽略）")),
+               outputs=(F("completed", "bool"), F("name", "str", required=False),
+                        F("reason", "str", required=False, description="没有做完时的原因"),
+                        F("duration_s", "float", "s", required=False), F("steps", "int", required=False)),
+               params=(F("policies", "object", description="本体可以运行的模型名列表（互不相同的非空字符串）"),
+                       F("max_duration_s", "float", "s", required=False, positive=True,
+                         description="其中最长的一个要多久"))),
     # ---- system ----------------------------------------------------------
     Capability("model.install", 1, "action", "system", "端侧模型安装", "下载并校验模型包，安装到端侧运行时，不触发任何动作。",
                inputs=(F("package_ref", "str"), F("sha256", "str"), F("runtime", "str"),

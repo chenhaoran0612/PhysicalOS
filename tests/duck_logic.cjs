@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const sandbox = {};
 vm.createContext(sandbox);
 const d = vm.runInContext(readFileSync('web/duck.js', 'utf8') +
-  '\n;({duckKit, duckScore, duckOrigin, duckRobots, duckReason, duckRunLine, duckSpark, duckFigure, duckAgo, duckTrainingSource, duckShowRow, duckTrainingBlock, duckStage, duckHead})', sandbox);
+  '\n;({duckKit, duckScore, duckOrigin, duckRobots, duckReason, duckRunLine, duckSpark, duckFigure, duckAgo, duckTrainingSource, duckShowRow, duckTrainingBlock, duckStage, duckHead, duckSkillLine})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -54,6 +54,18 @@ ok(row.includes('<b>10/10</b> 固定组') && row.includes('<b>10/10</b> 独立�
 ok(/data-duck-run="bow_roll" disabled/.test(d.duckShowRow(SHOWS[0], true, true)), 'not while a show is performed');
 ok(/data-duck-run="bow_roll" disabled/.test(d.duckShowRow(SHOWS[0], false, false)), 'not without a running duck');
 ok(d.duckShowRow(SHOWS[0], false, false).includes('data-duck-replay="bow_roll"'), 'the replay needs no duck');
+// ---- issue #67: a model is a skill of the robot
+const SKILLED = {...SHOWS[0], skill: {id: 'duck.bow_roll', version: '40.4.0', title: '鞠躬鞠过头'}};
+same(d.duckSkillLine(SHOWS[2]), '', 'a model without a package is no skill yet');
+ok(d.duckSkillLine(SKILLED).includes('<code>duck.bow_roll</code><span>v40.4.0</span><span>添加仿真小鸭时自动装上</span>'), 'which skill it is, before a duck is there');
+ok(d.duckSkillLine(SKILLED, {installed: true, error: ''}).includes('data-tone="good"') && d.duckSkillLine(SKILLED, {installed: true}).includes('已装在这个仿真小鸭上'), 'installed on the chosen duck');
+const missing = d.duckSkillLine(SKILLED, {installed: false, error: '没有装上：<b>'});
+ok(missing.includes('data-tone="bad"') && missing.includes('没有装到这个仿真小鸭上：没有装上：&lt;b&gt;'), 'not installed says why, escaped');
+ok(d.duckShowRow(SKILLED, true, false, {installed: true}).includes('已装在这个仿真小鸭上'), 'the row carries the skill line');
+const half = d.duckSkillLine(SKILLED, {installed: true, error: '已经装上，但没有登记到技能列表：x'});
+ok(half.includes('data-tone="bad"') && half.includes('已经装上，但没有登记到技能列表：x') && !half.includes('没有装到'), 'installed but not registered says exactly that');
+ok(!d.duckShowRow(SHOWS[0], true, false).includes('duck-skill'), 'a state from before has no skill line');
+ok(d.duckHead({shows: SHOWS, engine: {mujoco: '3.10.0'}}).includes('都是这个品牌型号的技能'), 'the head says what the models are');
 const training = d.duckShowRow(SHOWS[2], true, false);
 ok(!training.includes('data-duck-run') && !training.includes('data-duck-replay') && training.includes('还没有打包的模型'), 'a show in training has no buttons');
 ok(d.duckShowRow(SHOWS[1], true, false).includes('<b>8/10</b> 独立组') && d.duckShowRow(SHOWS[1], true, false).includes('duck-candidate'), 'a candidate says so');

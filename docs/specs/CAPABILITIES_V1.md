@@ -42,6 +42,7 @@
 | `arm.ee_pose` | 末端位姿 | 动作 | 运动 | `pose`: pose<br>`frame`: str?<br>`max_velocity`: float (m/s)? | `reached`: bool<br>`pose`: pose | `frame`: str<br>`reach`: float (m)<br>`payload`: float (kg) |
 | `gripper.position` | 夹爪 | 动作 | 运动 | `opening`: float (ratio)<br>`max_force`: float (N)? | `opening`: float (ratio)<br>`grasped`: bool? | `max_width`: float (m)<br>`max_force`: float (N) |
 | `policy.action_chunk` | 策略动作块 | 动作 | 运动 | `actions`: object<br>`dt`: float (s) | `executed`: int | `action_space`: str<br>`dim`: int<br>`rate_hz`: float (Hz) |
+| `policy.run` | 运行已训练的技能模型（v1.3，issue #67） | 动作 | 运动 | `name`: str<br>`seed`: int? | `completed`: bool<br>`name`: str?<br>`reason`: str?<br>`duration_s`: float (s)?<br>`steps`: int? | `policies`: object（模型名列表，必填）<br>`max_duration_s`: float (s)? |
 | `model.install` | 端侧模型安装 | 动作 | 系统 | `package_ref`: str<br>`sha256`: str<br>`runtime`: str | `installed`: bool<br>`model_id`: str | `runtimes`: object<br>`accelerator`: str? |
 | `audio.speak` | 语音播报 | 命令 | 无 | `text`: str<br>`language`: str? | `accepted`: bool | — |
 

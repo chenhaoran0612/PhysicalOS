@@ -119,7 +119,7 @@ class BuildTests(unittest.TestCase):
 
     def test_the_build_holds_the_install_script_and_two_wheels_of_the_tree(self):
         names = sorted(p.name for p in self.out.iterdir())
-        self.assertEqual(names, sorted(['device_install.sh', 'package.json', 'neuxmind_spec-1.2.0-py3-none-any.whl',
+        self.assertEqual(names, sorted(['device_install.sh', 'package.json', 'neuxmind_spec-1.3.0-py3-none-any.whl',
                                         'neuxmind_runtime-0.4.0-py3-none-any.whl']))
         self.assertEqual((self.out / 'device_install.sh').read_bytes(), (ROOT / 'runtime/deploy/device_install.sh').read_bytes())
         self.assertEqual(runtime_package.load(self.out).id, self.package.id)

@@ -58,6 +58,20 @@ def _check_places(cid: str, params: dict) -> None:
         raise ValueError(f"{cid}.params.places 不得重复")
 
 
+def _check_policies(cid: str, params: dict) -> None:
+    """``policies`` (v1.3): the trained skill models this body can run -- a non-empty list of distinct,
+    non-blank, single-line names. A body that declares the capability must say which ones it has."""
+    names = params.get("policies")
+    if not isinstance(names, list) or not names:
+        raise ValueError(f"{cid}.params.policies 须为非空的模型名列表")
+    for name in names:
+        if (not isinstance(name, str) or not name.strip() or len(name) > PLACE_NAME_MAX
+                or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)):
+            raise ValueError(f"{cid}.params.policies 里的模型名须为不超过 {PLACE_NAME_MAX} 个字符的一行文字")
+    if len(set(names)) != len(names):
+        raise ValueError(f"{cid}.params.policies 不得重复")
+
+
 def _check_joint_names(cid: str, params: dict) -> None:
     """Optional ``joint_names`` (v1.1): unique non-empty strings, one per ``dof``."""
     if "joint_names" not in params:
@@ -209,6 +223,8 @@ def validate_manifest_v2(m: dict) -> dict:
                 _check_joint_names(cid, params)
             if cid == "base.navigate_to_place":
                 _check_places(cid, params)
+            if cid == "policy.run":
+                _check_policies(cid, params)
         seen[cid] = {"id": cid, "major": major, "params": params}
     missing = [x for x in MANDATORY if x not in seen]
     if missing:

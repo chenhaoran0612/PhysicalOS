@@ -81,7 +81,19 @@ function duckTrainingSource(training, now) {
 const duckState = {root: null, robot: '', status: null, asked: null, replay: '', training: null, timer: 0, trainingTimer: 0,
   drawn: {}, busy: false, frame: 0};
 
-function duckShowRow(show, canRun, performing) {
+// Issue #67: a model with a package is a skill of the robot. `bound`: what the chosen simulated duck says
+// about it (`{installed, error}`), nothing when no duck is chosen or it has not answered yet.
+function duckSkillLine(show, bound) {
+  const skill = show.skill;
+  if (!skill || !skill.id) return '';
+  const where = !bound ? '添加仿真小鸭时自动装上'
+    : bound.installed ? (bound.error || '已装在这个仿真小鸭上')
+      : `没有装到这个仿真小鸭上${bound.error ? '：' + bound.error : ''}`;
+  return `<p class="duck-skill" data-tone="${bound ? (bound.installed && !bound.error ? 'good' : 'bad') : ''}"><span class="duck-skill-tag">技能</span>`
+    + `<code>${duckEsc(skill.id)}</code><span>v${duckEsc(skill.version)}</span><span>${duckEsc(where)}</span></p>`;
+}
+
+function duckShowRow(show, canRun, performing, bound) {
   const a = show.acceptance || {};
   const chip = `<span class="duck-chip duck-${duckEsc(show.status)}">${duckEsc(show.status_name)}</span>`;
   const scores = show.acceptance ? `<span class="duck-score"><b>${duckScore(a.fixed)}</b> 固定组</span><span class="duck-score"><b>${duckScore(a.independent)}</b> 独立组</span>` : '';
@@ -91,6 +103,7 @@ function duckShowRow(show, canRun, performing) {
     : '';
   return `<li class="duck-show" data-duck-show="${duckEsc(show.id)}"><div class="duck-show-main"><h3>${duckEsc(show.title)} ${chip}</h3>`
     + `<p>${duckEsc(show.summary)}</p><div class="duck-show-facts">${scores}<span>${duckEsc(duckOrigin(show.origin))}</span></div>`
+    + duckSkillLine(show, bound)
     + (show.note ? `<p class="duck-note">${duckEsc(show.note)}</p>` : '')
     + (show.status !== 'training' && !show.packaged ? '<p class="duck-note">这个安装里没有它的模型包。</p>' : '')
     + `</div><div class="duck-show-actions">${buttons}</div></li>`;
@@ -100,7 +113,8 @@ function duckHead(kit) {
   const count = kit.shows.filter(s => s.packaged).length;
   return `<header class="duck-head"><img src="/robot_images/microduck-adp102.webp" alt="" width="84" height="84">`
     + `<div><span class="duck-eyebrow">技能模型</span><h2>${duckEsc(kit.vendor || 'Microduck')} · ${duckEsc(kit.model || 'AD-P102')}</h2>`
-    + `<p>${count} 个模型包 · 在 MuJoCo ${duckEsc(kit.engine.mujoco || '')} 上验收和运行 · 仿真结果，不是现场证据</p></div></header>`;
+    + `<p>${count} 个模型包 · 在 MuJoCo ${duckEsc(kit.engine.mujoco || '')} 上验收和运行 · 仿真结果，不是现场证据</p>`
+    + `<p class="duck-head-skills">仿真里训练出的每个模型都是这个品牌型号的技能：仿真小鸭自带，在「我的机器人」里可以运行，也可以编排进机器人应用。</p></div></header>`;
 }
 
 function duckStage(kit, ducks) {
@@ -155,7 +169,8 @@ function duckDraw() {
   const status = duckState.status, asked = duckState.asked;
   const performing = Boolean(asked) || Boolean(status && ['starting', 'running'].includes(status.state));
   const canRun = Boolean(duckState.robot) && Boolean(status && status.running);
-  duckPart('shows', `<ul class="duck-shows">${kit.shows.map(s => duckShowRow(s, canRun, performing)).join('')}</ul>`);
+  const bound = (duckState.robot && status && status.skills) || {};
+  duckPart('shows', `<ul class="duck-shows">${kit.shows.map(s => duckShowRow(s, canRun, performing, bound[s.id])).join('')}</ul>`);
   duckPart('training', duckTrainingBlock(duckState.training, Date.now() / 1000));
   duckLive();
 }

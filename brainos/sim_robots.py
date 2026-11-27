@@ -221,6 +221,8 @@ class SimRobots:
             try:
                 self.platform.connect_robot({'robot_id': robot_id})
                 robot_caps.refresh(self.platform, self.platform.store.get('robots', robot_id))
+                if robot['sim'].get('duck'):
+                    self.platform.duck.bind_skills(robot_id)     # issue #67: its trained skill models are its skills
             except ValueError as exc:
                 robot = self.platform.store.get('robots', robot_id)
                 robot['sim'].update(state='failed', error='仿真机器人已启动，但连接检查没有通过：' + str(exc))

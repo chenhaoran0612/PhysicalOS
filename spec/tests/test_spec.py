@@ -175,8 +175,8 @@ class NamedPlacesAndExplore(unittest.TestCase):
                 "capabilities": [{"id": "safety.stop", "params": {"hardware_estop": False}},
                                  {"id": "system.health"}, *capabilities]}
 
-    def test_spec_version_is_1_2(self):
-        self.assertEqual(caps.SPEC_VERSION, "1.2")
+    def test_spec_version_is_past_1_2(self):
+        self.assertGreaterEqual(tuple(int(x) for x in caps.SPEC_VERSION.split(".")), (1, 2))
 
     def test_both_are_motion_actions(self):
         for cap_id in ("base.navigate_to_place", "base.explore"):
@@ -235,6 +235,65 @@ class NamedPlacesAndExplore(unittest.TestCase):
             "entry": "skill.py:run", "requires": [{"id": "base.navigate_to_place"}, {"id": "safety.stop"}]})
         with_places = self._m({"id": "base.navigate_to_place", "params": {"places": ["会议室"]}})
         self.assertTrue(mf.check_compatibility(skill, with_places)["compatible"])
+        self.assertFalse(mf.check_compatibility(skill, self._m())["compatible"])
+
+
+
+class TrainedSkillModels(unittest.TestCase):
+    """Issue #67 (spec 1.3): a model trained for a body is run by the body, chosen by name."""
+
+    def _m(self, *capabilities):
+        return {"schema": "robot.adapter.v2", "instance_id": "duck-1", "name": "Duck", "adapter_version": "0.1.0",
+                "family": "humanoid",
+                "capabilities": [{"id": "safety.stop", "params": {"hardware_estop": False}},
+                                 {"id": "system.health"}, *capabilities]}
+
+    def test_spec_version_is_1_3(self):
+        self.assertEqual(caps.SPEC_VERSION, "1.3")
+
+    def test_it_is_a_motion_action(self):
+        cap = caps.get("policy.run")
+        self.assertEqual((cap.kind, cap.safety, cap.major), ("action", "motion", 1))
+        self.assertTrue(mf.is_motion("policy.run"))
+
+    def test_payloads(self):
+        caps.validate_payload("policy.run", {"name": "bow"})
+        caps.validate_payload("policy.run", {"name": "bow", "seed": 0})
+        caps.validate_payload("policy.run", {"name": "bow", "seed": 1700003000})
+        caps.validate_payload("policy.run", {"completed": True, "name": "bow", "duration_s": 4.54, "steps": 227}, "outputs")
+        caps.validate_payload("policy.run", {"completed": False, "reason": "fell"}, "outputs")
+        for bad in ({}, {"name": 3}, {"name": "bow", "seed": -1}, {"name": "bow", "seed": 1.5}, {"name": "bow", "seed": True},
+                    {"name": "bow", "speed": 2.0}, {"seed": 1}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    caps.validate_payload("policy.run", bad)
+
+    def test_manifest_declares_its_models(self):
+        out = mf.validate_manifest_v2(self._m({"id": "policy.run", "params": {"policies": ["bow", "kick"], "max_duration_s": 30.0}}))
+        declared = {c["id"]: c["params"] for c in out["capabilities"]}
+        self.assertEqual(declared["policy.run"]["policies"], ["bow", "kick"])
+
+    def test_models_must_be_a_list_of_distinct_names(self):
+        for bad in (None, [], "bow", ["bow", "bow"], ["bow", ""], ["bow", 3], {"bow": 1}, ["  "], ["x" * 101], ["a\nb"]):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    mf.validate_manifest_v2(self._m({"id": "policy.run", "params": {"policies": bad}}))
+
+    def test_the_capability_without_models_is_refused(self):
+        with self.assertRaises(ValueError):
+            mf.validate_manifest_v2(self._m({"id": "policy.run"}))
+
+    def test_limits_fail_closed(self):
+        for extra in ({"max_duration_s": 0}, {"max_duration_s": float("inf")}, {"warp": 1}):
+            with self.subTest(extra=extra):
+                with self.assertRaises(ValueError):
+                    mf.validate_manifest_v2(self._m({"id": "policy.run", "params": {"policies": ["bow"], **extra}}))
+
+    def test_a_skill_can_require_it(self):
+        skill = mf.validate_skill_package({
+            "schema": "skill.package.v1", "id": "bow", "version": "1.0.0", "title": "鞠躬",
+            "entry": "skill.py:run", "requires": [{"id": "policy.run"}, {"id": "safety.stop"}]})
+        self.assertTrue(mf.check_compatibility(skill, self._m({"id": "policy.run", "params": {"policies": ["bow"]}}))["compatible"])
         self.assertFalse(mf.check_compatibility(skill, self._m())["compatible"])
 
 
