@@ -244,8 +244,9 @@ function rpSettings() {
     `<div class="robot-menu-panel"><div class="robot-menu-group" role="group" aria-label="${RP_SETTINGS_LABEL}">${entries}</div></div></details>`;
 }
 
-// The head of the page: one line of state, the title, and on the right what can be done to the page.
-const rpHead = (line, buttons) => `<div class="page-head rp-head"><div>${line ? `<div class="eyebrow">${h(line)}</div>` : ''}<h1>我的机器人</h1></div>` +
+// The head of the page: the title as every page has it (issue #57, web/page_titles.js), under it one line of
+// state, and on the right what can be done to the page.
+const rpHead = (line, buttons) => `<div class="page-head rp-head"><div>${pageTitleMarkup('robots')}${line ? `<p class="subtitle rp-count">${h(line)}</p>` : ''}</div>` +
   `<div class="button-row">${buttons}${rpSettings()}</div></div>`;
 
 function rpPage() {

@@ -55,7 +55,8 @@ const ROBOT = '巡检机器人';
   check(await main.locator('.page-head details.rp-settings').count() === 1, 'The empty page has no 设置');
   check(!(await main.locator('.notice:visible').count()), 'A notice is in sight on the empty page');
   // Issue #53: nothing describes anything. A way to add a robot is its title and its button.
-  check(await main.locator('.page-head .eyebrow').count() === 0, 'The empty page still has a line above its title');
+  check(await main.locator('.page-head .eyebrow').innerText() === 'MY ROBOTS' && await main.locator('.page-head .rp-count').count() === 0,
+        'The empty page is not titled as every page is (issue #57), or counts robots it does not have');
   check(await main.locator('.robot-entry .journey-option p, .robot-entry .entry-eyebrow').count() === 0, 'A way to add a robot is still described');
   check(await main.locator('.robot-entry .journey-option .button:visible').count() === 3, 'A way to add a robot lost its button');
   check(await noSidewaysScroll(), 'The empty page scrolls sideways');
@@ -76,7 +77,7 @@ const ROBOT = '巡检机器人';
   await card(ROBOT).locator('.hb-line').waitFor({timeout: 15000});
   check(await main.locator('.robot-entry').count() === 0, 'The three ways to add a robot still fill the page once there is a robot');
   check(await main.locator('h1').innerText() === '我的机器人', 'The page with a robot is not titled 我的机器人');
-  check((await main.locator('.page-head .eyebrow').innerText()).includes('1 台真机'), 'The head does not say how many robots there are');
+  check((await main.locator('.page-head .rp-count').innerText()).includes('1 台真机'), 'The head does not say how many robots there are');
   check(await main.locator('.page-head button:visible').count() === 1, 'The head has more than the one button');
   check(await main.locator('.page-head details.rp-settings > summary').isVisible(), 'The head has no 设置');
   check(await main.locator('.page-purpose, .rp-folds').count() === 0, 'The page with a robot still has folds of explanations');
@@ -185,7 +186,7 @@ const ROBOT = '巡检机器人';
   await dialog.locator('button[type=submit]').click();
   await main.locator('article.sim-card [data-action="sim-live"]').waitFor({timeout: 60000});
   if (await page.locator('#dialog[open] [data-action="close"]').count()) await page.locator('#dialog [data-action="close"]').first().click();
-  check((await main.locator('.page-head .eyebrow').innerText()).includes('1 台真机 · 1 台仿真'), 'The head does not count real and simulated robots apart');
+  check((await main.locator('.page-head .rp-count').innerText()).includes('1 台真机 · 1 台仿真'), 'The head does not count real and simulated robots apart');
   const sim = main.locator('article.sim-card');
   const simSeen = await sim.locator('button:visible, summary:visible').evaluateAll(els => els.map(el => el.innerText.trim()));
   check(simSeen.join() === '能力与技能,实时状态,更多功能', `A running simulation shows ${JSON.stringify(simSeen)}`);
