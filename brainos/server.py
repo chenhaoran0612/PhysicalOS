@@ -198,6 +198,8 @@ def make_handler(application):
             extra=extra or {'/combo.js':('combo.js','text/javascript; charset=utf-8'),'/combo.css':('combo.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #54: adding a simulated robot by type, brand and model, likewise.
             extra=extra or {'/sim_profiles.js':('sim_profiles.js','text/javascript; charset=utf-8'),'/sim_profiles.css':('sim_profiles.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #66: 仿真试运行 by task, likewise.
+            extra=extra or {'/task_sim.js':('task_sim.js','text/javascript; charset=utf-8'),'/task_sim.css':('task_sim.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #63: the Microduck's skill models and their training, on the training page.
             extra=extra or {'/duck.js':('duck.js','text/javascript; charset=utf-8'),'/duck.css':('duck.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #43: skills kept in the cloud, remote calls of a robot's skills, its programs and scene data, likewise.
@@ -239,6 +241,7 @@ def make_handler(application):
                 wanted=parse_qs(urlparse(self.path).query).get('id',[''])[0]
                 mujoco=application.workspace(user).mujoco
                 picture=mujoco.frame(wanted) if path=='/api/sims/frame' else mujoco.preview(wanted)
+                picture=picture or (application.workspace(user).task_sim.preview(wanted) if path!='/api/sims/frame' else None)     # issue #66: a task's environment
                 if picture is None:
                     return self.respond({'error':'还没有画面'},404)
                 return self.respond(picture,mime='image/png')
@@ -421,6 +424,10 @@ def make_handler(application):
                         'sim/mujoco/empty':service.mujoco.empty,'sim/mujoco/scene':service.mujoco.scene,
                         'sim/mujoco/review':service.mujoco.review,'sim/mujoco/remove':service.mujoco.remove,
                         'sims/mujoco':service.mujoco.add_robot,'sims/view':service.mujoco.view,
+                        # issue #66: 仿真试运行 by task (requests for a task; its simulated robot is kept with the robots)
+                        'task-sim/list':service.task_sim.list,'task-sim/view':service.task_sim.view,'task-sim/build':service.task_sim.build,
+                        'task-sim/cancel':service.task_sim.cancel,'task-sim/remove':service.task_sim.remove,
+                        'task-sim/enter':service.task_sim.enter,'task-sim/install':service.task_sim.install,
                         'robots/run-skill':service.run_robot_skill,
                         # issue #63: a simulated Microduck performs a trained skill model; the training progress
                         'sims/duck/perform':service.duck.perform,'sims/duck/stop':service.duck.stop,'sims/duck/status':service.duck.status,

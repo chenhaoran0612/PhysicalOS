@@ -109,6 +109,8 @@ class Platform:
         self.sim_profiles = SimProfiles(self)       # issue #54: built-in profiles by type, brand and model; simulated robots are added from them
         from .duck_kit import DuckKit
         self.duck = DuckKit(self)                   # issue #63: the Microduck's model, skill models and training
+        from .task_sim import TaskSim
+        self.task_sim = TaskSim(self)               # issue #66: 仿真试运行 by task: one saved environment and one simulated robot per task
         from .hardware_init import HardwareInit
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         from .device_profile import DeviceProfile
@@ -1008,6 +1010,7 @@ class Platform:
         self.runtime_link.close()   # issue #17: the SSH sessions of the links to the robots' management layers
         self.runtime_install.close()   # issue #19: installs under way stop waiting (what a robot does goes on there)
         self.mujoco.close()         # issue #51: scenes being generated or checked stop waiting
+        self.task_sim.close()       # issue #66: a task's environment being built stops waiting
         self.sims.close()
         self.workflows.close()
         self.engineering.close()
