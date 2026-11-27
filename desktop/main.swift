@@ -22,13 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.navigationDelegate = self
         webView.uiDelegate = self
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1390, height: 930), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "NeuxMind Robot OS"
+        window.title = "NeuxMind Physical OS"
         window.minSize = NSSize(width: 900, height: 640)
         window.center()
         window.contentView = webView
         window.titlebarAppearsTransparent = true
         window.backgroundColor = NSColor(red: 0.96, green: 0.97, blue: 0.95, alpha: 1)
-        loading = NSTextField(labelWithString: "正在启动 NeuxMind Robot OS…")
+        loading = NSTextField(labelWithString: "正在启动 NeuxMind Physical OS…")
         loading.textColor = .secondaryLabelColor
         loading.font = .systemFont(ofSize: 17)
         loading.translatesAutoresizingMaskIntoConstraints = false
@@ -43,14 +43,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let bar = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "关于 NeuxMind Robot OS", action: #selector(showAbout), keyEquivalent: "")
+        appMenu.addItem(withTitle: "关于 NeuxMind Physical OS", action: #selector(showAbout), keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "连接平台服务…", action: #selector(configurePlatform), keyEquivalent: ",")
         appMenu.addItem(withTitle: "使用本机工作空间", action: #selector(useLocal), keyEquivalent: "")
         appMenu.addItem(withTitle: "开源许可…", action: #selector(openLicenses), keyEquivalent: "")
         appMenu.addItem(withTitle: "打开数据文件夹", action: #selector(openData), keyEquivalent: "")
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "退出 NeuxMind Robot OS", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "退出 NeuxMind Physical OS", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         bar.addItem(appItem)
         let editItem = NSMenuItem()
@@ -73,9 +73,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         if let url = Bundle.main.resourceURL?.appendingPathComponent("licenses") { NSWorkspace.shared.open(url) }
     }
 
-    var dataDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("NeuxMind Robot OS", isDirectory: true)
-    }
+    /// Decided once per start (desktop/DataFolder.swift): the former folder is moved to the new name the first time.
+    lazy var dataDirectory: URL = {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let (folder, outcome) = DataFolder.resolve(in: support)
+        switch outcome {
+        case .moved: NSLog("Data folder moved to %@", folder.path)
+        case .keptFormer(let why): NSLog("Data folder stays at %@: %@", folder.path, why)
+        case .fresh, .current: break
+        }
+        return folder
+    }()
 
     func startServer() {
         guard let resources = Bundle.main.resourceURL else { showError("无法读取应用资源。"); return }
@@ -122,14 +130,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     func showError(_ message: String) {
-        let alert = NSAlert(); alert.messageText = "NeuxMind Robot OS"; alert.informativeText = message
+        let alert = NSAlert(); alert.messageText = "NeuxMind Physical OS"; alert.informativeText = message
         alert.addButton(withTitle: "确定"); alert.runModal()
     }
     @objc func reload() { webView.reload() }
     @objc func openBrowser() { if let url = serviceURL { NSWorkspace.shared.open(url) } }
     @objc func openData() { NSWorkspace.shared.open(dataDirectory) }
     @objc func showAbout() {
-        let alert = NSAlert(); alert.messageText = "NeuxMind Robot OS 0.21.13"
+        let alert = NSAlert(); alert.messageText = "NeuxMind Physical OS 0.21.13"
         alert.informativeText = "机器人开发与交付平台\n模型 · Agent · 训练 · 仿真 · 部署 · 用量\n\nmacOS Apple Silicon 开发预览版\n平台资源和生产模型由运营端配置。"
         alert.runModal()
     }

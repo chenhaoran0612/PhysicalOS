@@ -1,4 +1,4 @@
-"""NeuxMind Robot OS shared specification (stdlib only).
+"""NeuxMind Physical OS shared specification (stdlib only).
 
 Import from here in runtime/, cloud/, sdk/ and brainos/:
 

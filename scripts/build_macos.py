@@ -27,7 +27,7 @@ import urllib.request
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 BUILD=ROOT/'.build'
 DIST=ROOT/'dist'
-APP=DIST/'NeuxMind Robot OS.app'
+APP=DIST/'NeuxMind Physical OS.app'
 VERSION='0.21.13'
 
 # (source, destination inside the bundle). Destinations mirror the source tree so that
@@ -261,7 +261,7 @@ def build_app():
     shutil.copytree(ROOT/'licenses',resources/'licenses')
     shutil.copy2(ROOT/'runtime-lock.json',resources/'runtime-lock.json')
     run(['swiftc','-O','-target','arm64-apple-macos13.0','-framework','Cocoa','-framework','WebKit',
-         ROOT/'desktop/main.swift','-o',macos/'NeuxMind'])
+         ROOT/'desktop/main.swift',ROOT/'desktop/DataFolder.swift','-o',macos/'NeuxMind'])
     run(['swift',ROOT/'desktop/icon.swift',BUILD])
     run(['iconutil','-c','icns',BUILD/'AppIcon.iconset','-o',resources/'AppIcon.icns'])
     shutil.copy2(ROOT/'README.md',resources/'README.md')
@@ -286,13 +286,13 @@ def package_installers():
         components.write_bytes(plistlib.dumps([{'RootRelativeBundlePath':APP.name,
             'BundleIsRelocatable':False,'BundleIsVersionChecked':True,'BundleOverwriteAction':'upgrade'}]))
         run(['pkgbuild','--root',staging,'--component-plist',components,'--install-location','/Applications',
-             '--identifier','com.neuxmind.robotos','--version',VERSION,DIST/f'NeuxMind-Robot-OS-{VERSION}-arm64.pkg'])
+             '--identifier','com.neuxmind.robotos','--version',VERSION,DIST/f'NeuxMind-Physical-OS-{VERSION}-arm64.pkg'])
         (staging/'Applications').symlink_to('/Applications')
         shutil.copy2(ROOT/'desktop/INSTALL.txt',staging/'安装说明.txt')
         run(['xattr','-cr',staging])
-        dmg=DIST/f'NeuxMind-Robot-OS-{VERSION}-arm64.dmg'
+        dmg=DIST/f'NeuxMind-Physical-OS-{VERSION}-arm64.dmg'
         if dmg.exists():dmg.unlink()
-        run(['hdiutil','create','-volname','NeuxMind Robot OS','-srcfolder',staging,'-ov','-format','UDZO',dmg])
+        run(['hdiutil','create','-volname','NeuxMind Physical OS','-srcfolder',staging,'-ov','-format','UDZO',dmg])
         run(['hdiutil','verify',dmg])
         mount=pathlib.Path(temporary)/'mounted'
         mount.mkdir()

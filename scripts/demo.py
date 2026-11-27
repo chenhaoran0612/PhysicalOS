@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-command demo environment for NeuxMind Robot OS (simulation only).
+"""One-command demo environment for NeuxMind Physical OS (simulation only).
 
 Starts, from the source tree:
   * two simulated robots (edge runtime): a quadruped and a 6-axis arm
@@ -267,7 +267,7 @@ def up() -> None:
 
 
 def print_info(info: dict) -> None:
-    print("\n=== NeuxMind Robot OS 演示环境已启动（全部为本机仿真） ===\n")
+    print("\n=== NeuxMind Physical OS 演示环境已启动（全部为本机仿真） ===\n")
     print(f"1) 桌面控制台：在浏览器打开  {info['desktop']}")
     print("   （首次进入先注册一个本地工作空间，任意邮箱 + 10 位以上密码）\n")
     print("2) 仿真机器人（在控制台“连接机器人”时填写）：")

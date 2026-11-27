@@ -121,7 +121,7 @@ def make_handler(gateway):
 
 
 def main():
-    parser=argparse.ArgumentParser(description='Robot OS device gateway; install your robot adapter first.')
+    parser=argparse.ArgumentParser(description='Physical OS device gateway; install your robot adapter first.')
     parser.add_argument('--adapter',required=True,help='Trusted installed Python module:AdapterClass')
     parser.add_argument('--host',default='127.0.0.1')
     parser.add_argument('--port',type=int,default=8790)
@@ -132,7 +132,7 @@ def main():
     gateway=Gateway(adapter,os.environ.get('BRAIN_EDGE_TOKEN',''),args.state_dir)
     server=FastBindHTTPServer((args.host,args.port),make_handler(gateway))
     server.daemon_threads=True
-    print(f'Robot OS Edge gateway http://{args.host}:{server.server_port}',flush=True)
+    print(f'Physical OS Edge gateway http://{args.host}:{server.server_port}',flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

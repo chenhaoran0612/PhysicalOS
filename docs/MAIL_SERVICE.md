@@ -5,7 +5,7 @@
 
 ## 配置
 
-状态目录：安装版是 `~/Library/Application Support/NeuxMind Robot OS/state`，源码运行是 `--state-dir` 指的目录。
+状态目录：安装版是 `~/Library/Application Support/NeuxMind Physical OS/state`，源码运行是 `--state-dir` 指的目录。
 
 ```bash
 python3 -m brainos.mailer --state-dir "<状态目录>" init
@@ -20,7 +20,7 @@ python3 -m brainos.mailer --state-dir "<状态目录>" init
 | `user` | 登录账号，一般就是发信邮箱地址 |
 | `password` | 邮箱的密码或授权码 |
 | `from` | 发件地址，留空时用 `user`。只写地址，不带名称。要与登录账号一致，或是它有权代发的地址 |
-| `from_name` | 收件人看到的发件人名称，默认 `NeuxMind Robot OS` |
+| `from_name` | 收件人看到的发件人名称，默认 `NeuxMind Physical OS` |
 | `ssl` | 可不写：端口是 465 时为 `true`，否则为 `false` |
 
 设置了环境变量 `NEUXMIND_SMTP_HOST` 时，整套配置改用环境变量（`NEUXMIND_SMTP_HOST`、`_PORT`、`_USER`、`_PASSWORD`、`_FROM`、`_FROM_NAME`、`_SSL`），`mail.json` 不再读取；没有设置 `HOST` 时其余几个变量不起作用。
@@ -43,7 +43,7 @@ python3 -m brainos.mailer --state-dir "<状态目录>" test you@example.com
 
 ## 邮件的样子
 
-- 发件人显示为 `NeuxMind Robot OS <发件地址>`，标题是 `NeuxMind 注册验证码：123456` 或 `NeuxMind 重置密码验证码：123456`。
+- 发件人显示为 `NeuxMind Physical OS <发件地址>`，标题是 `NeuxMind 注册验证码：123456` 或 `NeuxMind 重置密码验证码：123456`。
 - 同一封邮件带纯文本和 HTML 两个版本，内容相同。HTML 不加载任何外部资源，没有链接和按钮。
 - 带 `Date`、发件域名下的 `Message-ID`、`Auto-Submitted: auto-generated`（不触发自动回复）。
 - 文字和版式在 `brainos/mail_templates.py`。

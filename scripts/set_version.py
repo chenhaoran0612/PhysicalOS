@@ -21,10 +21,10 @@ LOCATIONS = [
     ('scripts/build_macos.py', [rf"^VERSION='{V}'"]),
     ('brainos/server.py', [rf"'status':'ok','version':'{V}'"]),
     ('brainos/service.py', [rf"system=\{{'version': '{V}'"]),
-    ('brainos/agent_runtime.py', [rf"'title':'NeuxMind Robot OS','version':'{V}'"]),
-    ('desktop/main.swift', [rf'messageText = "NeuxMind Robot OS {V}"']),
+    ('brainos/agent_runtime.py', [rf"'title':'NeuxMind Physical OS','version':'{V}'"]),
+    ('desktop/main.swift', [rf'messageText = "NeuxMind Physical OS {V}"']),
     ('desktop/Info.plist', [rf'<key>CFBundleShortVersionString</key><string>{V}</string>']),
-    ('desktop/INSTALL.txt', [rf'^NeuxMind Robot OS {V} —']),
+    ('desktop/INSTALL.txt', [rf'^NeuxMind Physical OS {V} —']),
     ('tests/frozen_engine_smoke.py', [rf"\['version'\]=='{V}'", rf"'version':'{V}'\}}"]),
 ]
 EXPECTED_COUNTS = {path: len(patterns) for path, patterns in LOCATIONS}

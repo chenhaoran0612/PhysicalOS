@@ -1,4 +1,4 @@
-# NeuxMind Robot OS
+# NeuxMind Physical OS
 
 > **0.8.0（第 01 轮进化）起，本项目从"Mac 桌面控制台"升级为跨本体机器人操作系统与开发平台。** 目标架构见 [docs/TARGET_ARCHITECTURE.md](docs/TARGET_ARCHITECTURE.md)，进化记录见 [docs/evolution/](docs/evolution/)，全部文档的索引见 [docs/README.md](docs/README.md)。
 >
@@ -54,11 +54,11 @@ python3 -m unittest discover -s tests      # 桌面端（含 tests/test_version.
 
 ## 安装与运行
 
-- macOS 安装包：`dist/NeuxMind-Robot-OS-<版本>-arm64.dmg` 或同名 `.pkg`（当前发布版本 0.14.0；`dist/` 不进 Git，由 `scripts/build_macos.py` 生成）。
+- macOS 安装包：`dist/NeuxMind-Physical-OS-<版本>-arm64.dmg` 或同名 `.pkg`（当前发布版本 0.14.0；`dist/` 不进 Git，由 `scripts/build_macos.py` 生成）。
 - 原生宿主使用 Cocoa + WKWebView，内置独立 Python 后端，最终用户不需要安装开发环境。
 - 当前构建为 Apple Silicon、macOS 13+ 开发预览。Intel Mac、Windows 尚未构建验证。
 - 安装包采用 ad-hoc 本地签名，尚未进行 Developer ID 签名和 Apple 公证。
-- 数据存放在 `~/Library/Application Support/NeuxMind Robot OS/state/`。应用更新不覆盖用户数据。
+- 数据存放在 `~/Library/Application Support/NeuxMind Physical OS/state/`。应用更新不覆盖用户数据。
 - 菜单“连接平台服务…”可连接运营方部署的 HTTPS 工作台；本机工作空间保留。当前没有默认的已上线云平台地址。
 
 源码开发（在仓库根目录执行）：
@@ -132,7 +132,7 @@ python3.12 -m venv .build/packaging-venv
 
 - 注册和找回密码都要填邮件里的 6 位验证码：10 分钟内有效，60 秒后才能重发，同一邮箱每小时最多发 5 次，输错 5 次作废。新密码至少 10 个字符，同时包含字母和数字。
 - 邮件服务按顺序读取：环境变量 `NEUXMIND_SMTP_HOST`、`NEUXMIND_SMTP_PORT`、`NEUXMIND_SMTP_USER`、`NEUXMIND_SMTP_PASSWORD`、`NEUXMIND_SMTP_FROM`、`NEUXMIND_SMTP_FROM_NAME`、`NEUXMIND_SMTP_SSL`；或 `<状态目录>/mail.json`（同名小写键，不带前缀）。配置、检查命令和失败提示见 [docs/MAIL_SERVICE.md](docs/MAIL_SERVICE.md)（issue #37）；`python3 -m brainos.mailer --state-dir <状态目录> init|check|test <邮箱>` 可生成配置模板、检查登录、发测试邮件。写错的 `mail.json` 会在发信时报错，不会被当成未配置。
-- 验证码邮件带纯文本和 HTML 两个版本，不加载外部资源、没有链接，发件人显示为 `NeuxMind Robot OS`（`from_name` 可改）。
+- 验证码邮件带纯文本和 HTML 两个版本，不加载外部资源、没有链接，发件人显示为 `NeuxMind Physical OS`（`from_name` 可改）。
 - 没有配置邮件服务时邮件不会发出，验证码写到 `<状态目录>/mail-outbox.txt`（权限 0600），注册页会显示这个路径。
 - 没有配置邮件服务时还会启用一个内置测试账号（`brainos/auth.py` 的 `TEST_EMAIL`），用来在配置邮件之前试用。它的密码写在公开的源码里，不要在它名下放真实资料；环境变量 `NEUXMIND_TEST_ACCOUNT=0` 可以关掉它，配置了邮件服务后它在下次启动时自动停用（`mail.json` 写错了也算已配置）。
 - `NEUXMIND_MAIL_DEV_ECHO=1` 只给自动化测试用：没有配置邮件服务时，验证码随接口返回。浏览器验收脚本经 `tests/gate_helper.cjs` 走登录页。
@@ -236,7 +236,7 @@ python3 scripts/set_version.py 0.15.0        # 不带参数则列出各处当前
 .build/packaging-venv/bin/python scripts/build_macos.py
 ```
 
-`scripts/build_macos.py` 会先删除再重建 `dist/NeuxMind Robot OS.app`：从某个工作区打包前，先退出从那里启动的 App。
+`scripts/build_macos.py` 会先删除再重建 `dist/NeuxMind Physical OS.app`：从某个工作区打包前，先退出从那里启动的 App。
 
 测试设备与模型仅位于 `tests/`，不会包含在产品模型库或正常启动流程中。测试通过证明平台协议和门禁，不证明真实机器人的动作、安全或任务可靠性。
 

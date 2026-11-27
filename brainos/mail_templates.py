@@ -7,7 +7,7 @@ a verification mail that asks for nothing but reading a code is the least likely
 import time
 from html import escape
 
-PRODUCT = 'NeuxMind Robot OS'
+PRODUCT = 'NeuxMind Physical OS'
 
 PURPOSES = {
     'register': {'title': '注册验证码', 'lead': f'你正在注册 {PRODUCT} 账号，请在注册页面输入下面的验证码：',
@@ -50,7 +50,7 @@ _HTML = '''<!doctype html>
 <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:520px;background:#ffffff;border:1px solid {line};border-radius:12px;">
 <tr><td style="background:{brand};border-radius:12px 12px 0 0;padding:22px 32px;font-family:{font};">
 <span style="font-size:19px;font-weight:700;color:#ffffff;">NeuxMind</span>
-<span style="font-size:11px;letter-spacing:3px;color:{accent};padding-left:8px;">ROBOT OS</span>
+<span style="font-size:11px;letter-spacing:3px;color:{accent};padding-left:8px;">PHYSICAL OS</span>
 </td></tr>
 <tr><td style="padding:32px 32px 8px;font-family:{font};color:{ink};font-size:15px;line-height:1.7;">
 <p style="margin:0 0 12px;">你好，</p>
