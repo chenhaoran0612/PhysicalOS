@@ -376,6 +376,8 @@ const UX_CODES = {
   sim_scene_invalid: ['service', '工程助手写出的环境描述不符合格式，没有采用。', '重新生成；可以在补充说明里把要求写得更具体'],
   sim_scene_not_ready: ['state', '这个环境还没有检查完，或者还没有被确认，暂时不能用。', '等检查结束后看预览并确认'],
   sim_scene_in_use: ['state', '有仿真机器人正在使用这个环境。', '先在“我的机器人”里删除那台仿真机器人'],
+  sim_profile_unknown: ['input', '没有选要添加的型号。', '在“添加仿真机器人”里选择类型、品牌和型号'],
+  sim_profile_unavailable: ['state', '这个型号现在不能添加：这个安装里没有它的机器人模型，或没有仿真引擎。', '换一个型号，或安装带有这个型号的版本'],
 };
 
 // Codes that start like these are parameter refusals even when not listed (e.g. a new runtime code).

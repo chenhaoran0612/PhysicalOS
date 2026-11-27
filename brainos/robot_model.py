@@ -91,7 +91,11 @@ def of(record):
 
 def key(product):
     """What two products are compared by (None for no product)."""
-    return (product['vendor'].casefold(), product['model'].casefold()) if product else None
+    if not product:
+        return None
+    from . import sim_profiles              # issue #54: a known brand or model in another spelling is the same one
+    vendor, model = sim_profiles.canonical(product['vendor'], product['model'])
+    return (vendor.casefold(), model.casefold())
 
 
 def wire(application):

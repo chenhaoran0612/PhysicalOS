@@ -34,7 +34,9 @@ function rmProduct(record) {
   const p = record && record.product;
   return p && typeof p.vendor === 'string' && typeof p.model === 'string' && p.vendor && p.model ? {vendor: p.vendor, model: p.model} : null;
 }
-const rmKey = product => (product ? (product.vendor + '\n' + product.model).toLowerCase() : RM_UNSET);
+// Issue #54: another spelling of a known brand and model is the same one (spCanon, web/sim_profiles.js), as robot_model.key says.
+const rmCanon = product => (typeof spCanon === 'function' ? spCanon(product) : product);
+const rmKey = product => (product ? (rmCanon(product).vendor + '\n' + rmCanon(product).model).toLowerCase() : RM_UNSET);
 const rmLabel = product => (product ? product.vendor + ' ' + product.model : RM_NONE);
 const rmSame = (a, b) => Boolean(a && b) && rmKey(a) === rmKey(b);
 

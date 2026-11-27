@@ -54,9 +54,11 @@ function taBound(st, task) {
 const taProduct = x => (x && x.product && x.product.vendor && x.product.model ? {vendor: x.product.vendor, model: x.product.model} : null);
 const taProductLabel = p => `${p.vendor} ${p.model}`;
 
+// Issue #54: another spelling of a known brand and model is the same one (spCanon, web/sim_profiles.js).
+const taCanon = p => (p && typeof spCanon === 'function' ? spCanon(p) : p);
 // What two applications are compared by when a task takes one (kind_of in brainos/task_apps.py).
 function taKind(app) {
-  const p = taProduct(app);
+  const p = taCanon(taProduct(app));
   return p ? 'product:' + p.vendor.toLowerCase() + '\n' + p.model.toLowerCase() : 'robot:' + (app.robot_id || '');
 }
 
@@ -69,7 +71,7 @@ function taLabel(st, app) {
 
 // What a robot is compared by: as taKind of an application made for it.
 function taRobotKind(robot) {
-  const p = taProduct(robot);
+  const p = taCanon(taProduct(robot));
   return p ? 'product:' + p.vendor.toLowerCase() + '\n' + p.model.toLowerCase() : 'robot:' + robot.id;
 }
 

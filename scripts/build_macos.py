@@ -36,6 +36,8 @@ DATA=[(ROOT/'web','web'),(ROOT/'runtime'/'examples'/'skills','runtime/examples/s
       (ROOT/'brainos'/'skills','brainos/skills')]     # issue #2: built-in hardware-init Skill (text files)
 # Issue #19: the management layer's install package (scripts/build_device_package.py), sent to robots from the console.
 DATA+=[(BUILD/'device-package','device-package')]
+# Issue #54: the robot model packages of the built-in profiles (scripts/robot_models.py). None of them is in the repository.
+DATA+=[(BUILD/'robot-models','robot_models')]
 PATHS=[ROOT,ROOT/'spec',ROOT/'runtime']
 PACKAGES=['brainos','neuxmind_spec','neuxmind_runtime']
 # Imported lazily (inside functions or by name) and therefore named explicitly.
@@ -76,9 +78,18 @@ def build_device_package():
     subprocess.run([sys.executable,str(ROOT/'scripts/build_device_package.py'),'--out',str(BUILD/'device-package')],cwd=ROOT,check=True,stdout=sys.stderr)
 
 
+def build_robot_models():
+    """Issue #54: (re)build the robot model packages into .build/robot-models. A package that cannot be built here
+    (no network and no earlier download, or the folder of the models that are not public is missing) is left out:
+    the app then lists that brand and model as not available. The summary goes to stderr."""
+    subprocess.run([sys.executable,str(ROOT/'scripts/robot_models.py'),'--out',str(BUILD/'robot-models')],cwd=ROOT,check=False,stdout=sys.stderr)
+    (BUILD/'robot-models').mkdir(parents=True,exist_ok=True)
+
+
 def check():
     """Linux-runnable: everything the bundle is built from exists and imports cleanly."""
     problems=[]
+    if not (BUILD/'robot-models'/'NOTICE.txt').is_file():build_robot_models()   # issue #54
     if not (BUILD/'device-package'/'package.json').is_file():build_device_package()   # issue #19
     try:
         sys.path.insert(0,str(ROOT));from brainos import runtime_package;runtime_package.load(BUILD/'device-package')
@@ -103,7 +114,8 @@ def check():
     result=subprocess.run([sys.executable,'-I','-c',code],cwd=str(ROOT),capture_output=True,text=True,timeout=120)
     if result.returncode:
         problems.append('导入失败：'+result.stderr.strip()[-800:])
-    report={'ok':not problems,'examples':examples,'data':[str(t) for _,t in DATA],'packages':PACKAGES,
+    models=sorted(p.stem for p in (BUILD/'robot-models').glob('*.zip'))   # issue #54: which profiles this build can simulate
+    report={'ok':not problems,'examples':examples,'robot_models':models,'data':[str(t) for _,t in DATA],'packages':PACKAGES,
             'hidden_imports':HIDDEN,'problems':problems}
     print(json.dumps(report,ensure_ascii=False,indent=2))
     return report
@@ -114,6 +126,22 @@ def _http(method,url,body=None,opener=None,timeout=30):
     req=urllib.request.Request(url,data=data,method=method,headers={'Content-Type':'application/json'} if data else {})
     with (opener or urllib.request.build_opener(urllib.request.ProxyHandler({}))).open(req,timeout=timeout) as r:
         return json.loads(r.read())
+
+
+def profile_smoke(api):
+    """Issue #54: the packaged backend lists the built-in profiles and starts a robot of the first one whose model
+    package is in the bundle (the whole MuJoCo robot, as a child of the packaged backend)."""
+    catalog=api('state')['sim_catalog']
+    assert [t['id'] for t in catalog['types']]==['manipulator','wheel_legged','quadruped','biped','other'],catalog['types']
+    usable=[p for p in catalog['profiles'] if p['available'] and not p['builtin']]
+    if not usable:
+        return {'profiles':[],'profile_robot':'no model package in this bundle'}
+    robot=api('sims',{'profile_id':usable[0]['id']})
+    assert robot['status']=='connected' and robot['sim']['kind']=='mujoco' and robot['sim']['state']=='running',robot
+    live=api('robots/live',{'robot_id':robot['id']})
+    assert live.get('reachable') and live.get('simulated'),live
+    api('sims/remove',{'robot_id':robot['id']})
+    return {'profiles':[p['id'] for p in usable],'profile_robot':usable[0]['id']+' started'}
 
 
 def smoke(backend,state_dir):
@@ -150,7 +178,8 @@ def smoke(backend,state_dir):
                 break
             assert time.monotonic()<deadline,live
             time.sleep(0.5)
-        return {'backend':base,'robot':robot['id'],'sandbox':'inprocess (frozen)','run':live['run']['status']}
+        profiles=profile_smoke(api)   # issue #54
+        return {'backend':base,'robot':robot['id'],'sandbox':'inprocess (frozen)','run':live['run']['status'],**profiles}
     finally:
         process.terminate()
         try:
@@ -190,6 +219,7 @@ def freeze_check(out=None):
     out=pathlib.Path(out or tempfile.mkdtemp(prefix='neuxmind-freeze-'))
     out.mkdir(parents=True,exist_ok=True)
     build_device_package()   # issue #19: the bundle carries the install package
+    build_robot_models()     # issue #54: and the robot model packages
     run([sys.executable,'-m','PyInstaller','--log-level','WARN',*pyinstaller_args(out/'dist',out/'work',out)])
     backend=out/'dist'/'brainos-server'/'brainos-server'
     with tempfile.TemporaryDirectory(prefix='neuxmind-freeze-state-') as state:
@@ -217,6 +247,7 @@ def main():
 def build_app():
     DIST.mkdir(exist_ok=True)
     build_device_package()   # issue #19: always from the tree being built, never an older .build copy
+    build_robot_models()     # issue #54: likewise the robot model packages
     if not check()['ok']:
         raise SystemExit('打包内容检查未通过')
     run([sys.executable,ROOT/'scripts/prepare_agent_runtime.py','--verify-only'])

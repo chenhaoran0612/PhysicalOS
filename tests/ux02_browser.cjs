@@ -48,7 +48,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
   await go('robots');
   await gateSignIn(page, {name: 'ux02 新用户', email: 'ux02@example.test', password: 'ux02-password-123'});
   await click('sim-add');
-  await page.locator('#dialog input[name=kind][value=quadruped]').check();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'quadruped');
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});
   const quad = await page.evaluate(() => state.robots[0].id);

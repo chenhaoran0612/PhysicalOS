@@ -220,8 +220,12 @@ def _is_gripper(joint, joints):
     return any(word in master for word in GRIPPER_WORDS)
 
 
-def build(model_dir, scene, family):
-    """Compile the simulation of ``scene`` with the robot in ``model_dir``. Raises :class:`BuildError`."""
+def build(model_dir, scene, family, pose=None):
+    """Compile the simulation of ``scene`` with the robot in ``model_dir``. Raises :class:`BuildError`.
+
+    ``pose`` (issue #54): ``{joint name: angle}`` the robot starts and is held in, for a robot whose URDF zero is
+    not how it stands (a dog with straight legs). Angles are kept inside the joint's own limits."""
+    pose = pose if isinstance(pose, dict) else {}
     model_dir = Path(model_dir)
     if family not in FAMILIES:
         raise BuildError(f'这一版的仿真只支持这些本体类型：{"、".join(FAMILIES)}（这台是 {family}）')
@@ -238,6 +242,13 @@ def build(model_dir, scene, family):
     for body in robot.bodies:
         if body.name != 'world':
             body.gravcomp = 1.0
+        # Issue #54: a link that has shapes for looks shows those, not its collision shapes as well. A link with
+        # collision shapes only keeps showing them.
+        own = list(body.geoms)
+        if any(not (geom.contype or geom.conaffinity) for geom in own):
+            for geom in own:
+                if geom.contype or geom.conaffinity:
+                    geom.group = 3
     spec = mujoco.MjSpec()
     spec.option.timestep = TIMESTEP
     spec.option.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
@@ -287,9 +298,10 @@ def build(model_dir, scene, family):
     world = World(model, data, family=family, joints=joints, places=scene['places'], start=start)
     for index, joint in enumerate(joints):
         lower, upper = joint.get('lower'), joint.get('upper')
-        rest = 0.0
+        wanted = pose.get(joint['name'])
+        rest = float(wanted) if isinstance(wanted, (int, float)) and not isinstance(wanted, bool) and math.isfinite(wanted) else 0.0
         if joint['type'] != 'continuous' and lower is not None and upper is not None and lower < upper:
-            rest = min(max(0.0, lower), upper)
+            rest = min(max(rest, lower), upper)
         data.qpos[world._qpos[ROBOT + joint['name']]] = rest
         world.command_joint(index, rest)
     if not fixed:

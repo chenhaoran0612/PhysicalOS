@@ -49,7 +49,7 @@ const shots = process.argv[3] || 'artifacts';
   // ---------------------------------------------------------------- 1. add a simulated quadruped
   await click('sim-add');
   await page.locator('form[data-form=sim-add]').waitFor();
-  await page.locator('#dialog input[name=kind][value=quadruped]').check();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'quadruped');
   await shot('02-sim-add');
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});      // capability table of the new robot
@@ -127,7 +127,7 @@ const shots = process.argv[3] || 'artifacts';
   // ---------------------------------------------------------------- 7. a simulated arm: joints move
   await page.goto(cfg.url + '/#robots');
   await click('sim-add');
-  await page.locator('#dialog input[name=kind][value=arm]').check();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'arm');
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});
   robots = await robotsOf();

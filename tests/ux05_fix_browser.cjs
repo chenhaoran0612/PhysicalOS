@@ -69,7 +69,7 @@ function writeSkill() {
   await go('overview');
   await page.evaluate(() => refresh(true));
   await page.locator('#main .first-run [data-action="sim-add"]').click();
-  await page.locator('#dialog input[name=kind][value=quadruped]').check();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'quadruped');
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});
   const quad = await page.evaluate(() => state.robots[0].id);

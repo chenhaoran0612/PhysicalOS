@@ -17,13 +17,13 @@ const same = (actual, expected, what) => { assert.equal(actual, expected, what);
 // ---- the list
 {
   const brands = rc.rcBrands().map(b => b.vendor);
-  for (const brand of ['智身科技', '星玑', '宇树科技', 'Universal Robots', 'Franka Robotics', 'KUKA', 'ABB', 'FANUC', 'Kinova', 'UFACTORY', '越疆', '节卡', '遨博', '睿尔曼', '松灵机器人']) {
+  for (const brand of ['智身科技', '星玑科技', '宇树科技', 'Universal Robots', 'Franka Robotics', 'KUKA', 'ABB', 'FANUC', 'Kinova', 'UFACTORY', '越疆', '节卡', '遨博', '睿尔曼', '松灵机器人']) {
     ok(brands.includes(brand), `${brand} can be chosen`);
   }
   same(brands.indexOf('智身科技'), 0, 'our own robots come first');
   ok(!brands.includes('neuxmind-sim'), 'the brand of the simulated robots is not offered to a person');
   const zs = rc.rcBrand('智身科技').models.map(m => m.model);
-  for (const model of ['钢镚 L1', '钢镚 L2', '钢镚 L2-W', '钢镚 L2U', '铜锤 M1']) ok(zs.includes(model), `智身科技 ${model} can be chosen`);
+  for (const model of ['钢镚 L1', '钢镚 L2', '钢镚 L2-W', '钢镚 L2-U', '铜锤 M1']) ok(zs.includes(model), `智身科技 ${model} can be chosen`);
   const names = new Set();
   for (const brand of rc.ROBOT_CATALOG) {
     ok(brand.vendor && brand.vendor.length <= 100, `a brand name fits the field: ${brand.vendor}`);
@@ -127,7 +127,7 @@ const same = (actual, expected, what) => { assert.equal(actual, expected, what);
      'a brand that is not listed is typed, written as text');
   ok(!/<label class="field rc-typed" hidden>/.test(typed), 'both inputs are in sight then');
   // A brand without models yet: its model is typed.
-  ok(rc.rcModelOptions('星玑').includes('<option value="CS1">CS1</option>'), '星玑 CS1 can be chosen');
+  ok(rc.rcModelOptions('星玑科技').includes('<option value="CS1">CS1</option>'), '星玑科技 CS1 can be chosen');
   ok(rc.rcModelOptions('某个没有型号的品牌', '', [{product: {vendor: '某个没有型号的品牌', model: 'M'}}]).includes('<option value="M">M</option>'), 'a brand of the account with its one model');
   ok(rc.rcModelOptions('智身科技').startsWith('<option value="" selected>请选择</option>'), 'a brand with models starts unchosen');
   same(rc.rcStart({vendor: 'neuxmind-sim', model: 'sim-quadruped'}).vendorChoice, rc.RC_OTHER, 'the simulated brand is shown as typed while the account has no such robot');

@@ -71,7 +71,7 @@ function writeSkill() {
   await go('robots');
   await gateSignIn(page, {name: 'ux04 新用户', email: 'ux04@example.test', password: 'ux04-password-123'});
   await click('sim-add');
-  await page.locator('#dialog input[name=kind][value=quadruped]').check();
+  await require('./sim_profiles_helper.cjs').pickSimProfile(page, 'quadruped');
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});
   const quad = await page.evaluate(() => state.robots[0].id);

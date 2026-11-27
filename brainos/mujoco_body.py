@@ -81,7 +81,7 @@ class _Physics:
 
     def _init_physics(self, config):
         self.config = config
-        self.world = mujoco_build.build(config['model_dir'], config['scene'], config['family'])
+        self.world = mujoco_build.build(config['model_dir'], config['scene'], config['family'], config.get('pose'))
         self.fault = ''
         self.touch = []
         self._viewer = None

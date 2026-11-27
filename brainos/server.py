@@ -191,6 +191,8 @@ def make_handler(application):
             extra=extra or {'/safety_limits.js':('safety_limits.js','text/javascript; charset=utf-8'),'/safety_limits.css':('safety_limits.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #53: the brands and models a robot can be chosen as, and the pictures of the models.
             extra=extra or {'/robot_catalog.js':('robot_catalog.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path) or robot_pictures.static(urlparse(self.path).path,ROOT/'web')
+            # Issue #54: adding a simulated robot by type, brand and model, likewise.
+            extra=extra or {'/sim_profiles.js':('sim_profiles.js','text/javascript; charset=utf-8'),'/sim_profiles.css':('sim_profiles.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #43: skills kept in the cloud, remote calls of a robot's skills, its programs and scene data, likewise.
             extra=extra or {'/cloud_skills.js':('cloud_skills.js','text/javascript; charset=utf-8'),'/cloud_skills.css':('cloud_skills.css','text/css; charset=utf-8'),'/remote_calls.js':('remote_calls.js','text/javascript; charset=utf-8'),'/remote_calls.css':('remote_calls.css','text/css; charset=utf-8'),'/robot_bundle.js':('robot_bundle.js','text/javascript; charset=utf-8'),'/robot_bundle.css':('robot_bundle.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #48: a robot's brand and model; applications and skills by brand and model.
