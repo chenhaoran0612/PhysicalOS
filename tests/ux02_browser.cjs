@@ -182,7 +182,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
 
   // ---------------------------------------------------------------- installed skill -> project -> application
   await go('skills');
-  await page.locator('#main [data-action="ux-adopt"]').click();
+  await page.evaluate(() => action('ux-adopt'));      // issue #68: 机器人应用 has no button for this any more
   await dlg('[data-action="ux-adopt-one"][data-id="' + quad + '|patrol"]').click();
   await dlg('.contract-line:has-text("巡逻") :text("已加入项目")').waitFor();
   await shot('08-adopt-installed-skill');

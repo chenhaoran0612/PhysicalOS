@@ -214,6 +214,8 @@ def make_handler(application):
             extra=extra or {'/run_boards.js':('run_boards.js','text/javascript; charset=utf-8'),'/run_record_view.js':('run_record_view.js','text/javascript; charset=utf-8'),'/run_boards.css':('run_boards.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #60: 机器人应用 as a waterfall of applications, the page of one application, the page of the skills.
             extra=extra or {'/app_gallery.js':('app_gallery.js','text/javascript; charset=utf-8'),'/app_gallery.css':('app_gallery.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #68: 机器人应用 shows applications only; one is created for a task and a brand and model.
+            extra=extra or {'/app_create.js':('app_create.js','text/javascript; charset=utf-8'),'/app_create.css':('app_create.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #62: why a skill cannot be installed on a robot that is not connected, and the step that fixes it.
             extra=extra or {'/skill_install_guide.js':('skill_install_guide.js','text/javascript; charset=utf-8'),'/skill_install_guide.css':('skill_install_guide.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
@@ -387,6 +389,8 @@ def make_handler(application):
                         'projects/robot':lambda p:task_robot.choose(service,p),
                         # Issue #50: a task binds applications of the account (and lets go of them); it does not make them
                         'task-apps/bind':service.task_apps.bind,'task-apps/unbind':service.task_apps.unbind,
+                        # Issue #68: the skills of a brand and model, ready to be chosen; an application created for a task
+                        'model-skills/ready':service.model_skills.ready,'model-skills/create':service.model_skills.create,
                         # Issue #22: safety limits a person fills in per device; the signed-in account is recorded as who
                         'robots/limits':service.safety_limits.read,
                         'robots/limits/save':lambda p:service.safety_limits.save(p,user),

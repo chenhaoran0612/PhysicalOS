@@ -50,7 +50,7 @@ let failed = async () => {};
   });
   const openAdopt = async () => {
     await page.goto(cfg.url + '/#skills');
-    await main.locator('[data-action="ux-adopt"]').first().click();
+    await page.evaluate(() => action('ux-adopt'));      // issue #68: 机器人应用 has no button for this any more
     await dialog.getByText('使用机器人上已安装的技能', {exact: true}).first().waitFor();
   };
   const openGallery = async name => {

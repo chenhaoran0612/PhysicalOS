@@ -82,14 +82,18 @@ let failed = async () => {};
                          success_condition: '到达', stop_condition: '超时', model_ids: []});
     await refresh(true);
   }, {cfg});
+  // Issue #68: the form creates an application for a task, so with no task it asks for one first; the
+  // account can still hold an application no task has (made here through the API).
   await main.locator('.page-head [data-action="application-add"]').click();
   const made = dialog.locator('form[data-form=application]');
-  await made.waitFor();
-  await made.locator('[name=name]').fill('货架取件');
-  await made.locator('.step-editor [name=skill_id]').first().waitFor();
-  await made.locator('button[type=submit]').click();
-  await dialog.getByText('应用交付清单').waitFor();
+  await has(dialog, ['先建一个任务']);
+  must(await made.count() === 0, 'the form opened with no task to create the application for');
   await dialog.locator('[data-action="close"]').first().click();
+  await page.evaluate(async () => {
+    await api('applications', {project_id: projectId, name: '货架取件', version: '1', robot_id: state.robots[0].id,
+                               steps: [{skill_id: state.skills[0].id, parameters: {}, timeout_s: 60}]});
+    await refresh(true);
+  });
   let snapshot = await appState();
   same([snapshot.projects.length, snapshot.applications.map(a => [a.name, a.project_id === snapshot.robot_home])], [0, [['货架取件', true]]],
        'an application made from the form with no task');
@@ -110,9 +114,11 @@ let failed = async () => {};
 
   // 2 ---- 去创建应用: 机器人应用 says whom it is for; what is made there is the account's
   await main.locator('.ta-head [data-action="taskapp-create"]').click();
-  await main.locator('.ta-banner').waitFor();
+  await made.waitFor();                                                      // issue #68: the form opens, with the task chosen
   must(page.url().endsWith('#skills'), `「去创建应用」 did not open 机器人应用: ${page.url()}`);
-  await has(main.locator('.ta-banner'), ['正在为任务「仓库巡检」准备应用', '绑定到这个任务']);
+  same(await made.locator('[name=task_id] option:checked').innerText(), '仓库巡检', 'the task the form is for');
+  await dialog.locator('[data-action="close"]').first().click();
+  must(await main.locator('.ta-banner').count() === 0, 'the notice about a task is still shown');
   must(await main.locator('.page-head [data-action="application-add"]').count() === 1, '机器人应用 has no way to create an application');
   const ids = await page.evaluate(async ({cfg}) => {
     const robot = (name, family, device, more = {}) => api('robots', {project_id: projectId, name, family, endpoint: cfg.devices[device], token: cfg.access, ...more});
@@ -134,9 +140,13 @@ let failed = async () => {};
   same(snapshot.applications.map(a => a.project_id), [ids.home, ids.home], 'where applications made while a task is open are kept');
   same(snapshot.skills.map(s => s.project_id), [ids.home, ids.home], 'where their skills are kept');
   same(snapshot.task_applications, [], 'bindings after making two applications');
-  await has(appCard('通道巡检'), ['还没有绑定到任务', '绑定到这个任务']);
+  await has(appCard('通道巡检'), ['还没有绑定到任务']);
   await shot('2-apps-page-for-a-task');
-  await appCard('通道巡检').locator('[data-action="taskapp-bind-to"]').click();
+  await appCard('通道巡检').locator('[data-action="taskapp-tasks"]').click();
+  await dialog.locator('.ta-pick-row', {hasText: '仓库巡检'}).locator('[data-action="taskapp-bind-to"]').click();
+  await dialog.locator('.ta-pick-row', {hasText: '仓库巡检'}).locator('[data-action="taskapp-unbind-from"]').waitFor();
+  await dialog.locator('.ta-pick-foot [data-action="close"]').click();
+  await page.goto(cfg.url + '/#task');
   await appRow('通道巡检').waitFor();
   must(page.url().endsWith('#task'), `binding from 机器人应用 did not go back to the task: ${page.url()}`);
 

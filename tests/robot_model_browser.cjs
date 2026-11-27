@@ -102,21 +102,16 @@ let failed = async () => {};
   must(await card(ids.first).locator('[data-action="engine-robot-model"]').count() === 1, 'no way to change a typed brand and model');
 
   // 3 ---- 机器人应用 by brand and model
-  await page.goto(cfg.url + '/#skills');
-  const filter = page.locator('.robot-model-filter');
-  await filter.waitFor();
-  await has(filter, ['全部品牌型号', ACME, '1 台机器人', BETA, '2 台机器人']);
   // Issue #60: the skills are on their own page (every skill, with its brand and model); 机器人应用 is the applications.
-  await page.locator('#main .page-head [data-action="appg-skills"]').click();
+  // Issue #68: 机器人应用 has no filter by brand and model and no button to the skills.
+  await page.goto(cfg.url + '/#app-skills');
   await page.locator('#main table tbody tr').first().waitFor();
   same(await page.locator('#main table tbody tr').count(), 2, 'skills listed');
   await has(page.locator('#main table tbody tr', {hasText: '伸到货架'}), [ACME]);
   await has(page.locator('#main table tbody tr', {hasText: '前往巡检点'}), [BETA]);
   await page.locator('#main [data-action="appg-back"]').click();
-  await filter.waitFor();
-  await filter.locator('.robot-model-chip', {hasText: ACME}).click();
-  same(await filter.locator('.robot-model-chip.active').getAttribute('aria-pressed'), 'true', 'the chosen filter');
-  await filter.locator('.robot-model-chip').first().click();
+  await page.locator('#main .page-head [data-action="application-add"]').waitFor();
+  must(await page.locator('.robot-model-filter').count() === 0, 'the filter is still on 机器人应用');
 
   // 4 ---- an application takes the skills of its robot's brand and model
   await page.locator('#main [data-action="application-add"]').first().click();
@@ -182,9 +177,6 @@ let failed = async () => {};
   // 3 again ---- the application on its page
   await page.locator('#main .cards article.card').first().waitFor();
   await has(page.locator('#main .cards article.card').first(), ['每日巡检', BETA, '2 台同品牌型号的机器人可用']);
-  await page.locator('.robot-model-filter .robot-model-chip', {hasText: ACME}).click();
-  await has(page.locator('#main'), ['这个品牌型号还没有应用']);
-  await page.locator('.robot-model-filter .robot-model-chip').first().click();
 
   // 8 ---- widths
   for (const width of WIDTHS) {

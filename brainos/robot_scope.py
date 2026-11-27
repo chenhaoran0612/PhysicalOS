@@ -44,6 +44,7 @@ PREFIXES = ('robots/', 'sims/', 'engineering/ssh/', 'engineering/hardware/', 'en
 # binding one to a task (task-apps/...) is a request for that task.
 ROUTES += ('skills', 'applications', 'harness', 'onsite', 'deployments')
 PREFIXES += ('applications/', 'onsite/')
+PREFIXES += ('model-skills/',)             # issue #68: the skills of a brand and model, and creating an application for a task
 # The task that was open in the page when a request about a robot was sent (a simulated robot's
 # first run opens a task for the trial; see brainos/sim_robots.py).
 TASK_FIELD = 'task_project_id'
