@@ -29,7 +29,7 @@ import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import duck_paths, robot_scope
+from . import duck_paths, duck_skills, robot_scope
 from .contracts import required_text
 from .errors import CodedError
 
@@ -314,7 +314,9 @@ class DuckKit:
             shows.append({'id': show['id'], 'title': show['title'], 'summary': show['summary'], 'status': show['status'],
                           'status_name': STATUS_NAMES[show['status']], 'origin': show.get('origin'),
                           'acceptance': show.get('acceptance'), 'note': show.get('note', ''),
-                          'sha256': show.get('sha256', ''), 'packaged': bool(self._zip(show))})
+                          'sha256': show.get('sha256', ''), 'packaged': bool(self._zip(show)),
+                          # issue #67: a model with a package is a skill of the robot
+                          'skill': duck_skills.describe(show) if show.get('package') else None})
         return {'profile_id': PROFILE_ID, 'vendor': VENDOR, 'model': MODEL, 'available': not problem, 'problem': problem,
                 'engine': dict(ENGINE), 'built_at': kit.get('built_at'), 'shows': shows,
                 'dashboard': dashboard_url()}
@@ -401,6 +403,24 @@ class DuckKit:
         self.store.put('robots', robot)
         self.platform.audit('robot.sim_added', {'robot_id': robot['id'], 'kind': SIM_KIND, 'profile_id': profile['id']}, owner)
         return {**sims.start(robot['id']), 'project_id': project['id'] if project else ''}
+
+    # ------------------------------------------------------------ its skills (issue #67)
+    def bind_skills(self, robot_id):
+        """Every skill model a running simulated duck has is installed on it as a skill and registered for
+        its brand and model (called whenever one starts). What happened is kept on the robot; never raises."""
+        try:
+            robot = self.store.get('robots', robot_id)
+            if not (robot.get('sim') or {}).get('duck') or not robot.get('endpoint'):
+                return {}
+            have = self._config(robot).get('shows', {})
+            bound = duck_skills.bind(self.platform, robot, [show for show in PACKAGED if show['id'] in have])
+            robot = self.store.get('robots', robot_id)
+            if robot['sim'].get('skills') != bound:
+                robot['sim']['skills'] = bound
+                self.store.put('robots', robot)
+            return bound
+        except Exception:                                    # the duck runs without them; the page says which are missing
+            return {}
 
     # ------------------------------------------------------------ performing
     def _duck(self, p):
@@ -498,6 +518,9 @@ class DuckKit:
                 'error': str(record.get('error') or record.get('fault') or '')[:500],
                 'engine': str(engine.get('mujoco') or '')[:20],
                 'shows': sorted(self._config(robot).get('shows', {})),
+                'skills': {str(k): {'skill': str(v.get('skill') or ''), 'version': str(v.get('version') or ''),
+                                    'installed': v.get('installed') is True, 'error': str(v.get('error') or '')[:300]}
+                           for k, v in (robot['sim'].get('skills') or {}).items() if isinstance(v, dict)},
                 'has_frame': (view / 'frame.png').is_file()}
 
     # ------------------------------------------------------------ training

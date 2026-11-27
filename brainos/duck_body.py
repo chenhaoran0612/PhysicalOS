@@ -4,18 +4,23 @@ The edge runtime loads it like any other body (``serve --adapter brainos.duck_bo
 online, reports its health, and ``safety.stop`` stops it. What moves is one child process with the physics
 (``brainos.duck_engine``): the duck stands at HOME, and performs a show when the console asks for one.
 
-Shows are not a capability of the standard, and the runtime does not run motion it cannot bound (vendor
-extensions ``x.*`` are refused by the safety supervisor), so a show is not started through the runtime. The
-console writes ``<control>/command.json`` (``{"id", "cmd": "show" | "stop" | "home", "show", "seed"}``) and
-this body answers in ``<control>/status.json``. Both are files in the robot's own state directory, like the
-picture of a MuJoCo simulated robot. A stop through the runtime (the stop button, the e-stop) ends a show
-the same way.
+A show is a trained skill model, and since issue #67 that is a capability of the standard: ``policy.run``
+(spec 1.3) runs one of the models this body declares, by name. So every show is a skill of the robot: a skill
+package that calls ``policy.run`` is installed on it (``brainos.duck_skills``), and the runtime authorizes,
+starts, times and stops it like any other skill.
+
+The page of issue #63 still has its own way in: the console writes ``<control>/command.json``
+(``{"id", "cmd": "show" | "stop" | "home", "show", "seed"}``). Whichever way a show was started, this body
+says what it is doing in ``<control>/status.json``. Both are files in the robot's own state directory, like
+the picture of a MuJoCo simulated robot. A stop through the runtime (the stop button, the e-stop) ends a
+show the same way.
 
 Settings come from ``duck.json`` in the working directory (written by ``brainos.duck_kit`` before the
 process starts) or the file named by ``NEUXMIND_DUCK_CONFIG``.
 """
 import json
 import os
+import secrets
 import subprocess
 import sys
 import threading
@@ -23,14 +28,16 @@ import time
 from pathlib import Path
 
 from neuxmind_runtime.clock import RealClock
-from neuxmind_runtime.hal import RobotAdapter
+from neuxmind_runtime.hal import ActionHandle, ActionStatus, RobotAdapter
 
 from . import duck_paths
 
 CONFIG_NAME = 'duck.json'
 CONFIG_ENV = 'NEUXMIND_DUCK_CONFIG'
 ADAPTER = 'brainos.duck_body:body'
-ADAPTER_VERSION = '0.1.0'
+ADAPTER_VERSION = '0.2.0'
+POLICY = 'policy.run'            # issue #67: a show is run as a trained skill model, by name
+LONGEST_SHOW_S = 60.0           # declared with the capability; the longest package runs about 28 s
 READY_TIMEOUT_S = 120.0       # compiling the scene (38 meshes) and loading the policies
 POLL_S = 0.1
 CLOSE_S = 3.0
@@ -138,6 +145,51 @@ class Engine:
             pass
 
 
+class Performance(ActionHandle):
+    """One show started through the runtime (``policy.run``): what the body's run record says about it."""
+
+    def __init__(self, body, run_id, show):
+        self.body, self.id, self.show = body, run_id, show
+
+    def poll(self):
+        with self.body._lock:
+            run = dict(self.body.run)
+        if run['id'] != self.id:
+            return ActionStatus(state='cancelled', error='这个仿真机器人接到了另一个命令，这一次没有做完')
+        state, result = run['state'], run['result'] if isinstance(run['result'], dict) else {}
+        if state in ('starting', 'running'):
+            return ActionStatus(progress=max(0.0, min(1.0, float(run['progress'] or 0.0))),
+                                feedback={'phase': run['phase'], 'steps': run['steps']})
+        if state == 'succeeded':
+            out = {'completed': True, 'name': self.show, 'steps': int(result.get('steps') or run['steps'] or 0)}
+            if isinstance(result.get('duration_s'), (int, float)) and not isinstance(result.get('duration_s'), bool):
+                out['duration_s'] = float(result['duration_s'])
+            return ActionStatus(state='succeeded', progress=1.0, result=out)
+        if state == 'stopped':
+            return ActionStatus(state='cancelled', progress=float(run['progress'] or 0.0), error='已停止')
+        reason = run['error'] or str(result.get('reason') or result.get('error') or '没有做完')
+        return ActionStatus(state='failed', progress=float(run['progress'] or 0.0), error=f'这个技能模型没有做完：{reason}')
+
+    def cancel(self):
+        with self.body._lock:
+            ours = self.body.run['id'] == self.id and self.body.run['state'] in ('starting', 'running')
+        if ours:
+            self.body.stop()
+
+
+class Refused(ActionHandle):
+    """A show that was not started; says why."""
+
+    def __init__(self, reason):
+        self.reason = reason
+
+    def poll(self):
+        return ActionStatus(state='failed', error=self.reason)
+
+    def cancel(self):
+        pass
+
+
 class DuckBody(RobotAdapter):
     def __init__(self, config):
         self.clock = RealClock()
@@ -154,16 +206,19 @@ class DuckBody(RobotAdapter):
         self.fault = ''
         self._lock = threading.Lock()                 # the run record; never held while a child starts or stops
         self._file = threading.Lock()                 # one writer of status.json at a time, in the order of the records
+        self._one = threading.Lock()                  # one show is prepared at a time (the page's command or the runtime's action)
         self._stops = 0                               # counts stop(): a show that was being prepared when one came is not started
         self._closed = threading.Event()
         self._seen = self._command_id()               # a command from before this start is not performed again
         self.run = {'id': '', 'show': '', 'state': 'idle', 'phase': '', 'progress': 0.0, 'steps': 0, 'result': None, 'error': ''}
         self._manifest = {
-            'schema': 'robot.adapter.v2', 'spec_version': '1.2', 'instance_id': config['instance_id'],
+            'schema': 'robot.adapter.v2', 'spec_version': '1.3', 'instance_id': config['instance_id'],
             'name': config.get('name') or f'{config["vendor"]} {config["model"]}（仿真）',
             'vendor': config['vendor'], 'model': config['model'], 'family': 'humanoid',
             'adapter_version': ADAPTER_VERSION, 'simulated': True,
-            'capabilities': [{'id': 'safety.stop', 'params': {'hardware_estop': False}}, {'id': 'system.health'}],
+            'capabilities': [{'id': 'safety.stop', 'params': {'hardware_estop': False}}, {'id': 'system.health'},
+                             # issue #67: every show package is a trained skill model this body can run
+                             {'id': POLICY, 'params': {'policies': list(self.shows), 'max_duration_s': LONGEST_SHOW_S}}],
             'model_runtimes': [], 'safety': {'hardware_estop': False}}
 
     @staticmethod
@@ -196,7 +251,19 @@ class DuckBody(RobotAdapter):
         raise ValueError(f'仿真小鸭不支持命令 {cap_id}')
 
     def start_action(self, cap_id, args):
-        raise ValueError(f'仿真小鸭不支持动作 {cap_id}')
+        if cap_id != POLICY:
+            raise ValueError(f'仿真小鸭不支持动作 {cap_id}')
+        show = args.get('name')
+        if show not in self.shows:
+            return Refused('这个仿真机器人没有这个技能模型')
+        with self._lock:
+            busy = self.run['state'] in ('starting', 'running')
+        if busy:
+            return Refused('这个仿真机器人正在运行另一个技能模型，请等它结束或先停止')
+        run_id, stops, seed = 'run-' + secrets.token_hex(8), self._stops, args.get('seed')
+        self._begin(run_id, show)
+        threading.Thread(target=self._perform, args=(run_id, show, seed, stops), name='nx-duck-run', daemon=True).start()
+        return Performance(self, run_id, show)
 
     def stop(self):
         self._stops += 1
@@ -210,11 +277,17 @@ class DuckBody(RobotAdapter):
                     **({'fault': self.fault} if self.fault else {})}
 
     # ------------------------------------------------------------ the physics child
-    def _update(self, **fields):
+    def _update(self, only=None, **fields):
+        """Write ``fields`` into the run record. ``only``: the run they are about; when another run has
+        taken its place meanwhile nothing is written (returns False)."""
         engine = self.engine
         facts = engine.facts if engine is not None else {}
         with self._file:
             with self._lock:
+                if only is not None and self.run['id'] != only:
+                    return False
+                if fields.get('progress') is None:
+                    fields.pop('progress', None)
                 self.run.update(fields)
                 record = dict(self.run)
             record.update(engine={'mujoco': facts.get('mujoco', ''), 'task': facts.get('task', ''),
@@ -226,6 +299,7 @@ class DuckBody(RobotAdapter):
                 os.replace(part, self.control / 'status.json')
             except OSError:
                 pass
+        return True
 
     def _event(self, engine, event):
         if engine is not self.engine:
@@ -243,15 +317,15 @@ class DuckBody(RobotAdapter):
         if event.get('id') != current or not current:
             return
         if kind == 'started':
-            self._update(state='running', phase='', progress=0.0, steps=0)
+            self._update(only=current, state='running', phase='', progress=0.0, steps=0)
         elif kind == 'state':
-            self._update(phase=str(event.get('phase') or ''), progress=float(event.get('progress') or 0.0), steps=int(event.get('step') or 0))
+            self._update(only=current, phase=str(event.get('phase') or ''), progress=float(event.get('progress') or 0.0), steps=int(event.get('step') or 0))
         elif kind == 'done':
             state = 'succeeded' if event.get('success') else 'stopped' if event.get('stopped') else 'failed'
             result = {key: event.get(key) for key in ('success', 'reason', 'steps', 'duration_s', 'phases', 'error') if key in event}
             phases = event.get('phases') or []
-            self._update(state=state, result=result, steps=int(event.get('steps') or 0),
-                         phase=str(phases[-1]) if phases else '', progress=1.0 if event.get('success') else self.run['progress'])
+            self._update(only=current, state=state, result=result, steps=int(event.get('steps') or 0),
+                         phase=str(phases[-1]) if phases else '', progress=1.0 if event.get('success') else None)
 
     def _start_engine(self, show):
         """The child for ``show`` running and ready; returns '' or why not."""
@@ -299,26 +373,44 @@ class DuckBody(RobotAdapter):
             self._update(id=command['id'], show=str(show)[:40], state='error', result=None, error='这个仿真机器人没有这个技能模型')
             return
         stops = self._stops
-        self._update(id=command['id'], show=show, state='starting', phase='', progress=0.0, steps=0, result=None, error='')
-        problem = self._start_engine(show)
-        if problem:
-            self._update(state='error', error=problem)
-            return
-        stopped = {'state': 'stopped', 'result': {'success': False, 'reason': 'stopped', 'steps': 0, 'duration_s': 0.0, 'phases': []}}
-        if self._stops != stops:                      # a stop came while the show was being prepared: it is not started
-            self._update(**stopped)
-            return
-        seed = command.get('seed')
-        engine = self.engine
-        sent = engine is not None and engine.send({'cmd': 'show', 'id': command['id'], **({'seed': seed} if isinstance(seed, int) else {})})
-        if not sent:
-            self._update(state='error', error='物理引擎没有收到开始的命令')
-        elif self._stops != stops:                    # and one that came at that very moment still ends it
-            engine.send({'cmd': 'stop'})
+        self._begin(command['id'], show)
+        self._perform(command['id'], show, command.get('seed'), stops)
+
+    def _begin(self, run_id, show):
+        self._update(id=run_id, show=show, state='starting', phase='', progress=0.0, steps=0, result=None, error='')
+
+    def _perform(self, run_id, show, seed, stops):
+        """Prepare the child for ``show`` and start it; the run record says how it went. ``stops``: the
+        count of stops when the run was asked for (one that came since means it is not started)."""
+        try:
+            with self._one:
+                with self._lock:
+                    if self.run['id'] != run_id:
+                        return                        # another command took its place while it waited
+                problem = self._start_engine(show)
+                if problem:
+                    self._update(only=run_id, state='error', error=problem)
+                    return
+                stopped = {'state': 'stopped', 'result': {'success': False, 'reason': 'stopped', 'steps': 0, 'duration_s': 0.0, 'phases': []}}
+                if self._stops != stops:              # a stop came while the show was being prepared: it is not started
+                    self._update(only=run_id, **stopped)
+                    return
+                with self._lock:
+                    if self.run['id'] != run_id:
+                        return                        # replaced while the child was being prepared: this one is not performed
+                engine = self.engine
+                sent = engine is not None and engine.send({'cmd': 'show', 'id': run_id, **({'seed': seed} if isinstance(seed, int) and not isinstance(seed, bool) else {})})
+                if not sent:
+                    self._update(only=run_id, state='error', error='物理引擎没有收到开始的命令')
+                elif self._stops != stops:            # and one that came at that very moment still ends it
+                    engine.send({'cmd': 'stop'})
+        except Exception as exc:                      # the body keeps answering; the run says what went wrong
+            self._update(only=run_id, state='error', error=f'{type(exc).__name__}: {str(exc)[:200]}')
 
     def _serve(self):
         try:
-            problem = self._start_engine(self.default_show)
+            with self._one:
+                problem = self._start_engine(self.default_show)
         except Exception as exc:                      # the child could not even be started: said in the health and the status
             problem = self.fault = f'物理引擎没有启动：{type(exc).__name__}: {str(exc)[:200]}'
         self._update(**({'error': problem} if problem else {}))

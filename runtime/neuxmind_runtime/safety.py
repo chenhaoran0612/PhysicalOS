@@ -563,6 +563,18 @@ class SafetySupervisor:
         self._bound_program_speed(cap, args, notes, ctx)
         return args
 
+    def _limit_policy_run(self, args: dict, notes: list, _ctx: dict) -> dict:
+        """A trained skill model the body runs itself (issue #67). The supervisor cannot bound the motion
+        inside it; what it holds is the list: only a model the body declared is started, and the usual
+        gates (authorization, latched stop, filled limits on a real device, the run's time limit) apply."""
+        cap = "policy.run"
+        policies = self._param(cap, "policies")
+        if not isinstance(policies, (list, tuple)):
+            self._reject(cap, "清单里的 policies 不是列表，拒绝运行")
+        if args["name"] not in policies:
+            self._reject(cap, f"本体没有技能模型 {args['name']}，有 {list(policies)}")
+        return args
+
     def _limit_arm_ee_pose(self, args: dict, notes: list, _ctx: dict) -> dict:
         cap = "arm.ee_pose"
         reach = self._param(cap, "reach")
