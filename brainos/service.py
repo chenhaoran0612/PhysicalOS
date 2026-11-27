@@ -141,6 +141,8 @@ class Platform:
         self.remote_calls = RemoteCalls(self)       # issue #43: the owner's "允许远程调用" switch per installed skill
         from .robot_bundle import RobotBundles
         self.robot_bundle = RobotBundles(self)      # issue #43: a robot's programs and scene data, to the cloud and back
+        from .run_records import RunRecords
+        self.run_records = RunRecords(self)         # issue #70: a run is followed to its end; its result, events and samples are kept (after everything that audits a run)
         # Do not replay physical or remote operations after a process interruption.
         for kind in ('jobs', 'deployments', 'operations', 'model_deployments'):
             for obj in self.store.list(kind):
@@ -1011,4 +1013,5 @@ class Platform:
         self.engineering.close()
         self.package_delivery.close()   # issue #31: package deliveries a person started stop before the store is closed
         self.robot_bundle.close()       # issue #43: collecting or installing a bundle stops before the store is closed
+        self.run_records.close()        # issue #70: runs being followed are left before the store is closed
         self.store.close()

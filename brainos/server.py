@@ -17,6 +17,7 @@ from .service import Platform
 from .commerce import Commerce
 from .material_parse import MaterialParse   # issue #34: parsing results of library materials
 from . import cloud_auto_login              # issue #36: an app sign-in signs into the cloud too
+from . import run_records                   # issue #70: what a run did, kept on this computer
 from . import robot_scope                   # issue #42: robots belong to the account, not to the task that is open
 from . import task_robot                    # issue #42: the robot a task is done with
 
@@ -207,6 +208,8 @@ def make_handler(application):
             extra=extra or {'/task_apps.js':('task_apps.js','text/javascript; charset=utf-8'),'/task_apps.css':('task_apps.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #57: every page of the sidebar is titled the way 工作台 is.
             extra=extra or {'/page_titles.js':('page_titles.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #70: 仿真试运行 / 验证与测试 / 部署与运行 as boards over record lists, and the page of one record.
+            extra=extra or {'/run_boards.js':('run_boards.js','text/javascript; charset=utf-8'),'/run_record_view.js':('run_record_view.js','text/javascript; charset=utf-8'),'/run_boards.css':('run_boards.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #60: 机器人应用 as a waterfall of applications, the page of one application, the page of the skills.
             extra=extra or {'/app_gallery.js':('app_gallery.js','text/javascript; charset=utf-8'),'/app_gallery.css':('app_gallery.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #62: why a skill cannot be installed on a robot that is not connected, and the step that fixes it.
@@ -461,6 +464,8 @@ def make_handler(application):
                         'robots/bundles':service.robot_bundle.overview,'robots/bundles/collect':service.robot_bundle.start_collect,
                         'robots/bundles/install':service.robot_bundle.start_install,'robots/bundles/status':service.robot_bundle.status,
                         'robots/bundles/stop':service.robot_bundle.stop,
+                        # issue #70: what a run did (followed to its end), for 仿真试运行 / 验证与测试 / 部署与运行
+                        'runs/records':service.run_records.overview,'runs/record':service.run_records.detail,
                         # Issue #4: TokenFans models & compute (the key and password never come back).
                         'model-compute/key':service.model_compute.connect_key,
                         'model-compute/login':service.model_compute.login,
@@ -493,6 +498,7 @@ def main():
     args=parser.parse_args()
     app=Application(args.state_dir,args.operator_email)
     app.cloud_auto_login=cloud_auto_login.enabled_by_environment()     # issue #36
+    run_records.FOLLOW=run_records.enabled_by_environment()            # issue #70: runs are followed in the app, not in a test's Platform
     server=FastBindHTTPServer(('127.0.0.1',args.port),make_handler(app))
     server.daemon_threads=True
     print(f'NeuxMind Physical OS http://127.0.0.1:{server.server_port}',flush=True)
