@@ -178,7 +178,7 @@ def smoke(backend,state_dir):
         assert robot['status']=='connected' and robot['sim']['state']=='running',robot
         gallery=api('skills/examples',{'project_id':robot['project_id'],'robot_id':robot['id']})
         names=sorted(x['example'] for x in gallery['items'] if x.get('valid'))
-        assert names==['free_walk','goto_place','patrol','patrol_places','status_report','wave'],gallery
+        assert names==['free_walk','goto_place','patrol','patrol_places','status_report'],gallery   # issue #69: the arm's package (wave) is not listed for a quadruped
         preview=api('skills/package-preview',{'robot_id':robot['id'],'example':'status_report'})
         installed=api('skills/package-install',{'robot_id':robot['id'],'example':'status_report',
                                                 'package_digest':preview['package_digest'],'request_id':'freeze-1'})

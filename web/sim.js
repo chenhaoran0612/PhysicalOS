@@ -68,10 +68,28 @@ async function simGalleryOpen(robotId) {
   gallery.items.filter(x => x.valid).forEach(x => { simGalleryCache[x.skill.id] = x; });
   const installed = new Set((detail?.skills?.items || []).map(s => s.id + '@' + s.version));
   const cards = gallery.items.filter(x => x.valid).map(x => simGalleryCard(x, robot, installed)).join('');
-  const body = `<div class="section-head"><h3>示例技能</h3><span>随应用提供，不需要找文件夹</span></div>` +
-    (gallery.items.length ? `<div class="gallery">${cards}</div>` : notice('这个安装包里没有示例技能。', true)) +
+  const body = simGalleryHead(gallery) +   // issue #69: only this brand and model's packages and the generic ones
+    (gallery.items.length ? `<div class="gallery">${cards}</div>` : notice('没有这个品牌型号可以安装的技能包。', true)) +
     simFolderSection(robotId);
   $('#dialog-content').querySelector('.dialog-body').innerHTML = body;
+}
+
+// Issue #69: the list is for one brand and model (a simulated robot and a real one alike).
+function simGalleryHead(gallery) {
+  const whose = gallery.product ? `${h(gallery.product)} 可以安装的技能包` : '可以安装的技能包';
+  const what = gallery.product ? '这个品牌型号的技能包，加上所有机器人都能装的通用技能包'
+    : '这台机器人还没有填写品牌和型号，只列出所有机器人都能装的通用技能包';
+  return `<div class="section-head" data-gallery-product="${h(gallery.product || '')}"><h3>${whose}</h3><span>${what}${simGalleryLeftOut(gallery)}</span></div>`;
+}
+
+function simGalleryLeftOut(gallery) {
+  return gallery.left_out ? `<span data-gallery-left-out="${Number(gallery.left_out)}"> · 另有 ${Number(gallery.left_out)} 个技能包属于其他品牌型号，没有列出</span>` : '';
+}
+
+function simGalleryScope(x) {
+  if (!x.scope) return '';
+  return `<span class="tag" data-gallery-scope="${x.scope.generic ? 'generic' : 'product'}">` +
+    (x.scope.generic ? '通用 · 所有机器人都能装' : '适用：' + h(x.scope.products.join('、'))) + '</span>';
 }
 
 function simGalleryCard(x, robot, installed) {
@@ -89,7 +107,7 @@ function simGalleryCard(x, robot, installed) {
     ? skillRunButton(robot, {id: s.id, compatible: !mine || mine.compatible}) + badge('已安装', 'good')   // issue #42: real robots too
     : button('安装到这台机器人', 'skillpkg-example', 'small', robot.id + '|' + x.example, !mine || !mine.compatible);
   return `<article class="gallery-item" data-example="${h(x.example)}"><div class="section-head"><h3>${h(s.title)}</h3>${verdict}</div>` +
-    `<p>${h(x.note || s.summary || s.description)}</p><div class="tags">` +
+    `<p>${h(x.note || s.summary || s.description)}</p><div class="tags">${simGalleryScope(x)}` +
     `<span class="tag">${x.moves ? '会让机器人运动 · 运行前需授权' : '只读取状态，不会运动'}</span>` +
     `${s.requires.map(r => `<span class="tag">需要：${h(r.title)}</span>`).join('')}</div>${reasons}${other}` +
     `<div class="button-row">${action}</div><small class="mono gallery-id">${h(s.id)}@${h(s.version)}</small></article>`;

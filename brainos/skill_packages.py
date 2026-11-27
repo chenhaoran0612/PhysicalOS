@@ -332,6 +332,13 @@ def _skill_view(skill):
             'parameters': robot_caps.parameter_views(skill['parameters'])}
 
 
+def _for_this_product(robot, p):
+    """Issue #69: a bundled package goes only onto robots of the brands and models it is for."""
+    if p.get('example'):
+        from . import skill_products
+        skill_products.check(robot, p['example'])
+
+
 def read_source(p):
     """Read a bundled example (``example``: its id) or a folder the user chose (``path``)."""
     if p.get('example'):
@@ -343,6 +350,7 @@ def read_source(p):
 def preview(platform, p):
     """Read, validate and check compatibility. Sends nothing that changes the robot."""
     robot = _robot_for(platform, p)
+    _for_this_product(robot, p)
     package, info = read_source(p)
     skill = validate(package)
     manifest = robot_caps.fetch_manifest_v2(robot)
@@ -372,6 +380,7 @@ def install(platform, p):
             raise ValueError('请求标识已用于另一次安装')
         return existing
     robot = _robot_for(platform, p)
+    _for_this_product(robot, p)
     package, info = read_source(p)
     skill = validate(package)
     if package_digest(package) != expected:

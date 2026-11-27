@@ -1,0 +1,30 @@
+{
+  "schema": "skill.products.v1",
+  "note": "Which brands and models each bundled skill package is for (issue #69). generic: for every robot. A simulated robot and a real one of the same brand and model are the same product. alias: another spelling of a product already listed (what the device itself reports); it counts but is not named on the page. This file sits next to the packages, not inside one, so no package's content or digest changes.",
+  "packages": {
+    "status_report": {"generic": true},
+    "patrol": {"products": [
+      {"vendor": "NeuxMind 示例", "model": "通用四足"},
+      {"vendor": "neuxmind-sim", "model": "sim-quadruped", "alias": true}
+    ]},
+    "wave": {"products": [
+      {"vendor": "NeuxMind 示例", "model": "通用六轴机械臂"},
+      {"vendor": "neuxmind-sim", "model": "sim-arm-6dof", "alias": true}
+    ]},
+    "goto_place": {"products": [
+      {"vendor": "智身科技", "model": "钢镚 L2-U"},
+      {"vendor": "NeuxMind 示例", "model": "通用四足"},
+      {"vendor": "neuxmind-sim", "model": "sim-quadruped", "alias": true}
+    ]},
+    "patrol_places": {"products": [
+      {"vendor": "智身科技", "model": "钢镚 L2-U"},
+      {"vendor": "NeuxMind 示例", "model": "通用四足"},
+      {"vendor": "neuxmind-sim", "model": "sim-quadruped", "alias": true}
+    ]},
+    "free_walk": {"products": [
+      {"vendor": "智身科技", "model": "钢镚 L2-U"},
+      {"vendor": "NeuxMind 示例", "model": "通用四足"},
+      {"vendor": "neuxmind-sim", "model": "sim-quadruped", "alias": true}
+    ]}
+  }
+}
