@@ -226,9 +226,10 @@ class Training(unittest.TestCase):
 
 
 class Listed(unittest.TestCase):
-    def test_the_duck_is_a_biped_profile_of_its_brand_and_model(self):
-        profile = sim_profiles.BY_ID[duck_kit.PROFILE_ID]
-        self.assertEqual((profile['vendor'], profile['model'], profile['type'], profile.get('duck')), ('Microduck', 'AD-P102', 'biped', True))
+    def test_the_duck_is_a_profile_of_the_type_other_of_its_brand_and_model(self):
+        profile = sim_profiles.BY_ID[duck_kit.PROFILE_ID]     # issue #65: listed under 「其他」, not with the humanoids
+        self.assertEqual((profile['vendor'], profile['model'], profile['type'], profile.get('duck')), ('Microduck', 'AD-P102', 'other', True))
+        self.assertEqual([p['id'] for p in sim_profiles.PROFILES if p['type'] == 'other'], [duck_kit.PROFILE_ID])
         self.assertEqual(sim_profiles.canonical('microduck', 'adp102'), ('Microduck', 'AD-P102'))
         self.assertTrue((ROOT / 'web' / 'robot_images' / 'microduck-adp102.webp').is_file())
 
@@ -300,6 +301,8 @@ class Catalog(Case):
     def test_the_page_gets_the_skill_models_and_which_ones_have_a_package_here(self):
         catalog = self.app.snapshot()['duck_kit']
         self.assertEqual((catalog['vendor'], catalog['model'], catalog['available'], catalog['problem']), ('Microduck', 'AD-P102', True, ''))
+        row = next(p for p in self.app.snapshot()['sim_catalog']['profiles'] if p['id'] == duck_kit.PROFILE_ID)
+        self.assertEqual((row['type'], row['kit'], row['available']), ('other', True, True))     # issue #65: under 「其他」, and not from a URDF
         self.assertEqual([(s['id'], s['packaged'], s['status_name']) for s in catalog['shows']],
                          [(task, True, '已交付') for task in self.TASKS])
         row = [p for p in self.app.sim_profiles.catalog()['profiles'] if p['id'] == duck_kit.PROFILE_ID][0]
@@ -347,7 +350,7 @@ class Catalog(Case):
 class Performing(Case):
     def test_a_simulated_duck_is_an_online_robot_of_its_brand_and_model(self):
         robot = self.add()
-        self.assertEqual((robot['status'], robot['family'], robot['sim']['state'], robot['sim']['duck']), ('connected', 'biped', 'running', True))
+        self.assertEqual((robot['status'], robot['family'], robot['sim']['state'], robot['sim']['duck']), ('connected', 'other', 'running', True))
         self.assertEqual((robot['product']['vendor'], robot['product']['model']), ('Microduck', 'AD-P102'))
         self.assertEqual(sorted(c['id'] if isinstance(c, dict) else c for c in robot['capabilities']), ['safety.stop', 'system.health'])
         second = self.add()
@@ -478,6 +481,27 @@ class RealKit(unittest.TestCase):
                 child.stdout.close()
         # The delivered replay of this seed: 227 control steps, 4.54 s (the package's 使用说明.md).
         self.assertEqual((done['success'], done['steps'], done['duration_s'], done['phases'][-1]), (True, 227, 4.54, '回正'), done)
+
+
+@unittest.skipUnless(HAVE_MUJOCO, 'needs the mujoco package')
+class ListedUnderOther(Case):
+    """Issue #65: the duck is of the type 「其他」; one that was added while it was listed with the humanoids follows."""
+
+    def test_a_duck_added_while_it_was_listed_as_a_biped_becomes_one_of_the_type_other(self):
+        robot = self.add()
+        store = self.app.store
+        store.put('robots', {**store.get('robots', robot['id']), 'family': 'biped'}, owner=True)     # as 0.21.16 saved it
+        self.assertEqual(self.app.sim_profiles.align_types(), [robot['id']])
+        self.assertEqual(store.get('robots', robot['id'])['family'], 'other')
+        self.assertEqual(self.app.sim_profiles.align_types(), [])
+
+    def test_an_application_of_the_duck_is_still_simulated_as_the_body_the_duck_reports(self):
+        robot = self.add()                    # of the type 其他 (no standard body), its device reports a humanoid
+        self.assertEqual((robot['family'], robot['manifest']['family']), ('other', 'humanoid'))
+        with mock.patch.object(self.app.robot_models, 'robots_for', return_value=[robot]):
+            self.assertEqual(self.app.mujoco._family({'id': 'app-1'}), 'humanoid')
+        with mock.patch.object(self.app.robot_models, 'robots_for', return_value=[{**robot, 'manifest': {}}]):
+            self.assertEqual(self.refused('sim_family_unsupported', self.app.mujoco._family, {'id': 'app-1'})[-2:], '其他')
 
 
 if __name__ == '__main__':

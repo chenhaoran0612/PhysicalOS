@@ -52,12 +52,15 @@ const engine = process.env.BRAIN_BROWSER === 'webkit' ? playwright.webkit : play
   must(await form.locator('input[name=kind]').count() === 0, 'The two old kinds are still in the dialog');
   const start = await chosen();
   must(start.type === 'quadruped' && start.profile && !start.disabled, 'The dialog does not open on a dog that can be added: ' + JSON.stringify(start));
-  must(await form.locator('.sp-preview img').evaluate(img => img.complete && img.naturalWidth > 0), 'The picture of the chosen model did not load');
+  // the picture is on its way when the dialog opens: wait for it to finish, then look (it was a race on Chromium)
+  must(await form.locator('.sp-preview img').evaluate(async img => { if (!img.complete) await new Promise(done => { img.onload = img.onerror = done; }); return img.naturalWidth > 0; }), 'The picture of the chosen model did not load');
   await shot('sim54-01-dialog');
   // a type without a model: said, and nothing can be added
   await form.locator('input[name=sim_type][value=other]').check({force: true});
-  must((await form.locator('.sp-preview').innerText()).includes('这个类型暂时没有可以仿真的型号'), 'A type without models does not say so');
-  must((await chosen()).disabled, 'A type without models can still be submitted');
+  if (!catalog.profiles.some(p => p.type === 'other' && p.available)) {      // issue #65: 「其他」 has the Microduck where its kit is installed
+    must(/这个类型暂时没有可以仿真的型号|现在不能添加/.test(await form.locator('.sp-preview').innerText()), 'A type without a model that can be added does not say so');
+    must((await chosen()).disabled, 'A type without a model that can be added can still be submitted');
+  }
   // keyboard: the types are one radio group
   await form.locator('input[name=sim_type][value=other]').focus();
   await page.keyboard.press('ArrowLeft');

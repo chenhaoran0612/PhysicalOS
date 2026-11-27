@@ -82,6 +82,7 @@ function spPreview(catalog, choice) {
     return `<p class="sp-none" role="status">${none ? SP_NO_MODEL : '这个品牌的型号现在不能添加' + (why ? '：' + spEsc(why) : '') + '。'}</p>`;
   }
   const what = profile.builtin ? '示例机器人：没有模型文件，形状是示意的。'
+    : profile.kit ? '按它自己的仿真模型在 MuJoCo 里仿真；训练出来的技能模型在「训练与改进」页里运行。'     // issue #65: the Microduck
     : '按这个型号的 URDF 模型在 MuJoCo 里仿真；行走直接移动机身，不模拟步态。';
   return `<img src="${spEsc(spPicture(profile))}" alt="${spEsc(profile.vendor + ' ' + profile.model)}" width="120" height="120">` +
     `<div><b>${spEsc(profile.vendor)} · ${spEsc(profile.model)}</b><p>${what}</p></div>`;
