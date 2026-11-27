@@ -106,10 +106,15 @@ let failed = async () => {};
   const filter = page.locator('.robot-model-filter');
   await filter.waitFor();
   await has(filter, ['全部品牌型号', ACME, '1 台机器人', BETA, '2 台机器人']);
-  same(await page.locator('#main table tbody tr').count(), 2, 'skills listed for all');
+  // Issue #60: the skills are on their own page (every skill, with its brand and model); 机器人应用 is the applications.
+  await page.locator('#main .page-head [data-action="appg-skills"]').click();
+  await page.locator('#main table tbody tr').first().waitFor();
+  same(await page.locator('#main table tbody tr').count(), 2, 'skills listed');
+  await has(page.locator('#main table tbody tr', {hasText: '伸到货架'}), [ACME]);
+  await has(page.locator('#main table tbody tr', {hasText: '前往巡检点'}), [BETA]);
+  await page.locator('#main [data-action="appg-back"]').click();
+  await filter.waitFor();
   await filter.locator('.robot-model-chip', {hasText: ACME}).click();
-  same(await page.locator('#main table tbody tr').count(), 1, 'skills listed for one brand and model');
-  await has(page.locator('#main table tbody'), ['伸到货架', ACME]);
   same(await filter.locator('.robot-model-chip.active').getAttribute('aria-pressed'), 'true', 'the chosen filter');
   await filter.locator('.robot-model-chip').first().click();
 

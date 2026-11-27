@@ -188,7 +188,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
   await shot('08-adopt-installed-skill');
   await click('application-add');
   await page.locator('form[data-form=application]').waitFor();
-  assert((await dlg('.dialog-body').innerText()).includes('目标选仿真机器人时，这个应用只能做仿真测试'), '创建应用时应提前说明仿真目标的限制');
+  assert((await dlg('.dialog-body').innerText()).includes('只有仿真机器人：应用只能做仿真测试'), '创建应用时应提前说明仿真目标的限制');
   await fill('name', '园区巡逻');
   // ux03: steps use the generated form; the advanced JSON is one click away.
   await page.locator('#dialog .step-editor .raw-params summary').click();
