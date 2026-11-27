@@ -70,15 +70,28 @@ for (const name of SIDEBAR.slice(1)) {
   ok(html.startsWith(`<div class="page-head"><div>${page.pageTitleMarkup(route)}`), `#${route}: the head starts with the English line and the name`);
   ok(!html.includes('OLD ENGLISH') && !html.includes('一句以前的话'), `#${route}: what the page used to be titled is gone`);
   same(html.split('<h1>').length, 2, `#${route}: one title`);
-  ok(html.includes('<button>B</button>') && html.includes('class="subtitle"'), `#${route}: the buttons and the sentence under the title stay`);
+  ok(html.includes('<button>B</button>'), `#${route}: the buttons stay`);
+  // Issue #59: nothing under the title, and no 「这个页面怎么用」 after the head.
+  ok(!html.includes('class="subtitle"') && !html.includes('说明。'), `#${route}: no sentence under the title`);
+  ok(!html.includes('page-purpose') && !html.includes('这个页面怎么用') && !html.includes('需要准备') && !html.includes('完成后得到'),
+     `#${route}: no 「这个页面怎么用」`);
+  same(html, `<div class="page-head"><div>${page.pageTitleMarkup(route)}</div><div class="button-row"><button>B</button></div></div>`,
+       `#${route}: the head is the two lines and the buttons, nothing else`);
+}
+for (const route of HIDDEN) {
+  page.at(route);
+  const html = page.heading('X', 'Y', '说明。');
+  ok(!html.includes('class="subtitle"') && !html.includes('page-purpose'), `the hidden page #${route} has neither when it is shown again`);
 }
 page.at('harness');
 ok(!page.heading('X', 'Y', 'Z').includes('验证效果'), 'the step label of web/journey.js is no longer the line above the title');
-ok(page.heading('X', 'Y', 'Z').includes('先检查设备与应用配置'), 'its sentence is still under the title');
+ok(!page.heading('X', 'Y', 'Z').includes('先检查设备与应用配置'), 'its sentence is no longer under the title (issue #59)');
 page.at('cloud');
-ok(page.heading('X', 'Y', '云平台说明').includes('<p class="subtitle">云平台说明</p>'), 'a page without a step keeps the sentence it gives');
+ok(!page.heading('X', 'Y', '云平台说明').includes('云平台说明'), 'a page without a step loses the sentence it gives too (issue #59)');
 page.at('somewhere-else');
 ok(page.heading('EN', '标题', '说明').includes('<div class="eyebrow">EN</div><h1>标题</h1>'), 'a page outside the table is drawn as it asks');
+ok(!page.heading('EN', '标题', '说明').includes('class="subtitle"'), 'and it has no sentence under the title either (issue #59)');
+ok(!source('journey.js').includes('这个页面怎么用') && !source('app.js').includes('journeyHelp'), 'the block 「这个页面怎么用」 is no longer written anywhere');
 
 // 4. 我的机器人 has its own head: the same format, and the count of robots under the name.
 const robots = vm.createContext({h, button: () => '', badge: () => '', rows: () => [], state: {robots: []}});

@@ -4,7 +4,8 @@
 //
 //   * heading() of web/app.js draws the head of an ordinary page with pageTitleMarkup(current); what the
 //     page itself asked for (its own English line, a sentence as the title, the step label of
-//     web/journey.js) is used only for a page that is not in the table. The sentence under the title stays.
+//     web/journey.js) is used only for a page that is not in the table. Nothing is drawn under the title, and no
+//     「这个页面怎么用」 after the head (issue #59).
 //   * 我的机器人 (web/robots_page.js) has its own head and asks pageTitleMarkup('robots').
 //   * 工作台 (web/task_workbench.js) is where the format comes from and writes it out itself.
 //
