@@ -47,6 +47,9 @@ PREFIXES += ('applications/', 'onsite/')
 # The task that was open in the page when a request about a robot was sent (a simulated robot's
 # first run opens a task for the trial; see brainos/sim_robots.py).
 TASK_FIELD = 'task_project_id'
+# Issue #56: a robot needs no task. What an investigation of one runs on (the assistant's models) is a
+# task's while a task is open, and is kept at the home when the page has no task.
+NO_TASK_ROUTES = ('engineering/models', 'engineering/models/use', 'engineering/models/cloud')
 NOT_HERE = '请先进入一个任务，再做这一步'
 NOT_FOUND = '找不到 '                         # how brainos/store.py starts when a record is not there
 SESSION_ASSET_GONE = '这次会话当时选用的模型或助手工具已经不在了（保存它们的任务可能已被删除）。不能继续这一次；请重新开始一次新的'
@@ -107,6 +110,8 @@ def request(route, payload):
     if route not in ROUTES and not route.startswith(PREFIXES):
         if is_home(payload.get('project_id')):      # what a task makes is not kept at the robots' home
             raise ValueError(NOT_HERE)
+        if route in NO_TASK_ROUTES and not payload.get('project_id'):       # issue #56
+            return {**payload, 'project_id': HOME}
         return payload
     scoped = {**payload, 'project_id': HOME}
     asked = payload.get('project_id')

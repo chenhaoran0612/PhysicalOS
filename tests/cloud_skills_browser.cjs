@@ -235,7 +235,7 @@ const {pickBrandAndModel} = require('./robot_model_helper.cjs');
   await shot('12-sim-robot-page');
 
   // 8 · A robot with a management layer stand-in: the link, the switches, the confirmation, an older version, the calls.
-  await fixture('attach?project=' + await page.evaluate(() => projectId));
+  await fixture('attach?project=' + await page.evaluate(() => projectId || state.robot_home));     // issue #56: a robot makes no task
   await reload();
   await page.evaluate(id => robotDetailOpen(id), cfg.robot_id);
   await switchOf('goto_place').waitFor();

@@ -151,7 +151,7 @@ if (typeof document !== 'undefined') {
       if (!p.profile_id) throw Error('请选择要添加的型号');
       toast('正在启动仿真机器人…第一次添加一个型号要先解开它的模型，可能需要十几秒');
       const robot = await api('sims', {profile_id: p.profile_id, project_id: projectId || undefined});
-      projectId = robot.project_id;
+      projectId = robotNoTaskNext(robot.project_id, projectId, state.projects);   // issue #56: no task is made for a robot
       try { sessionStorage.setItem('brain-project', projectId); } catch { /* optional */ }
       location.hash = 'robots';
       await refresh(true);

@@ -217,7 +217,7 @@ function raPaint() {
   };
   riPaint = () => { basePaint(); raPaint(); };
   engineAction = async (type, id) => {
-    if (!type.startsWith('engine-runtime-autostart') || !state.user || !project()) return baseAction(type, id);
+    if (!type.startsWith('engine-runtime-autostart') || !state.user) return baseAction(type, id);
     if (type === 'engine-runtime-autostart') return raDialog(id);
     if (type === 'engine-runtime-autostart-on') return raStart(id, false);
     if (type === 'engine-runtime-autostart-off') return raStart(id, true);

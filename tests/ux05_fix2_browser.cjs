@@ -83,7 +83,7 @@ function writeSkill() {
   await submit();
   await dlg('.cap-list').waitFor({timeout: 60000});
   await closeDialog();
-  const projectA = await page.evaluate(() => projectId);
+  const projectA = await require('./robot_no_task_helper.cjs').openTask(page, '项目 A');     // issue #56: a robot makes no task
   const addReal = async (name, r, pid) => {
     const robot = await call('robots', {project_id: pid, name, family: 'quadruped', endpoint: r.endpoint, token: r.token});
     await call('robots/connect', {robot_id: robot.id});

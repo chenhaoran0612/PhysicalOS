@@ -144,7 +144,7 @@ function robotRemoveRefused(robotId, error) {
   robotRemoveBaseAction = engineAction;
   engineRobotCard = r => robotRemoveCardButton(baseCard(r), r);
   engineAction = async (type, id) => {
-    if (!state.user || !project()) return robotRemoveBaseAction(type, id);
+    if (!state.user) return robotRemoveBaseAction(type, id);
     if (type === 'engine-robot-remove') return robotRemoveOpen(id);
     if (type === 'engine-robot-remove-confirm') return robotRemoveConfirm(id);
     return robotRemoveBaseAction(type, id);

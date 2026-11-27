@@ -14,7 +14,7 @@ const project=()=>state.projects.find(p=>p.id===projectId);
 const rows=k=>state[k].filter(x=>x.project_id===projectId||robotShared(k,x));
 // Issue #42: robots, and what is kept about them, belong to the account (state.robot_home), so every task lists them. A task's own assistant settings are not shared.
 const ROBOT_HOME_PRIVATE=['agent_models','agent_skills','agent_mcp_servers'];
-function robotShared(kind,x){return Boolean(state.robot_home)&&x.project_id===state.robot_home&&!ROBOT_HOME_PRIVATE.includes(kind);}
+function robotShared(kind,x){return Boolean(state.robot_home)&&x.project_id===state.robot_home&&(!projectId||!ROBOT_HOME_PRIVATE.includes(kind));}   // issue #56: with no task open, the assistant's settings are the home's
 const find=(k,id)=>state[k].find(x=>x.id===id);
 const named=(k,id)=>find(k,id)?.name||id;
 const date=v=>v?new Date(v).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
@@ -161,8 +161,8 @@ async function action(type,id,el){
  if(type==='purchase')return form('申请开通平台额度','支付渠道未配置时只保存申请，不扣款、不入账。',field('申请额度点','<input name="credits" type="number" min="1" max="100000000" value="1000" required>'),'purchase','保存额度申请');
  if(type==='operator-console'){if(!state.user.operator)throw Error('需要运营权限');return dialog('平台运营控制台','上架资源与模型、管理额度和核对用量',`<div class="dialog-body"><div class="button-row">${button('上架资源','operator-resource')}${button('上架模型','operator-model','secondary')}${button('调整用户额度','operator-grant','secondary')}${button('核对结算','operator-settle','secondary')}</div><div class="spacer"></div><h3>待处理额度申请</h3>${json(state.operator?.orders||[])}<h3>资源预留</h3>${json(state.operator?.reservations||[])}</div>`);}
  if(type.startsWith('operator-')){if(!state.user.operator)throw Error('需要运营权限');const kind=type.slice(9),templates={resource:{name:'',kind:'training',description:'',unit:'gpu_hour',credits_per_unit:1,endpoint:'',token:''},model:{name:'',source:'native',version:'1.0',model_ref:'',task_type:'',input_contract:'',output_contract:'',license:'',package_ref:'',package_digest:'',runtime:'onnx',families:['mobile']},grant:{user_id:state.user.id,credits:1000,reason:''},settle:{reservation_id:'',actual_units:0,evidence_ref:''}};return form('运营配置','仅运营账号可操作。资源上架会先检查实际服务协议。',field('配置 JSON',textarea('payload','',JSON.stringify(templates[kind],null,2))),'operator','提交配置',`data-kind="${kind}"`);}
- if(type==='project-add')return form('你希望机器人完成什么工作？','先描述目标。设备、模型、测试与部署结果都会保存在这个任务项目中。',field('任务项目名称',input('name','例如：仓库每日巡检'))+field('机器人要做什么，怎样算完成？',textarea('objective','例如：每天巡检仓库，识别通道障碍和设备异常，完成后生成报告。'))+(typeof taskRobotField==='function'?taskRobotField(rows('robots')):''),'project','保存目标，开始接入');
- if(!project()&&!(typeof taNoTaskNeeded==='function'&&taNoTaskNeeded(type)))return toast('请先创建或选择一个项目');   // issue #50: skills and applications are the account's
+ if(type==='project-add')return form('你希望机器人完成什么工作？','先描述目标，再选用哪台机器人来做。模型、测试与部署结果会保存在这个任务里；机器人属于账号，不随任务增减。',field('任务项目名称',input('name','例如：仓库每日巡检'))+field('机器人要做什么，怎样算完成？',textarea('objective','例如：每天巡检仓库，识别通道障碍和设备异常，完成后生成报告。'))+(typeof taskRobotField==='function'?taskRobotField(rows('robots')):''),'project','保存目标，开始接入');
+ if(!project()&&!(typeof taNoTaskNeeded==='function'&&taNoTaskNeeded(type))&&!(typeof robotNoTaskNeeded==='function'&&robotNoTaskNeeded(type)))return toast('请先创建或选择一个项目');   // issue #50: skills and applications are the account's
  // 第 02 轮：机器人能力与技能包、异步现场测试（INTERFACES §4.1、§4.5）
  if(type==='detail-robots')return robotDetailOpen(id);
  if(type.startsWith('skillpkg-'))return skillPackageAction(type,id);

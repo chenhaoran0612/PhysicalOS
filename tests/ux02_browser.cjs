@@ -87,6 +87,7 @@ const SIM = '仿真本体的测试结果不能作为现场证据';
   await page.waitForFunction(() => location.hash === '#simulation');
 
   // ---------------------------------------------------------------- (d) assistant without a model
+  await require('./robot_no_task_helper.cjs').openTask(page);     // issue #56: a robot makes no task; an engineering job is a task's work
   await go('agents');
   await page.locator('#main [data-action="engine-work"]').first().click();
   await dlg('.model-why').waitFor();

@@ -350,7 +350,7 @@ const rbIsApply = view => !!view && view.mode === 'body';
     if (title && rbIsApply(view)) title.textContent = '应用本体配置';
   };
   engineAction = async (type, id) => {
-    if (!type.startsWith('engine-robot-body') || !state.user || !project()) return baseAction(type, id);
+    if (!type.startsWith('engine-robot-body') || !state.user) return baseAction(type, id);
     if (type === 'engine-robot-body') return rbForm(id);
     if (type === 'engine-robot-body-detect') return rbDetect(id);
     if (type === 'engine-robot-body-check') return rbCheck(id);

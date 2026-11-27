@@ -117,7 +117,7 @@ function hardwareRepairForm(robotId){
  if(!models.length)$('#dialog [type=submit]').disabled=true;
 }
 async function hardwareAction(type,id){
- if(!state.user)return auth();if(!project())return action('project-add');
+ if(!state.user)return auth();if(!project()&&!robotNoTaskNeeded(type))return action('project-add');   // issue #56: a robot needs no task
  if(type==='hardware-open')return hardwareOpen(id);
  if(['hardware-mark','hardware-unmark','hardware-auto'].includes(type))return rpAction(type,id);   // issue #13
  if(type==='hardware-scan'){const robot=find('robots',id);dialog('硬件初始化 · '+h(robot?.name||''),'重新扫描',`<div class="dialog-body hardware-init"><div class="hw-scanning" role="status"><span class="hw-spinner" aria-hidden="true"></span><div><b>正在扫描硬件…</b><p>只读命令，不修改设备。</p></div></div></div>`);$('#dialog').dataset.hardwareRobot=id;return hardwareScan(id);}

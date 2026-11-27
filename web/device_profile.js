@@ -292,7 +292,7 @@ function profileCardButton(html, robot) {
   const baseCard = engineRobotCard, baseDialog = dialog;
   profileBaseAction = engineAction;
   engineRobotCard = r => profileCardButton(baseCard(r), r);
-  engineAction = async (type, id) => (type.startsWith('engine-profile') && state.user && project()
+  engineAction = async (type, id) => (type.startsWith('engine-profile') && state.user
     ? profileAction(type, id) : profileBaseAction(type, id));
   // Any other dialog replaces the profile: a read that finishes later must not draw over it.
   dialog = (...args) => { delete $('#dialog').dataset.deviceProfile; return baseDialog(...args); };

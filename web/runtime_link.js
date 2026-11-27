@@ -201,7 +201,7 @@ async function rlRemove(robotId) {
   engineAction = async (type, id) => {
     if (type === 'engine-runtime-link-retry') return rlRetry(id);
     if (type === 'engine-runtime-link-remove') return rlRemove(id);
-    if (type === 'engine-runtime-link' && state.user && project()) return rlOpen(id);
+    if (type === 'engine-runtime-link' && state.user) return rlOpen(id);
     return rlBaseAction(type, id);
   };
   engineSubmit = async (kind, p, f) => (kind === 'engine-runtime-link' ? rlSubmit(p, f) : rlBaseSubmit(kind, p, f));

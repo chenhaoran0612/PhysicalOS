@@ -222,7 +222,7 @@ async function invSubmit(kind,p,f){
  const baseAction=engineAction,baseSubmit=engineSubmit,baseBody=engineSessionBody,baseCard=engineRobotCard,baseRefresh=engineRefresh,baseDialog=dialog,baseInventory=inventoryOpen,baseInventoryAction=inventoryAction;
  invBaseAction=baseAction;
  engineAction=async(type,id)=>{
-  if(state.user&&project()){
+  if(state.user){   // issue #56: a robot is investigated with no task
    if(type==='engine-discover'&&!invBypass)return invOpen(id);
    if(type==='engine-session'&&invIsChat(find('agent_sessions',id)))return invChat(id);
    // Evidence opened from the chat replaces it: offer the way back (approvals keep waiting there).

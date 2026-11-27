@@ -312,12 +312,12 @@ class OverHttp(unittest.TestCase):
         self.assertEqual([r['project_id'] for r in state['robots']], [state['robot_home']])
         self.post('robots/live', {'project_id': self.task('Site B'), 'robot_id': robot['id']})
 
-    def test_a_first_simulated_robot_still_opens_a_trial_task(self):
+    def test_a_first_simulated_robot_opens_no_trial_task(self):          # issue #56 (it used to open one)
         robot = self.post('sims', {'kind': 'quadruped'})
         self.addCleanup(lambda: self.request('/api/sims/remove', {'robot_id': robot['id']}))
 
         state = self.state()
-        self.assertEqual([p['id'] for p in state['projects']], [robot['project_id']])
+        self.assertEqual(state['projects'], [])
         self.assertEqual([r['project_id'] for r in state['robots']], [state['robot_home']])
 
 

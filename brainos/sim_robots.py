@@ -166,6 +166,8 @@ class SimRobots:
             existing = robot_scope.tasks(self.platform.store.list('projects'))
             if existing:
                 project = existing[0]
+            elif at_home:
+                project = None                  # issue #56: a robot needs no task, and none is made for it
             else:
                 # Q5-12: an automatically created trial project is not a task the user described.
                 project = self.platform.add_project(dict(DEFAULT_PROJECT))
@@ -185,7 +187,7 @@ class SimRobots:
         self.platform.store.put('robots', robot)
         self.platform.audit('robot.sim_added', {'robot_id': robot['id'], 'kind': kind}, owner)
         robot = self.start(robot['id'])
-        return {**robot, 'project_id': project['id']}
+        return {**robot, 'project_id': project['id'] if project else ''}
 
     def start(self, robot_id):
         """Start (or adopt the running) child process and connect the robot. Returns the redacted robot."""

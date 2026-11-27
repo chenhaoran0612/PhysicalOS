@@ -114,7 +114,7 @@ function uxInsertAfterHead(html, extra) {
 }
 
 {
-  const wrap = (key, extra) => { const orig = views[key]; views[key] = () => uxInsertAfterHead(orig(), state.user && project() ? extra() : ''); };
+  const wrap = (key, extra) => { const orig = views[key]; views[key] = () => uxInsertAfterHead(orig(), state.user ? extra() : ''); };
   wrap('harness', () => simDeployNotice('harness'));
   wrap('deployment', () => simDeployNotice('deployment'));
   wrap('simulation', simWorkbench);
