@@ -1,4 +1,4 @@
-# NeuxMind Robot OS 目标架构
+# NeuxMind Physical OS 目标架构
 
 > 版本：2026-11-05（第 1 轮进化）。取代 `ARCHITECTURE.md` 中"以桌面端为中心"的定位；原文件保留作历史。
 

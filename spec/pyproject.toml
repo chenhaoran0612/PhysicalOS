@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "neuxmind-spec"
 version = "1.2.0"
-description = "NeuxMind Robot OS capability standard, manifest v2 and skill package v1 (stdlib only)"
+description = "NeuxMind Physical OS capability standard, manifest v2 and skill package v1 (stdlib only)"
 requires-python = ">=3.10"
 
 [tool.setuptools]

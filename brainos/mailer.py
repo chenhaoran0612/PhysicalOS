@@ -34,7 +34,7 @@ from pathlib import Path
 log = logging.getLogger('brainos.mail')
 
 KEYS = ('host', 'port', 'user', 'password', 'from', 'from_name', 'ssl')
-DEFAULT_FROM_NAME = 'NeuxMind Robot OS'
+DEFAULT_FROM_NAME = 'NeuxMind Physical OS'
 SUBMISSION_PORT = 587
 IMPLICIT_TLS_PORT = 465
 SMTP_TIMEOUT_S = 20

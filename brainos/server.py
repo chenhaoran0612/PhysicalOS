@@ -131,7 +131,7 @@ def make_handler(application):
             # Issue #2: its own static files, kept apart from the shared table below.
             extra={'/hardware.js':('hardware.js','text/javascript; charset=utf-8'),'/hardware.css':('hardware.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #7: shared look (dropdowns, hover states, readable data views), also kept apart.
-            extra=extra or {'/dropdown.js':('dropdown.js','text/javascript; charset=utf-8'),'/dropdown.css':('dropdown.css','text/css; charset=utf-8'),'/hover.css':('hover.css','text/css; charset=utf-8'),'/readable.css':('readable.css','text/css; charset=utf-8'),'/readable.js':('readable.js','text/javascript; charset=utf-8'),'/readable_dom.js':('readable_dom.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            extra=extra or {'/dropdown.js':('dropdown.js','text/javascript; charset=utf-8'),'/dropdown.css':('dropdown.css','text/css; charset=utf-8'),'/hover.css':('hover.css','text/css; charset=utf-8'),'/login_hero.css':('login_hero.css','text/css; charset=utf-8'),'/readable.css':('readable.css','text/css; charset=utf-8'),'/readable.js':('readable.js','text/javascript; charset=utf-8'),'/readable_dom.js':('readable_dom.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #6: its own static files, likewise.
             extra=extra or {'/investigation.js':('investigation.js','text/javascript; charset=utf-8'),'/investigation.css':('investigation.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #32: the list of body types and the type of a device, likewise.
@@ -465,7 +465,7 @@ def main():
     app.cloud_auto_login=cloud_auto_login.enabled_by_environment()     # issue #36
     server=FastBindHTTPServer(('127.0.0.1',args.port),make_handler(app))
     server.daemon_threads=True
-    print(f'NeuxMind Robot OS http://127.0.0.1:{server.server_port}',flush=True)
+    print(f'NeuxMind Physical OS http://127.0.0.1:{server.server_port}',flush=True)
     def terminate(_signum,_frame):
         raise KeyboardInterrupt      # the app quits with SIGTERM: close workspaces (stops simulated robots)
     try:

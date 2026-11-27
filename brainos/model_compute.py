@@ -146,7 +146,7 @@ def _read_bounded(response):
 def request(method, path, token=None, payload=None, unauthorized='TokenFans 拒绝了请求'):
     """Call TokenFans; every failure is a ValueError in plain words. Redirects are refused
     so that a Bearer credential is never forwarded to another address."""
-    headers = {'Accept': 'application/json', 'User-Agent': 'NeuxMind-Robot-OS'}
+    headers = {'Accept': 'application/json', 'User-Agent': 'NeuxMind-Physical-OS'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
     data = None

@@ -1197,7 +1197,7 @@ def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="输出机器可读的 JSON")
 
-    parser = argparse.ArgumentParser(prog="nx", description="NeuxMind Robot OS 命令行：几分钟让任意机器人开始工作",
+    parser = argparse.ArgumentParser(prog="nx", description="NeuxMind Physical OS 命令行：几分钟让任意机器人开始工作",
                                      parents=[common])
     parser.add_argument("--version", action="version", version=f"nx {__version__}")
     sub = parser.add_subparsers(dest="command", required=True, metavar="<命令>")

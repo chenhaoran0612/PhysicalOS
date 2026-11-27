@@ -91,9 +91,11 @@ function acctFormHtml(){
 function acctGateHtml(){
   return `<div class="auth-layout">
    <aside class="auth-aside" aria-hidden="true">
-    <div class="auth-logo"><span class="brand-mark">n<span>↗</span></span><span>NeuxMind<small>ROBOT OS</small></span></div>
-    <div class="auth-pitch"><h2>让你的机器人，<br>准备上岗。</h2>
-     <ol class="auth-steps"><li>接入本体</li><li>开发应用</li><li>测试验证</li><li>部署上岗</li></ol></div>
+    <div class="auth-glow"><i></i><i></i><i></i></div><div class="auth-orbit"><i></i><i></i><i></i></div>
+    <div class="auth-logo"><span class="brand-mark">n<span>↗</span></span><span>NeuxMind<small>PHYSICAL OS</small></span></div>
+    <div class="auth-pitch"><p class="auth-kicker"><i></i>NEUXMIND PHYSICAL OS</p>
+     <h2 class="auth-slogan"><span>让你的机器人，</span><span class="auth-slogan-lit">准备上岗。</span></h2></div>
+    <p class="auth-wordmark">PHYSICAL OS</p>
     <small class="auth-legal">© ${new Date().getFullYear()} NeuxMind</small>
    </aside>
    <div class="auth-main" role="main"><div class="auth-card" data-mode="${acctMode}">
@@ -165,12 +167,20 @@ function acctBusy(btn,on){
   else if(btn.dataset.label){btn.disabled=false;btn.classList.remove('is-busy');btn.textContent=btn.dataset.label;}
 }
 
+/* Issue #55: going from one form to another (登录 → 创建账号 → 验证码) replaces the form only. The left side stays the
+   same element, so its light and orbits keep moving and the slogan does not come in again. */
+function acctDrawGate(gate){
+  const html=acctGateHtml(),shown=gate.hidden?null:gate.querySelector('.auth-main');
+  if(!shown){gate.innerHTML=html;return;}
+  const fresh=document.createElement('template');fresh.innerHTML=html;
+  shown.replaceWith(fresh.content.querySelector('.auth-main'));
+}
 function acctApplyGate(){
   const gate=document.getElementById('auth-gate');if(!gate)return;
   const need=acctChecked&&!state.user;
   document.body.classList.toggle('auth-required',need);
   document.body.classList.toggle('auth-pending',!acctChecked);
-  if(need){if(gate.dataset.mode!==acctMode||gate.hidden){gate.innerHTML=acctGateHtml();gate.dataset.mode=acctMode;acctFocus();}gate.hidden=false;}
+  if(need){if(gate.dataset.mode!==acctMode||gate.hidden){acctDrawGate(gate);gate.dataset.mode=acctMode;acctFocus();}gate.hidden=false;}
   else{gate.hidden=true;gate.innerHTML='';delete gate.dataset.mode;}
   if(need)acctSignedOutShow(gate);
 }

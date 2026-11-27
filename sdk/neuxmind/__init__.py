@@ -1,4 +1,4 @@
-"""NeuxMind Robot OS developer SDK.
+"""NeuxMind Physical OS developer SDK.
 
 * :mod:`neuxmind.robot`   — :class:`RobotClient` for the edge runtime HTTP API (v2, v1 manifest)
 * :mod:`neuxmind.cloud`   — :class:`CloudClient` for the NeuxMind Cloud API

@@ -277,7 +277,7 @@ def _scaffold(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="neuxmind-runtime", description="NeuxMind Robot OS 端侧运行时")
+    parser = argparse.ArgumentParser(prog="neuxmind-runtime", description="NeuxMind Physical OS 端侧运行时")
     sub = parser.add_subparsers(dest="command", required=True)
 
     serve = sub.add_parser("serve", help="启动端侧运行时网关（token 读取 BRAIN_EDGE_TOKEN）")

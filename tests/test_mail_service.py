@@ -87,7 +87,7 @@ class TemplateTest(unittest.TestCase):
         self.assertEqual(subject, 'NeuxMind 注册验证码：048213')
         for part in (text, html):
             self.assertIn('048213', part)
-            self.assertIn('NeuxMind Robot OS', part)
+            self.assertIn('NeuxMind Physical OS', part)
             self.assertIn('10 分钟', part)
             self.assertIn('请勿直接回复', part)
             self.assertIn('如果不是你本人操作', part)
@@ -118,7 +118,7 @@ class SendTest(MailCase):
         self.assertEqual((server.host, server.port, server.user), ('smtp.example.test', 587, 'no-reply@example.test'))
         self.assertEqual(server.calls, ['starttls', 'login', 'send', 'quit'])
         (msg,) = server.messages
-        self.assertEqual(msg['From'], 'NeuxMind Robot OS <no-reply@example.test>')
+        self.assertEqual(msg['From'], 'NeuxMind Physical OS <no-reply@example.test>')
         self.assertEqual(msg['To'], 'user@example.org')
         self.assertTrue(msg['Date'])
         self.assertTrue(msg['Message-ID'].endswith('@example.test>'))

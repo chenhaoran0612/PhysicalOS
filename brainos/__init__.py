@@ -1,1 +1,1 @@
-"""NeuxMind Robot OS: local platform foundation."""
+"""NeuxMind Physical OS: local platform foundation."""

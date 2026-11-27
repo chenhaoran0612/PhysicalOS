@@ -1,4 +1,4 @@
-"""NeuxMind Robot OS edge runtime.
+"""NeuxMind Physical OS edge runtime.
 
 Layers (bottom-up): adapter (HAL) → safety supervisor → capability bus →
 skill runtime → HTTP gateway (v1 compatible + v2). See ``runtime/README.md``.

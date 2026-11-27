@@ -288,7 +288,7 @@ form[data-form="engine-ssh"] details.page-purpose>.field:last-child{margin-botto
 
 /* ---------- 账号：登录 / 注册页、顶栏用户信息、账号面板 ---------- */
 body.auth-pending .sidebar,body.auth-pending .shell,body.auth-required .sidebar,body.auth-required .shell{display:none}
-body.auth-pending::before{content:"正在连接 Robot OS…";position:fixed;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px}
+body.auth-pending::before{content:"正在连接 Physical OS…";position:fixed;inset:0;display:grid;place-items:center;color:var(--muted);font-size:13px}
 .auth-gate{min-height:100vh;background:var(--surface)}
 .auth-gate[hidden]{display:none}
 .auth-layout{display:grid;grid-template-columns:minmax(360px,44%) 1fr;min-height:100vh}
@@ -299,9 +299,6 @@ body.auth-pending::before{content:"正在连接 Robot OS…";position:fixed;inse
 .auth-logo .brand-mark{color:var(--lime)}
 .auth-pitch{margin:auto 0;position:relative;z-index:1}
 .auth-pitch h2{font-size:clamp(30px,3.2vw,44px);line-height:1.25;letter-spacing:-1.4px;font-weight:600;color:#f1f6ee;margin:0 0 30px}
-.auth-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;counter-reset:s}
-.auth-steps li{counter-increment:s;font-size:12px;color:#b9cbbf;border:1px solid #33503f;border-radius:999px;padding:7px 13px 7px 9px;display:flex;align-items:center;gap:8px}
-.auth-steps li::before{content:counter(s,decimal-leading-zero);font-size:10px;color:var(--lime);font-variant-numeric:tabular-nums}
 .auth-legal{font-size:11px;color:#6f877a;position:relative;z-index:1}
 .auth-main{display:flex;align-items:center;justify-content:center;padding:48px 24px}
 .auth-card{width:100%;max-width:380px}
