@@ -178,7 +178,12 @@ class SimRobotTests(unittest.TestCase):
     def test_gallery_lists_examples_with_compatibility_per_robot(self):
         quad = self.add()
         arm = self.add('arm', project_id=quad['project_id'])
-        gallery = self.app.skill_examples({'project_id': quad['project_id'], 'robot_id': quad['id']})
+        # Issue #69: asked for one robot, the list has its brand and model's packages and the generic one.
+        for_quad = self.app.skill_examples({'project_id': quad['project_id'], 'robot_id': quad['id']})
+        for_arm = self.app.skill_examples({'project_id': quad['project_id'], 'robot_id': arm['id']})
+        self.assertEqual([x['example'] for x in for_quad['items']], ['free_walk', 'goto_place', 'patrol', 'patrol_places', 'status_report'])
+        self.assertEqual([x['example'] for x in for_arm['items']], ['status_report', 'wave'])
+        gallery = self.app.skill_examples({'project_id': quad['project_id']})
         self.assertTrue(gallery['available'])
         items = {x['example']: x for x in gallery['items']}
         self.assertEqual(sorted(items), ['free_walk', 'goto_place', 'patrol', 'patrol_places', 'status_report', 'wave'])
@@ -198,8 +203,8 @@ class SimRobotTests(unittest.TestCase):
         self.assertEqual(result['status'], 'succeeded')
         self.assertEqual(result['example'], 'patrol')
         self.assertIn('patrol', [s['id'] for s in result['skills']['items']])
-        preview = self.app.preview_skill_package({'robot_id': quad['id'], 'example': 'wave'})
-        self.assertFalse(preview['can_install'])
+        with self.assertRaisesRegex(ValueError, '不能装到'):      # issue #69: the arm's package is not for a quadruped
+            self.app.preview_skill_package({'robot_id': quad['id'], 'example': 'wave'})
         for bad in ('../patrol', 'nope', '', '/etc'):
             with self.assertRaises(ValueError):
                 self.app.preview_skill_package({'robot_id': quad['id'], 'example': bad or None, 'path': bad})

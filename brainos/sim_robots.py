@@ -674,8 +674,14 @@ def gallery(platform, p):
         if r.get('manifest_v2'):
             manifests[r['id']] = r['manifest_v2']
     items = []
+    from . import robot_model, skill_products          # issue #69: only what this robot's brand and model can install
+    target = next((r for r in platform.store.list('robots') if r['id'] == focus), None) if focus else None
+    product, bindings, left_out = robot_model.of(target or {}), skill_products.table(), 0
     for folder in sorted(root.iterdir()) if root else []:
         if not (folder / 'skill.json').is_file():
+            continue
+        if target and not skill_products.offered(folder.name, product, bindings):
+            left_out += 1
             continue
         try:
             package, info = skill_packages.read_folder(str(folder), bundled=True)
@@ -694,5 +700,7 @@ def gallery(platform, p):
         moves = any(robot_caps.capability_row(x['id'])['safety'] == 'motion' for x in skill['requires'])
         items.append({'example': folder.name, 'valid': True, 'skill': view, 'moves': moves,
                       'note': EXAMPLE_NOTES.get(folder.name, ''), 'preset': EXAMPLE_PRESETS.get(folder.name, {}),
-                      'package_digest': skill_packages.package_digest(package), 'compatibility': compat})
-    return {'available': root is not None, 'items': items}
+                      'package_digest': skill_packages.package_digest(package), 'compatibility': compat,
+                      'scope': skill_products.view(folder.name, bindings)})
+    return {'available': root is not None, 'items': items, 'left_out': left_out,
+            'product': robot_model.label(product) if product else None}

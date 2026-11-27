@@ -384,8 +384,14 @@ class RobotInTheEnvironment(Case):
         scene = self.confirmed()
         robot = self.sim.add_robot({'project_id': self.pid, 'scene_id': scene['id']})
         self.addCleanup(self.app.sims.stop_process, robot['id'])
-        preview = self.app.preview_skill_package({'robot_id': robot['id'], 'example': 'free_walk'})
-        installed = self.app.install_skill_package({'robot_id': robot['id'], 'example': 'free_walk',
+        # Issue #69: the bundled package is not for this made-up brand, so it is installed from its folder.
+        from brainos import runtime_bridge
+        folder = str(runtime_bridge.examples_dir() / 'free_walk')
+        with self.assertRaises(CodedError) as refused:
+            self.app.preview_skill_package({'robot_id': robot['id'], 'example': 'free_walk'})
+        self.assertEqual(refused.exception.code, 'skill_other_model')
+        preview = self.app.preview_skill_package({'robot_id': robot['id'], 'path': folder})
+        installed = self.app.install_skill_package({'robot_id': robot['id'], 'path': folder,
                                                     'package_digest': preview['package_digest'], 'request_id': 'mujoco-install-1'})
         self.assertEqual(installed['status'], 'succeeded', installed)
         started = self.app.run_robot_skill({'robot_id': robot['id'], 'skill_id': 'free_walk', 'hardware_authorized': True,

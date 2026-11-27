@@ -70,10 +70,11 @@ const shots = process.argv[3] || 'artifacts';
   await click('skillpkg-open', quad);
   await dlg('.gallery-item[data-example="patrol"]').waitFor();
   const patrolCard = await dlg('.gallery-item[data-example="patrol"]').innerText();
-  const waveCard = await dlg('.gallery-item[data-example="wave"]').innerText();
   assert(patrolCard.includes('适用于这台机器人'), '巡逻应适用于四足');
-  assert(waveCard.includes('这台机器人不能用') && waveCard.includes('机械臂关节位置'), '挥手应不适用于四足并说明原因');
-  assert(await dlg('[data-action="skillpkg-example"][data-id="' + quad + '|wave"]').isDisabled(), '不兼容技能的安装按钮应禁用');
+  // Issue #69: the arm's package is not listed for a quadruped; the generic one is, and says so.
+  assert(await dlg('.gallery-item[data-example="wave"]').count() === 0, '挥手属于机械臂，不应出现在四足的列表里');
+  assert((await dlg('.gallery-item[data-example="status_report"]').innerText()).includes('通用'), '状态报告应标明通用');
+  assert((await dlg('[data-gallery-left-out]').innerText()).includes('1 个技能包属于其他品牌型号'), '应说明有 1 个技能包没有列出');
   assert(await dlg('.folder-install').count() === 1, '缺少“从文件夹安装（高级）”');
   await shot('04-gallery');
   await click('skillpkg-example', quad + '|patrol');
@@ -134,8 +135,9 @@ const shots = process.argv[3] || 'artifacts';
   const arm = robots.find(r => r.sim?.kind === 'arm').id;
   await click('skillpkg-open', arm);
   await dlg('.gallery-item[data-example="wave"]:has-text("适用于这台机器人")').waitFor();
-  const otherLine = await dlg('.gallery-item[data-example="patrol"]').innerText();
-  assert(otherLine.includes('仿真四足机器人 ✓ 可用'), '技能卡片应显示其他机器人的兼容性：' + otherLine);
+  assert(await dlg('.gallery-item[data-example="patrol"]').count() === 0, '巡逻属于四足，不应出现在机械臂的列表里');   // issue #69
+  const otherLine = await dlg('.gallery-item[data-example="status_report"]').innerText();
+  assert(/✓ 可用/.test(otherLine) && otherLine.includes('其他机器人'), '技能卡片应显示其他机器人的兼容性：' + otherLine);
   await click('skillpkg-example', arm + '|wave');
   await dialogText('兼容：可以安装');
   await submit();
