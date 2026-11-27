@@ -207,6 +207,8 @@ def make_handler(application):
             extra=extra or {'/page_titles.js':('page_titles.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #60: 机器人应用 as a waterfall of applications, the page of one application, the page of the skills.
             extra=extra or {'/app_gallery.js':('app_gallery.js','text/javascript; charset=utf-8'),'/app_gallery.css':('app_gallery.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #62: why a skill cannot be installed on a robot that is not connected, and the step that fixes it.
+            extra=extra or {'/skill_install_guide.js':('skill_install_guide.js','text/javascript; charset=utf-8'),'/skill_install_guide.css':('skill_install_guide.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
