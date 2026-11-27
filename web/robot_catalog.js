@@ -4,16 +4,16 @@
 // Issue #48 gave a robot a brand and model, typed as two free texts. This file
 //   * holds the list (ROBOT_CATALOG): our own robots' brands, common quadrupeds and humanoids, and the
 //     common robot-arm brands. Adding a brand or a model is one line here;
-//   * turns the two inputs of web/robot_model.js into two pick-lists (rmInputs is replaced, the file is
-//     not edited). 「其他」 in either list shows the text input, so a brand or model that is not listed
-//     can still be typed. The fields that are sent stay `vendor` and `model`;
+//   * draws the brand and the model of a form (rmInputs of web/robot_model.js is replaced, the file is
+//     not edited). Since issue #61 each is one control: a list to choose from that can also be typed in
+//     (web/combo.js), so a brand or model that is not listed is simply typed. The fields that are sent
+//     stay `vendor` and `model`;
 //   * answers what a robot looks like (rcPicture): the picture of its model when the list has one, a
 //     drawing of its body type otherwise. Pictures are files under web/robot_images/ (SOURCES.md there
 //     says where each one is from).
 // A device may report its brand in another spelling ("Unitree", "unitree robotics"): `aliases` lists
 // those, and names are compared without case, spaces, hyphens and underscores.
 
-const RC_OTHER = '__other__';
 const RC_IMAGES = '/robot_images/';
 // A robot with wheels at the ends of its legs (轮足) is not a quadruped: it moves, and is drawn, differently.
 const RC_TYPE_NAMES = {quadruped: '四足机器人', wheel_legged: '轮足机器人', manipulator: '机械臂', humanoid: '人形机器人', wheeled: '轮式机器人'};
@@ -121,89 +121,101 @@ function rcPicture(robot) {
   return {src: RC_IMAGES + (RC_TYPE_PICTURES[type] || RC_TYPE_DEFAULT), alt: label, exact: false};
 }
 
-// ---------------------------------------------------------------- the two pick-lists
-// The brands of the account's own robots that the list does not offer (typed by hand before, or the
-// simulated robots' brand), each with the models those robots have: [{vendor, models: [{model}]}].
-// They can be chosen like a listed brand, so a skill for a robot one already has needs no typing.
-function rcOwnBrands(robots) {
-  const own = [];
-  for (const robot of Array.isArray(robots) ? robots : []) {
-    const p = robot && robot.product;
-    if (!p || typeof p.vendor !== 'string' || typeof p.model !== 'string' || !p.vendor || !p.model) continue;
-    const listed = rcBrand(p.vendor);
-    if (listed && !listed.hidden) continue;
-    let brand = own.find(b => rcNorm(b.vendor) === rcNorm(p.vendor));
-    if (!brand) own.push(brand = {vendor: p.vendor, models: [], aliases: []});
-    if (!brand.models.some(m => rcNorm(m.model) === rcNorm(p.model))) brand.models.push({model: p.model, aliases: []});
-  }
-  return own;
-}
+// ---------------------------------------------------------------- the picker: a brand and a model, each chosen or typed
+const RC_OWN_NOTE = '已有';
+const RC_SOURCES = {vendor: 'rcVendorChoices', model: 'rcModelChoices', owned: ''};
 const rcRobots = () => (typeof state === 'object' && state && state.robots) || [];
-// The brand a choice of the brand list stands for: of the list, or one of the account's own.
-function rcChosenBrand(vendorChoice, robots = rcRobots()) {
-  if (!vendorChoice || vendorChoice === RC_OTHER) return null;
-  const listed = rcBrand(vendorChoice);
-  return listed && !listed.hidden ? listed : rcOwnBrands(robots).find(b => rcNorm(b.vendor) === rcNorm(vendorChoice)) || null;
-}
-
 const rcEsc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-const rcOption = (value, text, selected) => `<option value="${rcEsc(value)}"${selected ? ' selected' : ''}>${rcEsc(text)}</option>`;
 
-// The options of the model list for a chosen brand (a brand of the list, RC_OTHER, or '').
-function rcModelOptions(vendorChoice, chosen = '', robots = rcRobots()) {
-  const brand = rcChosenBrand(vendorChoice, robots);
-  if (!brand) return rcOption('', vendorChoice === RC_OTHER ? '在下面填写' : '先选品牌', true);
-  return (brand.models.length ? rcOption('', '请选择', !chosen) : '') +
-    brand.models.map(m => rcOption(m.model, m.model, m.model === chosen)).join('') +
-    rcOption(RC_OTHER, '其他型号', chosen === RC_OTHER || !brand.models.length);
+// The brands and models of the account's own robots, as written on them: [{vendor, model}].
+function rcOwned(robots) {
+  return (Array.isArray(robots) ? robots : []).map(robot => robot && robot.product)
+    .filter(p => p && typeof p.vendor === 'string' && typeof p.model === 'string' && p.vendor && p.model);
 }
-
-// What the picker starts as for a saved brand and model: what each list shows, and what each input holds.
-function rcStart(product, robots = rcRobots()) {
-  if (!product) return {vendorChoice: '', modelChoice: '', vendor: '', model: ''};
-  const brand = rcChosenBrand(product.vendor, robots);
-  if (!brand) return {vendorChoice: RC_OTHER, modelChoice: '', vendor: product.vendor, model: product.model};
-  const entry = brand.models.find(m => rcNamed(m, 'model', product.model));
-  // A reported spelling ("unitree") is kept as it is: the list only shows which brand it is.
-  return {vendorChoice: brand.vendor, modelChoice: entry ? entry.model : RC_OTHER, vendor: product.vendor, model: product.model};
+// The brand of the list a text is, leaving out the one of the simulated robots; or null.
+function rcListed(vendor) {
+  const brand = rcBrand(vendor);
+  return brand && !brand.hidden ? brand : null;
 }
-
-function rcInputs(product, required, robots = rcRobots()) {
-  const start = rcStart(product, robots), req = required ? ' required' : '';
-  const own = rcOwnBrands(robots);
-  const typedVendor = start.vendorChoice === RC_OTHER, typedModel = typedVendor || start.modelChoice === RC_OTHER;
-  const label = (text, body, cls = '', hidden = false) => `<label class="field ${cls}"${hidden ? ' hidden' : ''}>${text}${body}</label>`;
-  const input = (name, value, shown, hint) => `<input name="${name}" maxlength="${RC_MAX}" value="${rcEsc(value)}" placeholder="${hint}" autocomplete="off"${shown ? req : ''}>`;
-  return `<div class="robot-model-inputs rc-picker" data-rc-picker${required ? ' data-rc-required' : ''}>` +
-    label('品牌', `<select data-rc="vendor" aria-label="品牌"${req}>${rcOption('', required ? '请选择' : '不选（由设备上报）', !start.vendorChoice)}` +
-      [...own, ...rcBrands()].map(b => rcOption(b.vendor, b.vendor, b.vendor === start.vendorChoice)).join('') + rcOption(RC_OTHER, '其他品牌', typedVendor) + '</select>') +
-    label('型号', `<select data-rc="model" aria-label="型号"${start.vendorChoice && !typedVendor ? req : ' disabled'}>` +
-      rcModelOptions(start.vendorChoice, start.modelChoice, robots) + '</select>') +
-    label('品牌名称', input('vendor', start.vendor, typedVendor, '填写品牌'), 'rc-typed', !typedVendor) +
-    label('型号名称', input('model', start.model, typedModel, '填写型号'), 'rc-typed', !typedModel) + '</div>';
+// Whether two texts are one brand: the same brand of the list (in any spelling), or the same text.
+function rcSameBrand(a, b) {
+  const listed = rcListed(a);
+  return listed ? listed === rcListed(b) : rcNorm(a) === rcNorm(b);
 }
+const rcHas = (options, value) => options.some(o => rcNorm(o.value) === rcNorm(value));
 
-// A list of the picker changed: the inputs that are sent follow it.
-function rcChanged(selectEl) {
-  const picker = selectEl.closest('[data-rc-picker]');
-  if (!picker) return;
-  const required = picker.hasAttribute('data-rc-required');
-  const vendorList = picker.querySelector('[data-rc="vendor"]'), modelList = picker.querySelector('[data-rc="model"]');
-  const vendorInput = picker.querySelector('[name="vendor"]'), modelInput = picker.querySelector('[name="model"]');
-  const show = (inputEl, shown) => { inputEl.closest('label').hidden = !shown; inputEl.required = shown && required; };
-  if (selectEl === vendorList) {
-    const choice = vendorList.value, typed = choice === RC_OTHER;
-    modelList.innerHTML = rcModelOptions(choice);
-    modelList.disabled = !choice || typed;
-    modelList.required = required && !modelList.disabled;
-    vendorInput.value = typed ? '' : choice;
-    show(vendorInput, typed);
+// The brands to choose from: those of the account's own robots first (a skill for a robot one already
+// has needs no searching), then the rest of the list. [{value, keys: other spellings, note}]
+function rcVendorOptions(robots = rcRobots()) {
+  const own = [];
+  for (const p of rcOwned(robots)) {
+    const listed = rcListed(p.vendor), value = listed ? listed.vendor : p.vendor;
+    if (!rcHas(own, value)) own.push({value, keys: listed ? listed.aliases : [], note: RC_OWN_NOTE});
   }
-  const modelTyped = vendorList.value === RC_OTHER || modelList.value === RC_OTHER;
-  if (!modelTyped || selectEl === vendorList || selectEl === modelList) modelInput.value = modelTyped ? '' : modelList.value;
-  show(modelInput, modelTyped);
-  if (modelTyped && selectEl === modelList) modelInput.focus();
-  if (vendorList.value === RC_OTHER && selectEl === vendorList) vendorInput.focus();
+  return [...own, ...rcBrands().filter(b => !rcHas(own, b.vendor)).map(b => ({value: b.vendor, keys: b.aliases}))];
+}
+
+// The models to choose from for a brand as it stands in the box (any spelling of it): those of the
+// account's own robots of that brand first, then the list's. A brand nobody knows has none.
+function rcModelOptions(vendor, robots = rcRobots()) {
+  if (!rcNorm(vendor)) return [];
+  const listed = rcListed(vendor), models = listed ? listed.models : [];
+  const own = [];
+  for (const p of rcOwned(robots)) {
+    if (!rcSameBrand(vendor, p.vendor)) continue;
+    const entry = models.find(m => rcNamed(m, 'model', p.model)), value = entry ? entry.model : p.model;
+    if (!rcHas(own, value)) own.push({value, keys: entry ? entry.aliases : [], note: RC_OWN_NOTE});
+  }
+  return [...own, ...models.filter(m => !rcHas(own, m.model)).map(m => ({value: m.model, keys: m.aliases}))];
+}
+
+// Whether the model in the box stays when the brand changes from `was` to `now`: a model that is one of
+// the old brand's and not one of the new brand's goes; anything else was typed and is the person's.
+function rcKeepsModel(was, now, model, robots = rcRobots()) {
+  if (!rcNorm(model) || !rcNorm(now) || rcSameBrand(was, now)) return true;      // an emptied brand box decides nothing
+  const of = vendor => rcModelOptions(vendor, robots).some(o => [o.value, ...o.keys].some(k => rcNorm(k) === rcNorm(model)));
+  return !of(was) || of(now);
+}
+
+// The two controls. `sources` names the functions web/combo.js asks for the options, and `owned` the function
+// that says which brands and models come first ([{product}], '' for the account's robots): another page can
+// offer its own (the library: what it has materials of).
+function rcInputs(product, required, sources = RC_SOURCES) {
+  const p = product || {vendor: '', model: ''};
+  const hint = required ? '选择或输入' : '选择或输入，设备上报时可留空';
+  const one = (text, name, value) => `<label class="field">${text}` +
+    comboInput({name, source: sources[name], value, label: text, placeholder: hint, required, maxlength: RC_MAX, attrs: `data-rc="${name}"`}) + '</label>';
+  return `<div class="robot-model-inputs rc-picker" data-rc-picker${required ? ' data-rc-required' : ''} data-rc-was="${rcEsc(p.vendor)}"` +
+    `${sources.owned ? ` data-rc-owned="${rcEsc(sources.owned)}"` : ''}>` +
+    one('品牌', 'vendor', p.vendor) + one('型号', 'model', p.model) + '</div>';
+}
+
+// What web/combo.js asks: the options of a brand box, and of the model box next to it.
+function rcVendorChoices() { return rcVendorOptions(); }
+function rcModelChoices(input) {
+  const picker = input.closest('[data-rc-picker]');
+  return picker ? rcModelOptions(picker.querySelector('[data-rc="vendor"]').value, rcPickerOwned(picker)) : [];
+}
+// Whose brands and models a picker puts first: what its `owned` function says, else the account's robots.
+function rcPickerOwned(picker) {
+  const name = picker.dataset.rcOwned;
+  return name && Object.prototype.hasOwnProperty.call(globalThis, name) && typeof globalThis[name] === 'function' ? globalThis[name]() : rcRobots();
+}
+
+// A box of the picker was changed (chosen from its list, or typed and left).
+function rcChanged(input) {
+  const picker = input.closest('[data-rc-picker]');
+  if (!picker) return;
+  const vendorInput = picker.querySelector('[data-rc="vendor"]'), modelInput = picker.querySelector('[data-rc="model"]');
+  if (input === vendorInput) {
+    if (!rcKeepsModel(picker.dataset.rcWas, vendorInput.value, modelInput.value, rcPickerOwned(picker))) {
+      modelInput.value = '';
+      modelInput.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+    picker.dataset.rcWas = vendorInput.value;
+  }
+  // Issue #58 (the body type of the form follows the chosen model) hooks in here when it is there.
+  if (typeof rcFollowType === 'function') rcFollowType(picker);
 }
 
 // web/robot_model.js draws its forms with rmInputs: replaced once every script has loaded, so the place of
@@ -214,5 +226,5 @@ else {
   // Deferred scripts run while the document is "interactive", before the later ones exist: wait for all of them.
   if (document.readyState === 'complete') rcInstall();
   else document.addEventListener('DOMContentLoaded', rcInstall);
-  document.addEventListener('change', e => { if (e.target.matches?.('[data-rc-picker] select[data-rc]')) rcChanged(e.target); });
+  document.addEventListener('change', e => { if (e.target.matches?.('[data-rc-picker] input[data-rc]')) rcChanged(e.target); });
 }

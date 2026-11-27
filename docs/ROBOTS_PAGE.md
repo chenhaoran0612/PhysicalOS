@@ -31,6 +31,7 @@ issue #53 的五条，和各自的做法：
 ### 品牌型号清单和图片
 
 - 清单：`web/robot_catalog.js` 的 `ROBOT_CATALOG`，一行一个品牌，`rcM(型号, 本体类型, 图片文件名, 其他写法)` 一个型号。设备自己上报的写法（例如 `unitree`）通过 `aliases` 认到同一个品牌，比较时不分大小写、不计空格和连字符；保存的仍是原来的两段文字，后端规则（`brainos/robot_model.py`）没有改。
+- issue #61 起品牌和型号各是一个「可下拉、可输入」的框，没有「其他」和第二个输入框了，见 [BRAND_MODEL_INPUT.md](BRAND_MODEL_INPUT.md)；下面这一条写的是 #53 当时的做法。
 - 表单：`rcInputs()` 替换了 issue #48 的 `rmInputs()`（没有改 `web/robot_model.js`）。发送的字段仍是 `vendor`、`model`；下拉列表选中清单里的值时把它写进这两个输入框，选「其他」时显示输入框。星玑的型号是 CS1。
 - 图片：`web/robot_images/`，由 `brainos/robot_pictures.py` 提供（只按文件名提供这个目录里的 `.webp` 和 `.svg`，请求里不能带路径）。清单里有图片的型号显示它自己的图；没有的（包括清单之外的品牌型号）按类型显示一张线条示意图（四足、轮足、机械臂、人形各一张）。30 张型号图片来自开源的 MuJoCo Menagerie 模型渲染图；智身 钢镚 L2U 的图由它的 URDF 模型渲染，星玑 CS1 的图取自它的开发手册。来源逐张写在 `web/robot_images/SOURCES.md`；仓库是公开的：除这两张（项目方提供的资料）以外，没有放厂商的产品图。
 

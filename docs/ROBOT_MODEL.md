@@ -87,4 +87,4 @@
 
 ## 品牌型号从清单里选（issue #53）
 
-品牌和型号的两个输入框现在是两个下拉列表，清单和图片见 [ROBOTS_PAGE.md](ROBOTS_PAGE.md) 的「品牌型号清单和图片」。保存的字段和这里的规则没有变。
+（issue #61 起：品牌和型号各是一个可下拉、可输入的框，见 [BRAND_MODEL_INPUT.md](BRAND_MODEL_INPUT.md)。）品牌和型号的两个输入框现在是两个下拉列表，清单和图片见 [ROBOTS_PAGE.md](ROBOTS_PAGE.md) 的「品牌型号清单和图片」。保存的字段和这里的规则没有变。

@@ -62,8 +62,10 @@ const PRODUCT = 'Acme Robotics Go-7';
     const upload = dialog.locator('form[data-ml-form="upload-model"]');
     await upload.waitFor();
     must((await upload.locator('input[type=file]').getAttribute('accept')).split(',').includes('.urdf'), 'The chooser does not offer .urdf');
-    must(await upload.locator('[data-ml-typed]').isHidden(), 'Brand and model have to be typed although the robot has them');
-    must((await upload.locator('select[name=product] option:checked').innerText()).includes(PRODUCT), 'The brand and model is not preselected');
+    must(await upload.locator('[data-ml-typed]').isHidden(), 'The body type is asked although the robot has one');
+    // issue #61: the brand and model are two boxes, filled in with those of the robot
+    must(`${await upload.locator('[name=vendor]').inputValue()} ${await upload.locator('[name=model]').inputValue()}` === PRODUCT, 'The brand and model is not filled in');
+    await shot('2-upload-form');
     await upload.locator('input[type=file]').setInputFiles({name: 'notes.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4')});
     await upload.locator('[name=version]').fill('1.0');
     await upload.locator('[type=submit]').click();

@@ -32,9 +32,9 @@ const sandbox = {
   engineAction: async () => {},
 };
 vm.createContext(sandbox);
-const lib = vm.runInContext(['cloud_auto_login.js', 'material_library.js', 'model_library.js', 'mujoco_sim.js']
+const lib = vm.runInContext(['combo.js', 'robot_catalog.js', 'cloud_auto_login.js', 'material_library.js', 'model_library.js', 'mujoco_sim.js']
   .map(name => readFileSync('web/' + name, 'utf8')).join('\n') + `
-;({mlKey, mlLabel, mlProducts, mlModelsOf, mlModelPrecheck, mlLabels, mlModelsPanel, mlState, ML_OTHER, materialRow, materialFilters,
+;({mlKey, mlLabel, mlProducts, mlModelsOf, mlModelPrecheck, mlLabels, mlKnown, mlProductFields, mlVendorChoices, mlOwned, rcModelChoices, mlTypedSync, mlModelsPanel, mlState, materialRow, materialFilters,
    materialLibrary, MATERIAL_KINDS, api, mjSceneActions, mjTouchText, mjSceneCard, mjBody, mjBusyScene, simKindLabel})`, sandbox);
 let checks = 0;
 const check = (actual, expected, what) => { assert.deepEqual(JSON.parse(JSON.stringify(actual ?? null)), expected, what); checks += 1; };
@@ -73,16 +73,43 @@ const ACME = {vendor: 'Acme Robotics', model: 'Go-7'};
 
   // ---- what an upload sends
   const products = [{...ACME, family: 'quadruped', robots: ['一号']}];
-  check(lib.mlLabels({product: lib.mlKey(ACME), version: ' 1.0 ', vendor: 'ignored', model: 'ignored', body_type: 'manipulator'}, products).labels,
-    {body_type: 'quadruped', vendor: 'Acme Robotics', model: 'Go-7', version: '1.0'}, 'a chosen brand and model gives its own labels and body type');
-  check(lib.mlLabels({product: lib.ML_OTHER, version: '1', vendor: ' New ', model: ' N1 ', body_type: 'manipulator'}, products).labels,
-    {body_type: 'manipulator', vendor: 'New', model: 'N1', version: '1'}, 'typed');
-  includes(lib.mlLabels({product: lib.ML_OTHER, version: '1', vendor: 'New', model: ''}, products).error, '一起填', 'half is refused');
-  includes(lib.mlLabels({product: lib.mlKey(ACME), version: ''}, products).error, '版本', 'the version is needed');
-  includes(lib.mlLabels({product: 'gone\nmodel', version: '1'}, products).error, '请选择', 'a brand and model that is not listed');
-  // An option value goes through the HTML parser, which rewrites control characters (a NUL becomes U+FFFD).
-  check(/^[\x21-\x7e]+$/.test(lib.ML_OTHER) && !lib.ML_OTHER.includes('\n'), true, 'the value of "other" survives being an attribute');
-
+  // issue #61: the brand and model are the same two controls as everywhere, chosen or typed
+  check(lib.mlLabels({version: ' 1.0 ', vendor: ' acme  robotics ', model: 'go-7', body_type: 'manipulator'}, products).labels,
+    {body_type: 'quadruped', vendor: 'Acme Robotics', model: 'Go-7', version: '1.0'}, 'a brand and model the account has gives its own spelling and body type');
+  check(lib.mlLabels({version: '1', vendor: ' New ', model: ' N1 ', body_type: 'manipulator'}, products).labels,
+    {body_type: 'manipulator', vendor: 'New', model: 'N1', version: '1'}, 'a new one is taken as typed');
+  includes(lib.mlLabels({version: '1', vendor: 'New', model: ''}, products).error, '一起填', 'half is refused');
+  includes(lib.mlLabels({version: '', vendor: 'Acme Robotics', model: 'Go-7'}, products).error, '版本', 'the version is needed');
+  includes(lib.mlLabels({version: '1', vendor: 'New', model: 'N1'}, products).error, '本体类型', 'a new brand and model needs its body type');
+  check(lib.mlKnown({vendor: 'ACME ROBOTICS', model: 'Go-7'}, products)?.family, 'quadruped', 'known in any case');
+  check(lib.mlKnown({vendor: 'Acme Robotics', model: ''}, products), null, 'half a brand and model is none');
+  {
+    const before = lib.mlState.products;
+    lib.mlState.products = products;
+    const count = (html, piece) => html.split(piece).length - 1;
+    const known = lib.mlProductFields({vendor: ACME.vendor, model: ACME.model}, {});
+    check([count(known, 'name="vendor"'), count(known, 'name="model"'), count(known, 'name="product"'), count(known, '<select')], [1, 1, 0, 1],
+      'one brand, one model, no list of pairs next to them; the only list is the body type');
+    includes(known, 'data-combo-source="mlVendorChoices"', 'the brand offers what the library knows');
+    includes(known, 'value="Acme Robotics"', 'filled in');
+    includes(known, 'data-ml-typed hidden', 'a brand and model the account has brings its body type: not asked');
+    excludes(known, '其他品牌型号', 'no "other" to choose first');
+    excludes(lib.mlProductFields(null, {}), 'data-ml-typed hidden', 'nothing chosen yet: the body type is asked');
+    excludes(lib.mlProductFields({vendor: 'New', model: 'N1'}, {}), 'data-ml-typed hidden', 'a new brand and model: asked');
+    excludes(lib.mlProductFields({vendor: ACME.vendor, model: ACME.model}, {}, false), 'body_type', 'moving a material asks no body type');
+    includes(known, 'data-rc-owned="mlOwned"', 'and what the library has comes first');
+    check(lib.mlVendorChoices()[0], {value: 'Acme Robotics', keys: [], note: '已有'}, 'the brands the library has come first in the list');
+    check(lib.mlOwned().map(o => o.product.model), ['Go-7'], 'what the library has');
+    const box = vendor => ({closest: () => ({dataset: {rcOwned: 'mlOwned'}, querySelector: () => ({value: vendor})})});
+    check(lib.rcModelChoices(box('acme robotics')).map(o => o.value), ['Go-7'], 'and their models');
+    const typed = {hidden: true}, form = (vendor, model) => ({querySelector: () => typed, elements: {vendor: {value: vendor}, model: {value: model}}});
+    lib.mlTypedSync(form('New', 'N1'));
+    check(typed.hidden, false, 'typing a new brand and model brings the body type into sight');
+    lib.mlTypedSync(form('acme robotics', 'GO-7'));
+    check(typed.hidden, true, 'and one the account has takes it away again');
+    lib.mlTypedSync(null);
+    lib.mlState.products = before;
+  }
   // ---- the pages
   check(lib.MATERIAL_KINDS.model, '机器人模型', 'the kind has a name');
   lib.mlState.products = products;

@@ -7,7 +7,6 @@
 const PRODUCT = {vendor: '示例机器人公司', model: 'X1'};
 
 async function fillBrandAndModel(page, product = PRODUCT) {
-  // Issue #53: the two inputs are two pick-lists now (web/robot_catalog.js).
   if (await page.locator('#dialog [data-rc-picker]').count()) return pickBrandAndModel(page.locator('#dialog'), product, true);
   for (const name of ['vendor', 'model']) {
     const input = page.locator(`#dialog input[name="${name}"]`);
@@ -15,24 +14,25 @@ async function fillBrandAndModel(page, product = PRODUCT) {
   }
 }
 
-// Chooses a brand and model in the pick-lists of a form (`scope`: a locator the picker is inside of):
-// from the lists when they have them, otherwise 「其他」 and typed. With `onlyIfEmpty` a picker that
-// already has a brand is left as it is.
-const OTHER = '__other__';
+// Sets the brand and model of a form (`scope`: a locator the picker is inside of). Since issue #61 each
+// is one box that is a list and can be typed in (web/combo.js): the text is typed, which also covers a
+// brand or model that is not listed. The box is left afterwards, so its list is closed and the form has
+// heard the change. With `onlyIfEmpty` a picker that already has a brand is left as it is.
 async function pickBrandAndModel(scope, product = PRODUCT, onlyIfEmpty = false) {
   const picker = scope.locator('[data-rc-picker]').first();
-  if (onlyIfEmpty && (await picker.locator('[name="vendor"]').inputValue())) return;
-  const has = (list, value) => list.locator('option').evaluateAll((options, v) => options.some(o => o.value === v), value);
-  const vendors = picker.locator('[data-rc="vendor"]'), models = picker.locator('[data-rc="model"]');
-  if (await has(vendors, product.vendor)) {
-    await vendors.selectOption(product.vendor);
-    if (await has(models, product.model)) return models.selectOption(product.model);
-    await models.selectOption(OTHER);
-  } else {
-    await vendors.selectOption(OTHER);
-    await picker.locator('[name="vendor"]').fill(product.vendor);
-  }
-  await picker.locator('[name="model"]').fill(product.model);
+  const vendor = picker.locator('[name="vendor"]'), model = picker.locator('[name="model"]');
+  if (onlyIfEmpty && (await vendor.inputValue())) return;
+  await vendor.fill(product.vendor);
+  await vendor.blur();
+  await model.fill(product.model);
+  await model.blur();
 }
 
-module.exports = {fillBrandAndModel, pickBrandAndModel, PRODUCT};
+// Chooses an option of such a box from its list, as a person does with the mouse: opens the list with the
+// button of the box and clicks the option.
+async function chooseFromList(page, box, text) {
+  await box.locator('xpath=..').locator('[data-combo-toggle]').click();
+  await page.locator('#combo-list [role="option"]', {hasText: text}).first().click();
+}
+
+module.exports = {fillBrandAndModel, pickBrandAndModel, chooseFromList, PRODUCT};
