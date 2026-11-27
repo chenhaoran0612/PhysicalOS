@@ -43,6 +43,7 @@
 | [PACKAGE_DELIVERY.md](PACKAGE_DELIVERY.md) | 把资料库里的驱动安装包送到设备并核对：只送「可用」的、取和送两段各自续传、三处核对校验值、文件名换名、交给修复流程的送达记录 |
 | [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md) | 资料库：页面、桌面端后台、云平台三段怎么配合，分片上传与续传；issue #51 起按品牌型号归属，见 MODEL_LIBRARY.md |
 | [MODEL_LIBRARY.md](MODEL_LIBRARY.md) | 资料库按品牌型号归属：同品牌同型号的机器人共用、旧资料怎么归过去、改一份资料的品牌型号、机器人模型（URDF，可带网格）单独一栏、接口、验证范围（issue #51） |
+| [SIM_PROFILES.md](SIM_PROFILES.md) | 仿真机器人按类型、品牌、型号添加：内置档案、模型包怎么打、同一品牌型号的不同写法、旧仿真机器人删除一次（issue #54） |
 | [MUJOCO_SIM.md](MUJOCO_SIM.md) | 用 MuJoCo 仿真机器人应用：交付清单里的「仿真环境」、工程助手写环境和人确认、仿真里有什么没有什么（不模拟步态）、结果不算现场证据、验证范围（只用编造的模型）（issue #51） |
 | [MAIL_SERVICE.md](MAIL_SERVICE.md) | 验证码邮件：本机 `mail.json` 里的发信账号、`init` / `check` / `test` 命令、邮件的样子、发送失败时的提示（issue #37） |
 | [CLOUD_AUTO_LOGIN.md](CLOUD_AUTO_LOGIN.md) | 登录应用时同时登录云平台：登录、注册、重置密码时一并登录或自动注册，“保持登录”传给云平台，旧版本的登录退出一次，默认云平台地址 |
