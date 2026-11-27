@@ -28,7 +28,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 BUILD=ROOT/'.build'
 DIST=ROOT/'dist'
 APP=DIST/'NeuxMind Physical OS.app'
-VERSION='0.21.13'
+VERSION='0.21.14'
 
 # (source, destination inside the bundle). Destinations mirror the source tree so that
 # brainos finds them at the same place relative to itself (brainos/runtime_bridge.py).
