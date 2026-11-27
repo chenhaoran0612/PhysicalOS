@@ -46,8 +46,11 @@
 | [PRODUCT_NAME.md](PRODUCT_NAME.md) | 产品名称 Physical OS、应用和安装包的名字、数据目录在第一次启动时改名、登录页（issue #55） |
 | [ROBOT_NO_TASK.md](ROBOT_NO_TASK.md) | 添加机器人不需要任务，也不会顺带建任务；任务在创建时绑定机器人（issue #56） |
 | [APP_GALLERY.md](APP_GALLERY.md) | 「机器人应用」是应用瀑布流：应用有自己的页面，画出工作流（按顺序调用的技能）；技能在单独的页面；创建应用选品牌型号（issue #60） |
+| [APP_CREATE.md](APP_CREATE.md) | 「机器人应用」只展示已创建的应用；创建应用时选任务（必选）和品牌型号，这个品牌型号的技能直接可以编排，不用先安装；机器人上没有的技能在现场测试时自动装上；随应用带的技能包只算属于这个品牌型号的和通用的（issue #68） |
 | [SKILL_INSTALL_GUIDE.md](SKILL_INSTALL_GUIDE.md) | 从「机器人应用」安装技能时机器人没连上：对话框写明原因，带「安装管理层」「接入已有的管理层」「重新连接」（issue #62） |
 | [DUCK_SKILLS.md](DUCK_SKILLS.md) | Microduck AD-P102（双足小鸭）作为仿真机器人；它训练出来的技能模型在应用里按原策略真跑，「训练与改进」页看训练进展；模型文件只进安装包（issue #63） |
+| [TRAINED_SKILLS.md](TRAINED_SKILLS.md) | 仿真里训练出的模型就是机器人的技能：能力标准 1.3 的 `policy.run`；Microduck AD-P102 每个有模型包的节目是一个技能 `duck.<节目>`，仿真小鸭启动时自带并登记到品牌型号的技能里（issue #67） |
+| [MODEL_HUB.md](MODEL_HUB.md) | 模型库、训练与改进、训练与测试数据：看板加卡片墙，模型按九个分类、各有指标；模型文件上传成为版本；评测库和训练库；一轮一轮的改进（基线评测、找短板、应用外训练、评测候选、决定）；归账号（issue #71） |
 | [SKILL_PRODUCTS.md](SKILL_PRODUCTS.md) | 技能包按品牌型号归属：「安装技能包」只列出这台机器人品牌型号的技能包和通用技能包，别的品牌型号的包不显示也装不上；归属表 `runtime/examples/skills/products.json`（issue #69） |
 | [RUN_RECORDS.md](RUN_RECORDS.md) | 运行数据：每次运行跟到结束并保存结果、事件和采样；「验证与测试」「部署与运行」是数字板加记录列表，「仿真试运行」加了仿真运行记录；点一行看这次运行的路线、曲线、步骤和事件（issue #70） |
 | [TASK_SIM.md](TASK_SIM.md) | 仿真试运行按任务来做：页面只列任务；任务的品牌型号决定仿真哪一种机器人，环境由工程助手按任务构建一次、保存在任务上，进入仿真时装上任务用到的技能（issue #66） |
