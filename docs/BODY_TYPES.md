@@ -1,12 +1,14 @@
 # 本体类型清单（issue #32，需求 R1-11）
 
-更新：2026-11-19。代码在 `brainos/body_types.py`、`web/body_types.js`、`web/body_types.css`。
+更新：2026-11-27（issue #58：内置类型改成和仿真档案一样的五类）。代码在 `brainos/body_types.py`、`web/body_types.js`、`web/body_types.css`。
 
 ## 是什么
 
 添加设备时要选一个本体类型。可选的类型来自一份由平台维护的清单：
 
-- 内置两类：**四足机器人**（`quadruped`）、**机械臂**（`manipulator`）。内置类型不能删除。
+- 内置五类，和「添加仿真机器人」的基础档案（[SIM_PROFILES.md](SIM_PROFILES.md)）是同一份、同样的名称和顺序：
+  **机械臂**（`manipulator`）、**轮足机器狗**（`wheel_legged`）、**四足机械狗**（`quadruped`）、**双足机器人**（`biped`）、**其他**（`other`）。
+  内置类型不能删除。issue #58 之前只有四足机器人和机械臂两类，选了轮足的型号（如钢镚 L2-W）也只能登记成四足。
 - 可以添加新类型，也可以删除没有设备在用的类型。
 - 每个类型有三样内容：
 
@@ -16,14 +18,38 @@
 | 状态机本体模板 | `state_machine_template` | 模板的标识。状态机模板本身（需求 R4）还没有实现，这里先登记标识：小写字母、数字、点、下划线、连字符，以字母或数字开头，最长 100 |
 | 应有的运控接口 | `required_capabilities` | 这类本体应该具备的接口，用标准能力的编号表示（`spec/neuxmind_spec/capabilities.py` 里的编号，如 `base.velocity`），至少一个。运控驱动检查（issue #28）按它核对 |
 
-内置两类的内容：
+内置五类的内容（名称、编号、顺序取自 `brainos/sim_profiles.py` 的 `TYPES`，有测试保证两边一致）：
 
-| 类型 | 状态机模板 | 应有的运控接口 |
-| --- | --- | --- |
-| 四足机器人 | `quadruped.default` | `safety.stop`、`base.velocity`、`legged.posture`、`base.odometry` |
-| 机械臂 | `manipulator.default` | `safety.stop`、`joint.state`、`arm.joint_position` |
+| 类型 | 编号 | 对应的标准取值 | 状态机模板 | 应有的运控接口 |
+| --- | --- | --- | --- | --- |
+| 机械臂 | `manipulator` | `manipulator` | `manipulator.default` | `safety.stop`、`joint.state`、`arm.joint_position` |
+| 轮足机器狗 | `wheel_legged` | `quadruped` | `wheel_legged.default` | `safety.stop`、`base.velocity`、`legged.posture`、`base.odometry` |
+| 四足机械狗 | `quadruped` | `quadruped` | `quadruped.default` | `safety.stop`、`base.velocity`、`legged.posture`、`base.odometry` |
+| 双足机器人 | `biped` | `humanoid` | `biped.default` | `safety.stop`、`base.velocity`、`legged.posture`、`joint.state` |
+| 其他 | `other` | `custom` | `other.default` | `safety.stop`、`system.health` |
 
-仿真四足和仿真机械臂声明的能力包含各自类型要求的接口（有测试）。
+轮足、双足、其他这三类的模板标识和应有接口是 issue #58 时按相近的类型定的，没有和真机核对过；状态机模板本身（R4）仍未实现。
+
+仿真四足和仿真机械臂声明的能力包含各自类型要求的接口，仿真四足也满足轮足的（有测试）。
+
+「对应的标准取值」是这类本体在设备清单里自报的 `family`。需要标准取值的代码用 `body_types.standard_family(编号)`：
+内置类型取上表，旧取值原样返回，后来添加的类型是 `custom`。
+
+## 类型跟着型号走（issue #58）
+
+添加机器人的两个表单里，在品牌、型号的清单（`web/robot_catalog.js`）里选了一个型号，本体类型会自动选成这个型号的类型
+（钢镚 L2-W → 轮足机器狗，G1 → 双足机器人）。只在人还没有自己选类型时这样做：类型是空的，或者是上一个型号带出来的。
+人自己选过的类型不会被后选的型号改掉。型号是手填的（「其他型号」）时不动类型。
+清单里型号的类型到本体类型的对应：`quadruped`、`wheel_legged`、`manipulator` 同名，`humanoid` → `biped`，`wheeled` → `other`。
+
+已经登记的机器人不会被自动改类型：以前只能登记成四足的轮足机器人（例如真机 钢镚 L2-U）要在「修改类型」里改成轮足机器狗。
+仿真机器人例外：从档案添加的仿真机器人，类型就是档案的类型，升级后打开一次会把以前存成四足的轮足仿真机器人改过来
+（`SimProfiles.align_types`）；仿真本身仍按标准取值运行。
+
+读类型的几处：
+
+- 安装管理层（`runtime_install_plan.ADAPTERS`）：轮足机器狗和四足机械狗都装仿真四足本体，机械臂装仿真机械臂；双足机器人、其他没有对应的仿真本体，照旧拒绝（`install_body_unsupported`）。
+- 本体适配生成适配器（`adaptation.scaffold_spec`）、应用的 MuJoCo 仿真（`mujoco_sim`）：按 `standard_family` 取标准取值，所以轮足按四足、双足按人形处理。
 
 ## 三条规则
 
@@ -31,9 +57,9 @@
 只是留在 `robot['manifest']['family']` 里。设备自报的是清单里的另一个类型时，卡片上显示“设备自报：…”，
 “修改类型”里可以一键改成它；自报的值不在清单里时只在“修改类型”和详情里说明，不提示修改。
 
-**2. 标准不变，清单只列两类。** 标准（`spec/neuxmind_spec/manifest.py` 的 `FAMILIES`）仍是 7 个取值，设备清单的校验、
+**2. 标准不变，清单列自己的类型。** 标准（`spec/neuxmind_spec/manifest.py` 的 `FAMILIES`）仍是 7 个取值，设备清单的校验、
 端侧运行时、SDK、云端模型目录都不变。模型包标注的是标准取值，所以端侧模型部署仍按设备自报的类型匹配。
-平台清单里没有另外 5 个取值（移动机器人、人形、无人机、复合、其他）：
+平台清单里没有标准的 5 个取值（移动机器人 `mobile`、人形 `humanoid`、无人机 `aerial`、复合 `composite`、其他/自定义 `custom`；清单里的「双足机器人」「其他」是 `biped`、`other`，不是这几个旧值）：
 
 - 以前登记的设备保留原来的值，卡片上标“旧类型，不在清单里”，不会被自动修改，其余功能照常；
 - 新设备不能选这 5 个值，添加设备的两个表单里类型是必填项，开始时没有选中任何一项；
@@ -50,14 +76,14 @@
 ## 保存在哪
 
 清单随桌面端保存，在每个登录账号自己的工作区里（和设备在同一个库，记录种类 `body_types`）。只保存后来添加的类型，
-两类内置写在代码里。所以：不登录云平台、离线也能用；不同账号各有一份清单；云端不知道这份清单。
+五类内置写在代码里。所以：不登录云平台、离线也能用；不同账号各有一份清单；云端不知道这份清单。
 以后需要多台电脑共用一份清单时，再做云端同步。
 
-`robot['family']` 保存的是类型的编号：内置类型是 `quadruped` / `manipulator`，后来添加的是 `bodytype-…`，旧设备是原来的取值。
+`robot['family']` 保存的是类型的编号：内置类型是上表的五个编号，后来添加的是 `bodytype-…`，旧设备是原来的取值。
 读这个字段的地方要知道它不再一定是标准取值：
 
 - 任务配方拿到的机器人信息（`brainos/recipes.py`）、交付清单、安全监视里的 `family` 都是这个编号；
-- 本体适配生成适配器时（`brainos/adaptation.py`），类型不是标准取值就写成 `custom`，内置两类照原样写；
+- 本体适配生成适配器时（`brainos/adaptation.py`），写的是 `standard_family` 给出的标准取值；
 - 需要设备自报的标准取值时读 `robot['manifest']['family']`（云端模型匹配、端侧模型部署已经这样做）。
 
 清单最多添加 100 个类型（整份清单随每次读取状态一起发给页面）。

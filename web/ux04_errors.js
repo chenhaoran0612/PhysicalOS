@@ -269,7 +269,7 @@ const UX_CODES = {
   install_package_missing: ['service', '这个控制台没有带管理层的安装包，没法安装。', '重新安装桌面应用；在源码里运行时，先运行 scripts/build_device_package.py'],
   install_package_damaged: ['service', '控制台自带的管理层安装包不完整或被改动过，没有发给机器人。', '重新安装桌面应用'],
   install_in_progress: ['state', '这台机器人正在安装（或清理）管理层，上一次还没有结束。', '等它结束，或在安装窗口里先停止'],
-  install_body_unsupported: ['input', '这台机器人的本体类型没有对应的仿真本体，管理层装不上。', '在卡片上把本体类型改成四足或机械臂'],
+  install_body_unsupported: ['input', '这台机器人的本体类型没有对应的仿真本体，管理层装不上。', '把本体类型改成四足机械狗、轮足机器狗或机械臂'],
   install_choice_invalid: ['input', '对设备上已有的管理层，这种处理方式不可用。', '重新打开“安装管理层”，按窗口里列出的方式选择'],
   install_login_refused: ['network', '机器人（或跳板机）拒绝了 SSH 登录，安装停下了，没有反复重试（以免账号被锁）。', '核对卡片上“配置连接”里的账号、密码或私钥后再安装'],
   install_unreachable: ['network', '安装途中连不上机器人，等到了时限。设备上已经开始的那一步会在设备上继续做完。', '网络恢复后再点“安装管理层”，会接着已经做完的部分'],

@@ -16,8 +16,12 @@
 
 const RC_IMAGES = '/robot_images/';
 // A robot with wheels at the ends of its legs (轮足) is not a quadruped: it moves, and is drawn, differently.
-const RC_TYPE_NAMES = {quadruped: '四足机器人', wheel_legged: '轮足机器人', manipulator: '机械臂', humanoid: '人形机器人', wheeled: '轮式机器人'};
-const RC_TYPE_PICTURES = {quadruped: 'type-quadruped.svg', wheel_legged: 'type-wheel-legged.svg', manipulator: 'type-manipulator.svg', humanoid: 'type-humanoid.svg'};
+// Issue #58: named as the body type list names them (brainos/body_types.py, the types of the profiles).
+const RC_TYPE_NAMES = {quadruped: '四足机械狗', wheel_legged: '轮足机器狗', manipulator: '机械臂', humanoid: '双足机器人', wheeled: '轮式机器人', biped: '双足机器人', other: '其他'};
+const RC_TYPE_PICTURES = {quadruped: 'type-quadruped.svg', wheel_legged: 'type-wheel-legged.svg', manipulator: 'type-manipulator.svg', humanoid: 'type-humanoid.svg', biped: 'type-humanoid.svg'};
+// A type of this list → the id of the body type a robot of it is registered as.
+const RC_BODY_TYPE = {humanoid: 'biped', wheeled: 'other'};
+const rcBodyType = type => (type ? RC_BODY_TYPE[type] || type : '');
 const RC_TYPE_DEFAULT = 'type-other.svg';
 const RC_MAX = 100;
 
@@ -216,6 +220,27 @@ function rcChanged(input) {
   }
   // Issue #58 (the body type of the form follows the chosen model) hooks in here when it is there.
   if (typeof rcFollowType === 'function') rcFollowType(picker);
+}
+
+// ---------------------------------------------------------------- issue #58: the body type follows the model
+// The body type (an id of the body type list) of a model chosen in the two lists; '' when the model is typed
+// by hand, is one of the account's own, or nothing is chosen.
+function rcTypeFor(vendor, model) {
+  const brand = rcListed(vendor), entry = brand && rcNorm(model) ? brand.models.find(m => rcNamed(m, 'model', model)) : null;
+  return entry ? rcBodyType(entry.type) : '';
+}
+
+// In a form that adds a robot (it has the body type list next to the picker): a listed model is of one
+// type, so choosing the model chooses that type, as long as the person has not chosen a type themselves
+// (the list is still empty, or holds what an earlier model put there). The type is the person's to decide.
+function rcFollowType(picker) {
+  const formEl = picker.closest('form'), list = formEl && formEl.querySelector('select[name="family"]');
+  if (!list) return;
+  const type = rcTypeFor(picker.querySelector('[data-rc="vendor"]').value, picker.querySelector('[data-rc="model"]').value);
+  if (!type || list.value === type || ![...list.options].some(o => o.value === type)) return;
+  if (list.value && list.value !== list.dataset.rcFollowed) return;
+  list.value = list.dataset.rcFollowed = type;
+  list.dispatchEvent(new Event('change', {bubbles: true}));
 }
 
 // web/robot_model.js draws its forms with rmInputs: replaced once every script has loaded, so the place of

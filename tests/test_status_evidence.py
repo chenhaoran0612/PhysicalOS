@@ -17,7 +17,7 @@ from hardware_fixture import JETPACK6, X86_NVIDIA, jetson
 from motion_drivers_fixture import chassis, idle
 from ros2_fixture import absent
 
-QUADRUPED = built_in()[0]
+QUADRUPED = {t['id']: t for t in built_in()}['quadruped']     # issue #58: the list has five types
 
 # What issue #47's robot showed: a board whose spare ports are unused, whose 4G modem's serial ports
 # belong to dialout, and whose boot log has two harmless lines. The robot walked.

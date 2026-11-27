@@ -26,7 +26,7 @@ from test_engineering import ResponsesFixture
 from test_product import Server
 from test_ssh_jump import SERVICES, SshCase
 
-QUADRUPED, MANIPULATOR = built_in()
+QUADRUPED, MANIPULATOR = ({t['id']: t for t in built_in()}[i] for i in ('quadruped', 'manipulator'))     # issue #58: the list has five types
 VELOCITY, ODOMETRY, ARM = 'motion-driver:base.velocity', 'motion-driver:base.odometry', 'motion-driver:arm.joint_position'
 READ_ONLY = {hardware_scan.SCAN_EXEC, ros2_profile.ROS2_EXEC, device_software.SOFTWARE_EXEC, device_status.status_command(SERVICES),
              heartbeat.HEARTBEAT_COMMAND}
@@ -95,7 +95,7 @@ class AssessTests(unittest.TestCase):
         self.assertEqual((velocity['capability'], velocity['state']), ('base.velocity', 'missing'))
         for said in ('底盘速度', 'base.velocity'):
             self.assertIn(said, velocity['title'])
-        for said in ('四足机器人', '/cmd_vel', 'geometry_msgs/msg/Twist', '话题'):
+        for said in ('四足机械狗', '/cmd_vel', 'geometry_msgs/msg/Twist', '话题'):
             self.assertIn(said, velocity['detail'])
         self.assertRegex(velocity['detail'], '没有安装.*没有在运行|没有在运行.*没有安装')
 
@@ -306,7 +306,7 @@ class OnboardingTests(DriverCase):
 
         check = self.check(connection)
         self.assertEqual((check['status'], check['project_id'], check['body_type']),
-                         ('missing', self.pid, {'id': 'quadruped', 'name': '四足机器人'}))
+                         ('missing', self.pid, {'id': 'quadruped', 'name': '四足机械狗'}))
         missing = [item for item in check['items'] if item['state'] == 'missing']
         self.assertEqual([(item['capability'], item['kind'], item['name'], item['types'], item['issue_id']) for item in missing],
                          [('base.velocity', 'topic', '/cmd_vel', ['geometry_msgs/msg/Twist'], VELOCITY),

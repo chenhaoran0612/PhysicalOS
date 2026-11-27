@@ -106,7 +106,7 @@ let failed = async () => {};
   // 2 · A quadruped without its chassis driver: the profile says what is missing, and so does its card.
   await readProfile(DOG);
   await banner.waitFor({timeout: 15000});
-  await expectText(banner, ['运控驱动', '四足机器人', '有 2 项不在这台设备的 ROS 2 清单里', '不说明本体不能运动', '底盘速度', '里程计', '查看并处理']);
+  await expectText(banner, ['运控驱动', '四足机械狗', '有 2 项不在这台设备的 ROS 2 清单里', '不说明本体不能运动', '底盘速度', '里程计', '查看并处理']);
   await shot('1-profile-banner');
   await close();
   await card(DOG).getByText('运控接口 2 项待确认').waitFor({timeout: 15000});

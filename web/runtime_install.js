@@ -14,6 +14,7 @@ const RI_DEFAULT_PORT = 8790, RI_PORT_MIN = 1024, RI_PORT_MAX = 65535;
 const RI_MARK = {done: '✓', running: '', failed: '✕', stopped: '■', pending: ''};
 const RI_STATE = {done: '完成', running: '进行中', failed: '失败', stopped: '已停止', pending: '未开始'};
 const RI_BODY = {quadruped: '仿真四足（sim_quadruped）', manipulator: '仿真机械臂（sim_arm）'};
+RI_BODY.wheel_legged = RI_BODY.quadruped;      // issue #58: a wheel-legged dog gets the simulated quadruped
 const RI_ROOT = {none: '没有', empty: '一个空目录', unfinished: '一份没装完的安装', installed: '一个装好的管理层',
   foreign: '不是安装脚本建的目录', link: '一个符号链接'};
 // {robot id: view of its install} as the backend last sent them; robots whose "清理" waits for a second click.

@@ -261,7 +261,8 @@ class SimProfiles:
         while name in taken:
             name, n = f'{base} {n}', n + 1
         sims = self.platform.sims
-        robot = {'id': uid('robot'), 'project_id': owner, 'name': name, 'family': family, 'endpoint': '',
+        # Issue #58: the robot is of the profile's type (a type of the body type list); the simulation keeps `family`.
+        robot = {'id': uid('robot'), 'project_id': owner, 'name': name, 'family': profile['type'], 'endpoint': '',
                  'token': secrets.token_urlsafe(32), 'status': 'unconnected', 'capabilities': [],
                  'sim': {'kind': SIM_KIND, 'adapter': 'brainos.mujoco_body:body', 'enabled': True, 'state': 'starting',
                          'profile_id': profile['id'], 'start_timeout_s': START_TIMEOUT_S},
@@ -276,6 +277,18 @@ class SimProfiles:
         self.store.put('robots', robot)
         self.platform.audit('robot.sim_added', {'robot_id': robot['id'], 'kind': SIM_KIND, 'profile_id': profile['id']}, owner)
         return {**sims.start(robot['id']), 'project_id': project['id'] if project else ''}
+
+    def align_types(self):
+        """Issue #58: simulated robots added before the body type list had the profile types were saved with
+        the standard value (a wheel-legged dog as a quadruped). Give each the type of its profile; returns
+        the ids that changed. Robots that are not simulated, or not from a profile, are not touched."""
+        changed, known = [], {p['id']: p for p in self.profiles}
+        for robot in self.store.list('robots'):
+            profile = known.get(robot['sim'].get('profile_id')) if isinstance(robot.get('sim'), dict) else None
+            if profile and not profile.get('builtin') and robot.get('family') != profile['type']:
+                self.store.put('robots', {**robot, 'family': profile['type']}, owner=True)
+                changed.append(robot['id'])
+        return changed
 
     # ------------------------------------------------------------ the simulated robots from before
     def remove_old_sims(self):

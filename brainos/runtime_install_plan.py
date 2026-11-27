@@ -30,6 +30,7 @@ _NUMBER = re.compile(r'[0-9]{1,12}', re.ASCII)       # a robot's digits: '²'.is
 MIN_PYTHON = (3, 10)
 MIN_FREE_KB = 300 * 1024                  # a venv with the two wheels takes about 25 MB; pip needs room to work
 ADAPTERS = {'quadruped': 'sim_quadruped', 'manipulator': 'sim_arm'}    # see the module text of runtime_install
+ADAPTERS['wheel_legged'] = 'sim_quadruped'      # issue #58: a wheel-legged dog is driven like a quadruped
 FRESH = ('upload', 'install', 'start', 'link')
 SCRIPTED = ('install', 'start', 'remove', 'wait_install')
 AUTOSTART = 'autostart'     # issue #20: only when the person asked for it, and only for this console's own install
