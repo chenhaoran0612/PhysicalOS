@@ -299,7 +299,6 @@ function cloudSkillDeleteAsk(key) {
 // ---------------------------------------------------------------- installing on a robot
 // Choose the robot (and the skill and version when they are not given). `fixed.robotId` comes from a robot's page.
 async function cloudSkillInstallForm(fixed) {
-  if (!project()) return toast('请先创建或选择一个项目');
   if (!state.cloud_account?.logged_in) {
     return dialog('从云端安装技能', '云端技能库', `<div class="dialog-body">${cloudSignInNotice(CLOUD_SKILLS_LOAD_SIGN_IN)}</div>`);
   }

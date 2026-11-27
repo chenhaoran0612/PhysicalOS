@@ -234,7 +234,7 @@ function mdIssueRow(html, issue) {
   }
   mdBaseAction = engineAction;
   engineRobotCard = r => mdCard(baseCard(r), r);
-  engineAction = async (type, id) => (MD_ACTIONS.includes(type) && state.user && project()
+  engineAction = async (type, id) => (MD_ACTIONS.includes(type) && state.user
     ? mdAction(type, id) : mdBaseAction(type, id));
   // Any other dialog replaces this one: a read that finishes later must not draw over it.
   dialog = (...args) => { delete $('#dialog').dataset.motionDrivers; delete $('#dialog').dataset.motionDriversSig; return baseDialog(...args); };

@@ -175,6 +175,8 @@ def make_handler(application):
             extra=extra or {'/skill_run.js':('skill_run.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #42: the robot a task is done with (chosen when the task is created), likewise.
             extra=extra or {'/task_robot.js':('task_robot.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #56: a robot is added and looked after with no task, likewise.
+            extra=extra or {'/robot_no_task.js':('robot_no_task.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #11: deleting a robot, likewise.
             extra=extra or {'/robot_remove.js':('robot_remove.js','text/javascript; charset=utf-8'),'/robot_remove.css':('robot_remove.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #49: the pages that are hidden for now, likewise.

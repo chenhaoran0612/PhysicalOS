@@ -86,7 +86,7 @@ async function journeyAction(type,id){
  if(type==='journey-home'){$('#dialog').close();location.hash='overview';return;}
  if(type==='journey-start'){if(!state.user){journeyResume=true;return auth();}return action('project-add');}
  if(!state.user){journeyResume=true;return auth();}
- if(!project())return action('project-add');
+ if(!project()&&!robotNoTaskNeeded(type))return action('project-add');   // issue #56: connecting a robot needs no task
  if(type==='journey-connect')return dialog('连接你的机器人','选择你目前拥有的连接方式。',`<div class="dialog-body"><div class="contract-line"><b>有 SSH 地址、用户名和密码或密钥</b>助手可以登录调查硬件、软件和配置，形成设备档案。<div class="spacer"></div>${button('通过 SSH 连接','engine-ssh','',id||'')}</div><div class="contract-line"><b>已有平台兼容的设备接入服务</b>填写服务地址，检查它提供的能力与状态。<div class="spacer"></div>${button('连接已有接入服务',id?'robot-config':'robot-add','secondary',id||'')}</div><p class="inline-note">当前支持 SSH 调查和兼容接入服务。仅有 USB、串口或厂商专有连接时，需要相应接入插件。</p></div>`);
  if(type==='journey-prepare'){
   if(!rows('robots').length)return journeyAction('journey-connect');

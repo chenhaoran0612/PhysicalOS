@@ -285,7 +285,7 @@ async function riPoll(force = false) {
   riBaseSubmit = engineSubmit;
   engineRobotCard = r => riCard(baseCard(r), r);
   engineAction = async (type, id) => {
-    if (!type.startsWith('engine-runtime-install') || !state.user || !project()) return riBaseAction(type, id);
+    if (!type.startsWith('engine-runtime-install') || !state.user) return riBaseAction(type, id);
     if (type === 'engine-runtime-install') return riShow(id);
     if (type === 'engine-runtime-install-again') return riForm(id, riLive(id)?.port);
     if (type === 'engine-runtime-install-stop') return riStop(id);

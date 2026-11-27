@@ -235,6 +235,8 @@ class SimProfiles:
             existing = robot_scope.tasks(self.store.list('projects'))
             if existing:
                 project = existing[0]
+            elif at_home:
+                return None, robot_scope.HOME       # issue #56: a robot needs no task, and none is made for it
             else:
                 project = self.platform.add_project(dict(DEFAULT_PROJECT))
                 project['auto_created'] = True
@@ -273,7 +275,7 @@ class SimProfiles:
         (state_dir / 'mujoco.json').write_text(json.dumps(config, ensure_ascii=False), encoding='utf-8')
         self.store.put('robots', robot)
         self.platform.audit('robot.sim_added', {'robot_id': robot['id'], 'kind': SIM_KIND, 'profile_id': profile['id']}, owner)
-        return {**sims.start(robot['id']), 'project_id': project['id']}
+        return {**sims.start(robot['id']), 'project_id': project['id'] if project else ''}
 
     # ------------------------------------------------------------ the simulated robots from before
     def remove_old_sims(self):

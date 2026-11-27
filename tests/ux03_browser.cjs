@@ -74,6 +74,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
   await dlg('.cap-list').waitFor({timeout: 60000});
   const quad = await page.evaluate(() => state.robots[0].id);
   await click('close');
+  await require('./robot_no_task_helper.cjs').openTask(page);     // issue #56: a robot makes no task
 
   // ---------------------------------------------------------------- (a) workbench: the sim path, not the assistant
   await go('task');      // issue #44: the steps of a task are its own page; #overview is the dashboard

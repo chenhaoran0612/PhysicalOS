@@ -398,7 +398,7 @@ async function simSubmit(kind, p, f) {
   if (kind === 'sim-add') {
     toast('正在启动仿真机器人…');
     const robot = await api('sims', {kind: p.kind, project_id: projectId || undefined});
-    projectId = robot.project_id;
+    projectId = robotNoTaskNext(robot.project_id, projectId, state.projects);   // issue #56: no task is made for a robot
     try { sessionStorage.setItem('brain-project', projectId); } catch { /* optional */ }
     location.hash = 'robots';
     await refresh(true);

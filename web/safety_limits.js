@@ -328,7 +328,7 @@ async function safetyLimitsSubmit(p, f) {
   const baseRender = robotDetailRender, baseDialog = dialog;
   engineRobotCard = r => safetyLimitsCard(baseCard(r), r);
   engineAction = async (type, id) => {
-    if (!state.user || !project()) return baseAction(type, id);
+    if (!state.user) return baseAction(type, id);
     if (type === SAFETY_LIMITS_EDIT) return safetyLimitsOpen(id);
     if (type !== SAFETY_LIMITS_RELOAD) return baseAction(type, id);
     const robot = find('robots', id);

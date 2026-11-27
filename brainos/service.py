@@ -94,6 +94,7 @@ class Platform:
         self.package_delivery = PackageDelivery(self)   # issue #31: a usable driver package goes from the library to a device, verified there
         from .model_compute import ModelCompute
         self.model_compute = ModelCompute(self)
+        self.model_compute.ensure_profile(robot_scope.HOME)     # issue #56: with no task, a robot is investigated on the default model kept with the robots
         from .body_types import BodyTypes
         self.body_types = BodyTypes(self)           # issue #32: the platform's list of body types; a device has the type a person chose
         from .robot_model import RobotModels

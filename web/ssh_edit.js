@@ -250,7 +250,7 @@ async function sshEditSubmit(p, f) {
     return html.replace(button('适配器配置', 'robot-config', 'secondary small', r.id),
                         button('配置连接', 'engine-ssh-edit', 'secondary small', r.id));
   };
-  engineAction = async (type, id) => (type === 'engine-ssh-edit' && state.user && project()
+  engineAction = async (type, id) => (type === 'engine-ssh-edit' && state.user
     ? sshEditOpen(id) : sshEditBaseAction(type, id));
   engineSubmit = async (kind, p, f) => {
     if (kind === 'engine-ssh' && p.edit_robot_id) return sshEditSubmit(p, f);
