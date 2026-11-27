@@ -33,6 +33,15 @@ const ROBOT = '巡检机器人';
   const inSight = name => card(name).locator('button:visible, summary:visible').evaluateAll(els => els.map(el => el.innerText.trim()));
   const noSidewaysScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth &&
     document.querySelector('main').scrollWidth <= document.querySelector('main').clientWidth);
+  // Issue #64: where the open list of a card is, against the part of the window the page has (not the sidebar, not the top bar).
+  const listPlace = name => menu(name).evaluate(el => {
+    const r = x => { const b = x.getBoundingClientRect(); return {left: b.left, top: b.top, right: b.right, bottom: b.bottom}; };
+    const scroller = document.getElementById('content-scroll'), area = r(scroller), list = r(el.querySelector('.robot-menu-panel')), button = r(el.querySelector('summary'));
+    area.right = area.left + scroller.clientWidth; area.bottom = Math.min(area.bottom, innerHeight);
+    const inside = list.left >= area.left && list.top >= area.top && list.right <= area.right + .5 && list.bottom <= area.bottom + .5;
+    const covers = list.left < button.right && list.right > button.left && list.top < button.bottom && list.bottom > button.top;
+    return {inside, covers, list, button, area, scrollTop: scroller.scrollTop};
+  });
   const shot = name => page.screenshot({path: `${shots}/robots-page-${name}.png`, fullPage: true});
 
   await page.goto(cfg.url);
@@ -119,8 +128,14 @@ const ROBOT = '巡检机器人';
   await page.locator('#dialog [data-action="close"]').first().click();
 
   // 3. The list: everything else, grouped; deleting last and apart. It hangs out of the card and is not cut.
+  const scrolledBefore = await page.evaluate(() => document.getElementById('content-scroll').scrollTop);
   await openRobotMenu(card(ROBOT));
   const panel = menu(ROBOT).locator('.robot-menu-panel');
+  // Issue #64: the whole list is in the window, beside or under its button, and the page did not scroll for it.
+  const placed = await listPlace(ROBOT);
+  check(placed.inside, `The open list leaves the page's part of the window: ${JSON.stringify(placed)}`);
+  check(!placed.covers, `The open list covers its own button: ${JSON.stringify(placed)}`);
+  check(placed.scrollTop === scrolledBefore, 'Opening the list scrolled the page');
   const titles = await panel.locator('.robot-menu-title').allInnerTexts();
   check(['连接', '设备', '管理层'].every(t => titles.includes(t)), `The list is not grouped: ${titles.join(',')}`);
   const entries = await panel.locator('.robot-menu-item').evaluateAll(els => els.map(el => el.dataset.action));
@@ -145,6 +160,9 @@ const ROBOT = '巡检机器人';
   // The page is drawn again while the list is open (a poll): it stays open.
   await page.evaluate(() => refresh(true));
   check(await menu(ROBOT).evaluate(el => el.open), 'The list closed when the page was drawn again');
+  await page.waitForTimeout(100);
+  const redrawn = await listPlace(ROBOT);
+  check(redrawn.list.left === placed.list.left && redrawn.list.top === placed.list.top, `The list jumped when the page was drawn again: ${JSON.stringify([placed.list, redrawn.list])}`);
   // Esc closes it and the focus is back on its button.
   await page.keyboard.press('Escape');
   check(!(await menu(ROBOT).evaluate(el => el.open)), 'Esc does not close the list');
@@ -244,6 +262,48 @@ const ROBOT = '巡检机器人';
   await page.locator('#dialog [data-action="close"]').first().click();
   await shot('5b-settings');
 
+  // 5c. Issue #64 — a low window: the list is as high as the window lets it and scrolls inside itself; it
+  // follows its button when the page is scrolled, and is put away when the button is out of sight.
+  for (const height of [760, 520]) {
+    await page.setViewportSize({width: 1440, height});
+    await page.waitForTimeout(150);
+    await openRobotMenu(card(ROBOT));
+    const low = await listPlace(ROBOT);
+    check(low.inside, `The list leaves the window when it is ${height}px high: ${JSON.stringify(low)}`);
+    const all = await menu(ROBOT).locator('.robot-menu-item').evaluateAll(els => els.every(el => {
+      el.scrollIntoView({block: 'nearest'});
+      const r = el.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return hit === el || el.contains(hit);
+    }));
+    check(all, `An entry of the list cannot be reached when the window is ${height}px high`);
+    await shot(`5c-${height}`);
+    if (height === 520) {
+      // The page is drawn again while the list is scrolled inside itself: it stays where the person scrolled it to.
+      const inner = await menu(ROBOT).locator('.robot-menu-panel').evaluate(el => { el.scrollTop = el.scrollHeight; return el.scrollTop; });
+      check(inner > 0, 'The list does not scroll inside itself in a window 520px high');
+      await page.waitForTimeout(100);
+      await page.evaluate(() => refresh(true));
+      await page.waitForTimeout(100);
+      const kept = await menu(ROBOT).locator('.robot-menu-panel').evaluate(el => el.scrollTop);
+      check(kept === inner, `The list jumped back to its top when the page was drawn again (${inner} -> ${kept})`);
+      await menu(ROBOT).locator('.robot-menu-panel').evaluate(el => { el.scrollTop = 0; });
+      await page.waitForTimeout(100);
+    }
+    if (height === 520) {
+      await page.evaluate(() => document.getElementById('content-scroll').scrollBy(0, 60));
+      await page.waitForFunction(top => document.querySelector('.rp-card details.robot-menu[open] summary')?.getBoundingClientRect().top !== top, low.button.top);
+      await page.waitForTimeout(100);
+      const moved = await listPlace(ROBOT);
+      check(moved.inside && moved.button.top < low.button.top, `After the page was scrolled the list is not in the window: ${JSON.stringify(moved)}`);
+      await page.evaluate(() => document.getElementById('content-scroll').scrollBy(0, 5000));
+      const gone = await card(ROBOT).locator('details.robot-menu summary').evaluate(el => el.getBoundingClientRect().bottom <= document.getElementById('content-scroll').getBoundingClientRect().top);
+      if (gone) await page.waitForFunction(() => !document.querySelector('.rp-card details.robot-menu[open]'), null, {timeout: 5000})
+        .catch(() => { throw Error('The list stays open after its button was scrolled out of sight'); });
+      await page.evaluate(() => document.getElementById('content-scroll').scrollTo(0, 0));
+    }
+    await page.keyboard.press('Escape');
+  }
+
   // 6. Narrow windows: nothing scrolls sideways, and the list stays inside the window.
   for (const width of [320, 375, 768, 1024, 1920]) {
     await page.setViewportSize({width, height: 900});
@@ -252,10 +312,30 @@ const ROBOT = '巡检机器人';
     await openRobotMenu(card(ROBOT));
     const box = await menu(ROBOT).locator('.robot-menu-panel').boundingBox();
     check(box && box.x >= 0 && box.x + box.width <= width, `The list leaves the window at ${width}px (${JSON.stringify(box)})`);
+    const narrow = await listPlace(ROBOT);
+    check(narrow.inside, `The list leaves the page's part of the window at ${width}px: ${JSON.stringify(narrow)}`);
     check(await noSidewaysScroll(), `The open list makes the page scroll sideways at ${width}px`);
-    if ([320, 768].includes(width)) await shot(`6-${width}`);
+    if ([320, 768, 1920].includes(width)) await shot(`6-${width}`);
     await page.keyboard.press('Escape');
   }
+
+  // 6b. Issue #64 — the button of the list is below the window and the list is opened without scrolling to it
+  // first (a script, a keyboard helper): the button is brought into sight and the list stays open, inside the page area.
+  await page.setViewportSize({width: 375, height: 420});
+  await page.waitForTimeout(150);
+  await page.evaluate(() => document.getElementById('content-scroll').scrollTo(0, 0));
+  const below = await menu(ROBOT).locator('summary').evaluate(el => el.getBoundingClientRect().top >= Math.min(document.getElementById('content-scroll').getBoundingClientRect().bottom, innerHeight));
+  check(below, 'Step 6b needs the button of the list below a window 375 by 420');
+  await menu(ROBOT).locator('summary').evaluate(el => el.click());
+  await page.waitForTimeout(300);
+  await page.evaluate(() => refresh(true));
+  await page.waitForTimeout(300);
+  check(await menu(ROBOT).evaluate(el => el.open), 'A list opened while its button was out of sight was closed again');
+  const reached = await listPlace(ROBOT);
+  check(reached.inside && reached.button.top < reached.area.bottom && reached.button.bottom > reached.area.top,
+        `A list opened while its button was out of sight is not in the window with its button: ${JSON.stringify(reached)}`);
+  await shot('6b-opened-out-of-sight');
+  await page.keyboard.press('Escape');
 
   check(!errors.length, 'Page errors: ' + errors.join(' | '));
   await browser.close();

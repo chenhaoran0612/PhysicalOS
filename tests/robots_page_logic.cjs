@@ -18,7 +18,7 @@ const engineRobotOptions = () => '<div class="journey-options robot-entry"><arti
 const sandbox = {h, button, badge, rcPicture, engineRobotOptions, state: {robots: []}};
 vm.createContext(sandbox);
 const page = vm.runInContext(readFileSync('web/robots_page.js', 'utf8') +
-  '\n;({rpCard, rpParts, rpOverview, rpButtons, rpPick, rpSummary, rpWays, RP_MENU_LABEL})', sandbox);
+  '\n;({rpCard, rpParts, rpOverview, rpButtons, rpPick, rpSummary, rpWays, rpPlaceAt, RP_MENU_LABEL})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -199,6 +199,51 @@ const text = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   same(page.rpSummary([{}, {sim: {}}, {sim: {}}]), '1 台真机 · 2 台仿真', 'real and simulated robots are counted apart');
   same(page.rpSummary([{}]), '1 台真机', 'only what there is');
   same(page.rpSummary([{sim: {}}]), '1 台仿真', 'only what there is');
+}
+
+// ---- issue #64: where the list of a card is put. Under its button while it fits there; a long list
+// ---- beside the button, about the middle of the window; never outside the part of the window the page has.
+{
+  const area = {left: 268, top: 122, right: 1600, bottom: 1021};          // the window of the issue's picture, without sidebar and top bar
+  const button = {left: 595, top: 356, right: 685, bottom: 394};
+  const inside = (at, size, where = area) => at.left >= where.left && at.top >= where.top &&
+    at.left + size.width <= where.right && at.top + Math.min(size.height, at.maxHeight) <= where.bottom;
+  const covers = (at, size, b) => at.left < b.right && at.left + size.width > b.left && at.top < b.bottom && at.top + Math.min(size.height, at.maxHeight) > b.top;
+
+  const short = {width: 248, height: 150}, atShort = page.rpPlaceAt(button, short, area);
+  same(atShort.side, 'below', 'a list that fits under its button hangs there');
+  ok(atShort.top >= button.bottom && atShort.left + short.width === button.right, 'under the button, its right edge on the button\'s');
+
+  const long = {width: 248, height: 620}, atLong = page.rpPlaceAt(button, long, area);      // the list of the issue: 15 entries
+  same(atLong.side, 'right', 'a list too long for the room under its button goes beside it');
+  ok(inside(atLong, long), 'and is inside the window from its first entry to its last');
+  ok(atLong.left >= button.right && !covers(atLong, long, button), 'it does not cover its button');
+  const middle = atLong.top + long.height / 2, centre = (area.top + area.bottom) / 2;
+  ok(Math.abs(middle - centre) <= (area.bottom - area.top) / 4, 'it is about the middle of the window, not at its lower edge');
+
+  const lastColumn = {left: 1480, top: 356, right: 1570, bottom: 394}, atLeft = page.rpPlaceAt(lastColumn, long, area);
+  same(atLeft.side, 'left', 'no room on the right: on the left of the button');
+  ok(inside(atLeft, long) && !covers(atLeft, long, lastColumn), 'inside the window, the button free');
+
+  const low = {left: 595, top: 950, right: 685, bottom: 988}, atLow = page.rpPlaceAt(low, long, area);
+  ok(inside(atLow, long) && !covers(atLow, long, low), 'a button at the lower edge: the list is still inside the window');
+
+  // A phone: no room beside the button. Above it when the list fits there.
+  const phone = {left: 0, top: 62, right: 320, bottom: 900}, phoneButton = {left: 200, top: 700, right: 290, bottom: 734};
+  const atAbove = page.rpPlaceAt(phoneButton, {width: 248, height: 400}, phone);
+  same(atAbove.side, 'above', 'no room under or beside the button: above it');
+  ok(inside(atAbove, {width: 248, height: 400}, phone) && atAbove.top + 400 <= phoneButton.top, 'above the button, inside the window');
+  const atOver = page.rpPlaceAt({left: 200, top: 400, right: 290, bottom: 434}, long, phone);
+  same(atOver.side, 'over', 'nowhere free: over the page');
+  ok(inside(atOver, long, phone), 'inside the window all the same');
+
+  // A window lower than the list: the list is as high as the window lets it, and scrolls inside.
+  const flat = {left: 268, top: 122, right: 1600, bottom: 600}, atFlat = page.rpPlaceAt(button, long, flat);
+  ok(atFlat.maxHeight < long.height && atFlat.maxHeight <= flat.bottom - flat.top, 'a list higher than the window is cut to it');
+  ok(inside(atFlat, long, flat), 'and stays inside');
+  ok(atLong.maxHeight >= long.height, 'a list that fits is not cut');
+  ok([atShort, atLong, atLeft, atLow, atAbove, atOver, atFlat].every(at => Number.isInteger(at.left) && Number.isInteger(at.top) && Number.isInteger(at.maxHeight)),
+     'whole pixels: the text of the list is not blurred');
 }
 
 console.log(`robots_page_logic: ${checks} checks passed`);
