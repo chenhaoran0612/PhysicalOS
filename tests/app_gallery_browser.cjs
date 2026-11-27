@@ -79,11 +79,10 @@ let failed = async () => {};
   // 0 ---- nothing yet: what an application is, skills first; no skills table on this page
   await page.goto(cfg.url + '/#skills');
   await main.locator('.page-head [data-action="application-add"]').waitFor();
-  await has(main, ['机器人应用', '先把技能加进来，再编排成应用', '按顺序调用一个或多个技能']);
+  await has(main, ['机器人应用', '还没有应用']);                              // issue #68: an empty page says so and nothing else
   await lacks(main, ['技能资产', '注册技能']);
   must(await main.locator('table').count() === 0, 'the skills table is still on 机器人应用');
-  must(await main.locator('.ag-empty [data-action="ux-adopt"]').count() === 1, 'the empty page does not start with the skills');
-  await has(main.locator('.page-head [data-action="appg-skills"]'), ['技能', '0']);
+  must(await main.locator('[data-action="ux-adopt"], [data-action="appg-skills"]').count() === 0, 'the page still has a way to the skills (issue #68)');
   await shot('0-empty');
 
   const ids = await page.evaluate(async ({cfg}) => {
@@ -125,10 +124,8 @@ let failed = async () => {};
     seen = await boxes();
     must(new Set(seen.map(b => b[0])).size === 1, `more than one column at ${width}px: ${JSON.stringify(seen)}`);
   });
-  await page.locator('.robot-model-filter .robot-model-chip', {hasText: ACME}).click();
-  same(await cards.locator('.ag-open').allInnerTexts(), ['货架取件'], 'one brand and model');
-  await page.locator('.robot-model-filter .robot-model-chip').first().click();
-  same(await cards.count(), 3, 'all brands and models again');
+  must(await page.locator('.robot-model-filter').count() === 0, 'the filter by brand and model is still on the page (issue #68)');
+  await page.evaluate(async () => { await api('projects', {name: '巡检任务', objective: '每天巡检一圈'}); await refresh(true); });   // issue #68: an application is created for a task
   await main.locator('.page-head [data-action="application-add"]').click();
   await dialog.locator('form[data-form=application] [name=robot_id]').waitFor();
   same(await dialog.locator('form[data-form=application] [name=robot_id] option').evaluateAll(list => list.map(o => o.value)), [ids.arm, ids.twin],
@@ -136,7 +133,7 @@ let failed = async () => {};
   await closeDialog();
 
   // 2 ---- the skills have their own page
-  await main.locator('.page-head [data-action="appg-skills"]').click();
+  await page.goto(cfg.url + '/#app-skills');                                 // issue #68: no button on 机器人应用 leads here
   await main.locator('.ag-skills table').waitFor();
   must(page.url().endsWith('#app-skills'), `「技能」 did not open the page of the skills: ${page.url()}`);
   same(await main.locator('.ag-skills tbody tr').count(), 3, 'every skill');
@@ -206,9 +203,8 @@ let failed = async () => {};
   await cards.first().waitFor();
   same(await cards.count(), 3, 'a new version is not another card');
   await has(card('通道巡检'), ['v1.1 · 共 2 个版本']);
-  await has(page.locator('.robot-model-filter .robot-model-chip').first(), ['3 个应用']);      // a version is not an application
   await card('通道巡检').locator('[data-action="taskapp-tasks"]').click();                      // the button on a card is not the card
-  await dialog.getByText('还没有任务').waitFor();
+  await dialog.locator('.ta-pick-row', {hasText: '巡检任务'}).waitFor();                         // issue #68: the task made above for the form
   must(page.url().endsWith('#skills'), 'the button on a card opened the application');
   await closeDialog();
   same(await card('通道巡检').locator('.ag-step').count(), 4, 'the card shows the newest workflow');
@@ -219,11 +215,15 @@ let failed = async () => {};
   await made.waitFor();
   await has(made, ['品牌型号']);
   await lacks(made, ['目标机器人', '目标选仿真机器人']);
-  await has(dialog, ['选择品牌型号']);
+  await has(dialog, ['选任务和品牌型号']);                                   // issue #68: the form asks for a task too
   same(await made.locator('[name=robot_id] option').allInnerTexts(), [`${ACME} · 1 台机器人`, `${BETA} · 2 台机器人`], 'one choice per brand and model');
   same(await made.locator('[name=robot_id] option').evaluateAll(list => list.map(o => o.value)), [ids.arm, ids.dog],
        'with both connected, the one added first');
-  const offered = () => made.locator('.step-editor [name=skill_id] option:not([disabled])').allInnerTexts();
+  // Issue #68: the form asks the server for the skills of the brand and model; they are offered once it has answered.
+  const offered = async () => {
+    await page.waitForFunction(() => { const t = document.querySelector('#dialog .ac-status')?.textContent || ''; return t && !t.includes('正在准备'); });
+    return made.locator('.step-editor [name=skill_id] option:not([disabled])').allInnerTexts();
+  };
   same(await offered(), ['伸到货架'], 'the skills of the first brand and model');
   await made.locator('[name=robot_id]').selectOption({label: `${BETA} · 2 台机器人`});
   same((await offered()).sort(), ['前往巡检点', '环顾<四周>'].sort(), 'the skills follow the brand and model');
@@ -236,12 +236,7 @@ let failed = async () => {};
   await has(card('清晨巡检'), [BETA, '2 台同品牌型号的机器人可用']);
   const saved = (await appState()).applications.find(a => a.name === '清晨巡检');
   same([saved.robot_id, saved.product.vendor, saved.product.model], [ids.dog, 'Beta <b>', 'B2'], 'what was saved');
-  await page.locator('.robot-model-filter .robot-model-chip', {hasText: BETA}).click();
-  await main.locator('.page-head [data-action="application-add"]').click();
-  await made.waitFor();
-  same(await made.locator('[name=robot_id]').inputValue(), ids.dog, 'the form starts from the brand and model being looked at');
-  await closeDialog();
-  await page.locator('.robot-model-filter .robot-model-chip').first().click();
+  // Issue #68: the page has no filter by brand and model; the form starts from the task's brand and model (tests/app_create_browser.cjs).
 
   // 6 ---- keyboard, reduced motion, widths
   await card('货架取件').locator('.ag-open').focus();

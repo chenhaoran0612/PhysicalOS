@@ -1,0 +1,4 @@
+/* Issue #68: 机器人应用 shows applications only; an application is created for a task and a brand and model. */
+.ac-none p { margin: 0; padding: 72px 20px; text-align: center; font-size: 13px; color: var(--ag-soft, #7f8d82); }
+.ac-task-note:empty, .ac-status:empty { display: none; }
+.ac-status { margin: 4px 0 12px; padding: 9px 12px; border-radius: 8px; background: var(--ag-tint, #f5f8f1); color: #35543c; }

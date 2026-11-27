@@ -101,6 +101,8 @@ class Platform:
         self.robot_models = RobotModels(self)       # issue #48: a robot's brand and model; applications and skills belong to one (after body_types)
         from .task_apps import TaskApps
         self.task_apps = TaskApps(self)             # issue #50: applications belong to the account; a task binds them (after robot_models)
+        from .model_skills import ModelSkills
+        self.model_skills = ModelSkills(self)       # issue #68: a brand and model's skills are ready; an application is made for a task (after task_apps)
         from .sim_robots import SimRobots
         self.sims = SimRobots(self, self.store.root)
         from .mujoco_sim import MujocoSim
@@ -753,6 +755,7 @@ class Platform:
         robot=self.store.get('robots',robot['id'])
         if robot['manifest_digest']!=static['robot_manifest_digest']:
             raise ValueError('设备能力版本已改变，请重新检查应用')
+        self.model_skills.install_missing(app,robot['id'])   # issue #68: a skill that comes with the app and is not on the robot yet is installed, once the check has passed
         validation=connector.request(robot['endpoint'],'/v1/validate',robot['token'],{'application':robot_caps.typed_application(self,app)})
         if validation.get('accepted') is not True:
             if self.validation_latched(validation):

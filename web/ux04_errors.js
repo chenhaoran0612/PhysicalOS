@@ -348,6 +348,9 @@ const UX_CODES = {
   task_robot_other_model: ['input', '这个任务已经绑定了另一个品牌型号的应用，不能改用这台机器人。', '先在任务页面解除这些应用的绑定，再更换机器人；或选一台同品牌型号的机器人'],
   task_app_missing: ['input', '找不到这个应用，它可能已经不在了。', '刷新页面，再从「机器人应用」里选'],
   app_no_robot: ['input', '现在没有可以使用这个应用的机器人：它所属品牌型号的机器人都不在了。', '在“我的机器人”里接入一台这个品牌型号的机器人'],
+  // Issue #68: an application is created for a task; a skill the robot lacks is installed before an on-site test.
+  app_task_required: ['input', '创建应用要先选一个任务：应用是为任务准备的。', '在表单里选一个任务；还没有任务就先到「工作台」新建一个'],
+  skill_auto_install_failed: ['device', '应用里有一个技能还没有装到这台机器人上，自动安装没有成功。', '看下面的原因；处理后再做一次现场测试，或在“我的机器人”里手动安装这个技能'],
   skill_other_model: ['input', '这个技能属于另一个品牌型号的机器人，不能用在这里。', '换成这个品牌型号自己的技能，或为它另外登记、发布一份'],
   skill_product_required: ['input', '还没有选择这个技能是给哪个品牌型号的机器人用的。', '选择品牌型号后再发布'],
   skill_product_missing: ['input', '云端的这个版本还没有说明给哪个品牌型号用。', '在“技能发布”页打开它的版本列表，点“指定品牌型号”'],

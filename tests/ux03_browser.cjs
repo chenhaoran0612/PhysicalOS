@@ -114,7 +114,7 @@ const shots = process.argv[3] || 'artifacts/ux03';
 
   // ---------------------------------------------------------------- (c) application steps use the generated form
   await go('skills');
-  await page.locator('#main [data-action="ux-adopt"]').click();
+  await page.evaluate(() => action('ux-adopt'));      // issue #68: 机器人应用 has no button for this any more
   await dlg('[data-action="ux-adopt-one"][data-id="' + quad + '|patrol"]').click();
   await dlg('.contract-line:has-text("巡逻") :text("已加入项目")').waitFor();
   const adopted = (await st()).skills.find(s => s.entrypoint === 'patrol');
