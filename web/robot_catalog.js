@@ -35,6 +35,7 @@ const ROBOT_CATALOG = [
     rcM('铜锤 M1', 'quadruped', '', ['M1']), rcM('铅球 SP1', 'wheel_legged', '', ['SP1']),
     rcM('银毅 NE01', 'humanoid', '', ['NE01']), rcM('破风者 RX', 'humanoid', '', ['RX'])]},
   {vendor: '星玑科技', aliases: ['星玑', 'xingji', 'xinji'], models: [rcM('CS1', 'quadruped', 'xingji-cs1', ['CS-DOG1'])]},
+  {vendor: 'Microduck', aliases: ['小鸭'], models: [rcM('AD-P102', 'humanoid', 'microduck-adp102', ['AD-P102 二版'])]},   // issue #63
   {vendor: '宇树科技', aliases: ['宇树', 'unitree', 'unitree robotics'], models: [
     rcM('Go2', 'quadruped', 'unitree-go2'), rcM('Go1', 'quadruped', 'unitree-go1'), rcM('A1', 'quadruped', 'unitree-a1'),
     rcM('B2', 'quadruped'), rcM('Go2-W', 'wheel_legged'), rcM('B2-W', 'wheel_legged'),

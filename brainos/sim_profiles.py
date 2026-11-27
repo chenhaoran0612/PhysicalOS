@@ -80,6 +80,10 @@ PROFILES = (
      'pose': {'*_thigh_joint': 0.35},          # estimated from the URDF: the feet come under the hips
      'source': {'private': 'xingji-cs1', 'urdf': 'robot_description.urdf', 'stand_in_shapes': True,
                 'licence_name': '厂家文件，不公开'}},
+    # Issue #63: the duck is not built from a URDF. Its model, skill models and physics engine are a kit of
+    # their own (brainos/duck_kit.py); `duck` sends 「添加仿真机器人」 there.
+    {'id': 'microduck-adp102', 'vendor': 'Microduck', 'model': 'AD-P102', 'type': 'biped', 'image': 'microduck-adp102', 'duck': True,
+     'source': {'licence_name': '厂家文件与署名非商用模型，不公开'}},
     {'id': 'neuxmind-quadruped', 'vendor': 'NeuxMind 示例', 'model': '通用四足', 'type': 'quadruped', 'image': '', 'builtin': 'quadruped'},
     {'id': 'neuxmind-arm', 'vendor': 'NeuxMind 示例', 'model': '通用六轴机械臂', 'type': 'manipulator', 'image': '', 'builtin': 'arm'},
 )
@@ -93,10 +97,12 @@ VENDOR_ALIASES = {
     '智元机器人': ('智元', 'agibot'),
     '智身科技': ('智身', 'zs', 'zsibot', 'genisom', 'genisom ai'),
     '星玑科技': ('星玑', 'xingji', 'xinji'),
+    'Microduck': ('小鸭',),
 }
 MODEL_ALIASES = {
     ('智身科技', '钢镚 L2-U'): ('钢镚 L2U', 'L2U', 'L2-U', 'L2 Ultra', 'L2W Ultra'),
     ('星玑科技', 'CS1'): ('CS-DOG1', 'csdog1'),
+    ('Microduck', 'AD-P102'): ('ADP102', 'AD-P102 二版'),
     ('云深处科技', '绝影 Lite3'): ('Lite3',),
     ('云深处科技', '山猫 M20'): ('M20',),
 }
@@ -182,6 +188,8 @@ class SimProfiles:
         """Why this profile cannot be added on this computer ('' when it can)."""
         if profile.get('builtin'):
             return ''
+        if profile.get('duck'):
+            return self.platform.duck.problem()
         if not engine:
             return '这个安装里没有 MuJoCo 仿真引擎'
         if self._package(profile) is None:
@@ -249,6 +257,8 @@ class SimProfiles:
         profile = self._profile(p.get('profile_id'))
         if profile.get('builtin'):
             return self.platform.sims.add({**p, 'kind': profile['builtin']})
+        if profile.get('duck'):
+            return self.platform.duck.add(self, profile, p)
         problem = self._problem(profile, self._engine())
         if problem:
             raise CodedError(f'「{profile["vendor"]} {profile["model"]}」现在不能添加：{problem}', 'sim_profile_unavailable')

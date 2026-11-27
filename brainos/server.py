@@ -197,6 +197,8 @@ def make_handler(application):
             extra=extra or {'/combo.js':('combo.js','text/javascript; charset=utf-8'),'/combo.css':('combo.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #54: adding a simulated robot by type, brand and model, likewise.
             extra=extra or {'/sim_profiles.js':('sim_profiles.js','text/javascript; charset=utf-8'),'/sim_profiles.css':('sim_profiles.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #63: the Microduck's skill models and their training, on the training page.
+            extra=extra or {'/duck.js':('duck.js','text/javascript; charset=utf-8'),'/duck.css':('duck.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #43: skills kept in the cloud, remote calls of a robot's skills, its programs and scene data, likewise.
             extra=extra or {'/cloud_skills.js':('cloud_skills.js','text/javascript; charset=utf-8'),'/cloud_skills.css':('cloud_skills.css','text/css; charset=utf-8'),'/remote_calls.js':('remote_calls.js','text/javascript; charset=utf-8'),'/remote_calls.css':('remote_calls.css','text/css; charset=utf-8'),'/robot_bundle.js':('robot_bundle.js','text/javascript; charset=utf-8'),'/robot_bundle.css':('robot_bundle.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #48: a robot's brand and model; applications and skills by brand and model.
@@ -237,6 +239,21 @@ def make_handler(application):
                 if picture is None:
                     return self.respond({'error':'还没有画面'},404)
                 return self.respond(picture,mime='image/png')
+            if path=='/api/duck/replay':                                    # issue #63: the recorded replay of a skill model (a video)
+                from .duck_kit import replay_response
+                wanted=parse_qs(urlparse(self.path).query).get('show',[''])[0]
+                answer=replay_response(application.workspace(user).duck.replay(wanted),self.headers.get('Range'))
+                if answer is None:
+                    return self.respond({'error':'这个技能模型没有录像'},404)
+                status,headers,body=answer
+                self.send_response(status)
+                for name,value in headers.items():
+                    self.send_header(name,value)
+                self.send_header('Cache-Control','no-store')
+                self.send_header('X-Content-Type-Options','nosniff')
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if path=='/api/state':
                 operator=bool(application.operator_email and user['email']==application.operator_email)
                 data={**application.workspace(user).snapshot(),'user':{**user,'operator':operator},
@@ -402,6 +419,9 @@ def make_handler(application):
                         'sim/mujoco/review':service.mujoco.review,'sim/mujoco/remove':service.mujoco.remove,
                         'sims/mujoco':service.mujoco.add_robot,'sims/view':service.mujoco.view,
                         'robots/run-skill':service.run_robot_skill,
+                        # issue #63: a simulated Microduck performs a trained skill model; the training progress
+                        'sims/duck/perform':service.duck.perform,'sims/duck/stop':service.duck.stop,'sims/duck/status':service.duck.status,
+                        'duck/training':service.duck.training,
                         # ux05-fix (Q7-03): global safety watch (stop not obeyed, latch guard, calibration)
                         'robots/safety':service.robot_safety,
                         'skills/examples':service.skill_examples,

@@ -38,6 +38,9 @@ DATA=[(ROOT/'web','web'),(ROOT/'runtime'/'examples'/'skills','runtime/examples/s
 DATA+=[(BUILD/'device-package','device-package')]
 # Issue #54: the robot model packages of the built-in profiles (scripts/robot_models.py). None of them is in the repository.
 DATA+=[(BUILD/'robot-models','robot_models')]
+# Issue #63: the Microduck kit (scripts/duck_kit.py): its skill model packages and the physics engine they were accepted on.
+# None of it is in the repository. The engine is a folder of its own, loaded only by the duck's physics child.
+DATA+=[(BUILD/'duck-kit','duck_kit')]
 PATHS=[ROOT,ROOT/'spec',ROOT/'runtime']
 PACKAGES=['brainos','neuxmind_spec','neuxmind_runtime']
 # Imported lazily (inside functions or by name) and therefore named explicitly.
@@ -51,6 +54,8 @@ HIDDEN=['brainos.sim_child','brainos.sim_robots','brainos.runtime_bridge','neuxm
 HIDDEN+=['brainos.mujoco_body','brainos.mujoco_tool','mujoco','mujoco.renderer','mujoco.gl_context',
          'mujoco.rendering.classic.gl_context']+(['mujoco.cgl'] if sys.platform=='darwin' else [])
 BINARIES=['mujoco']
+# Issue #63: the simulated duck's body (--adapter brainos.duck_body:body) and its physics child (--nx-duck-engine).
+HIDDEN+=['brainos.duck_body','brainos.duck_engine','brainos.duck_policy','brainos.duck_paths']
 
 
 def run(args):
@@ -86,10 +91,18 @@ def build_robot_models():
     (BUILD/'robot-models').mkdir(parents=True,exist_ok=True)
 
 
+def build_duck_kit():
+    """Issue #63: (re)build the Microduck kit into .build/duck-kit. Without the folder of its files on this
+    computer the kit is empty and the app lists the duck as not available. The summary goes to stderr."""
+    subprocess.run([sys.executable,str(ROOT/'scripts/duck_kit.py'),'build','--out',str(BUILD/'duck-kit')],cwd=ROOT,check=False,stdout=sys.stderr)
+    (BUILD/'duck-kit').mkdir(parents=True,exist_ok=True)
+
+
 def check():
     """Linux-runnable: everything the bundle is built from exists and imports cleanly."""
     problems=[]
     if not (BUILD/'robot-models'/'NOTICE.txt').is_file():build_robot_models()   # issue #54
+    if not (BUILD/'duck-kit').is_dir():build_duck_kit()   # issue #63
     if not (BUILD/'device-package'/'package.json').is_file():build_device_package()   # issue #19
     try:
         sys.path.insert(0,str(ROOT));from brainos import runtime_package;runtime_package.load(BUILD/'device-package')
@@ -106,6 +119,8 @@ def check():
         problems.append('desktop/launcher.py 不处理 --nx-sim-child（打包后无法启动仿真机器人）')
     if '--nx-mujoco-tool' not in launcher:
         problems.append('desktop/launcher.py 不处理 --nx-mujoco-tool（打包后无法检查仿真环境）')   # issue #51
+    if '--nx-duck-engine' not in launcher:
+        problems.append('desktop/launcher.py 不处理 --nx-duck-engine（打包后仿真小鸭无法运行技能模型）')   # issue #63
     code=('import importlib,sys\n'
           f'sys.path[:0]={[str(p) for p in PATHS]!r}\n'
           f'for m in {PACKAGES+HIDDEN!r}: importlib.import_module(m)\n'
@@ -214,18 +229,43 @@ def mujoco_smoke(backend,work):
     return {'mujoco':'ok','mujoco_preview':result.get('preview') is True,'mujoco_render_error':result.get('render_error','')}
 
 
+def duck_smoke(backend,work):
+    """Issue #63: the frozen backend, started as the duck's physics child, performs one skill model of the kit on the
+    engine that is packaged next to it (not the MuJoCo the rest of the bundle uses). Without a kit: says so."""
+    kit=backend.parent/'_internal'/'duck_kit'
+    packages=sorted((kit/'shows').glob('*.zip')) if (kit/'kit.json').is_file() else []
+    if not packages or not (kit/'engine'/'mujoco').is_dir():
+        return {'duck':'no kit in this build'}
+    sys.path.insert(0,str(ROOT));from brainos import duck_kit
+    work=pathlib.Path(work);package=duck_kit.unpack(packages[0],work/'package')
+    child=subprocess.Popen([str(backend),'--nx-duck-engine','--package',str(package),'--view',str(work/'view'),'--engine',str(kit/'engine')],
+                           stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,cwd=str(work))
+    try:
+        ready=json.loads(child.stdout.readline() or '{}')
+        assert ready.get('event')=='ready' and ready.get('mujoco')==duck_kit.ENGINE['mujoco'],(ready,child.stderr.read()[-800:] if child.poll() is not None else '')
+        child.stdin.write(json.dumps({'cmd':'show','id':'smoke'})+'\n');child.stdin.flush()
+        done=next((e for e in map(json.loads,child.stdout) if e.get('event')=='done'),None)
+    finally:
+        child.stdin.close();child.wait(15)
+    assert done and done.get('success') is True,done
+    return {'duck':'ok','duck_show':ready['task'],'duck_engine':ready['mujoco'],'duck_steps':done['steps'],'duck_frame':(work/'view'/'frame.png').is_file()}
+
+
 def freeze_check(out=None):
     """Freeze the backend with the same arguments as the Mac build (current OS) and smoke-test it."""
     out=pathlib.Path(out or tempfile.mkdtemp(prefix='neuxmind-freeze-'))
     out.mkdir(parents=True,exist_ok=True)
     build_device_package()   # issue #19: the bundle carries the install package
     build_robot_models()     # issue #54: and the robot model packages
+    build_duck_kit()         # issue #63: and the Microduck kit
     run([sys.executable,'-m','PyInstaller','--log-level','WARN',*pyinstaller_args(out/'dist',out/'work',out)])
     backend=out/'dist'/'brainos-server'/'brainos-server'
     with tempfile.TemporaryDirectory(prefix='neuxmind-freeze-state-') as state:
         result=smoke(backend,pathlib.Path(state))
     with tempfile.TemporaryDirectory(prefix='neuxmind-freeze-mujoco-') as work:
         result.update(mujoco_smoke(backend,work))   # issue #51
+    with tempfile.TemporaryDirectory(prefix='neuxmind-freeze-duck-') as work:
+        result.update(duck_smoke(backend,work))   # issue #63
     print(json.dumps({'ok':True,'bundle':str(out/'dist'/'brainos-server'),**result},ensure_ascii=False,indent=2))
     return result
 
@@ -248,6 +288,7 @@ def build_app():
     DIST.mkdir(exist_ok=True)
     build_device_package()   # issue #19: always from the tree being built, never an older .build copy
     build_robot_models()     # issue #54: likewise the robot model packages
+    build_duck_kit()         # issue #63: and the Microduck kit
     if not check()['ok']:
         raise SystemExit('打包内容检查未通过')
     run([sys.executable,ROOT/'scripts/prepare_agent_runtime.py','--verify-only'])

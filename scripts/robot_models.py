@@ -418,6 +418,8 @@ def build(out_dir=DEFAULT_OUT, private=None, only=None, offline=False):
             needed.setdefault((source['repo'], source['commit']), set()).update(source['paths'])
     for profile in sim_profiles.PROFILES:
         source = profile.get('source')
+        if profile.get('duck'):                     # issue #63: its kit is built by scripts/duck_kit.py
+            continue
         if not source or (only and profile['id'] not in only):
             continue
         try:

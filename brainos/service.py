@@ -107,6 +107,8 @@ class Platform:
         self.mujoco = MujocoSim(self)               # issue #51: simulation environments for applications, run with MuJoCo
         from .sim_profiles import SimProfiles
         self.sim_profiles = SimProfiles(self)       # issue #54: built-in profiles by type, brand and model; simulated robots are added from them
+        from .duck_kit import DuckKit
+        self.duck = DuckKit(self)                   # issue #63: the Microduck's model, skill models and training
         from .hardware_init import HardwareInit
         self.hardware = HardwareInit(self)      # issue #2: hardware scan and repair
         from .device_profile import DeviceProfile
@@ -179,6 +181,7 @@ class Platform:
                 obj.pop('body_applied', None)
         result['sim_kinds'] = self.sims.kinds()
         result['sim_catalog'] = self.sim_profiles.catalog()     # issue #54
+        result['duck_kit'] = self.duck.catalog()                # issue #63
         from . import sim_profiles
         result['product_aliases'] = sim_profiles.aliases()      # issue #54: other spellings of a brand and model
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
