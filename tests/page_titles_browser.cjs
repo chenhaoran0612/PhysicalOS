@@ -22,7 +22,8 @@ const STYLE = ['fontSize', 'fontWeight', 'letterSpacing', 'color', 'marginBottom
   const check = (condition, message) => { if (!condition) throw Error(message); };
   const main = page.locator('#main');
   // The head of the page that is open: the lines of its title block in order, and how the two are drawn.
-  const head = () => main.locator('.page-head').first().evaluate((el, props) => {
+  const readHead = () => main.locator('.page-head').first().evaluate((el, props) => {
+    if (!el.isConnected) return null;              // drawn anew between finding it and reading it: its styles read empty
     const block = el.firstElementChild, eyebrow = block.querySelector('.eyebrow'), title = block.querySelector('h1');
     const drawn = node => node ? Object.fromEntries(props.map(p => [p, getComputedStyle(node)[p]])) : null;
     const box = node => node ? node.getBoundingClientRect() : null;
@@ -34,6 +35,15 @@ const STYLE = ['fontSize', 'fontWeight', 'letterSpacing', 'color', 'marginBottom
       eyebrowLeft: box(eyebrow)?.left, titleLeft: box(title)?.left, gap: box(title) && box(eyebrow) ? box(title).top - box(eyebrow).bottom : null,
     };
   }, STYLE);
+  // Some pages draw themselves once more right after they open (the run records' first answer on 仿真试运行 and the other
+  // record pages, 云平台账户 when its account arrives). A head replaced that way is read again; what is checked is unchanged.
+  const head = async () => {
+    for (let round = 0; round < 5; round += 1) {
+      const at = await readHead();
+      if (at) return at;
+    }
+    throw Error('The page head was replaced five times while it was being read');
+  };
 
   await page.goto(cfg.url);
   await gateSignIn(page, {name: '标题统一验收', email: `titles-${crypto.randomBytes(4).toString('hex')}@example.test`,
