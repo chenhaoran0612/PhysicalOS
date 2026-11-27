@@ -45,15 +45,18 @@ const engine = process.env.BRAIN_BROWSER === 'webkit' ? playwright.webkit : play
     const helper = await api('sims', {profile_id: profile.id});            // a robot of that brand and model, to make the application for
     await refresh(true);
     const robot = state.robots.find(r => r.id === helper.id);
+    // Issue #69: the bundled packages are per brand and model; patrol is for the example quadruped, status_report for all.
+    const offered = (await api('skills/examples', {robot_id: helper.id})).items.map(i => i.example);
+    const entry = offered.includes('patrol') ? 'patrol' : 'status_report';
     const task = await api('projects', {name: '仓库巡检', objective: '从门口走到货架，绕场一圈回到起点'});
     const bare = await api('projects', {name: '还没想好', objective: '以后再说'});
-    const skill = await api('skills', {project_id: task.id, name: '绕场巡逻', version: '1.0', requires: ['navigation.goal'], entrypoint: 'patrol',
+    const skill = await api('skills', {project_id: task.id, name: '绕场巡逻', version: '1.0', requires: ['navigation.goal'], entrypoint: entry,
       success_condition: '回到起点', stop_condition: '超时', model_ids: [], robot_id: robot.id});
     const app = await api('applications', {project_id: task.id, name: '巡检应用', version: '1.0', robot_id: robot.id,
-      steps: [{skill_id: skill.id, parameters: {waypoints: [[0.6, 0.0], [0.0, 0.0]], loops: 1}, timeout_s: 60}]});
+      steps: [{skill_id: skill.id, parameters: entry === 'patrol' ? {waypoints: [[0.6, 0.0], [0.0, 0.0]], loops: 1} : {}, timeout_s: 60}]});
     await api('task-apps/bind', {project_id: task.id, application_id: app.id});
     await refresh(true);
-    return {profile, task, bare, product: robot.product, helper: robot.id};
+    return {profile, task, bare, product: robot.product, helper: robot.id, entry};
   });
   must(made.product && made.product.vendor, 'The helper robot reports no brand and model: ' + JSON.stringify(made.product));
   const physics = !made.profile.builtin;
@@ -102,9 +105,9 @@ const engine = process.env.BRAIN_BROWSER === 'webkit' ? playwright.webkit : play
   } else {
     await root.locator('.tsim-map svg').waitFor();
   }
-  const skill = root.locator('[data-tsim-skill="patrol"]');
+  const skill = root.locator(`[data-tsim-skill="${made.entry}"]`);
   await eventually(async () => (await skill.innerText()).includes('已安装'), 'The skill of the task\'s application was not installed on entering');
-  must((await skill.innerText()).includes('第 1 步') && (await skill.innerText()).includes('loops = 1'), 'The skill does not show the values of its step');
+  must((await skill.innerText()).includes('第 1 步') && (made.entry !== 'patrol' || (await skill.innerText()).includes('loops = 1')), 'The skill does not show the values of its step');
   await eventually(async () => !(await skill.locator('[data-tsim-run]').isDisabled()), 'The skill cannot be run after entering');
   await shot('sim66-04-entered');
 
