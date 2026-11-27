@@ -199,6 +199,8 @@ def make_handler(application):
             extra=extra or {'/robot_model.js':('robot_model.js','text/javascript; charset=utf-8'),'/robot_model.css':('robot_model.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #50: the page of a task (its bound applications), and binding on 机器人应用.
             extra=extra or {'/task_apps.js':('task_apps.js','text/javascript; charset=utf-8'),'/task_apps.css':('task_apps.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #57: every page of the sidebar is titled the way 工作台 is.
+            extra=extra or {'/page_titles.js':('page_titles.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
