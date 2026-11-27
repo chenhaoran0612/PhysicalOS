@@ -160,7 +160,7 @@ let failed = async () => {};
   await dialog.waitFor({state: 'hidden'});
 
   // 6 ---- the form of a skill has the same two controls, filled in when every robot is of one brand and model
-  await page.goto(cfg.url + '/#skills');
+  await page.goto(cfg.url + '/#app-skills');      // issue #60: the skills have a page of their own
   await page.locator('#main [data-action="skill-add"]').first().click();
   const skill = dialog.locator('form[data-form=skill]');
   await skill.waitFor();
