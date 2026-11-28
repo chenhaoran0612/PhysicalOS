@@ -76,6 +76,21 @@ TEXT_FORMATS = frozenset(("markdown", "text", "yaml", "json", "xml", "urdf"))
 # never a page of this origin: routes/library.py) and parsed from the text taken out of it (material_extract).
 TEXT_FORMATS = TEXT_FORMATS | {"html"}
 _GROUPS = (*_GROUPS[:4], ("网页", ("html",)), *_GROUPS[4:])
+# Issue #77: a robot model may also be MJCF (MuJoCo's own format, an .xml with the root <mujoco>), SDF (Gazebo)
+# or USD (Isaac Sim). These are taken only as robot models (library_model.py), never as documents: they are in
+# BY_ID (an upload and a material name their format) but not in FORMATS, EXTENSIONS or the upload sentence.
+MODEL_ONLY = (
+    Format("mjcf", "MJCF", MODEL, (".xml",)),
+    Format("sdf", "SDF", MODEL, (".sdf",)),
+    Format("usd", "USD", MODEL, (".usd", ".usda", ".usdc")),
+    Format("usdz", "USDZ", MODEL, (".usdz",)),
+    Format("stp", "STP", MODEL, (".stp", ".step")),        # STEP (ISO 10303-21) CAD geometry, asked for on 2026-11-28
+)
+BY_ID = {**BY_ID, **{fmt.id: fmt for fmt in MODEL_ONLY}}
+TEXT_FORMATS = TEXT_FORMATS | {"mjcf", "sdf"}
+_MODEL_ROOTS = {"mjcf": (re.compile(rb"<mujoco[\s>/]"), "MJCF 的 <mujoco>"), "sdf": (re.compile(rb"<sdf[\s>/]"), "SDF 的 <sdf>")}
+_USD_MAGIC = (b"#usda ", b"PXR-USDC")
+_STEP_MAGIC = b"ISO-10303-21"
 
 
 def supported_text() -> str:
@@ -182,13 +197,15 @@ def _text_head(fmt: Format, head: bytes, whole: bool, strict: bool) -> None:
     first = plain.lstrip(b" \t\r\n")[:1]
     if fmt.id == "json" and first not in (b"{", b"["):
         raise Unsupported("内容不是 JSON 对象或数组")
-    if fmt.id in ("xml", "urdf") and first != b"<":
+    if fmt.id in ("xml", "urdf", "mjcf", "sdf") and first != b"<":
         raise Unsupported("内容不是 XML")
     if fmt.id == "html" and first != b"<":
         raise Unsupported("内容不是 HTML 网页")
     # A long licence comment may come first: only what is certainly the whole start decides.
     if fmt.id == "urdf" and (whole or strict) and not _ROBOT_TAG.search(plain):
         raise Unsupported("内容里没有 URDF 的 <robot> 元素")
+    if fmt.id in _MODEL_ROOTS and (whole or strict) and not _MODEL_ROOTS[fmt.id][0].search(plain):
+        raise Unsupported(f"内容里没有 {_MODEL_ROOTS[fmt.id][1]} 元素")
 
 
 # ------------------------------------------------------------------ archives
@@ -264,12 +281,20 @@ def check_head(fmt: Format, head: bytes, *, whole: bool, strict: bool = False) -
     ``head`` is too short to decide (used once the file is complete)."""
     if fmt.id in TEXT_FORMATS:
         return _text_head(fmt, head, whole, strict)
+    if fmt.id == "usd":                                # issue #77: text (.usda) or binary (.usdc); .usd is either
+        if not head.startswith(_USD_MAGIC):
+            raise Unsupported("内容不是 USD 文件")
+        return None
+    if fmt.id == "stp":                                # issue #77: a STEP file starts with its standard's name
+        if not head.removeprefix(_BOM).lstrip(b" \t\r\n").startswith(_STEP_MAGIC):
+            raise Unsupported("内容不是 STEP（ISO 10303-21）文件")
+        return None
     if fmt.id == "pdf":
         if b"%PDF-" not in head[:_PDF_HEADER_WINDOW]:   # readers accept the header anywhere in the first 1024 bytes
             raise Unsupported("内容不是 PDF")
-    elif fmt.id in ("docx", "xlsx", "zip"):
+    elif fmt.id in ("docx", "xlsx", "zip", "usdz"):
         if not head.startswith(_ZIP_LOCAL):
-            raise Unsupported("内容不是 ZIP 结构" if fmt.id == "zip" else f"内容不是 {fmt.label} 文档")
+            raise Unsupported("内容不是 ZIP 结构" if fmt.id in ("zip", "usdz") else f"内容不是 {fmt.label} 文档")
     elif fmt.id in ("doc", "xls"):
         if not head.startswith(_OLE_MAGIC):
             raise Unsupported(f"内容不是 {fmt.label} 文档")
@@ -350,7 +375,7 @@ def check_file(fmt: Format, path: str, size: int) -> None:
                 check.feed(block, final=remaining == 0)
     if fmt.id in _OFFICE_MEMBER:
         _office_members(fmt, path, size)
-    elif fmt.id == "zip":
+    elif fmt.id in ("zip", "usdz"):
         if _ZIP_END not in _zip_tail(path, size):
             raise Unsupported("内容不是完整的 ZIP 压缩包")
     elif fmt.id in _OLE_STREAMS:

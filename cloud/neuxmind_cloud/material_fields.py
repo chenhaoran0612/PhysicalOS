@@ -61,7 +61,7 @@ DOCUMENT_FIELDS = (
     Field("actions", "装好后应该出现的动作", NAMED_LIST, False, "动作名和动作类型；没有动作的驱动可以不填"),
 )
 URDF_FIELDS = (
-    Field("robot_name", "机器人名称（URDF 里写的）", TEXT, False, max_len=MAX_NAME),
+    Field("robot_name", "机器人名称（模型文件里写的）", TEXT, False, max_len=MAX_NAME),
     Field("links", "连杆", TEXT_LIST, True, max_len=MAX_NAME, max_items=MAX_LINKS),
     Field("joints", "关节和上限", JOINTS, True, "位置上限：转动关节是弧度，移动关节是米；速度：rad/s 或 m/s；力矩：N·m 或 N",
           max_items=MAX_JOINTS),
@@ -174,6 +174,10 @@ def _joints(value, max_items: int) -> list[dict]:
         kept = {key: _text(raw.get(key), 200) for key in LIMIT_KEYS if _text(raw.get(key), 200)}
         if kept:
             joint["raw"] = kept
+        # Issue #77: limits the model's format has no place for (MJCF has no velocity limit): not asked for.
+        unstated = item.get("unstated") if isinstance(item.get("unstated"), list) else []
+        if any(key in unstated for key in LIMIT_KEYS):
+            joint["unstated"] = [key for key in LIMIT_KEYS if key in unstated]
         out.append(joint)
     return out[:max_items]
 
@@ -220,7 +224,8 @@ def _joint_gaps(joint: dict) -> list[str]:
         return []
     wanted = ("velocity", "effort") if joint["type"] == "continuous" else LIMIT_KEYS
     names = {"lower": "位置下限", "upper": "位置上限", "velocity": "速度上限", "effort": "力矩上限"}
-    return [names[key] for key in wanted if joint.get(key) is None]
+    unstated = joint.get("unstated") or ()
+    return [names[key] for key in wanted if joint.get(key) is None and key not in unstated]
 
 
 def missing(kind: str, values: dict, not_applicable=()) -> list[str]:

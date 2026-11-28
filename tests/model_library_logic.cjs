@@ -1,6 +1,7 @@
 // Pure-logic checks of web/model_library.js and web/mujoco_sim.js (issue #51): which brands and models an
 // upload can be for, which robot model is the one in use, what the upload form sends, what cannot be a robot
 // model, which buttons an environment has in each state, and that names from the cloud are shown as text.
+// Issue #77: which brand and model the page shows, its row of brands and models, the robot model's rows.
 // The rules themselves are in brainos/model_library.py, brainos/mujoco_sim.py and the cloud.
 //   node tests/model_library_logic.cjs
 const {readFileSync} = require('node:fs');
@@ -34,7 +35,7 @@ const sandbox = {
 vm.createContext(sandbox);
 const lib = vm.runInContext(['combo.js', 'robot_catalog.js', 'cloud_auto_login.js', 'material_library.js', 'model_library.js', 'mujoco_sim.js']
   .map(name => readFileSync('web/' + name, 'utf8')).join('\n') + `
-;({mlKey, mlLabel, mlProducts, mlModelsOf, mlModelPrecheck, mlLabels, mlKnown, mlProductFields, mlVendorChoices, mlOwned, rcModelChoices, mlTypedSync, mlModelsPanel, mlState, materialRow, materialFilters,
+;({mlKey, mlLabel, mlProducts, mlModelsOf, mlModelPrecheck, mlLabels, mlKnown, mlProductFields, mlVendorChoices, mlOwned, rcModelChoices, mlTypedSync, mlPick, mlProductsBar, mlModelNotice, mlState, materialRow, materialFilters,
    materialLibrary, MATERIAL_KINDS, api, mjSceneActions, mjTouchText, mjSceneCard, mjBody, mjBusyScene, simKindLabel})`, sandbox);
 let checks = 0;
 const check = (actual, expected, what) => { assert.deepEqual(JSON.parse(JSON.stringify(actual ?? null)), expected, what); checks += 1; };
@@ -70,6 +71,17 @@ const ACME = {vendor: 'Acme Robotics', model: 'Go-7'};
   includes(lib.mlModelPrecheck({name: 'dog.xacro', size: 10}, formats), '.xacro 要先展开', 'xacro is turned away');
   includes(lib.mlModelPrecheck({name: 'dog.zip', size: 2000}, formats), '太大', 'over the limit');
   includes(lib.mlModelPrecheck({name: 'dog.urdf', size: 0}, formats), '空文件', 'empty');
+  // issue #77: without the cloud's list, the page's own: MJCF, SDF, USD and STP as well
+  for (const name of ['duck.xml', 'robot.sdf', 'robot.usda', 'robot.usdz', 'robot.stp', 'robot.STEP']) check(lib.mlModelPrecheck({name, size: 10}, null), '', name);
+  includes(lib.mlModelPrecheck({name: 'manual.pdf', size: 10}, null), 'STP（.stp、.step）', 'the refusal names every format');
+
+  // ---- issue #77: which brand and model the page shows
+  const two = [{...ACME}, {vendor: 'Microduck', model: 'AD-P102'}], duckKey = 'microduck\nad-p102';
+  check(lib.mlPick(two, duckKey, ''), duckKey, 'the one chosen');
+  check(lib.mlPick(two, 'gone\nx', duckKey), duckKey, 'else the one chosen last in this browser');
+  check(lib.mlPick(two, '', 'gone\nx'), '', 'with several and none of them chosen: none, the person chooses');
+  check(lib.mlPick([ACME], '', ''), 'acme robotics\ngo-7', 'the only one is chosen');
+  check(lib.mlPick([], '', duckKey), '', 'none');
 
   // ---- what an upload sends
   const products = [{...ACME, family: 'quadruped', robots: ['一号']}];
@@ -112,26 +124,59 @@ const ACME = {vendor: 'Acme Robotics', model: 'Go-7'};
   }
   // ---- the pages
   check(lib.MATERIAL_KINDS.model, '机器人模型', 'the kind has a name');
+  lib.mlState.products = [{...products[0], materials: 3, usable_models: 1}, {vendor: '<b>Evil</b>', model: 'X', family: 'other', robots: [], materials: 0}];
+  lib.mlState.selected = 'acme robotics\ngo-7';
+  const bar = lib.mlProductsBar();
+  includes(bar, 'data-ml-action="product" data-id="acme robotics\ngo-7" aria-pressed="true"', 'the chosen one is pressed');
+  includes(bar, '3 份资料 · 有仿真模型', 'with how many materials and whether a simulation has its model');
+  includes(bar, '&lt;b&gt;Evil&lt;/b&gt; X', 'a brand is text');
+  includes(bar, '还没有资料', 'a brand and model without materials says so');
+  excludes(bar, '<b>Evil', 'no markup from a brand');
+  lib.mlState.products = [];
+  const none = lib.mlProductsBar();
+  includes(none, '还没有品牌型号', 'without any brand and model');
+  includes(none, 'data-library-action="upload"', 'and a way on');
   lib.mlState.products = products;
   lib.mlState.models = [{id: 'mat_1', kind: 'model', ...ACME, status: 'parsed', filename: '<img src=x onerror=alert(1)>.urdf', version: '1', size: 10,
     created_at: 1, status_detail: '缺：关节 <b>hip</b> 的位置上限'}];
   lib.mlState.modelsLoaded = true;
-  const panel = lib.mlModelsPanel();
-  includes(panel, '还没有可用的机器人模型', 'a brand and model without a confirmed model says so');
-  includes(panel, '&lt;img src=x onerror=alert(1)&gt;.urdf', 'a file name is text');
-  includes(panel, '缺：关节 &lt;b&gt;hip&lt;/b&gt;', 'what is missing is text');
-  excludes(panel, '<img src=x', 'no markup from a file name');
-  includes(panel, 'data-ml-action="upload-model"', 'the model has its own upload');
+  const waiting = lib.mlModelNotice(ACME);
+  includes(waiting, '1 份机器人模型还没有确认为“可用”', 'an unconfirmed model is waiting for a person');
+  includes(waiting, 'data-ml-action="upload-model"', 'a model can be uploaded from the notice');
+  includes(lib.mlModelNotice({vendor: 'Other', model: 'X'}), '还没有可用的机器人模型', 'none at all');
+  lib.mlState.models.push({id: 'mat_9', kind: 'model', ...ACME, status: 'usable', format: 'mjcf', filename: '<i>duck</i>.xml', version: '2', size: 10, created_at: 5,
+    body_type: 'quadruped', sha256: 'e'.repeat(64)});
+  const inUse = lib.mlModelNotice(ACME);
+  includes(inUse, '仿真使用的机器人模型：<b>&lt;i&gt;duck&lt;/i&gt;.xml</b>', 'the model in use, as text');
+  excludes(inUse, 'upload-model', 'nothing to ask for');
+  const modelRow = lib.materialRow(lib.mlState.models[1]);
+  includes(modelRow, '仿真使用中', 'its row says a simulation uses it');
+  includes(modelRow, '机器人模型 · MJCF', 'and names its format');
+  const olderRow = lib.materialRow({...lib.mlState.models[1], id: 'mat_8', created_at: 1});
+  includes(olderRow, '>usable<', 'an older confirmed one keeps its own state (named by material_parse.js, not loaded here)');
+  excludes(olderRow, '仿真使用中', 'and not in use');
   const row = lib.materialRow({id: 'mat_2', filename: 'a.md', kind: 'document', format: 'markdown', size: 1, body_type: 'quadruped', ...ACME,
     version: '1', status: 'parsing', sha256: 'f'.repeat(64), created_at: 1});
   includes(row, 'data-ml-action="move"', 'a material can be moved');
-  includes(lib.materialFilters(), 'data-ml-filter', 'the list can be narrowed to a brand and model');
+  excludes(lib.materialFilters(), 'data-ml-filter', 'the brand and model are chosen above the list, not in its filters');
 
   // ---- the library overview comes with the brands and models; a device's materials are its brand and model's
   sandbox.answers = {'library/products': {products, formats: {model: formats, formats: []}, materials: [], total: 0},
     'library/robot': {materials: [{id: 'mat_3'}], total: 1, product: ACME, shared_with: ['二号']}};
+  lib.mlState.selected = '';
+  sandbox.answers['library/list'] = {materials: [{id: 'acme-only'}], total: 1};
   const overview = await lib.api('library/overview', {limit: 5});
-  check([calls.at(-1)[0], overview.products.length, lib.mlState.modelFormats.max_bytes], ['library/products', 1, 1000], 'the overview');
+  check([calls.at(-2)[0], overview.products.length, lib.mlState.modelFormats.max_bytes], ['library/products', 1, 1000], 'the overview');
+  check([calls.at(-1), overview.materials, lib.mlState.selected, lib.materialLibrary.filter.vendor],
+    [['library/list', {body_type: '', q: '', vendor: 'Acme Robotics', model: 'Go-7', limit: 5, offset: 0}], [{id: 'acme-only'}], 'acme robotics\ngo-7', 'Acme Robotics'],
+    'the only brand and model is chosen, and the first page is its materials');
+  lib.mlState.extra = {vendor: 'ACME ROBOTICS', model: 'go-7', family: 'quadruped', robots: []};
+  await lib.api('library/overview', {limit: 5, vendor: 'Acme Robotics', model: 'Go-7'});
+  check(lib.mlState.extra, null, 'a just-uploaded brand and model is no longer added once the server lists it');
+  const again = calls.length;
+  await lib.api('library/overview', {limit: 5, vendor: 'Acme Robotics', model: 'Go-7'});
+  check(calls.length - again, 1, 'asked for the chosen one already: one request');
+  delete sandbox.answers['library/list'];
   const mine = await lib.api('library/list', {device_id: 'robot-1', limit: 200});
   check([calls.at(-1), mine.materials.length, lib.mlState.robots['robot-1'].shared], [['library/robot', {robot_id: 'robot-1', project_id: 'project-1'}], 1, ['二号']],
     'a device\'s materials are asked for by robot');

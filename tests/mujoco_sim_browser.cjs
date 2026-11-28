@@ -1,9 +1,9 @@
 // Issue #51 browser acceptance: the library belongs to brands and models, the robot model is kept apart,
 // and an application is simulated with MuJoCo.
-//   1 · 资料库 shows one line per brand and model under 机器人模型, empty at first.
-//   2 · A robot model (a .zip with a URDF and a mesh) is uploaded for the brand and model, read by the cloud,
-//       checked and confirmed by a person: it becomes the one in use.
-//   3 · A document is uploaded by choosing the brand and model (no typing), and the list narrows to one.
+//   1 · 资料库 starts from the brand and model (issue #77: chosen on top; robot models are in its list).
+//   2 · A robot model (a .zip with a URDF and a mesh) is uploaded for the brand and model (用途 机器人模型), read
+//       by the cloud, checked and confirmed by a person: its row says 仿真使用中.
+//   3 · A document is uploaded by choosing the brand and model (no typing); both are listed together.
 //   4 · The application's checklist opens 仿真环境: an empty environment is built, previewed and confirmed,
 //       and a simulated robot of the application's brand and model starts in it, with a live picture.
 //   5 · The engineering assistant writes an environment from the application; its objects are listed for review.
@@ -50,18 +50,25 @@ const PRODUCT = 'Acme Robotics Go-7';
     await page.locator('#navigation a[href="#library"]').click();
     await main.locator('h1', {hasText: '资料库'}).waitFor();
 
-    // 1 · One line per brand and model, and it says what is missing.
-    const modelRow = main.locator('.ml-model-row', {hasText: PRODUCT});
-    await modelRow.waitFor();
-    await modelRow.locator('.ml-model-none').waitFor();
-    must((await modelRow.innerText()).includes('一号狗'), 'The brand and model does not name its robot: ' + await modelRow.innerText());
+    // 1 · Issue #77: the page starts from the brand and model (the only one is chosen); no section of its own
+    //     for robot models; above the list it says that a simulation has no model yet.
+    const chip = main.locator('[data-ml-action="product"][aria-pressed="true"]', {hasText: PRODUCT});
+    await chip.waitFor();
+    must((await main.locator('h2', {hasText: PRODUCT + ' 的资料'}).count()) === 1, 'The list is not the chosen brand and model\'s');
+    must(!(await main.innerText()).includes('机器人模型（URDF）') && await main.locator('.ml-model-row').count() === 0, 'Robot models still have a section on top');
+    const note = main.locator('#ml-model-note');
+    await note.locator('[data-ml-action="upload-model"]').waitFor();
+    must((await note.innerText()).includes('还没有可用的机器人模型'), 'It does not say that the simulation has no model: ' + await note.innerText());
     await shot('1-library-empty');
 
-    // 2 · Upload the robot model for that brand and model, confirm what was read.
-    await modelRow.locator('[data-ml-action="upload-model"]').click();
-    const upload = dialog.locator('form[data-ml-form="upload-model"]');
+    // 2 · Upload the robot model through the one upload form (用途 机器人模型), confirm what was read.
+    await note.locator('[data-ml-action="upload-model"]').click();
+    const upload = dialog.locator('form[data-library-form="upload"][data-ml-upload]');
     await upload.waitFor();
-    must((await upload.locator('input[type=file]').getAttribute('accept')).split(',').includes('.urdf'), 'The chooser does not offer .urdf');
+    must(await upload.locator('input[name=purpose][value=model]').isChecked(), 'The form is not for a robot model');
+    const accepted = (await upload.locator('input[type=file]').getAttribute('accept')).split(',');
+    must(['.urdf', '.xml', '.sdf', '.usd', '.stp'].every(e => accepted.includes(e)), 'The chooser does not offer every model format: ' + accepted);
+    must(!(await upload.locator('input[type=file]').evaluate(i => i.multiple)), 'A robot model is one file');
     must(await upload.locator('[data-ml-typed]').isHidden(), 'The body type is asked although the robot has one');
     // issue #61: the brand and model are two boxes, filled in with those of the robot
     must(`${await upload.locator('[name=vendor]').inputValue()} ${await upload.locator('[name=model]').inputValue()}` === PRODUCT, 'The brand and model is not filled in');
@@ -73,8 +80,9 @@ const PRODUCT = 'Acme Robotics Go-7';
     await upload.locator('input[type=file]').setInputFiles({name: 'demo_dog.zip', mimeType: 'application/zip', buffer: await fixtureFile('dog.zip')});
     await upload.locator('[type=submit]').click();
     await main.locator('.material-upload.good', {hasText: 'demo_dog.zip'}).waitFor({timeout: 30000});
-    const file = modelRow.locator('.ml-model-file', {hasText: 'demo_dog.zip'});
+    const file = page.locator('#material-list tbody tr', {hasText: 'demo_dog.zip'});
     await file.waitFor({timeout: 30000});
+    must((await file.innerText()).includes('机器人模型'), 'The robot model is not listed as one: ' + await file.innerText());
     await eventually(async () => {
       if ((await file.innerText()).includes('待确认')) return true;
       await main.locator('.page-head [data-library-action="refresh"]').click();
@@ -82,7 +90,7 @@ const PRODUCT = 'Acme Robotics Go-7';
       return false;
     }, 'the robot model was not read by the cloud');
     await shot('2-model-parsed');
-    await file.locator('button', {hasText: '核对并确认'}).click();
+    await file.locator('button', {hasText: '解析结果'}).click();
     await dialog.locator('.mp-result, .mp-panel, form').first().waitFor();
     const joints = await dialog.innerText();
     must(joints.includes('fl_thigh_joint') && joints.includes('demo_dog'), 'The parsed joints of the robot model are not shown: ' + joints.slice(0, 300));
@@ -90,13 +98,15 @@ const PRODUCT = 'Acme Robotics Go-7';
     await eventually(async () => (await dialog.innerText()).includes('可用') && !(await dialog.innerText()).includes('待确认'), 'the robot model was not confirmed');
     await dialog.locator('.close-dialog').click();
     await main.locator('.page-head [data-library-action="refresh"]').click();
-    await modelRow.locator('.ml-model-file', {hasText: '当前使用'}).waitFor({timeout: 15000});
+    await eventually(async () => (await file.innerText()).includes('仿真使用中'), 'the confirmed model does not say a simulation uses it', 15000);
+    await note.locator('.ml-model-in-use', {hasText: 'demo_dog.zip'}).waitFor();
     await shot('2-model-in-use');
 
-    // 3 · A document for the same brand and model: chosen, not typed; the list narrows to it.
+    // 3 · A document for the same brand and model: chosen, not typed; listed with the model.
     await main.locator('.page-head [data-library-action="upload"]').click();
     const doc = dialog.locator('form[data-library-form="upload"]');
     await doc.waitFor();
+    must(await doc.locator('input[name=purpose][value=document]').isChecked(), 'The upload is not for a document by default');
     await doc.locator('input[type=file]').setInputFiles({name: '说明.md', mimeType: 'text/markdown', buffer: Buffer.from('# 驱动说明\n')});
     await doc.locator('[name=version]').fill('1.0');
     await doc.locator('[type=submit]').click();
@@ -104,8 +114,8 @@ const PRODUCT = 'Acme Robotics Go-7';
     await docRow.waitFor({timeout: 30000});
     must((await docRow.innerText()).includes('Acme Robotics / Go-7'), 'The document is not labelled with the chosen brand and model: ' + await docRow.innerText());
     must(await docRow.locator('[data-ml-action="move"]').count() === 1, 'A material cannot be moved to another brand and model');
-    await main.locator('[data-ml-filter]').selectOption({label: PRODUCT});
-    await eventually(async () => await page.locator('#material-list tbody tr').count() === 2, 'the list did not narrow to the brand and model');
+    await eventually(async () => await page.locator('#material-list tbody tr').count() === 2, 'the model and the document are not listed together');
+    await eventually(async () => (await chip.innerText()).includes('2 份资料'), 'the brand and model does not count what was just stored');
     await shot('3-library');
 
     // 4 · The application's simulation: empty environment, preview, confirmation, robot, picture.

@@ -106,6 +106,7 @@ class _Finish:
     error: str = ""
     extracted: dict = field(default_factory=dict)
     knowledge_id: str | None = None
+    kept: str = ""                   # issue #77: a model the simulation cannot load (SDF, USD): 「已入库」 with these words
 
 
 @dataclass
@@ -151,7 +152,8 @@ def _urdf_values(facts: dict) -> tuple[dict, list]:
         raw = joint.get("raw") if isinstance(joint.get("raw"), dict) else {}
         kept = {k: v for k, v in raw.items() if fields.number(v) is None}
         joints.append({**{k: joint.get(k) for k in ("name", "type", "parent", "child", *fields.LIMIT_KEYS)},
-                       **({"raw": kept} if kept else {})})
+                       **({"raw": kept} if kept else {}),
+                       **({"unstated": joint["unstated"]} if isinstance(joint.get("unstated"), list) else {})})   # issue #77
     values = {"robot_name": facts.get("robot_name"), "links": facts.get("links"), "joints": joints}
     return values, [w for w in facts.get("warnings") or [] if isinstance(w, str)]
 
@@ -218,6 +220,9 @@ def _rules_step(job: _Job, settings: Settings, store: LibraryStore) -> _Finish:
         return _Finish(values, "rules", error=exc.message)
     except FileNotFoundError:
         return _Finish({}, "rules", error="这份资料的文件已经不在云端")
+    if library_model.kept_only(facts):          # issue #77: SDF / USD are kept, not read
+        return _Finish({}, "rules", warnings=[w for w in facts.get("warnings") or [] if isinstance(w, str)],
+                       extracted={"facts": facts}, kept=library_model.kept_detail(facts))
     if job.kind == fields.URDF:
         values, warnings = _urdf_values(facts)
     else:
@@ -525,6 +530,8 @@ def _finish(s: Session, row: MaterialParse, material: Material, outcome: _Finish
     row.confirmed_by = row.confirmed_by_email = ""
     row.confirmed_at = None
     status, detail = (PARSE_FAILED, outcome.error) if outcome.error else _state(row, values, gaps)
+    if outcome.kept and not outcome.error:
+        status, detail = STORED, outcome.kept
     if outcome.error and gaps and any(v for v in values.values() if v not in (None, "", [])):
         detail = f"{outcome.error}（{fields.missing_text(gaps)}）"
     library.set_parse_state(s, material, status, detail)
@@ -723,7 +730,17 @@ def view(material: Material, job: MaterialParse | None) -> dict:
             "retrying": bool(job and not done and job.error), "parser": job.parser if job else "",
             "revision": job.revision if job else 0, "edited_by": job.edited_by_email if job else "",
             "edited_at": job.edited_at if job else None, "confirmed_by": job.confirmed_by_email if job else "",
-            "confirmed_at": job.confirmed_at if job else None, "editable": done}
+            "confirmed_at": job.confirmed_at if job else None, "editable": done,
+            **_kept_view(job)}
+
+
+def _kept_view(job: MaterialParse | None) -> dict:
+    """Issue #77: a model the simulation cannot load is kept only: nothing to check, and the result says so."""
+    facts = (job.extracted or {}).get("facts") if job is not None and job.stage == DONE else None
+    if not library_model.kept_only(facts):
+        return {}
+    return {"editable": False, "kept_only": library_model.kept_only(facts),
+            "note": "这份机器人模型只保存在资料库里：仿真（MuJoCo）暂时用不了 SDF、USD 和 STP，不需要核对或确认。"}
 
 
 def get_result(session: Session, p, material_id: str) -> dict:
@@ -741,6 +758,7 @@ def _edit(session: Session, p, material_id: str, payload) -> tuple[Material, Mat
     job = _job(session, material_id, lock=True)
     if job is None or job.stage != DONE:
         raise conflict("这份资料还在解析，解析完才能修改或确认", code="parse_running")
+    library_model.refuse_edit(job)              # issue #77
     if type(payload.get("revision")) is not int or payload["revision"] != job.revision:
         raise ApiError(409, "parse_changed", "这份解析结果刚被修改过（可能是别人，也可能是重新解析），请刷新后再改",
                        revision=job.revision)

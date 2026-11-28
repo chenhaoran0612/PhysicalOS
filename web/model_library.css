@@ -1,19 +1,45 @@
-/* Issue #51: the library by brand and model, and the robot models (web/model_library.js). Tokens of style.css. */
-.ml-models { display: grid; }
-.ml-model-row { display: grid; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--line, #e2e8e2); }
-.ml-model-row:first-child { border-top: 0; }
-.ml-model-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
-.ml-model-head b { font-size: 13px; color: var(--ink, #24332e); overflow-wrap: anywhere; }
-.ml-model-head .cell-sub { flex: 1 1 200px; font-family: inherit; }
-.ml-model-files { display: grid; gap: 8px; }
-.ml-model-file { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 12px; border-radius: 8px; background: #fbfcfa; }
-.ml-model-file .cell-main { overflow-wrap: anywhere; }
-.ml-model-file .cell-sub { font-family: inherit; }
-.ml-model-file .button-row { margin-left: auto; }
-.ml-model-none { font-size: 11px; color: var(--amber, #9b702a); }
-.ml-model-older summary { cursor: pointer; font-size: 11px; color: var(--muted, #7b8780); }
-.ml-model-older[open] summary { margin-bottom: 8px; }
+/* Issue #51: the library by brand and model (web/model_library.js). Tokens of style.css.
+   Issue #77: the page starts from a row of brands and models; robot models are rows of the list. */
+:root { --ml-chip-line: #dbe4d1; --ml-chip-on: #eaf3df; --ml-chip-move: .16s; }
+
+.ml-products { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin-bottom: 24px; }
+.ml-products-label { flex: 0 0 100%; font-size: 9px; letter-spacing: 1.6px; font-weight: 600; color: #8a9a8d; }
+.ml-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 170px; max-width: 100%;
+  padding: 12px 16px 11px; border: 1px solid var(--ml-chip-line); border-radius: 9px; background: var(--surface, #fff);
+  color: var(--ink, #24332e); text-align: left; box-shadow: 0 1px 0 #e7ede1;
+  transition: border-color var(--ml-chip-move) ease-out, background var(--ml-chip-move) ease-out, transform var(--ml-chip-move) ease-out; }
+.ml-chip b { font-size: 13px; font-weight: 600; letter-spacing: -.2px; overflow-wrap: anywhere; }
+.ml-chip span { font-size: 10px; color: var(--muted, #7b8780); overflow-wrap: anywhere; }
+.ml-chip:hover { border-color: #b7cba7; transform: translateY(-1px); }
+.ml-chip:active { transform: translateY(0); }
+.ml-chip.on { border-color: var(--green, #28674f); background: var(--ml-chip-on); box-shadow: inset 0 0 0 1px var(--green, #28674f); }
+.ml-chip.on b { color: var(--green, #28674f); }
+.ml-chip.on span { color: #557a41; }
+.ml-products .empty { flex: 1 1 100%; background: var(--surface, #fff); border: 1px solid var(--line, #e2e8e2); border-radius: 8px; }
+.ml-choose .notice { margin-bottom: 14px; }
+.ml-model-in-use { margin: 0 0 14px; font-size: 11px; color: #5f7656; }
+.ml-model-in-use b { color: var(--ink, #24332e); font-weight: 600; overflow-wrap: anywhere; }
+#ml-model-note .notice .button { margin-left: 6px; vertical-align: middle; }
+
+/* The upload form: what the file is for, as two cards. */
+.ml-purposes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 18px; padding: 0; border: 0; }
+.ml-purposes legend { padding: 0; margin-bottom: 8px; font-size: 11px; color: #59704a; }
+.ml-purpose { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--ml-chip-line);
+  border-radius: 9px; background: #fbfcfa; cursor: pointer; transition: border-color var(--ml-chip-move) ease-out, background var(--ml-chip-move) ease-out; }
+.ml-purpose input { width: 15px; height: 15px; margin: 2px 0 0; accent-color: var(--green, #28674f); flex: 0 0 15px; }
+.ml-purpose b { display: block; font-size: 12px; color: var(--ink, #24332e); }
+.ml-purpose small { display: block; margin-top: 3px; font-size: 10px; line-height: 1.6; color: var(--muted, #7b8780); }
+.ml-purpose:has(input:checked) { border-color: var(--green, #28674f); background: var(--ml-chip-on); }
+.ml-purpose:has(input:focus-visible) { outline: 3px solid #8bbfa0; outline-offset: 2px; }
+
 .ml-typed { display: block; }
 .ml-typed[hidden] { display: none; }
-@media (max-width: 560px) { .ml-model-file .button-row { margin-left: 0; } }
-.ml-note { margin: 0; padding: 4px 20px 16px; }
+
+@media (max-width: 560px) {
+  .ml-chip { flex: 1 1 100%; }
+  .ml-purposes { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ml-chip, .ml-purpose { transition: none; }
+  .ml-chip:hover { transform: none; }
+}

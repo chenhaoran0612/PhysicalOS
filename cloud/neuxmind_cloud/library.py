@@ -173,9 +173,9 @@ def _upload_fields(payload, settings: Settings) -> dict:
         filename, fmt = types.clean_filename(payload.get("filename"))
     except ValueError as exc:
         raise bad_request(str(exc)) from None
+    fmt = library_model.requested_format(payload, fmt, filename)  # issue #51: kind "model" (#77: also .sdf, .usd…)
     if fmt is None:
         raise unsupported(f"不支持这种文件类型（{filename}）")
-    fmt = library_model.requested_format(payload, fmt, filename)  # issue #51: kind "model"
     fmt = library_bundle.requested_format(payload, fmt)          # issue #43: kind "bundle"
     size = payload.get("size")
     if isinstance(size, bool) or not isinstance(size, int) or size < 1:

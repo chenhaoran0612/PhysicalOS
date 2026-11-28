@@ -218,7 +218,7 @@ class EmptyEnvironment(Case):
             time.sleep(0.05)
         scene = self.sim.scene({'project_id': self.pid, 'scene_id': started['id']})
         self.assertEqual((scene['status'], scene['error_code']), ('failed', 'sim_model_invalid'))
-        self.assertIn('2 个 .urdf', scene['error'])
+        self.assertIn('2 个模型文件', scene['error'])          # issue #77: URDF and MJCF files both count
 
     def test_what_cannot_start_as_a_robot_does_not_pass_the_check(self):
         """Review, 2026-11-26: the check built the scene but not the body, so such a model failed only after it was confirmed."""

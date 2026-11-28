@@ -49,7 +49,7 @@ const PAGE = Buffer.from(`<!DOCTYPE html>
     }, cfg);
 
     // 1 · The page says that web pages are taken.
-    await main.locator('.empty', {hasText: '资料库还是空的'}).waitFor();
+    await main.locator('.empty', {hasText: '还没有品牌型号'}).waitFor();   // issue #77: an empty library starts with no brand and model
     const note = await main.locator('.material-supported').innerText();
     must(note.includes('.html') && note.includes('.htm') && note.includes('网页'), 'The supported types do not mention web pages: ' + note);
 
@@ -101,7 +101,8 @@ const PAGE = Buffer.from(`<!DOCTYPE html>
     const PAPER = '论文精读.html';
     await main.locator('.page-head [data-library-action="upload"]').click();
     await dialog.locator('form[data-library-form="upload"]').waitFor();
-    await dialog.locator('select[name="body_type"]').selectOption('quadruped');
+    // issue #77: the library already keeps materials of this brand and model, so its body type is not asked again
+    if (await dialog.locator('select[name="body_type"]').isVisible()) await dialog.locator('select[name="body_type"]').selectOption('quadruped');
     for (const [name, value] of Object.entries({vendor: '示例厂家', model: 'X1', version: '1.0'})) await dialog.locator(`[name="${name}"]`).fill(value);
     await dialog.locator('input[type=file]').setInputFiles([{name: PAPER, mimeType: 'text/html',
       buffer: Buffer.from('<!DOCTYPE html><html><head><meta charset="utf-8"><title>扩散模型精读</title></head><body><p>这篇论文讲的是扩散模型，和驱动没有关系。</p></body></html>')}]);

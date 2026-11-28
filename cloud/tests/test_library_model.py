@@ -143,7 +143,9 @@ class ModelKind(ParseCase):
 
     def test_the_formats_say_what_a_model_may_be(self):
         formats = self.ok(self.get("/library/formats", self.owner))
-        self.assertEqual(formats["model"], {"extensions": [".urdf", ".zip", ".tar.gz", ".tgz"],
+        # Issue #77: MJCF (.xml), SDF, USD and STP as well.
+        self.assertEqual(formats["model"], {"extensions": [".urdf", ".xml", ".sdf", ".usd", ".usda", ".usdc", ".usdz",
+                                                           ".stp", ".step", ".zip", ".tar.gz", ".tgz"],
                                             "max_bytes": self.settings.library_max_model_bytes})
 
 

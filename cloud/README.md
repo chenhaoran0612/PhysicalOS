@@ -371,6 +371,7 @@ issue #43 又加了四个权限范围，都不在默认范围里（见“云端�
 - `POST /library/materials/rebind` `{device_id, vendor, model}` → `{moved, merged, kept[]}`：把还绑在这台设备上的资料归到这个品牌型号（由控制台调用，可以重复）。同内容的留一份（确认过的优先），同名不同内容的不动并列出。
 - `PUT /library/materials/{id}/product` `{vendor, model}`：改一份资料的品牌型号。409 `material_exists` / `version_exists` / `bundle_needs_device`。
 - 机器人模型：`POST /library/uploads` 带 `kind: "model"`，接受单个 `.urdf` 或装着一个 `.urdf` 和网格文件的 `.zip` / `.tar.gz`；按 URDF 解析（压缩包只读其中的 `.urdf`，另报告缺少的和仿真读不了的网格）。`GET /library/formats` 的 `model` 给出后缀和上限。配置 `NEUXMIND_LIBRARY_MAX_MODEL_BYTES`（默认 512 MiB）。
+- issue #77：机器人模型还可以是 MJCF（`.xml`，或压缩包里没有被别的文件 include 的那个 `.xml`；按规则读出刚体、关节和上限，`material_mjcf.py`），以及 SDF（`.sdf`）、USD（`.usd`、`.usda`、`.usdc`、`.usdz`）、STP（`.stp`、`.step`）——这三种只保存为「已入库」，不解析，修改或确认 → 409 `model_kept_only`。这些后缀只在 `kind: "model"` 时接受。`GET /library/products` → `{products: [{vendor, model, body_type, materials, usable_models}]}`：有资料的品牌型号（bundle 除外）。见 [docs/LIBRARY_BY_PRODUCT.md](../docs/LIBRARY_BY_PRODUCT.md)。
 
 ### 程序和场景数据（资料库的 `bundle` 类型，issue #43，`library_bundle.py`）
 

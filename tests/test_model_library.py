@@ -27,6 +27,8 @@ class Cloud:
             raise self.fail
         if path.endswith('/rebind'):
             return {'moved': 2, 'merged': 1, 'kept': self.kept, 'device_id': payload['device_id']}
+        if path == '/library/products':          # issue #77: the brands and models with materials (none here)
+            return {'products': []}
         return {'id': path.split('/')[3], 'filename': 'arm.urdf', **payload}
 
     def list(self, p=None):

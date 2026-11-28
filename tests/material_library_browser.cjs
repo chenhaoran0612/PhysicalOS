@@ -44,13 +44,14 @@ let failed = async () => {};
   must(await main.locator('[data-library-action="upload"]').count() === 0, 'An upload button is offered without a cloud login');
   await shot('1-signed-out');
 
-  // 2 · Signed in: an empty library, and the supported types with their limits.
+  // 2 · Signed in: an empty library, and the supported types with their limits. Issue #77: the page starts from a
+  //     brand and model; with no robot and no material there is none yet, and it says so with a way on.
   await page.evaluate(async c => {
     await api('cloud/configure', {base_url: c.cloud});
     await api('cloud/login', {email: c.email, password: c.password});
     await refresh(true);
   }, cfg);
-  await main.locator('.empty', {hasText: '资料库还是空的'}).waitFor();
+  await main.locator('.empty', {hasText: '还没有品牌型号'}).locator('[data-library-action="upload"]').waitFor();
   const note = await main.locator('.material-supported').innerText();
   for (const word of ['Word', 'Excel', 'PDF', 'URDF', '.tar.gz', '.deb', '驱动安装包']) must(note.includes(word), `The supported types do not mention ${word}`);
   await shot('2-empty');

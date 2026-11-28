@@ -64,6 +64,14 @@ def rebind_materials(request: Request, payload=Body(default=None)):
     return library_product.rebind(ctx(request).db, _store(request), lambda s: principal(request, s), payload)
 
 
+@router.get("/products")
+def list_products(request: Request):
+    """Issue #77: the brands and models there are materials for."""
+    from .. import library_product
+    with ctx(request).db.transaction() as s:
+        return library_product.products(s, principal(request, s))
+
+
 @router.put("/materials/{material_id}/product")
 def move_material(request: Request, material_id: str, payload=Body(default=None)):
     """Issue #51: one material goes to another brand and model."""

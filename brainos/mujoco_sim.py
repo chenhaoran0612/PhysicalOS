@@ -158,7 +158,7 @@ class MujocoSim:
         if material is None:
             waiting = f'（已上传 {len(others)} 份，还没有确认为“可用”）' if others else ''
             raise CodedError(f'「{robot_model.label(product)}」还没有可用的机器人模型{waiting}；'
-                             '请在「资料库」里上传它的 URDF（或带网格的压缩包），核对解析结果并确认', 'sim_no_robot_model')
+                             '请在「资料库」里上传它的 URDF 或 MJCF 模型（或带网格的压缩包），核对解析结果并确认', 'sim_no_robot_model')
         return material
 
     def _require_engine(self):
