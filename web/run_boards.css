@@ -22,6 +22,7 @@
 .rb-legend i{width:9px;height:9px;border-radius:2px}
 .rb-legend b{font-weight:600;color:var(--rb-deep);font-variant-numeric:tabular-nums}
 .rb-none{margin:0;font-size:13px;line-height:1.8;color:var(--rb-soft)}
+.rb-none-list{padding:22px 24px}
 .rb-figures{display:grid;gap:10px;margin:0}
 .rb-figures div{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:0 10px;padding-bottom:9px;border-bottom:1px solid var(--rb-rule)}
 .rb-figures div:last-child{border-bottom:0;padding-bottom:0}

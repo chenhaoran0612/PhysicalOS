@@ -266,8 +266,16 @@ function rbDeployment() {
 
 // On the page of 仿真试运行: the board of the simulated runs and tests goes right under the page's head,
 // their list to the foot of the page. {board, list}
-function rbSimulationParts() {
-  const all = rbAll().filter(e => rbOnPage('simulation', e)), entries = rbOfTask(all, rbChosen(all)), totals = rbTotals(entries);
+// Issue #66 made the page "by task": inside one task (`scope` = {task, robot}, its own simulated robot) there is
+// no board — the page's own head is the task's — and the list holds that task's records only.
+function rbSimulationParts(scope = null) {
+  const all = rbAll().filter(e => rbOnPage('simulation', e));
+  if (scope) {
+    const mine = all.filter(e => (scope.robot && e.robot_id === scope.robot) || e.tasks.some(t => t.id === scope.task));
+    return {board: '', list: `<div class="rb-sim" data-rb-sim>` + rbListSection('这个任务的仿真运行记录', mine,
+      '<p class="rb-none rb-none-list">这个任务还没有仿真记录。在上面运行一次技能，它的结果、用时和走过的路线会列在这里。</p>') + '</div>'};
+  }
+  const entries = rbOfTask(all, rbChosen(all)), totals = rbTotals(entries);
   const sim = rows('robots').find(r => r.sim);
   return {board: `<div data-rb-sim-board>${rbBoard('仿真记录', '次仿真运行与测试', totals, rbFigures(totals))}</div>`, list: `<div class="rb-sim" data-rb-sim>` +
     rbListSection('仿真运行记录', entries, empty('还没有仿真记录', '在仿真机器人上运行一次技能或做一次仿真测试，它的结果、用时和走过的路线会列在这里。',
@@ -285,9 +293,20 @@ async function rbPoll() {
   rbRecords = answer.records;
   if (text === rbRecordsText) return;
   rbRecordsText = text;
-  if (RB_PAGES.includes(current) && !$('#dialog').open && !document.activeElement?.matches?.('[data-rb-task]')) render();
   if (current === 'record' && typeof rrRefresh === 'function') rrRefresh();
+  if (!RB_PAGES.includes(current) || $('#dialog').open) return;
+  if (rbBusy()) { rbRecordsText = ''; return; }      // drawn at the next round
+  render();
 }
+
+// Inside one task of 仿真试运行 (issue #66, web/task_sim.js: its block without the page's head): {task, robot}; null on the list of tasks.
+function rbSimTask(head) {
+  if (head || !$('#main [data-tsim-slot]') || typeof tsim !== 'object' || !tsim || !tsim.task) return null;
+  return {task: tsim.task, robot: (tsim.view && tsim.view.robot && tsim.view.robot.id) || ''};
+}
+
+// A person is typing or choosing in the page: a redraw would take the focus away.
+const rbBusy = () => Boolean(document.activeElement?.matches?.('#main input, #main textarea, #main select'));
 
 function rbGo(target) {
   if ($('#dialog').open) $('#dialog').close();
@@ -317,8 +336,8 @@ function rbInstall() {
   render = function () {
     baseRender();
     if (current === 'simulation' && state.user && !$('#main [data-rb-sim]')) {
-      const parts = rbSimulationParts(), head = $('#main .page-head');
-      if (head) head.insertAdjacentHTML('afterend', parts.board); else $('#main').insertAdjacentHTML('afterbegin', parts.board);
+      const head = $('#main .page-head'), parts = rbSimulationParts(rbSimTask(head));
+      if (head) head.insertAdjacentHTML('afterend', parts.board);
       $('#main').insertAdjacentHTML('beforeend', parts.list);
     }
     if (current === 'record' && typeof rrChrome === 'function') rrChrome();
