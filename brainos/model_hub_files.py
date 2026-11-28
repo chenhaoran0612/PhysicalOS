@@ -139,6 +139,29 @@ class LocalFiles:
                 self._drop(p['upload_id'])
         return {'cancelled': known}
 
+    def adopt(self, data, filename):
+        """Keep content that reached the app another way than an upload (issue #76: a model file the
+        training project's dashboard gave); returns the file's record, like ``complete``."""
+        name, size = _name(filename), len(data)
+        if not 0 < size <= MAX_FILE_BYTES:
+            raise ValueError('文件是空的，或者太大')
+        sha256 = hashlib.sha256(data).hexdigest()
+        with self.lock:
+            target = self._dir('files') / sha256
+            if not (target.exists() and target.stat().st_size == size):
+                if shutil.disk_usage(self._dir('files')).free < size + FREE_MARGIN_BYTES:
+                    raise CodedError('这台电脑的磁盘空间不够放这个文件', 'hub_upload_space')
+                part = self._dir('uploads') / ('adopt-' + secrets.token_hex(16))
+                try:
+                    part.write_bytes(data)
+                    part.chmod(0o600)
+                    os.replace(part, target)
+                finally:
+                    part.unlink(missing_ok=True)
+            record = {'id': 'file-' + secrets.token_hex(12), 'filename': name, 'size': size, 'sha256': sha256, 'created_at': _now()}
+            self.store.put(KIND, record)
+        return dict(record)
+
     # ------------------------------------------------------------ kept files
     def record(self, file_id):
         try:

@@ -95,6 +95,8 @@ class ModelHub:
         self.halt = lambda p: platform.duck.stop(p)
         self.poll_s = 0.2
         self.files.sweep(self._claimed())
+        from .model_hub_history import History
+        self.history = History(self)                # issue #76: a round's candidate chosen from the model's history
 
     @staticmethod
     def _now():
@@ -462,6 +464,8 @@ class ModelHub:
         origin = version.get('origin') or {}
         task = next((t for t in self.platform.duck.training().get('tasks', []) if t.get('id') == model.get('show')), None)
         rows = [r for r in (task or {}).get('series', []) if r[0] == origin.get('round') and r[1] == origin.get('update') and r[3]]
+        kept = version.get('training_result') or {}         # issue #76: the dashboard's result, kept when the file was chosen from it
+        rows = rows or ([[origin.get('round'), origin.get('update'), kept['passed'], kept['total'], None]] if kept.get('total') else [])
         if not model.get('show') or 'round' not in origin or 'update' not in origin or not rows:
             raise CodedError('训练项目的评估记录里没有这一版（按它的训练轮次和更新次数找）。可以手动导入评测结果', 'hub_training_missing')
         _, _, passed, total, _ = rows[-1]

@@ -175,6 +175,8 @@ def make_handler(application):
                             '/mujoco_sim.js':('mujoco_sim.js','text/javascript; charset=utf-8'),'/mujoco_sim.css':('mujoco_sim.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #71: the model library, 训练与改进 and the evaluation and training sets, likewise.
             extra=extra or {'/model_hub.js':('model_hub.js','text/javascript; charset=utf-8'),'/model_hub_pages.js':('model_hub_pages.js','text/javascript; charset=utf-8'),'/model_hub.css':('model_hub.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #76: a round's candidate chosen from the model's history, likewise.
+            extra=extra or {'/model_hub_history.js':('model_hub_history.js','text/javascript; charset=utf-8'),'/model_hub_history.css':('model_hub_history.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #36: why the cloud is not signed in (the automatic sign-in), likewise.
             extra=extra or {'/cloud_auto_login.js':('cloud_auto_login.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #42: running an installed skill on a real robot (the confirmations of the run form), likewise.
@@ -482,6 +484,7 @@ def make_handler(application):
                         'model-hub/evaluations/stop':service.model_hub.stop_evaluation,
                         'model-hub/rounds':service.model_hub.open_round,'model-hub/rounds/diagnose':service.model_hub.diagnose,
                         'model-hub/rounds/close':service.model_hub.close_round,
+                        'model-hub/rounds/history':service.model_hub.history.choices,'model-hub/rounds/history/training':service.model_hub.history.training_files,'model-hub/rounds/candidate':service.model_hub.history.pick,   # issue #76
                         # Issue #31: send a usable driver package from the library to a robot and verify it there
                         'library/deliver/start':service.package_delivery.start,'library/deliver/status':service.package_delivery.status,
                         'library/deliver/stop':service.package_delivery.stop,'library/deliver/list':service.package_delivery.list,

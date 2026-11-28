@@ -414,6 +414,11 @@ const UX_CODES = {
   hub_upload_busy: ['state', '同时在上传的文件太多了。', '等正在上传的文件传完再试'],
   hub_upload_space: ['state', '这台电脑的磁盘空间不够放这个文件。', '腾出磁盘空间后再上传'],
   hub_upload_size: ['state', '收到的内容和文件本身的长度不一致。', '重新选择文件上传'],
+  // Issue #76: a round's candidate chosen from the model's history (brainos/model_hub_history.py).
+  hub_candidate_start: ['input', '这一版是这一轮的起点，不能当候选。', '选一个别的版本或模型文件'],
+  hub_history_unknown: ['notfound', '训练项目里没有这个模型文件了。', '关掉对话框重新打开，从最新的列表里选'],
+  hub_history_unavailable: ['network', '读不到训练项目的模型文件。', '打开这台电脑上的训练看板后再试，或者上传模型文件'],
+  hub_history_mismatch: ['service', '取到的模型文件和训练看板记下的不一致，没有保存。', '稍后再试；训练项目可能正在改写这个文件'],
 };
 
 // Codes that start like these are parameter refusals even when not listed (e.g. a new runtime code).

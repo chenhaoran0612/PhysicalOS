@@ -1,0 +1,36 @@
+/* Issue #76 — 「选择候选版本」: the model's versions and the training project's model files as rows to click
+   (web/model_hub_history.js). Uses the tokens of style.css and web/model_hub.css. */
+.mhh{display:grid;gap:22px;max-height:min(64vh,640px);overflow:auto}
+.mhh .form-error:empty,.mhh .mhh-status:empty{display:none}
+.mhh-notes{position:sticky;top:-1px;z-index:2;display:grid;gap:6px;margin:-4px 0 -12px;padding:4px 0 8px;background:var(--surface)}
+.mhh-notes:not(:has(.form-error:not(:empty))):not(:has(.mhh-status:not(:empty))){display:none}
+.mhh-notes .form-error{margin:0}
+.mhh-status{margin:0;font-size:13px;color:var(--mh-soft)}
+.mhh-part{display:grid;gap:10px}
+.mhh-part-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--mh-rule)}
+.mhh-part-head h3{margin:0;font-size:13px;letter-spacing:.04em;color:var(--mh-deep)}
+.mhh-sub,.mhh-none,.mhh-wait{margin:0;font-size:12px;color:var(--muted)}
+.mhh-filter{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mh-soft);cursor:pointer}
+.mhh-list{list-style:none;display:grid;gap:6px;margin:0;padding:0}
+.mhh-pick{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;width:100%;min-height:52px;padding:10px 14px;
+  border:1px solid var(--line);border-left:3px solid var(--mh-edge);border-radius:10px;background:var(--surface);color:var(--ink);text-align:left;font:inherit;cursor:pointer;
+  transition:background-color .16s var(--mh-ease),border-color .16s var(--mh-ease),transform .16s var(--mh-ease)}
+.mhh-pick:hover:not(:disabled){background:#f3f7ef;border-color:#c9d8c3;border-left-color:var(--mh-good)}
+.mhh-pick:active:not(:disabled){transform:translateY(1px);background:#e8f0e1}
+.mhh-pick:focus-visible{outline:2px solid var(--mh-blue);outline-offset:2px}
+.mhh-pick:disabled{cursor:default;background:#f7f8f5;border-left-color:#dfe4da;color:var(--muted)}
+.mhh-main{display:grid;gap:3px;min-width:0}
+.mhh-name{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.mhh-name b{font-size:14px}
+.mhh-meta{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--mh-faint)}
+.mhh-side{display:flex;align-items:center;gap:12px;justify-content:flex-end}
+.mhh-result{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:280px}
+.mhh-score{padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mhh-score.good{background:#e2f0d6;color:var(--mh-good)}
+.mhh-score.warn{background:#f6ecd6;color:var(--mh-warn)}
+.mhh-score.bad{background:#f6e1de;color:var(--mh-bad)}
+.mhh-go{min-width:96px;font-size:12px;font-weight:600;color:var(--mh-deep);text-align:right;white-space:nowrap}
+.mhh-pick:disabled .mhh-go{font-weight:400;color:var(--muted)}
+.mhh-more{margin:2px 0 0;text-align:center}
+@media(max-width:760px){.mhh-pick{grid-template-columns:1fr}.mhh-side{justify-content:flex-start}.mhh-go{min-width:0;text-align:left}.mhh-meta{white-space:normal}}
+@media(prefers-reduced-motion:reduce){.mhh-pick{transition:none}.mhh-pick:active:not(:disabled){transform:none}}
