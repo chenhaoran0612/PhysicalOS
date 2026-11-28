@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from sqlalchemy import case, func, select
 
-from . import audit, library
+from . import audit, library, library_public
 from . import library_types as types
 from .db import Database
 from .errors import ApiError, bad_request, conflict
@@ -149,7 +149,7 @@ def products(session, p) -> dict:
     usable = func.sum(case(((Material.kind == types.MODEL) & (Material.status == USABLE), 1), else_=0))
     rows = session.execute(
         select(func.min(Material.vendor), func.min(Material.model), func.min(Material.body_type), func.count(), usable)
-        .where(Material.org_id == p.org_id, Material.kind != types.BUNDLE)
+        .where(Material.org_id.in_(library_public.orgs(p)), Material.kind != types.BUNDLE)   # #78: and the public library
         .group_by(func.lower(Material.vendor), func.lower(Material.model))
         .order_by(func.max(Material.created_at).desc()).limit(MAX_PRODUCTS)).all()
     return {"products": [{"vendor": vendor, "model": model, "body_type": body_type, "materials": int(count),

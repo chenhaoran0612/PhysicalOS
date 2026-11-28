@@ -191,6 +191,18 @@ class EveryAccountReads(PublicCase):
         by_product = self.listed(stranger, "?vendor=%E5%AE%87%E6%A0%91%E7%A7%91%E6%8A%80&model=go2&kind=model")
         self.assertEqual([m["filename"] for m in by_product], ["unitree-go2.zip"])
 
+    def test_the_brands_and_models_of_public_materials_are_offered_to_every_account(self):
+        # issue #77 with #78: the row of brands and models on 资料库 counts the public library too
+        self.seed()
+        stranger = self.register("row@else.test")
+        listed = self.ok(self.get("/library/products", stranger))["products"]
+        by_key = {(p["vendor"], p["model"]): p for p in listed}
+        self.assertEqual(set(by_key), {(GO["vendor"], GO["model"]), (ARM["vendor"], ARM["model"])})
+        self.assertEqual(by_key[(ARM["vendor"], ARM["model"])]["materials"], 2)
+        self.upload(stranger, "own.urdf", files.URDF_OK, **GO)
+        listed = self.ok(self.get("/library/products", stranger))["products"]
+        self.assertEqual({(p["vendor"], p["model"]): p["materials"] for p in listed}[(GO["vendor"], GO["model"])], 2)
+
     def test_a_public_material_opens_downloads_and_shows_its_parse_result(self):
         self.seed()
         self.parse_all()
