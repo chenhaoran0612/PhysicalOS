@@ -13,10 +13,11 @@ const button = (text, action, cls = '', id = '', disabled = false) =>
 const badge = (text, cls = '') => `<span class="status ${cls}"><i class="dot"></i>${h(text)}</span>`;
 const table = (headers, data) => `<div class="table-wrap"><table><thead><tr>${headers.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>${data.join('')}</tbody></table></div>`;
 const sandbox = {h, button, badge, table, date: v => (v ? String(v).slice(5, 16) : '—'), simBadge: () => badge('仿真', 'blue sim'),
-                 reportScopeName: r => (r.scope === 'simulation' ? '仿真测试（不能作为现场证据）' : r.scope === 'onsite' ? '设备端现场测试' : '静态工程检查')};
+                 reportScopeName: r => (r.scope === 'simulation' ? '仿真测试（不能作为现场证据）' : r.scope === 'onsite' ? '设备端现场测试' : '静态工程检查'),
+                 familyNames: {humanoid: '人形机器人', quadruped: '四足机器人'}};
 vm.createContext(sandbox);
 const page = vm.runInContext(readFileSync('web/run_boards.js', 'utf8') + '\n' + readFileSync('web/run_record_view.js', 'utf8') +
-  '\n;({rbDuration, rbTasks, rbOperationStatus, rbEntries, rbOnPage, rbOfTask, rbTotals, rbFlow, rbBoard, rbFigures, rbRow,' +
+  '\n;({rbDuration, rbTasks, rbOperationStatus, rbEntries, rbOnPage, rbOfTask, rbTotals, rbFlow, rbBoard, rbFigures, rbRow, rbCounted, rrRows,' +
   ' rrPathPoints, rrPathSvg, rrLinePoints, rrLineSvg, rrEventTime, RB_PAGES, RB_STAGES})', sandbox);
 
 let checks = 0;
@@ -31,6 +32,7 @@ same(page.rbDuration(120), '2 分');
 same([page.rbDuration(119.6), page.rbDuration(59.7), page.rbDuration(3599.7)], ['2 分', '1 分', '1 小时'], 'seconds are rounded before they are split');
 same(page.rbDuration(3 * 3600 + 5 * 60), '3 小时 5 分');
 same([page.rbDuration(null), page.rbDuration(-1), page.rbDuration(NaN)], ['', '', ''], 'nothing is shown for a time that is not known');
+same([page.rbDuration(0), page.rbDuration(0.004)], ['不到 0.1 秒', '不到 0.1 秒'], 'issue #75: a run of a few milliseconds is not "0 秒"');
 
 // ---- the account: a simulated dog and a real one of the same model, one application bound by the task 巡检
 const HOME = 'project-robot-home';
@@ -80,6 +82,7 @@ same([of('ev:check-1').steps, of('ev:check-1').steps_passed], [2, 2]);
 same([of('op:skill-run-1').sim, of('op:onsite-1').sim, of('op:onsite-2').sim], [true, true, false]);
 same(of('op:operation-1').subject, '每日巡检', 'started work is named by the released application');
 same(of('op:skill-install-1').subject, 'patrol_places 1.0.0');
+same([of('op:skill-run-1').skill_id, of('op:operation-1').skill_id], ['patrol_places', ''], 'issue #75: a skill\'s page lists the runs of that skill');
 
 // ---- a run whose following was cut off, and a status the page does not know
 same(page.rbOperationStatus({kind: 'skill_run', status: 'accepted'}, {state: 'lost', run_status: 'running'}, null), {key: 'wait', text: '结果没有收集到'},
@@ -124,10 +127,42 @@ ok(!page.rbRow({...of('op:skill-run-1'), subject: '<img>'}).includes('<img>'), '
 const flow = page.rbFlow(st, entries, 'real-1', 'app-2');
 same(flow.map(s => s.name), ['接入机器人', '安装技能', '仿真试运行', '真机测试', '部署运行']);
 same(flow.map(s => s.state), ['done', 'done', 'done', 'done', 'done']);
-same(flow.map(s => s.text), ['已连接', '装了 1 个技能包', '2 次，2 次完成', '2 次，0 次通过', '已发布，启动过 1 次'],
+same(flow.map(s => s.text), ['已连接', '装了 1 个技能包', '2 次：2 次完成', '2 次：0 次通过，2 次失败', '已发布，启动过 1 次'],
   'the simulated runs of the same application and of the same brand and model count for the real robot');
 same(page.rbFlow(st, entries, 'sim-1', '').map(s => s.state), ['done', 'none', 'done', 'none', 'none'], 'a simulated robot has not reached the stages of a real one');
 same(page.rbFlow(st, entries, 'gone', '')[0].text, '机器人已删除');
+
+// ---- issue #75: 「2 次，0 次完成」 for two runs that had both succeeded. One had been read back, one not yet: each part is said.
+const duck = {...st, operations: [
+  {id: 'run-a', kind: 'skill_run', robot_id: 'sim-1', skill_id: 'status_report', status: 'accepted', run_status: 'running', simulated: true, created_at: '2026-11-27T13:10:27Z'},
+  {id: 'run-b', kind: 'skill_run', robot_id: 'sim-1', skill_id: 'status_report', status: 'accepted', run_status: 'running', simulated: true, created_at: '2026-11-27T13:18:07Z'}],
+  evaluations: [], deployments: []};
+const one = page.rbEntries(duck, [{operation_id: 'run-b', state: 'final', run_status: 'succeeded', duration_s: 0, samples: 0, steps: 0, steps_passed: 0}]);
+same(page.rbFlow(duck, one, 'sim-1', '')[2].text, '2 次：1 次完成，1 次待核对', 'a run whose end was not read back yet is not counted as not done');
+const both = page.rbEntries(duck, ['run-a', 'run-b'].map(id => ({operation_id: id, state: 'final', run_status: 'succeeded', samples: 0, steps: 0, steps_passed: 0})));
+same(page.rbFlow(duck, both, 'sim-1', '')[2].text, '2 次：2 次完成', 'once both are read back');
+same(page.rbCounted(page.rbEntries(duck, [{operation_id: 'run-a', state: 'final', run_status: 'failed'}, {operation_id: 'run-b', state: 'following', run_status: 'running'}]), '完成'),
+  '2 次：0 次完成，1 次失败，1 次进行中', 'every part that has a run is named, and the done count always is');
+
+// ---- issue #75: what a skill returned, as rows like the facts above it (never a box inside a row)
+const report = {health: {ok: true, mode: 'sim:stand', errors: {}}, simulated: true, family: 'humanoid', available: []};
+same(page.rrRows(report), [['系统健康 · 正常', '是'], ['系统健康 · 模式', '仿真里站着待命'], ['系统健康 · 错误', '无'], ['仿真', '是'], ['本体类型', '人形机器人'], ['读到的状态', '无']],
+  'status_report on the duck: nested values become rows with Chinese names, true is 是, an empty value is 无');
+same(page.rrRows({completed: true, model: 'nod', steps: 25, duration_s: 0.8333333}), [['做完', '是'], ['技能模型', 'nod'], ['步数', '25'], ['用时（秒）', '0.833']]);
+same(page.rrRows({available: ['sensor.battery', 'joint.state'], 'sensor.battery': {percent: 88}}), [['读到的状态', 'sensor.battery、joint.state'], ['sensor.battery · percent', '88']],
+  'a list of plain values is one row; an unknown name stays as the device wrote it');
+same(page.rrRows({visited: [{place: '门口', ok: false}, {place: '货架', ok: true}]}),
+  [['到过的地点 · 第 1 项 · 地点', '门口'], ['到过的地点 · 第 1 项 · 正常', '否'], ['到过的地点 · 第 2 项 · 地点', '货架'], ['到过的地点 · 第 2 项 · 正常', '是']], 'a list of objects: one row per value');
+same(page.rrRows('done'), [['结果', 'done']], 'a plain result');
+same(page.rrRows({mode: 'sim:show:nod', x: null}), [['模式', '仿真里正在表演 nod'], ['x', '无']]);
+const many = page.rrRows(Object.fromEntries(Array.from({length: 90}, (_, i) => ['k' + i, i])));
+same([many.length, many[80][1]], [81, '还有 10 项没有列出，见下面「收集到的运行数据」'], 'a very long result is cut and says so');
+let deep = {}; for (let i = 0; i < 5000; i += 1) deep = {a: deep};                 // fits in the kept 20000 characters
+const cut = page.rrRows(deep);
+same([cut.length, cut[0][1]], [1, '1 项，层次太深，见下面「收集到的运行数据」'], 'a result nested thousands of levels deep is not walked to its end');
+const RR_ROWS_LEVELS = 8;
+let lists = []; for (let i = 0; i < 5000; i += 1) lists = [lists, 1];
+ok(page.rrRows({x: lists}).length <= RR_ROWS_LEVELS && page.rrRows({x: lists}).some(([, text]) => text.includes('层次太深')), 'nor are deeply nested lists (a row per level, then cut)');
 
 // ---- the route and the series
 const samples = [{t: 0, x: 0, y: 0, speed: 0, battery: 90, progress: 0}, {t: 1, x: 2, y: 0, speed: 0.5, battery: 90}, {t: 2}, {t: 3, x: 2, y: 1, speed: 0.2, battery: 89, progress: 1}];

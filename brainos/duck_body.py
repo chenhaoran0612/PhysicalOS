@@ -210,6 +210,7 @@ class DuckBody(RobotAdapter):
         self._stops = 0                               # counts stop(): a show that was being prepared when one came is not started
         self._closed = threading.Event()
         self._seen = self._command_id()               # a command from before this start is not performed again
+        self.staging = ''                             # issue #75: the show whose stage is being loaded (a "stage" command)
         self.run = {'id': '', 'show': '', 'state': 'idle', 'phase': '', 'progress': 0.0, 'steps': 0, 'result': None, 'error': ''}
         self._manifest = {
             'schema': 'robot.adapter.v2', 'spec_version': '1.3', 'instance_id': config['instance_id'],
@@ -292,7 +293,9 @@ class DuckBody(RobotAdapter):
                 record = dict(self.run)
             record.update(engine={'mujoco': facts.get('mujoco', ''), 'task': facts.get('task', ''),
                                   'checkpoint_sha256': facts.get('checkpoint_sha256', '')},
-                          fault=self.fault, updated_at=time.time())
+                          fault=self.fault, updated_at=time.time(),
+                          # issue #75: whose stage the duck stands on now, and the one being loaded
+                          stage=engine.show if engine is not None and engine.alive and not engine.error else '', staging=self.staging)
             part = self.control / 'status.json.part'
             try:
                 part.write_text(json.dumps(record, ensure_ascii=False), encoding='utf-8')
@@ -367,6 +370,9 @@ class DuckBody(RobotAdapter):
             if engine is not None:
                 engine.send({'cmd': 'home'})
             return
+        if what == 'stage':
+            self._stage(show)
+            return
         if what != 'show':
             return
         if show not in self.shows:
@@ -375,6 +381,27 @@ class DuckBody(RobotAdapter):
         stops = self._stops
         self._begin(command['id'], show)
         self._perform(command['id'], show, command.get('seed'), stops)
+
+    def _stage(self, show):
+        """Issue #75: stand on the stage ``show`` was trained on (its package's scene), ready to perform it. Not while
+        a show is being prepared or performed: that one keeps its stage, and the next run of ``show`` moves there anyway."""
+        if show not in self.shows:
+            return
+        with self._lock:
+            busy = self.run['state'] in ('starting', 'running')
+        if busy:
+            return
+        with self._one:
+            with self._lock:                          # again: a run that began while this waited keeps its stage
+                if self.run['state'] in ('starting', 'running'):
+                    return
+            self.staging = show
+            self._update()
+            try:
+                problem = self._start_engine(show)
+            finally:
+                self.staging = ''
+            self._update(**({'error': problem} if problem else {}))
 
     def _begin(self, run_id, show):
         self._update(id=run_id, show=show, state='starting', phase='', progress=0.0, steps=0, result=None, error='')

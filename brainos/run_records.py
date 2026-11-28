@@ -51,6 +51,7 @@ SAVE_EVERY = 5                      # samples between two saves of a record that
 LOST_AFTER = 30                     # reads in a row that failed: the device cannot be followed any more
 FOLLOW_MAX_S = 2 * 60 * 60          # a run is followed this long at most
 FOLLOW_WINDOW_S = 6 * 60 * 60       # an operation older than this is not picked up for following
+SETTLE_RETRY_S = 5 * 60             # issue #75: a run whose end could not be read back is asked about again after this long
 ENDED = ('succeeded', 'failed', 'stopped', 'cancelled', 'timeout', 'unknown')
 TEXT_MAX = 300
 RESULT_MAX = 20000                  # characters of a skill's result that are kept
@@ -227,6 +228,8 @@ class RunRecords:
         self.lock = threading.Lock()
         self.threads = {}                   # operation id -> thread
         self.stopping = threading.Event()
+        self.settled = {}                   # issue #75: operation id -> when its end was last read back (monotonic seconds)
+        self.settling = None                # the thread that reads back the runs nobody followed
         audit = platform.audit
 
         def audited(action, details, project_id=None):
@@ -285,11 +288,51 @@ class RunRecords:
                 thread = threading.Thread(target=self._run, args=(operation['id'],), name='run-follow', daemon=True)
                 self.threads[operation['id']] = thread
                 thread.start()
+        self._settle_later()
+
+    # ------------------------------------------------------------ runs nobody followed (issue #75)
+    # A run that ended while the app was closed, or before this computer followed runs, stayed 「已受理」 in every list
+    # until its own page was opened: a robot's 「2 次，0 次完成」 counted two runs that had both succeeded. Their ends are
+    # read back in the background now, once each (again after SETTLE_RETRY_S when the robot could not answer).
+    def _unsettled(self):
+        """Operations whose run may have ended unseen: under way as far as the platform knows, not followed now, and
+        either cut off while followed (``lost``) or too old to be followed (``ensure`` follows the younger ones)."""
+        limit, now_s, out = time.time() - FOLLOW_WINDOW_S, time.monotonic(), []
+        for operation in self.store.list('operations'):
+            if operation.get('kind') not in FOLLOWED or operation.get('status') not in UNDER_WAY or self._following(operation['id']):
+                continue
+            if now_s - self.settled.get(operation['id'], -SETTLE_RETRY_S - 1) < SETTLE_RETRY_S:
+                continue
+            record = self._record(operation['id'])
+            created = _seconds(operation.get('created_at'))
+            if (record or {}).get('state') == 'lost' or (record is None and (created is None or created < limit)):
+                out.append(operation)
+        return out
+
+    def _settle_later(self):
+        if not self.follow or self.stopping.is_set():
+            return
+        with self.lock:
+            if self.settling is not None and self.settling.is_alive():
+                return
+            self.settling = threading.Thread(target=self._settle, name='run-settle', daemon=True)
+            self.settling.start()
+
+    def _settle(self):
+        try:
+            for operation in self._unsettled():
+                if self.stopping.is_set():
+                    return
+                self.settled[operation['id']] = time.monotonic()
+                record = self._record(operation['id'])
+                self._read_back(operation, record if (record or {}).get('state') == 'lost' else None)
+        except Exception:                   # the store is closing, or a robot answered nonsense: the next list asks again
+            pass
 
     def close(self):
         self.stopping.set()
         with self.lock:
-            threads = list(self.threads.values())
+            threads = list(self.threads.values()) + ([self.settling] if self.settling is not None else [])
         for thread in threads:
             thread.join(timeout=5)
 

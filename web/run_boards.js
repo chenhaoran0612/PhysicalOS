@@ -36,6 +36,7 @@ const rbSeconds = v => { const t = typeof v === 'number' ? v * 1000 : Date.parse
 // "1 分 12 秒"; '' when not known.
 function rbDuration(seconds) {
   if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return '';
+  if (seconds < 0.05) return '不到 0.1 秒';                // issue #75: a run of a few milliseconds is not "0 秒"
   if (seconds < 59.5) return (seconds < 10 ? seconds.toFixed(1).replace(/\.0$/, '') : Math.round(seconds)) + ' 秒';
   const whole = Math.round(seconds), m = Math.floor(whole / 60), s = whole % 60;
   return m < 60 ? `${m} 分${s ? ` ${s} 秒` : ''}` : `${Math.floor(m / 60)} 小时${m % 60 ? ` ${m % 60} 分` : ''}`;
@@ -82,6 +83,7 @@ function rbEntries(st, summaries) {
     out.push({
       key: 'op:' + op.id, id: op.id, source: 'operation', kind: op.kind, name: RB_KIND[op.kind] || op.kind || '操作',
       subject: op.skill_id ? op.skill_id + (op.version ? ' ' + op.version : '') : release ? release.application_name : named(st.applications, applicationId),
+      skill_id: op.skill_id || '',                       // issue #75: a skill's page of 仿真试运行 lists that skill's runs
       robot_id: op.robot_id || '', robot: robot ? robot.name : '', sim, at: op.created_at, status: rbOperationStatus(op, record, report),
       duration_s: record && typeof record.duration_s === 'number' ? record.duration_s
         : started !== null && finished !== null && finished >= started ? Math.round((finished - started) * 10) / 10 : null,
@@ -130,6 +132,15 @@ function rbTotals(entries) {
           robots: new Set(entries.map(e => e.robot_id).filter(Boolean)).size};
 }
 
+// Issue #75: "2 次：1 次完成，1 次待核对" — every run is in one of the parts, so a run whose end was not read is not
+// silently counted as not done (the user read 「2 次，0 次完成」 for two runs that had both succeeded).
+function rbCounted(list, done) {
+  const t = rbTotals(list);
+  const parts = [[t.pass, '次' + done], [t.fail, '次失败'], [t.stop, '次被停止'], [t.run, '次进行中'], [t.wait + t.other, '次待核对']]
+    .filter(([n], i) => n || i === 0).map(([n, text]) => `${n} ${text}`);
+  return `${t.total} 次：${parts.join('，')}`;
+}
+
 // How far a robot and an application have come along the five stages: [{name, state: done|none, text}].
 function rbFlow(st, entries, robotId, applicationId) {
   const robot = (st.robots || []).find(r => r.id === robotId);
@@ -143,13 +154,12 @@ function rbFlow(st, entries, robotId, applicationId) {
   const real = mine.filter(e => !e.sim && ['skill_run', 'onsite', 'report'].includes(e.kind));
   const releases = (st.deployments || []).filter(d => d.status === 'deployed' && (d.robot_id === robotId || (root && sameApp(d))));
   const starts = mine.filter(e => e.kind === 'start' && (!root || sameApp(e)));
-  const passed = list => list.filter(e => e.status.key === 'pass').length;
   const step = (index, done, text, at) => ({name: RB_STAGES[index], state: done ? 'done' : 'none', text, at: at || null});
   return [
     step(0, Boolean(robot && (robot.status === 'connected' || robot.checked_at)), robot ? (robot.status === 'connected' ? '已连接' : robot.checked_at ? '接入过，现在没有连接' : '还没有连接') : '机器人已删除', robot && robot.created_at),
     step(1, installs.length > 0, installs.length ? `装了 ${installs.length} 个技能包` : '没有安装记录', installs.length ? installs[0].at : null),
-    step(2, sims.length > 0, sims.length ? `${sims.length} 次，${passed(sims)} 次完成` : '还没有仿真记录', sims.length ? sims[0].at : null),
-    step(3, real.length > 0, real.length ? `${real.length} 次，${passed(real)} 次通过` : '还没有真机记录', real.length ? real[0].at : null),
+    step(2, sims.length > 0, sims.length ? rbCounted(sims, '完成') : '还没有仿真记录', sims.length ? sims[0].at : null),
+    step(3, real.length > 0, real.length ? rbCounted(real, '通过') : '还没有真机记录', real.length ? real[0].at : null),
     step(4, releases.length > 0, releases.length ? `已发布${starts.length ? `，启动过 ${starts.length} 次` : ''}` : '还没有发布', releases.length ? releases[0].created_at : null),
   ];
 }
@@ -271,9 +281,12 @@ function rbDeployment() {
 function rbSimulationParts(scope = null) {
   const all = rbAll().filter(e => rbOnPage('simulation', e));
   if (scope) {
-    const mine = all.filter(e => (scope.robot && e.robot_id === scope.robot) || e.tasks.some(t => t.id === scope.task));
-    return {board: '', list: `<div class="rb-sim" data-rb-sim>` + rbListSection('这个任务的仿真运行记录', mine,
-      '<p class="rb-none rb-none-list">这个任务还没有仿真记录。在上面运行一次技能，它的结果、用时和走过的路线会列在这里。</p>') + '</div>'};
+    const mine = all.filter(e => ((scope.robot && e.robot_id === scope.robot) || e.tasks.some(t => t.id === scope.task))
+      && (!scope.skill || e.skill_id === scope.skill));          // issue #75: on a skill's page, that skill's runs
+    return {board: '', list: `<div class="rb-sim" data-rb-sim>` + (scope.skill
+      ? rbListSection('这个技能的仿真运行记录', mine, '<p class="rb-none rb-none-list">这个技能还没有仿真记录。在上面运行一次，它的结果、用时和走过的路线会列在这里。</p>')
+      : rbListSection('这个任务的仿真运行记录', mine,
+      '<p class="rb-none rb-none-list">这个任务还没有仿真记录。在上面运行一次技能，它的结果、用时和走过的路线会列在这里。</p>')) + '</div>'};
   }
   const entries = rbOfTask(all, rbChosen(all)), totals = rbTotals(entries);
   const sim = rows('robots').find(r => r.sim);
@@ -294,6 +307,10 @@ async function rbPoll() {
   if (text === rbRecordsText) return;
   rbRecordsText = text;
   if (current === 'record' && typeof rrRefresh === 'function') rrRefresh();
+  // Issue #75: the page of one record draws its badge and its 「走到了哪一步」 from these summaries too; it was left
+  // as it was ("已受理", "0 次完成") when only a summary changed and the full record it had read did not.
+  if (current === 'record' && !$('#dialog').open && !rbBusy() && typeof rrRedraw === 'function') return rrRedraw();
+  if (current === 'record') { rbRecordsText = ''; return; }     // drawn at the next round, as the other pages are
   if (!RB_PAGES.includes(current) || $('#dialog').open) return;
   if (rbBusy()) { rbRecordsText = ''; return; }      // drawn at the next round
   render();
@@ -302,7 +319,7 @@ async function rbPoll() {
 // Inside one task of 仿真试运行 (issue #66, web/task_sim.js: its block without the page's head): {task, robot}; null on the list of tasks.
 function rbSimTask(head) {
   if (head || !$('#main [data-tsim-slot]') || typeof tsim !== 'object' || !tsim || !tsim.task) return null;
-  return {task: tsim.task, robot: (tsim.view && tsim.view.robot && tsim.view.robot.id) || ''};
+  return {task: tsim.task, robot: (tsim.view && tsim.view.robot && tsim.view.robot.id) || '', skill: tsim.skill || ''};
 }
 
 // A person is typing or choosing in the page: a redraw would take the focus away.
