@@ -17,7 +17,7 @@ the console, not here). It may be called any number of times.
 """
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from . import audit, library
 from . import library_types as types
@@ -30,6 +30,7 @@ from .models import now
 from .skill_store import _product
 
 MAX_MOVED = 2000
+MAX_PRODUCTS = 500
 
 
 def _request(payload) -> tuple[str, dict]:
@@ -138,3 +139,18 @@ def move(db: Database, who: library.Who, material_id: str, payload) -> dict:
         audit.record(s, "library.material_moved", p.actor, org_id=p.org_id, target=material.id,
                      detail={"from": before, **product})
         return library.material_view(material)
+
+
+def products(session, p) -> dict:
+    """``GET /library/products`` (issue #77): the brands and models the organisation keeps materials for (bundles
+    aside: they belong to one device), newest first, each with how many materials and how many robot models a
+    simulation can use. The 「资料库」 page offers them to choose from, next to those of the account's robots."""
+    p.require(library.READ)
+    usable = func.sum(case(((Material.kind == types.MODEL) & (Material.status == USABLE), 1), else_=0))
+    rows = session.execute(
+        select(func.min(Material.vendor), func.min(Material.model), func.min(Material.body_type), func.count(), usable)
+        .where(Material.org_id == p.org_id, Material.kind != types.BUNDLE)
+        .group_by(func.lower(Material.vendor), func.lower(Material.model))
+        .order_by(func.max(Material.created_at).desc()).limit(MAX_PRODUCTS)).all()
+    return {"products": [{"vendor": vendor, "model": model, "body_type": body_type, "materials": int(count),
+                          "usable_models": int(models or 0)} for vendor, model, body_type, count, models in rows]}

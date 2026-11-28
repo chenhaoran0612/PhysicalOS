@@ -797,9 +797,10 @@ def _mesh_name(reference: str) -> str:
     return reference.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
 
 
-def model_facts(facts: dict, urdf: str | None, present: set[str] | None, warnings: list[str]) -> dict:
-    """The URDF's facts plus what is known about its meshes. ``present``: the lower-case file names in
-    the archive, or ``None`` for a single ``.urdf`` (nothing came with it)."""
+def model_facts(facts: dict, model_file: str | None, present: set[str] | None, warnings: list[str],
+                what: str = "URDF", single: str = ".urdf") -> dict:
+    """The model's facts plus what is known about its meshes. ``present``: the lower-case file names in
+    the archive, or ``None`` for a single file (nothing came with it). ``what``/``single``: URDF or MJCF (issue #77)."""
     names = list(dict.fromkeys(_shown(name) for name in map(_mesh_name, facts.pop("mesh_files", [])) if name))
     missing = [name for name in names if present is None or name.lower() not in present]
     unsupported = [name for name in names if name not in missing and not name.lower().endswith(MESH_LOADABLE)]
@@ -809,25 +810,69 @@ def model_facts(facts: dict, urdf: str | None, present: set[str] | None, warning
         return "、".join(_shown(name) for name in found[:EXAMPLES])
 
     if present is None and names:
-        notes.append(f"这份 URDF 用到 {len(names)} 个网格文件（例如 {examples(names)}），单个 .urdf 不带它们：仿真里这些部分只显示"
-                     "碰撞形状或不显示。要带网格，请把 .urdf 和网格文件打成一个压缩包（.zip / .tar.gz）上传")
+        notes.append(f"这份 {what} 用到 {len(names)} 个网格文件（例如 {examples(names)}），单个 {single} 不带它们：仿真里这些部分只显示"
+                     f"碰撞形状或不显示。要带网格，请把 {single} 和网格文件打成一个压缩包（.zip / .tar.gz）上传")
     elif missing:
-        notes.append(f"URDF 用到的 {len(missing)} 个网格文件在压缩包里没有（例如 {examples(missing)}）；仿真里这些部分不显示")
+        notes.append(f"{what} 用到的 {len(missing)} 个网格文件在压缩包里没有（例如 {examples(missing)}）；仿真里这些部分不显示")
     if unsupported:
         notes.append(f"有 {len(unsupported)} 个网格文件仿真读不了（例如 {examples(unsupported)}；只能读 .stl、.obj、.msh）；"
                      "仿真里这些部分不显示，可以转成 .stl 或 .obj 后重新上传")
-    return {**facts, "warnings": notes, "urdf": urdf,
+    return {**facts, "warnings": notes, "model_file": model_file, **({"urdf": model_file} if what == "URDF" else {}),
             "meshes": {"named": len(names), "missing": missing[:50], "unsupported": unsupported[:50]}}
 
 
+# Issue #77: besides a URDF, a robot model may be MJCF (read here, simulated), or SDF / USD / STP (kept, not read:
+# MuJoCo cannot load them). The suffixes of those kept-only files, and how they are named to a person.
+KEPT_SUFFIXES = {".sdf": "sdf", ".usd": "usd", ".usda": "usd", ".usdc": "usd", ".usdz": "usd", ".stp": "stp", ".step": "stp"}
+MAX_XML_FILES = 200
+MAX_XML_TOTAL = 64 * 1024 * 1024
+
+
+def _sibling(name: str):
+    """A module next to this file, loaded by its full path (under ``-I`` this directory is not searched)."""
+    import importlib.util
+    sys.dont_write_bytecode = True
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), name + ".py")
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _xml_reader(limits: dict):
+    return lambda data, on_start, on_end: SafeXml(limits, on_start, on_end).parse(data)
+
+
+def mjcf_facts(main: str | None, files: dict | None, data: bytes, limits: dict, present: set[str] | None) -> dict:
+    """What an MJCF file says (``material_mjcf.py``), with its includes read from ``files`` (an archive's)."""
+    mjcf, parse, notes = _sibling("material_mjcf"), _xml_reader(limits), []
+    root = mjcf.tree(data, parse)
+    if root is None or root.tag != "mujoco":
+        raise Refused("mjcf_root", f"根元素是 <{_shown(root.tag if root else '')}>，不是 MJCF 的 <mujoco>")
+    try:
+        facts = mjcf.facts(mjcf.expand(root, main or "", files, parse, notes, int(limits.get("elements", 200_000))), notes)
+    except mjcf.Refusal as exc:
+        raise Refused(exc.code, exc.message) from None
+    return model_facts(facts, main, present, [], what="MJCF", single=".xml")
+
+
+def kept_facts(fmt: str, files: list[str], warnings: list[str]) -> dict:
+    """A model in a format the simulation cannot load (SDF, USD): kept as it is, not read."""
+    return {"stored_only": fmt, "files": [_shown(n) for n in files[:EXAMPLES]], "file_count": len(files), "warnings": warnings}
+
+
 class ModelMembers(Members):
-    """An archive that should hold one ``.urdf`` and its meshes: the ``.urdf`` is read, the rest only named."""
+    """An archive that should hold one robot model and its meshes: one ``.urdf`` or MJCF ``.xml`` is read
+    (MJCF with the files it includes); SDF and USD files are only named; everything else only counted."""
 
     def __init__(self, limits: dict):
         super().__init__(limits)
         self.urdf_cap = int(limits.get("urdf_bytes", 32 * 1024 * 1024))
         self.urdfs: list[str] = []
         self.urdf_data: bytes | None = None
+        self.xml: dict[str, bytes] = {}
+        self.xml_bytes = 0
+        self.kept: dict[str, list[str]] = {}
         self.names: set[str] = set()
 
     def add(self, name: str) -> None:
@@ -840,33 +885,62 @@ class ModelMembers(Members):
 
     def wants_metadata(self, name: str, size: int) -> str | None:
         clean = name.replace("\\", "/")
-        if unsafe_name(name) or not clean.lower().endswith(".urdf"):
+        lower = clean.lower()
+        if unsafe_name(name):
             return None
-        self.urdfs.append(clean)
-        return "urdf" if len(self.urdfs) == 1 and size <= self.urdf_cap else None
+        if lower.endswith(".urdf"):
+            self.urdfs.append(clean)
+            return "urdf" if len(self.urdfs) == 1 and size <= self.urdf_cap else None
+        if lower.endswith(".xml") and len(self.xml) < MAX_XML_FILES and size <= self.urdf_cap \
+                and self.xml_bytes + size <= MAX_XML_TOTAL:
+            self.xml_bytes += size
+            return "xml:" + posixpath.normpath(clean)
+        kind = next((k for suffix, k in KEPT_SUFFIXES.items() if lower.endswith(suffix)), None)
+        if kind and sum(map(len, self.kept.values())) < 1000:
+            self.kept.setdefault(kind, []).append(clean)
+        return None
 
     def metadata_cap(self, _which: str) -> int:
         return self.urdf_cap
 
     def read_metadata(self, which: str, data: bytes) -> None:
-        self.urdf_data = data
+        if which == "urdf":
+            self.urdf_data = data
+        else:
+            self.xml[which[4:]] = data
 
     def facts(self) -> dict:
-        if not self.urdfs:
-            raise Refused("model_no_urdf", "压缩包里没有 .urdf 文件；机器人模型的压缩包里要有一个 .urdf 和它用到的网格文件")
-        if len(self.urdfs) > 1:
-            raise Refused("model_many_urdf", f"压缩包里有 {len(self.urdfs)} 个 .urdf（{'、'.join(_shown(n) for n in self.urdfs[:EXAMPLES])}）；"
-                          "机器人模型的压缩包里只能有一个")
-        if self.urdf_data is None:
-            raise Refused("too_large", "压缩包里的 .urdf 太大或读不出来，没有解析")
-        return model_facts(parse_urdf(self.urdf_data, self.limits), self.urdfs[0], self.names, super().facts()["warnings"])
+        warnings = super().facts()["warnings"]
+        found, included = _sibling("material_mjcf").roots(self.xml, _xml_reader(self.limits))
+        mains = [name for name in found if name not in included]
+        models = self.urdfs + mains
+        if len(models) > 1:
+            raise Refused("model_many_urdf", f"压缩包里有 {len(models)} 个模型文件（{'、'.join(_shown(n) for n in models[:EXAMPLES])}）；"
+                          "机器人模型的压缩包里只能有一个 URDF 或 MJCF 文件")
+        if self.urdfs:
+            if self.urdf_data is None:
+                raise Refused("too_large", "压缩包里的 .urdf 太大或读不出来，没有解析")
+            return model_facts(parse_urdf(self.urdf_data, self.limits), self.urdfs[0], self.names, warnings)
+        if mains:
+            return mjcf_facts(mains[0], self.xml, self.xml[mains[0]], self.limits, self.names)
+        if self.kept:
+            kinds = sorted(self.kept)
+            return kept_facts("+".join(kinds), [n for k in kinds for n in self.kept[k]], warnings)
+        raise Refused("model_no_urdf", "压缩包里没有机器人模型文件；要有一个 URDF（.urdf）或 MJCF（.xml）和它用到的网格文件，"
+                      "或者 SDF（.sdf）、USD（.usd 等）、STP（.stp、.step）文件")
 
 
 def _run_model(mode: str, limits: dict, handle, size: int) -> dict:
-    if mode == "model.urdf":
-        if size > int(limits.get("urdf_bytes", 32 * 1024 * 1024)):
-            raise Refused("too_large", "URDF 文件太大，没有解析")
-        return model_facts(parse_urdf(handle.read(), limits), None, None, [])
+    cap = int(limits.get("urdf_bytes", 32 * 1024 * 1024))
+    if mode in ("model.urdf", "model.mjcf"):
+        if size > cap:
+            raise Refused("too_large", "模型文件太大，没有解析")
+        data = handle.read()
+        if mode == "model.mjcf":                           # issue #77
+            return mjcf_facts(None, None, data, limits, None)
+        return model_facts(parse_urdf(data, limits), None, None, [])
+    if mode in ("model.sdf", "model.usd", "model.usdz", "model.stp"):  # issue #77: kept, not read
+        return kept_facts({"model.sdf": "sdf", "model.stp": "stp"}.get(mode, "usd"), [], [])
     members = ModelMembers(limits)
     if mode == "model.zip":
         scan_zip(handle, size, members)

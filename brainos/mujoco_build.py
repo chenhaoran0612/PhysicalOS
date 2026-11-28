@@ -25,6 +25,8 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
+from . import mujoco_mjcf_build       # issue #77: an MJCF robot
+
 TIMESTEP = 0.004
 ROBOT = 'robot/'
 BASE_JOINTS = ('base_x', 'base_y', 'base_z', 'base_yaw')
@@ -231,8 +233,12 @@ def build(model_dir, scene, family, pose=None):
         raise BuildError(f'这一版的仿真只支持这些本体类型：{"、".join(FAMILIES)}（这台是 {family}）')
     try:
         meta = json.loads((model_dir / 'model.json').read_text(encoding='utf-8'))
-        robot = mujoco.MjSpec.from_file(str(model_dir / 'model.urdf'))
-    except (OSError, ValueError) as exc:
+        if meta.get('model_format') == 'mjcf':      # issue #77: the robot alone, its joints as MuJoCo reads them
+            robot, joints, _notes = mujoco_mjcf_build.load(model_dir / 'model.xml')
+            meta = {**meta, 'joints': joints}
+        else:
+            robot = mujoco.MjSpec.from_file(str(model_dir / 'model.urdf'))
+    except (OSError, ValueError, RuntimeError) as exc:
         raise BuildError(f'机器人模型读不出来：{exc}') from None
     for geom in robot.geoms:
         if geom.contype or geom.conaffinity:
@@ -270,6 +276,8 @@ def build(model_dir, scene, family, pose=None):
                              rgba=[0, 0, 0, 0])
             carrier.gravcomp = 1.0
             frame = carrier.add_frame()
+        if meta.get('model_format') == 'mjcf':
+            mujoco_mjcf_build.same_options(robot, spec)      # issue #77: the file's own <option> gives way quietly
         spec.attach(robot, frame=frame, prefix=ROBOT)
         joints, by_name = [], {j['name']: j for j in meta.get('joints', [])}
         joint_type = mujoco.mjtTrn.mjTRN_JOINT

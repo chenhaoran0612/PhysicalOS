@@ -185,6 +185,7 @@ const UX_CODES = {
   not_parsed_kind: ['input', '程序和场景数据是原样保存的，不做解析。', '不需要解析；可以直接装到它所属的机器人上'],
   upload_kind_conflict: ['state', '云端有一次把同一个文件当作另一种资料、还没传完的上传，所以这一次没有开始。', '在“资料库”页取消那次没传完的上传后再试'],
   bundle_needs_device: ['input', '程序和场景数据必须属于一台机器人，这次上传没有说明是哪一台。', '从这台机器人的页面里收进云端'],
+  model_kept_only: ['state', '这种格式（SDF、USD、STP）的机器人模型只保存在资料库里，仿真暂时用不了，不需要核对或确认。', '仿真要用 URDF 或 MJCF 模型'],   // issue #77
   bundle_not_authorized: ['auth', '读取或写入机器人上的目录需要你的确认。', '在确认框里勾选并确认后再开始'],
   bundle_no_ssh: ['state', '这台机器人没有保存 SSH 连接，程序和场景数据要经 SSH 读写。', '先通过 SSH 接入这台机器人'],
   bundle_directory_invalid: ['input', '填写的目录不能用。', '写成 ~/ 开头或完整路径，例如 ~/walk_programs；不能是主目录本身或存放登录凭据的位置'],

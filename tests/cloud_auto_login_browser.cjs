@@ -58,7 +58,7 @@ let failed = async () => {};
   // 3 · Signing in again signs into the cloud: the library is open.
   await gateSignIn(page, {...account, register: false});
   await library();
-  await main.locator('.empty', {hasText: '资料库还是空的'}).waitFor();
+  await main.locator('.empty', {hasText: '还没有品牌型号'}).waitFor();   // issue #77: an empty library starts with no brand and model
   must(!(await main.innerText()).includes('请先登录云平台账户'), 'The library still asks for a cloud sign-in');
   const cloud = await page.evaluate(() => state.cloud_account);
   must(cloud.logged_in && cloud.email === account.email, 'The cloud account is not the app account: ' + JSON.stringify(cloud));
@@ -82,7 +82,7 @@ let failed = async () => {};
   await gate.locator('form[data-acct-form="login"]').waitFor();
   await gateSignIn(page, {...account, register: false});
   await library();
-  await main.locator('.empty', {hasText: '资料库还是空的'}).waitFor();
+  await main.locator('.empty', {hasText: '还没有品牌型号'}).waitFor();   // issue #77: an empty library starts with no brand and model
 
   // 5 · It lapsed while the app was closed: the app starts on the sign-in page.
   await fixture('expire-cloud-sessions');
@@ -92,7 +92,7 @@ let failed = async () => {};
   await shot('5-lapsed-while-closed');
   await gateSignIn(page, {...account, register: false});
   await library();
-  await main.locator('.empty', {hasText: '资料库还是空的'}).waitFor();
+  await main.locator('.empty', {hasText: '还没有品牌型号'}).waitFor();   // issue #77: an empty library starts with no brand and model
 
   must(errors.length === 0, 'Page errors: ' + errors.join(' | '));
   console.log(JSON.stringify({ok: true, ...result}));

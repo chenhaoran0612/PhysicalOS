@@ -18,7 +18,7 @@ Only a robot's programs and scene data (kind ``bundle``, issue #43) still belong
 from . import robot_model, robot_scope
 from .cloud_account import CloudError
 from .errors import CodedError
-from .material_library import MATERIAL_KEYS, _material_id, _scalars
+from .material_library import MATERIAL_KEYS, _counts, _material_id, _scalars
 
 MODEL = 'model'
 BUNDLE = 'bundle'
@@ -134,8 +134,10 @@ class ModelLibrary:
         return results
 
     # ------------------------------------------------------------ what the pages ask
-    def products(self):
-        """The brands and models of this account's robots (simulated ones aside), each with its body type."""
+    def products(self, kept=()):
+        """The brands and models to choose from: those of this account's robots (simulated ones aside), each with
+        its body type; then (issue #77) those the cloud keeps materials for (``kept``, from :meth:`kept`), with
+        how many materials and usable robot models each has."""
         found = {}
         for robot in sorted(self.store.list('robots'), key=lambda r: (r.get('created_at', ''), r['id'])):
             product = robot_model.of(robot)
@@ -143,13 +145,34 @@ class ModelLibrary:
                 continue
             entry = found.setdefault(product_key(product), {**product, 'family': robot.get('family'), 'robots': []})
             entry['robots'].append(robot['name'])
+        for row in kept:
+            entry = found.setdefault(product_key(row), {'vendor': row['vendor'], 'model': row['model'],
+                                                        'family': row.get('body_type'), 'robots': []})
+            entry.update(_counts(row, ('materials', 'usable_models')))
         return list(found.values())[:MAX_PRODUCTS]
+
+    def kept(self):
+        """Issue #77: the brands and models the cloud keeps materials for (``GET /library/products``). An older
+        cloud has no such list: then only the robots' brands and models are offered."""
+        try:
+            answer = self.platform.library._call('GET', '/library/products')
+        except CloudError as exc:
+            if exc.status == 404:                   # a cloud from before issue #77
+                return []
+            raise
+        rows = answer.get('products') if isinstance(answer, dict) and isinstance(answer.get('products'), list) else []
+        out = []
+        for row in rows[:MAX_PRODUCTS * 2]:
+            if isinstance(row, dict) and of_material(row):
+                out.append({**_scalars(row, ('vendor', 'model', 'body_type')), **_counts(row, ('materials', 'usable_models'))})
+        return out
 
     def overview(self, p=None):
         """``library/overview`` plus the brands and models to choose from; old materials are moved first."""
         moved = self.sync()
         view = self.platform.library.overview(p)
-        return {**view, 'products': self.products(), 'rebound': moved}
+        kept = self.kept() if view.get('formats') is not None else []        # not signed in: nothing to ask
+        return {**view, 'products': self.products(kept), 'rebound': moved}
 
     def robot(self, p):
         """The materials of one robot: its brand and model's, and what is still bound to it alone."""

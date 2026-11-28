@@ -40,6 +40,7 @@ MAX_NAME = 200
 COMPILER = {'meshdir': 'meshes', 'strippath': 'false', 'discardvisual': 'false', 'fusestatic': 'false',
             'balanceinertia': 'true', 'boundmass': '0.001', 'boundinertia': '0.000001'}
 FORMAT = 2                      # bump when what prepare() writes changes: older directories are rebuilt
+MODEL_SUFFIXES = ('.urdf', '.xml')     # issue #77: an MJCF model is an .xml (mujoco_mjcf.py)
 
 
 class ModelError(ValueError):
@@ -53,7 +54,12 @@ def _unsafe(name):
 
 def _wanted(name):
     lower = name.lower()
-    return lower.endswith('.urdf') or lower.endswith(MESH_SUFFIXES)
+    return lower.endswith(MODEL_SUFFIXES) or lower.endswith(MESH_SUFFIXES)
+
+
+def _limit(name):
+    """The largest a member may be: a model file (URDF, issue #77: or MJCF) or a mesh."""
+    return MAX_URDF_BYTES if name.lower().endswith(MODEL_SUFFIXES) else MAX_MESH_BYTES
 
 
 class _Budget:
@@ -71,7 +77,7 @@ class _Budget:
         return max(0, MAX_TOTAL_BYTES - self.total)
 
     def take(self, name, size):
-        limit = MAX_URDF_BYTES if name.lower().endswith('.urdf') else MAX_MESH_BYTES
+        limit = _limit(name)
         if size > limit:
             raise ModelError(f'压缩包里的 {name[:80]} 太大（{size} 字节，上限 {limit}）')
         self.total += size
@@ -80,7 +86,7 @@ class _Budget:
 
 
 def _read_capped(stream, name, budget):
-    limit = MAX_URDF_BYTES if name.lower().endswith('.urdf') else MAX_MESH_BYTES
+    limit = _limit(name)
     data = stream.read(min(limit, budget.room()) + 1)
     budget.take(name, len(data))
     return data
@@ -95,7 +101,7 @@ def _zip_members(path, budget):
                 mode = (info.external_attr >> 16) & 0o170000
                 if info.is_dir() or _unsafe(name) or not _wanted(name) or mode == 0o120000 or info.flag_bits & 1:
                     continue
-                if info.file_size > (MAX_URDF_BYTES if name.lower().endswith('.urdf') else MAX_MESH_BYTES):
+                if info.file_size > _limit(name):
                     raise ModelError(f'压缩包里的 {name[:80]} 太大')
                 with archive.open(info) as member:
                     yield name.replace('\\', '/'), _read_capped(member, name, budget)
@@ -205,19 +211,21 @@ def _match(reference, members):
 
 
 # ------------------------------------------------------------------ URDF
-def _parse_xml(data):
+def _parse_xml(data, root_tag='robot', what='URDF'):
+    """The element tree of a model file; DOCTYPE and entities refused, size and depth bounded.
+    ``root_tag``/``what``: issue #77 reads MJCF (``mujoco``) with it as well."""
     builder, parser, count, depth = ET.TreeBuilder(), expat.ParserCreate(), [0], [0]
 
     def refuse(*_args):
-        raise ModelError('URDF 里有 DOCTYPE 或实体声明，出于安全没有读取')
+        raise ModelError(f'{what} 里有 DOCTYPE 或实体声明，出于安全没有读取')
 
     def start(name, attrs):
         count[0] += 1
         depth[0] += 1
         if count[0] > MAX_ELEMENTS:
-            raise ModelError(f'URDF 的元素超过 {MAX_ELEMENTS} 个')
+            raise ModelError(f'{what} 的元素超过 {MAX_ELEMENTS} 个')
         if depth[0] > MAX_DEPTH:
-            raise ModelError(f'URDF 的 XML 嵌套超过 {MAX_DEPTH} 层')
+            raise ModelError(f'{what} 的 XML 嵌套超过 {MAX_DEPTH} 层')
         builder.start(name, attrs)
 
     def end(name):
@@ -229,9 +237,9 @@ def _parse_xml(data):
         parser.Parse(data, True)
         root = builder.close()
     except (expat.ExpatError, AssertionError, RecursionError) as exc:
-        raise ModelError(f'URDF 的 XML 格式不对：{exc}') from None
-    if root.tag != 'robot':
-        raise ModelError('这个文件的根元素不是 URDF 的 <robot>')
+        raise ModelError(f'{what} 的 XML 格式不对：{exc}') from None
+    if root.tag != root_tag:
+        raise ModelError(f'这个文件的根元素不是 {what} 的 <{root_tag}>')
     return root
 
 
@@ -264,6 +272,24 @@ def _joints(root):
     return joints
 
 
+def write_mesh(member, members, meshes_dir, written, unusable):
+    """The file under ``meshes/`` that archive member ``member`` became (written once), or ``None`` when it is
+    missing or cannot be loaded. ``written``/``unusable`` carry what was decided already."""
+    target = written.get(member) if member else None
+    if member and target is None and member not in unusable and len(written) < MAX_MESHES:
+        suffix = '.' + member.lower().rsplit('.', 1)[-1]
+        data = members[member]
+        if suffix == '.stl':
+            data = _binary_stl(data)
+        if data and suffix in MESH_SUFFIXES:
+            target = f'm{len(written)}{suffix}'
+            (meshes_dir / target).write_bytes(data)
+            written[member] = target
+        else:
+            unusable.add(member)
+    return target
+
+
 def _rewrite(root, members, meshes_dir, warnings):
     """Point every mesh at a file under ``meshes/``; take out the shapes whose mesh cannot be loaded."""
     written, dropped, unusable = {}, [], set()       # a member that cannot be used is looked at once, however often it is named
@@ -276,18 +302,7 @@ def _rewrite(root, members, meshes_dir, warnings):
                 continue
             reference = mesh.get('filename', '')
             member = _match(reference, members) if members else None
-            target = written.get(member) if member else None
-            if member and target is None and member not in unusable and len(written) < MAX_MESHES:
-                suffix = '.' + member.lower().rsplit('.', 1)[-1]
-                data = members[member]
-                if suffix == '.stl':
-                    data = _binary_stl(data)
-                if data and suffix in MESH_SUFFIXES:
-                    target = f'm{len(written)}{suffix}'
-                    (meshes_dir / target).write_bytes(data)
-                    written[member] = target
-                else:
-                    unusable.add(member)
+            target = write_mesh(member, members, meshes_dir, written, unusable)
             if target is None:
                 link.remove(shape)
                 dropped.append(reference.replace('\\', '/').rsplit('/', 1)[-1][:80])
@@ -316,30 +331,41 @@ def _prepare_urdf(data, members, dest, warnings):
             'joints': _joints(root), 'warnings': warnings}
 
 
+def _model_of(fmt, source):
+    """``(format, main file name, its bytes, other model-file bytes, mesh members)`` of a downloaded model.
+    Issue #77: an MJCF ``.xml`` (``fmt`` ``mjcf``, or the one in an archive that no other includes) as well."""
+    if fmt in ('urdf', 'mjcf'):
+        if source.stat().st_size > MAX_URDF_BYTES:
+            raise ModelError('模型文件太大')
+        return fmt, None, source.read_bytes(), None, {}
+    if fmt not in ('zip', 'tar.gz'):
+        raise ModelError(f'机器人模型不能是 {fmt} 文件（仿真只能读 URDF 和 MJCF）')
+    budget, urdfs, xmls, members = _Budget(), {}, {}, {}
+    for name, data in (_zip_members if fmt == 'zip' else _tar_members)(source, budget):
+        lower = name.lower()
+        (urdfs if lower.endswith('.urdf') else xmls if lower.endswith('.xml') else members)[name] = data
+    found = list(urdfs) + mujoco_mjcf.mains(xmls)
+    if len(found) != 1:
+        raise ModelError('压缩包里没有 .urdf 或 MJCF（.xml）文件（仿真只能读这两种）' if not found else
+                         f'压缩包里有 {len(found)} 个模型文件（{"、".join(n[:60] for n in found[:5])}），只能有一个')
+    main = found[0]
+    return ('urdf' if main in urdfs else 'mjcf'), main, urdfs.get(main) or xmls[main], xmls, members
+
+
 def prepare(source, fmt, dest):
     """Build the model directory ``dest`` from the downloaded file ``source`` (library format ``fmt``:
-    ``urdf``, ``zip`` or ``tar.gz``). Returns what ``model.json`` holds. ``dest`` must not exist."""
+    ``urdf``, ``mjcf`` (issue #77), ``zip`` or ``tar.gz``). Returns what ``model.json`` holds. ``dest`` must not exist."""
     source, dest = Path(source), Path(dest)
     work = dest.with_name(dest.name + '.part')
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True, mode=0o700)
     try:
-        warnings, members = [], {}
-        if fmt == 'urdf':
-            if source.stat().st_size > MAX_URDF_BYTES:
-                raise ModelError('URDF 文件太大')
-            urdf = source.read_bytes()
-        elif fmt in ('zip', 'tar.gz'):
-            budget = _Budget()
-            urdfs = {}
-            for name, data in (_zip_members if fmt == 'zip' else _tar_members)(source, budget):
-                (urdfs if name.lower().endswith('.urdf') else members)[name] = data
-            if len(urdfs) != 1:
-                raise ModelError('压缩包里没有 .urdf 文件' if not urdfs else f'压缩包里有 {len(urdfs)} 个 .urdf，只能有一个')
-            urdf = next(iter(urdfs.values()))
+        warnings = []
+        kind, main, data, xmls, members = _model_of(fmt, source)
+        if kind == 'mjcf':
+            meta = mujoco_mjcf.prepare(main, xmls, data, members, work, warnings)
         else:
-            raise ModelError(f'机器人模型不能是 {fmt} 文件')
-        meta = _prepare_urdf(urdf, members, work, warnings)
+            meta = _prepare_urdf(data, members, work, warnings)
         (work / 'model.json').write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding='utf-8')
         shutil.rmtree(dest, ignore_errors=True)
         os.replace(work, dest)
@@ -356,6 +382,14 @@ def load(dest):
         meta = json.loads((dest / 'model.json').read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return None
-    if not isinstance(meta, dict) or meta.get('format') != FORMAT or not (dest / 'model.urdf').is_file():
+    if not isinstance(meta, dict) or meta.get('format') != FORMAT or not (dest / model_file(meta)).is_file():
         return None
     return meta
+
+
+def model_file(meta):
+    """The file of a prepared directory MuJoCo reads: ``model.urdf``, or (issue #77) ``model.xml`` for MJCF."""
+    return 'model.xml' if isinstance(meta, dict) and meta.get('model_format') == 'mjcf' else 'model.urdf'
+
+
+from . import mujoco_mjcf  # noqa: E402  (issue #77; it uses the helpers above, so it is imported after them)
