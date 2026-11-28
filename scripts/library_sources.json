@@ -2238,7 +2238,7 @@
    ],
    "licence": "LICENSE",
    "licence_name": "MulanPSL-2.0",
-   "research_notes": "Link-U-OS is AgiBot's robot-OS org; README calls it Raise A2 open-sourced by Agibot (robot name a2_t2d0_ultra). Complete and self-contained (relative ../meshes refs, all 91 present), but only the 12 leg joints are revolute; arms, waist and head are fixed. A 22-DoF model_public.urdf exists in Link-U-OS/rl_deploy @ 2f6f2f4d2a7058e527e15882fa32539baafa13a5 (mujoco_sim/resource/model/a2_t2d0_ultra/urdf/) but its meshes/convex collision folder is not in that repo. A community copy (Seb-project/Agibot-A2-path-tools, no licence) is missing 2 meshes.",
+   "research_notes": "Link-U-OS is AgiBot's org for its robot software; README calls it Raise A2 open-sourced by Agibot (robot name a2_t2d0_ultra). Complete and self-contained (relative ../meshes refs, all 91 present), but only the 12 leg joints are revolute; arms, waist and head are fixed. A 22-DoF model_public.urdf exists in Link-U-OS/rl_deploy @ 2f6f2f4d2a7058e527e15882fa32539baafa13a5 (mujoco_sim/resource/model/a2_t2d0_ultra/urdf/) but its meshes/convex collision folder is not in that repo. A community copy (Seb-project/Agibot-A2-path-tools, no licence) is missing 2 meshes.",
    "notes": "智元 Link-U-OS 的远征 A2 模型，只有腿部 12 个关节能动，手臂、腰、头是固定的。"
   },
   {
