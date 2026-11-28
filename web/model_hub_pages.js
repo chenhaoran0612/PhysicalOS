@@ -85,7 +85,7 @@ function hubMore() {
 
 const hubViews = {
   models: () => hubLibraryPage(state, hubData, hubFilter, record => resultModelActions(record)) + hubMore(),
-  training: () => hubTrainingPage(state, hubData, jobTable(rows('jobs').filter(j => j.kind === 'training'), ''), Boolean(state.duck_kit && state.duck_kit.shows.length)),
+  training: () => hubTrainingPage(state, hubData, jobTable(rows('jobs').filter(j => j.kind === 'training'), button('先登记训练数据', 'go-datasets', 'secondary small')), Boolean(state.duck_kit && state.duck_kit.shows.length)),
   datasets: () => hubDataPage(state, hubData),
   model: () => (hubOpenModel() ? hubModelPage(state, hubData, hubOpenModel()) : hubViews.models()),
   'model-improve': () => (hubOpenModel() ? hubImprovePage(state, hubData, hubOpenModel(), hubLiveDetail) : hubViews.training()),
