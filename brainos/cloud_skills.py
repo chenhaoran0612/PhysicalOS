@@ -138,7 +138,7 @@ class CloudSkills:
         if not self.cloud.summary()['logged_in']:
             raise CodedError(LOGIN_REQUIRED, 'cloud_login_required')
 
-    def _call(self, method, path, payload=None):
+    def _call(self, method, path, payload=None, timeout=TIMEOUT_S):
         """One JSON call to the cloud. Like ``CloudAccount._request`` (no proxy, no redirect, the
         address policy on the real peer), with room for an answer that holds a whole package."""
         self._require_login()
@@ -152,7 +152,7 @@ class CloudSkills:
         opener = urllib.request.build_opener(connector.NoRedirect, urllib.request.ProxyHandler({}),
                                              _CheckedHTTPHandler(), _CheckedHTTPSHandler())
         try:
-            with opener.open(request, timeout=TIMEOUT_S) as response:
+            with opener.open(request, timeout=timeout) as response:
                 raw = response.read(MAX_ANSWER_BYTES + 1)
         except urllib.error.HTTPError as exc:
             raise self._refusal(exc) from None

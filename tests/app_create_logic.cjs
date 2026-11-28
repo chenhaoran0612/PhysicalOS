@@ -107,5 +107,15 @@ ok(page.acStatus({connected: 1, unread: []}, 3).includes('3 个技能可以直�
 ok(page.acStatus({connected: 2, unread: ['二号']}, 1).includes('1 台没有读到：二号'), 'a robot that could not be read is named');
 ok(page.acStatus({connected: 0, unread: []}, 0).includes('没有连接'), 'no connected robot: say so, and what to do');
 ok(page.acStatus({connected: 1, unread: []}, 0).includes('还没有可用的技能'), 'a brand and model without skills');
+// Issue #73: what 「技能发布」 published for the brand and model is offered too, also with no robot of it connected.
+const offline = cloud => ({connected: 0, unread: [], skipped: [], product: ACME, cloud});
+const published = page.acStatus(offline({status: 'ok', count: 6, error: null}), 6);
+ok(published.includes('6 个技能可以直接选用（6 个来自「技能发布」）'), 'skills published for the brand and model are counted as such');
+ok(published.includes('连接后才列得出') && !published.includes('先连接一台，再回来创建'), 'no robot connected does not stop the published ones');
+ok(!page.acStatus({connected: 1, unread: [], cloud: {status: 'ok', count: 0, error: null}}, 2).includes('技能发布'), 'nothing published: the cloud is not mentioned');
+ok(page.acStatus(offline({status: 'ok', count: 0, error: null}), 0).includes('先连接一台，或者在「技能发布」里发布给这个品牌型号'), 'nothing at all: say both ways to get skills');
+ok(page.acStatus(offline({status: 'signed_out', count: 0, error: null}), 0).includes('没有登录云平台'), 'signed out: say why the published ones are missing');
+ok(page.acStatus({connected: 1, unread: [], cloud: {status: 'failed', count: 0, error: '无法连接云平台；请检查地址和网络'}}, 2)
+  .includes('没有读到「技能发布」里的技能：无法连接云平台'), 'a cloud that could not be read is named, the rest is offered');
 
 console.log(`app_create logic: ${checks} checks passed`);
