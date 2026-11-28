@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const sandbox = {};
 vm.createContext(sandbox);
 const t = vm.runInContext(readFileSync('web/task_sim.js', 'utf8') +
-  '\n;({tsimStatus, tsimCardAction, tsimValue, tsimUseLine, tsimRunBlock, tsimSkillRows, tsimEsc})', sandbox);
+  '\n;({tsimStatus, tsimCardAction, tsimBuilt, tsimValue, tsimUseLine, tsimRunBlock, tsimSkillRows, tsimEsc})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -25,6 +25,13 @@ same(t.tsimStatus({environment: saved, build: {busy: false, status: 'failed'}}).
 same(t.tsimStatus({build: {busy: false, status: 'failed'}}).key, 'failed', 'a failed first build');
 same(t.tsimStatus({environment: {...saved, stale: true}}).key, 'stale', 'built for another brand and model');
 same(t.tsimStatus({environment: saved, problem: {code: 'sim_engine_missing'}}).key, 'saved', 'a saved environment is shown although something is missing now');
+
+// ---- issue #74: the list of the task's runs waits for something to run in
+same(t.tsimBuilt(null), false, 'not read yet');
+same(t.tsimBuilt({environment: null, build: {busy: false, status: 'failed'}}), false, 'a failed first build has nothing to run in');
+same(t.tsimBuilt({environment: null, build: {busy: true, status: 'generating'}}), false, 'a first build under way');
+same(t.tsimBuilt({environment: saved, build: {busy: true}}), true, 'a rebuild keeps the saved one');
+same(t.tsimBuilt({model: {staged: true}}), true, 'a robot with its own stage needs no build');
 
 // ---- the button of a card
 same(t.tsimCardAction({environment: saved}), {label: '进入仿真', primary: true}, 'saved: enter');

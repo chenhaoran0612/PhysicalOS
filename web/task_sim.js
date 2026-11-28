@@ -45,6 +45,10 @@ function tsimCardAction(row) {
   return {label: '构建仿真环境', primary: true};
 }
 
+// Issue #74: whether the task has anything to run in yet. Until it has (never built, building, a failed first build)
+// the page shows no list of its simulated runs: web/run_boards.js puts it at the foot, web/task_sim.css hides it.
+const tsimBuilt = view => Boolean(view && (view.environment || view.model?.staged));
+
 // A value of a step, short enough for one line.
 function tsimValue(value) {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -257,6 +261,7 @@ function tsimDraw() {
   }
   tsimPart('list', '');
   const view = tsim.view;
+  tsim.root.dataset.built = tsimBuilt(view) ? '1' : '';
   if (!view) {
     tsimPart('head', '<div class="tw-back"><a href="#simulation" data-tsim-back>← 全部任务</a></div>' +
       (tsim.viewError ? `<div class="notice bad">${tsimEsc(tsim.viewError)}</div>` : '<p class="tsim-quiet">正在读取…</p>'));
