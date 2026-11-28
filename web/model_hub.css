@@ -213,3 +213,10 @@ tr.mh-worse .mh-change{color:var(--mh-warn);font-weight:550}
 @media(max-width:1150px){.mh-board{grid-template-columns:minmax(120px,.7fr) minmax(0,2fr)}.mh-figures{grid-column:1/-1;grid-template-columns:repeat(3,1fr);gap:0 18px;margin-top:18px;padding-top:16px;border-top:1px solid var(--mh-rule)}.mh-figures div{border-bottom:0;padding-bottom:0}.mh-detail{grid-template-columns:1fr}.mh-side{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}}
 @media(max-width:760px){.mh-board{grid-template-columns:1fr;gap:18px 0;padding:22px 20px}.mh-index{padding-left:0;border-left:0}.mh-count strong{font-size:56px}.mh-steps{grid-template-columns:1fr}.mh-steps li{border-right:0;border-bottom:1px solid #eef1ea}.mh-round-head{flex-direction:column}.mh-pair,.mh-measure-inputs{grid-template-columns:1fr}.mh-files li{grid-template-columns:1fr}.mh-pick button{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.mh-card,.mh-card::after,.mh-cat,.mh-back{transition:none}.mh-card:hover,.mh-card:focus-within{transform:none}.mh-run.now{animation:none}}
+/* Issue #79: a duck model's imported acceptance carries four measures. The main column keeps the width the
+   grid gives it (an implicit column would grow to the widest table and slide under the side column), the
+   measures wrap, and a table that is still wider scrolls inside its panel. */
+.mh-detail-main{grid-template-columns:minmax(0,1fr)}
+.mh-evals{overflow-x:auto}
+.mh-evals td:nth-child(2){white-space:normal;min-width:180px}
+.mh-evals td:nth-child(2) .tag{display:inline-block;margin:2px 0}

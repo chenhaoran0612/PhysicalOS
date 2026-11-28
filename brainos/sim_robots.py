@@ -203,6 +203,8 @@ class SimRobots:
             robot['sim'].update(state='starting', enabled=True)
             robot['sim'].pop('error', None)
             self.platform.store.put('robots', robot)
+            if robot['sim'].get('duck'):
+                self.platform.duck.refresh(robot_id)        # issue #79: it performs the packages of this installation
             proc = SimProcess(robot_id, robot['sim']['adapter'], self.root / robot_id, robot['token'])
             try:
                 url = proc.start(robot['sim'].get('start_timeout_s') or START_TIMEOUT_S)   # issue #51: a MuJoCo body builds its model first

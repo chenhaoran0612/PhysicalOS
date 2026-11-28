@@ -28,10 +28,16 @@ from .model_hub_files import LocalFiles
 MODELS, VERSIONS, SETS, EVALS, ROUNDS, LINKS = 'hub_models', 'hub_versions', 'hub_sets', 'hub_evaluations', 'hub_rounds', 'hub_skill_links'
 DUCK_MODEL, DUCK_VERSION, DUCK_EVAL = 'hubm-duck-', 'hubv-duck-', 'hube-duck-'
 FIXED, INDEPENDENT = 'hubs-duck-fixed', 'hubs-duck-independent'
-# The start poses the training project evaluates on, and its second, pre-registered set (the packages name both).
+# The start poses the training project evaluates on, and a second, pre-registered set (the packages name both).
+# Issue #79: every version has its own independent set (``independent_from`` in duck_kit.SHOWS); the one issue
+# #71 knew (that of 鞠躬鞠过头 round 40) keeps its id, the others are ``hubs-duck-independent-<first seed>``.
 FIXED_SEEDS = tuple(range(1_700_003_000, 1_700_003_010))
 INDEPENDENT_SEEDS = tuple(range(1_991_724_000, 1_991_724_010))
 ACCEPTANCE = (('fixed', FIXED), ('independent', INDEPENDENT))
+
+
+def _independent_id(first):
+    return INDEPENDENT if first in (None, INDEPENDENT_SEEDS[0]) else f'{INDEPENDENT}-{first}'
 ACCEPTANCE_SOURCE = '训练项目的验收记录'
 EVALUATION, TRAINING = 'evaluation', 'training'
 PURPOSES = {EVALUATION: '评测集', TRAINING: '训练集'}
@@ -39,8 +45,8 @@ MAX_SEEDS, MAX_COUNT, MAX_FILES = 200, 1_000_000_000, 20
 OPEN = ('baseline', 'diagnose', 'training', 'candidate', 'review')
 ACCEPTED, REJECTED = 'accepted', 'rejected'
 STATUS_NAMES = {'delivered': '已交付', 'candidate': '候选', 'training': '训练中', 'empty': '还没有模型文件',
-                'unrated': '待评测', 'below': '未达标', 'qualified': '已达标'}
-NOT_RUNNABLE = '只有随应用带来的小黄鸭技能模型包可以在仿真里评测；上传的模型文件和其他分类的模型，请导入评测结果'
+                'unrated': '待评测', 'below': '未达标', 'qualified': '已达标', 'archived': '已归档'}
+NOT_RUNNABLE = '只有随这个安装带来的小黄鸭技能模型包可以在仿真里评测；它们的旧版本、上传的模型文件和其他分类的模型，请导入评测结果'
 
 
 def _id(prefix):
@@ -121,32 +127,79 @@ class ModelHub:
                 'note': show.get('note', ''), 'created_at': ''}
 
     @staticmethod
-    def _duck_version(show):
-        origin = show.get('origin') or {}
-        return {'id': f"{DUCK_VERSION}{show['id']}-{show['sha256'][:12]}", 'model_id': DUCK_MODEL + show['id'],
+    def _duck_version(show, version=None):
+        """A version of a duck's skill model: the package in the kit, or (issue #79) one that came with an earlier release."""
+        version = version or show
+        origin, current = version.get('origin') or {}, version is show
+        return {'id': f"{DUCK_VERSION}{show['id']}-{version['sha256'][:12]}", 'model_id': DUCK_MODEL + show['id'],
                 'label': f"第 {origin.get('round', '?')} 轮 · 第 {origin.get('update', '?')} 次更新", 'builtin': True, 'round_id': '',
-                'files': [{'id': '', 'filename': show['package'], 'size': None, 'sha256': show['sha256']}],
-                'origin': {k: origin[k] for k in ('round', 'update', 'steps', 'device') if k in origin}, 'note': '随应用带来的模型包', 'created_at': ''}
+                'superseded': not current,
+                'files': [{'id': '', 'filename': version['package'], 'size': None, 'sha256': version['sha256']}],
+                'origin': {k: origin[k] for k in ('round', 'update', 'steps', 'device') if k in origin},
+                'note': '随应用带来的模型包' if current else duck_kit.OLD_RULES, 'created_at': ''}
+
+    def _duck_versions(self, show):
+        return [self._duck_version(show, version) for version, _current in duck_kit.versions(show)]
 
     @staticmethod
     def _duck_sets():
         base = {'purpose': EVALUATION, 'category': catalog.MOTION, 'product': {'vendor': duck_kit.VENDOR, 'model': duck_kit.MODEL},
                 'targets': {}, 'source': '训练项目登记的起姿', 'file': None, 'builtin': True, 'created_at': ''}
-        return [{**base, 'id': FIXED, 'name': '固定起姿组', 'seeds': list(FIXED_SEEDS), 'count': len(FIXED_SEEDS),
-                 'description': '训练时每次评估都用的十个起姿。'},
-                {**base, 'id': INDEPENDENT, 'name': '独立起姿组', 'seeds': list(INDEPENDENT_SEEDS), 'count': len(INDEPENDENT_SEEDS),
-                 'description': '训练前就登记好、训练中从不使用的十个起姿，用来确认模型不是只会固定的那十个。'}]
+        found = {FIXED: {**base, 'id': FIXED, 'name': '固定起姿组', 'seeds': list(FIXED_SEEDS), 'count': len(FIXED_SEEDS),
+                         'description': '训练时每次评估都用的十个起姿，所有模型和版本都一样。'}}
+        for show in duck_kit.SHOWS:
+            for version, _current in duck_kit.versions(show):
+                key = _independent_id(version.get('independent_from'))
+                if key in found:
+                    continue
+                seeds = duck_kit.seed_group(version['independent_from']) if version.get('independent_from') else INDEPENDENT_SEEDS
+                origin = version.get('origin') or {}
+                found[key] = {**base, 'id': key, 'name': f"独立起姿组 · {show['title']} 第 {origin.get('round', '?')} 轮",
+                              'seeds': list(seeds), 'count': len(seeds),
+                              'description': '为这一版在训练前登记好、训练中从不使用的十个起姿，用来确认模型不是只会固定的那十个。'}
+        if INDEPENDENT not in found:                 # the id issue #71 gave it stays usable for what refers to it
+            found[INDEPENDENT] = {**base, 'id': INDEPENDENT, 'name': '独立起姿组', 'seeds': list(INDEPENDENT_SEEDS), 'count': len(INDEPENDENT_SEEDS),
+                                  'description': '训练前就登记好、训练中从不使用的十个起姿，用来确认模型不是只会固定的那十个。'}
+        return list(found.values())
+
+    def _duck_records(self, show):
+        """Issue #79: the accepted episodes of the package in the kit, by group (``{}`` when it has none)."""
+        try:
+            found = self.platform.duck.evidence({'show': show['id']}).get('records') or {}
+        except (CodedError, ValueError, OSError):
+            return {}
+        return {group['id']: group for group in found.get('groups', [])}
+
+    @staticmethod
+    def _duck_metrics(passed, total, cases):
+        metrics = {'success_rate': round(100 * passed / total, 2)}
+        if cases and len(cases) == total:
+            for name, key in (('mean_duration_s', 'duration_s'), ('mean_steps', 'steps'), ('mean_return', 'return')):
+                values = [c[key] for c in cases if c.get(key) is not None]
+                if len(values) == total:
+                    metrics[name] = round(sum(values) / total, 4)
+        return metrics
 
     def _duck_evaluations(self, show):
-        if not show.get('package'):
-            return []
-        version, results = self._duck_version(show)['id'], []
-        for key, set_id in ACCEPTANCE:
-            passed, total = (show.get('acceptance') or {}).get(key) or (None, None)
-            if total:
-                results.append({'id': f"{DUCK_EVAL}{show['id']}-{key}", 'model_id': DUCK_MODEL + show['id'], 'version_id': version, 'set_id': set_id,
-                                'mode': 'imported', 'status': 'done', 'metrics': {'success_rate': round(100 * passed / total, 2)},
-                                'passed': passed, 'total': total, 'source': ACCEPTANCE_SOURCE, 'round_id': '', 'error': '', 'created_at': '', 'finished_at': ''})
+        """The training project's acceptance of each version, as two imported evaluations; for the package in
+        the kit with every episode (issue #79). A version recorded before issue #79 keeps the ids it had."""
+        results = []
+        for version, current in duck_kit.versions(show):
+            groups = self._duck_records(show) if current else {}
+            version_id = self._duck_version(show, version)['id']
+            legacy = version.get('legacy') or 'independent_from' not in version
+            for key, set_id in ((key, FIXED if key == 'fixed' else _independent_id(version.get('independent_from'))) for key, _old in ACCEPTANCE):
+                passed, total = (version.get('acceptance') or {}).get(key) or (None, None)
+                if not total:
+                    continue
+                cases = [{**{k: c.get(k) for k in ('seed', 'success', 'steps', 'duration_s', 'return', 'recording')},
+                          'reason': '' if c.get('success') else c.get('reason', '')}            # a passed episode needs no reason
+                         for c in (groups.get(key) or {}).get('cases', [])]
+                results.append({'id': f"{DUCK_EVAL}{show['id']}-{key}" if legacy else f"{DUCK_EVAL}{show['id']}-{version['sha256'][:12]}-{key}",
+                                'model_id': DUCK_MODEL + show['id'], 'version_id': version_id, 'set_id': set_id,
+                                'mode': 'imported', 'status': 'done', 'metrics': self._duck_metrics(passed, total, cases),
+                                'passed': passed, 'total': total, 'source': ACCEPTANCE_SOURCE, 'round_id': '', 'error': '', 'created_at': '', 'finished_at': '',
+                                'cases': cases})
         return results
 
     # ------------------------------------------------------------ finding
@@ -166,7 +219,7 @@ class ModelHub:
     def _versions(self, model):
         """Newest first; the package that came with the app last."""
         builtin = duck_kit.BY_ID.get(model.get('show') or '')
-        return self._of(VERSIONS, model['id']) + ([self._duck_version(builtin)] if builtin and builtin.get('package') else [])
+        return self._of(VERSIONS, model['id']) + (self._duck_versions(builtin) if builtin else [])
 
     def _version(self, model, key):
         found = next((v for v in self._versions(model) if v['id'] == key), None)
@@ -235,13 +288,15 @@ class ModelHub:
 
     def _current(self, model, versions, rounds):
         """The version a model stands at: the newest of the accepted candidates and the versions added outside a round."""
-        events = [(v.get('created_at', ''), v['id']) for v in versions if not v.get('round_id')]
+        events = [(v.get('created_at', ''), v['id']) for v in versions if not v.get('round_id') and not v.get('superseded')]
         events += [(r.get('closed_at', ''), r['candidate_version_id']) for r in rounds if r['status'] == ACCEPTED]
         return max(events)[1] if events else ''
 
     def _status(self, model, current, evaluations):
         if not current:
-            return 'training' if model.get('builtin') else 'empty'
+            if model.get('builtin'):                        # issue #79: a show the training project no longer delivers
+                return 'archived' if duck_kit.BY_ID[model['show']]['status'] == duck_kit.ARCHIVED else 'training'
+            return 'empty'
         if current.startswith(DUCK_VERSION):
             return duck_kit.BY_ID[model['show']]['status']
         latest = next((e for e in evaluations if e['version_id'] == current and e['status'] == 'done'), None)
@@ -277,7 +332,7 @@ class ModelHub:
         return {**{k: model.get(k) for k in ('id', 'name', 'category', 'summary', 'created_at')}, 'product': model.get('product'),
                 'builtin': bool(model.get('builtin')), 'show': model.get('show') or '', 'note': model.get('note', ''),
                 'status': status, 'status_name': STATUS_NAMES[status], 'current_version_id': current,
-                'versions': [{**v, 'runnable': bool(v.get('builtin')) and self.runnable_show(model.get('show'))} for v in versions],
+                'versions': [{**v, 'runnable': bool(v.get('builtin')) and not v.get('superseded') and self.runnable_show(model.get('show'))} for v in versions],
                 'evaluations': evaluations, 'rounds': [self._round_view(model, r, evaluations) for r in records],
                 'skill': self._skill(model, skills, links)}
 
@@ -473,7 +528,7 @@ class ModelHub:
         model = self._model(p.get('model_id'))
         version = self._version(model, p.get('version_id'))
         evaluated = self._set(p.get('set_id'), EVALUATION, model['category'])
-        if not (version.get('builtin') and evaluated.get('seeds') and self.runnable_show(model.get('show'))):
+        if not (version.get('builtin') and not version.get('superseded') and evaluated.get('seeds') and self.runnable_show(model.get('show'))):
             raise CodedError(NOT_RUNNABLE, 'hub_eval_not_runnable')
         if not isinstance(p.get('robot_id'), str) or not self.known_duck(p['robot_id']):
             raise CodedError('请先选择一个正在运行的仿真小鸭', 'hub_duck_needed')

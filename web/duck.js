@@ -78,8 +78,8 @@ function duckTrainingSource(training, now) {
 }
 
 // ---------------------------------------------------------------- drawing
-const duckState = {root: null, robot: '', status: null, asked: null, replay: '', training: null, timer: 0, trainingTimer: 0,
-  drawn: {}, busy: false, frame: 0};
+const duckState = {root: null, robot: '', status: null, asked: null, replay: '', replayLabel: '', training: null, timer: 0, trainingTimer: 0,
+  drawn: {}, busy: false, frame: 0, evidence: null};
 
 // Issue #67: a model with a package is a skill of the robot. `bound`: what the chosen simulated duck says
 // about it (`{installed, error}`), nothing when no duck is chosen or it has not answered yet.
@@ -93,19 +93,22 @@ function duckSkillLine(show, bound) {
     + `<code>${duckEsc(skill.id)}</code><span>v${duckEsc(skill.version)}</span><span>${duckEsc(where)}</span></p>`;
 }
 
-function duckShowRow(show, canRun, performing, bound) {
+function duckShowRow(show, canRun, performing, bound, open) {
   const a = show.acceptance || {};
   const chip = `<span class="duck-chip duck-${duckEsc(show.status)}">${duckEsc(show.status_name)}</span>`;
   const scores = show.acceptance ? `<span class="duck-score"><b>${duckScore(a.fixed)}</b> 固定组</span><span class="duck-score"><b>${duckScore(a.independent)}</b> 独立组</span>` : '';
-  const buttons = show.packaged
+  const timed = show.seconds ? `<span>每段 ${duckEsc(duckSeconds(show.seconds))}</span>` : '';
+  const records = show.packaged || (show.history || []).length
+    ? `<button type="button" class="button small secondary" data-duck-evidence="${duckEsc(show.id)}" aria-expanded="${open ? 'true' : 'false'}">训练与验收</button>` : '';
+  const buttons = (show.packaged
     ? `<button type="button" class="button small" data-duck-run="${duckEsc(show.id)}" ${canRun && !performing ? '' : 'disabled'}>运行</button>`
       + `<button type="button" class="button small secondary" data-duck-replay="${duckEsc(show.id)}">验收录像</button>`
-    : '';
+    : '') + records;
   return `<li class="duck-show" data-duck-show="${duckEsc(show.id)}"><div class="duck-show-main"><h3>${duckEsc(show.title)} ${chip}</h3>`
-    + `<p>${duckEsc(show.summary)}</p><div class="duck-show-facts">${scores}<span>${duckEsc(duckOrigin(show.origin))}</span></div>`
+    + `<p>${duckEsc(show.summary)}</p><div class="duck-show-facts">${scores}${timed}<span>${duckEsc(duckOrigin(show.origin))}</span></div>`
     + duckSkillLine(show, bound)
     + (show.note ? `<p class="duck-note">${duckEsc(show.note)}</p>` : '')
-    + (show.status !== 'training' && !show.packaged ? '<p class="duck-note">这个安装里没有它的模型包。</p>' : '')
+    + (!['training', 'archived'].includes(show.status) && !show.packaged ? '<p class="duck-note">这个安装里没有它的模型包。</p>' : '')
     + `</div><div class="duck-show-actions">${buttons}</div></li>`;
 }
 
@@ -136,8 +139,10 @@ function duckStage(kit, ducks) {
 function duckTrainingBlock(training, now) {
   const tasks = training && Array.isArray(training.tasks) ? training.tasks : [];
   const rows = tasks.map(t => {
-    const best = duckFigure(t.best), latest = duckFigure(t.latest), points = duckSpark(t.series, 160, 36);
+    const best = duckFigure(t.best), latest = duckFigure(t.latest), points = duckSpark(t.series, 160, 36), release = duckRelease(t.release);
     return `<tr><td><span class="cell-main">${duckEsc(t.title)}</span><span class="cell-sub">${duckEsc(t.id)}${t.active ? '' : ' · 历史版本'}</span></td>`
+      + `<td><b class="duck-big">${duckEsc(release.score)}</b><span class="cell-sub">${duckEsc(release.where)}</span></td>`
+      + `<td>${t.run_count ? `<b class="duck-big">${Number(t.run_count)} 轮</b><span class="cell-sub">${duckEsc(duckSteps(t.run_steps))} 步</span>` : '—'}</td>`
       + `<td><b class="duck-big">${duckEsc(best.score)}</b><span class="cell-sub">${duckEsc(best.where)}</span></td>`
       + `<td><b class="duck-big">${duckEsc(latest.score)}</b><span class="cell-sub">${duckEsc(latest.where)}</span></td>`
       + `<td>${Number(t.evaluations) || 0} 次</td><td>${points ? `<svg class="duck-spark" viewBox="0 0 160 36" role="img" aria-label="${duckEsc(t.title)}历次评估的通过数"><polyline points="${points}"/></svg>` : '—'}</td></tr>`;
@@ -146,7 +151,87 @@ function duckTrainingBlock(training, now) {
     ? `<a class="button small secondary" href="${duckEsc(training.dashboard)}/" target="_blank" rel="noopener noreferrer">打开完整训练看板</a>` : '';
   return `<div class="duck-training-head"><div><h3>训练进展</h3><p>${duckEsc(duckTrainingSource(training, now))}`
     + `${training && training.rounds ? ` · 共 ${training.rounds} 轮` : ''} · 每次评估是固定十个起姿的整段通过数</p></div>${link}</div>`
-    + (rows ? `<div class="table-wrap"><table class="duck-table"><thead><tr><th>节目</th><th>历史最佳</th><th>最新评估</th><th>评估</th><th>走势</th></tr></thead><tbody>${rows}</tbody></table></div>` : '');
+    + (rows ? `<div class="table-wrap"><table class="duck-table"><thead><tr><th>节目</th><th>交付的版本</th><th>训练</th><th>历史最佳</th><th>最新评估</th><th>评估</th><th>走势</th></tr></thead><tbody>${rows}</tbody></table></div>` : '');
+}
+
+// ---------------------------------------------------------------- issue #79: how one model was trained and accepted
+const DUCK_CONFIG = [['num_envs', '并行环境'], ['horizon', '每次采样步数'], ['epochs', '每批数据训练轮数'], ['minibatch', '小批量'],
+  ['hidden', '隐藏层宽度'], ['learning_rate', '学习率'], ['initial_action_std', '初始动作噪声'], ['gamma', '折扣 γ'], ['lam', 'GAE λ'],
+  ['clip', '裁剪范围'], ['entropy', '熵系数'], ['seed', '训练随机种子']];
+const DUCK_RUN_STATES = {completed: '完成', running: '进行中', failed: '失败', startup_failed: '没有启动', stopped: '停止'};
+const DUCK_RUNS_SHOWN = 8;
+function duckSeconds(pair) {
+  if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== 'number' || typeof pair[1] !== 'number') return '';
+  return pair[0] === pair[1] ? `${pair[0].toFixed(2)} 秒` : `${pair[0].toFixed(2)}–${pair[1].toFixed(2)} 秒`;
+}
+function duckRelease(release) {
+  if (!release || typeof release.round !== 'number') return {score: '—', where: ''};
+  const seconds = duckSeconds(release.seconds);
+  return {score: `${duckScore(release.fixed)} · ${duckScore(release.independent)}`,
+    where: `第 ${release.round} 轮第 ${release.update} 次${seconds ? ' · ' + seconds : ''}${release.device ? ' · ' + release.device : ''}`};
+}
+function duckVersionName(v) { return `第 ${v.round} 轮第 ${v.update} 次更新`; }
+
+function duckCaseRows(show, group) {
+  return group.cases.map(c => `<tr><td class="duck-mono">${duckEsc(c.seed)}</td><td>${c.success ? '<span class="duck-pass">通过</span>' : `<span class="duck-fail">没有通过${c.reason ? '：' + duckEsc(duckReason(c.reason)) : ''}</span>`}</td>`
+    + `<td>${c.steps === null || c.steps === undefined ? '' : duckEsc(duckSteps(c.steps))}</td><td>${typeof c.duration_s === 'number' ? duckEsc(c.duration_s.toFixed(2)) + ' 秒' : ''}</td>`
+    + `<td>${c.recording ? `<button type="button" class="button small secondary" data-duck-recording="${duckEsc(show)}|${duckEsc(group.id)}|${duckEsc(c.seed)}">播放</button>` : ''}</td></tr>`).join('');
+}
+
+function duckAcceptance(evidence) {
+  const r = evidence.records;
+  if (!r) return `<p class="duck-ev-none">${duckEsc(evidence.problem || '这个安装里没有它的模型包，也就没有逐场的验收记录。')}</p>`;
+  const p = r.protocol || {};
+  const span = typeof p.min_s === 'number' ? `，从起点开始到完整收尾用时在 ${p.min_s}–${p.max_s} 秒之间` : '';
+  const groups = r.groups.filter(g => g.id !== 'zero');
+  const zero = r.groups.find(g => g.id === 'zero'), independent = r.groups.find(g => g.id === 'independent');
+  const control = zero && independent
+    ? `<p class="duck-ev-control"><b>${duckScore([zero.passed, zero.total])}</b> 对照：独立组同样的十个起姿，只按编舞、不加训练出的修正。${zero.passed < zero.total ? `训练出的修正让它从 ${zero.passed} 个提高到 ${independent.passed} 个。` : '只按编舞也能通过，训练出的修正没有让它变差。'}</p>` : '';
+  return `<p class="duck-ev-rule">每个起姿都要完整演完${duckEsc(span)}；固定组和独立组各十个起姿全部通过才算交付。仿真结果，不是现场证据。</p>`
+    + groups.map(g => `<div class="duck-ev-group"><h5>${duckEsc(g.name)} <b>${duckScore([g.passed, g.total])}</b><span>${duckEsc(duckSeconds([g.min_s, g.max_s]))}</span></h5>`
+      + `<div class="table-wrap"><table class="duck-table duck-cases"><thead><tr><th>起姿</th><th>结果</th><th>控制步数</th><th>用时</th><th>录像</th></tr></thead><tbody>${duckCaseRows(evidence.show, g)}</tbody></table></div></div>`).join('')
+    + control;
+}
+
+function duckTraining(evidence, task) {
+  const t = (evidence.records && evidence.records.training) || null;
+  const current = (evidence.versions || []).find(v => v.current);
+  const facts = t ? [
+    ['这一版', current ? duckVersionName(current) : ''], ['累计训练步数', duckSteps(t.steps)],
+    ['更新次数', t.updates !== null ? `${t.updates}${t.requested_updates ? ' / 最多 ' + t.requested_updates : ''}` : ''],
+    ['为什么停下', t.stop_reason], ['训练设备', t.device], ['软件', [t.torch && 'PyTorch ' + t.torch, t.mujoco && 'MuJoCo ' + t.mujoco].filter(Boolean).join(' · ')],
+    ...DUCK_CONFIG.filter(([key]) => t.config && t.config[key] !== undefined).map(([key, name]) => [name, String(t.config[key])]),
+  ].filter(([, value]) => value) : [];
+  const runs = task && Array.isArray(task.runs) ? task.runs : [];
+  const recent = runs.slice(-DUCK_RUNS_SHOWN).reverse().map(run => `<tr><td>第 ${duckEsc(run.round)} 轮</td><td>${duckEsc(Object.hasOwn(DUCK_RUN_STATES, run.state) ? DUCK_RUN_STATES[run.state] : run.state)}</td>`
+    + `<td>${run.updates === null ? '' : duckEsc(run.updates) + ' 次'}</td><td>${duckEsc(duckSteps(run.steps))}</td><td>${duckEsc(run.device)}</td></tr>`).join('');
+  return (facts.length ? `<dl class="duck-ev-facts">${facts.map(([name, value]) => `<div><dt>${duckEsc(name)}</dt><dd>${duckEsc(value)}</dd></div>`).join('')}</dl>` : '<p class="duck-ev-none">这个安装里没有这一版的训练记录。</p>')
+    + (t && t.method ? `<p class="duck-ev-method">${duckEsc(t.method)}</p>` : '')
+    + (task ? `<p class="duck-ev-sum">这个节目一共训练了 <b>${Number(task.run_count) || 0}</b> 轮，累计 <b>${duckEsc(duckSteps(task.run_steps))}</b> 步，评估 <b>${Number(task.evaluations) || 0}</b> 次。</p>`
+      + (recent ? `<div class="table-wrap"><table class="duck-table duck-runs"><thead><tr><th>最近的训练</th><th>结果</th><th>更新</th><th>步数</th><th>设备</th></tr></thead><tbody>${recent}</tbody></table></div>` : '')
+      : '<p class="duck-ev-none">本机的训练看板没有应答，这个安装也没有带上训练进展，所以这里没有历次训练。</p>');
+}
+
+function duckVersions(evidence) {
+  return `<ol class="duck-ev-versions">${(evidence.versions || []).map(v => `<li data-current="${v.current ? 'true' : 'false'}"><div><b>${duckEsc(duckVersionName(v))}</b>`
+    + `<span>${v.current ? (v.in_kit ? '随这个安装带来' : '这个安装里没有它的模型包') : '旧版本，不随这个安装带来'}</span></div>`
+    + `<p>固定组 ${duckScore((v.acceptance || {}).fixed)} · 独立组 ${duckScore((v.acceptance || {}).independent)}${v.independent_from ? '（起姿 ' + duckEsc(v.independent_from) + ' 起）' : ''}`
+    + `${v.seconds ? ' · ' + duckEsc(duckSeconds(v.seconds)) : ''} · ${duckEsc(v.device)}${v.steps ? ' · ' + duckEsc(duckSteps(v.steps)) + ' 步' : ''}</p></li>`).join('')}</ol>`;
+}
+
+// The panel of one model. `evidence`: the answer of `duck/evidence` (or `{show, loading}`), `training`: of `duck/training`.
+function duckEvidenceBlock(evidence, training) {
+  if (!evidence) return '';
+  const title = (duckKit().shows.find(s => s.id === evidence.show) || {}).title || evidence.title || evidence.show;
+  const head = `<div class="duck-ev-head"><div><span class="duck-eyebrow">训练与验收</span><h3>${duckEsc(title)}</h3></div>`
+    + '<button type="button" class="button small secondary" data-duck-evidence-close>收起</button></div>';
+  if (evidence.loading) return `${head}<p class="duck-ev-none" role="status">正在读取这个模型的训练和验收记录…</p>`;
+  if (evidence.error) return `${head}<p class="duck-ev-none">${duckEsc(evidence.error)}</p>`;
+  const task = ((training && training.tasks) || []).find(t => t.id === evidence.show) || null;
+  return head + '<div class="duck-ev-grid">'
+    + `<section aria-label="训练过程"><h4>训练过程</h4>${duckTraining(evidence, task)}</section>`
+    + `<section aria-label="验收结果"><h4>验收结果</h4>${duckAcceptance(evidence)}</section></div>`
+    + `<section class="duck-ev-history" aria-label="历次版本"><h4>历次交付的版本</h4>${duckVersions(evidence)}</section>`;
 }
 
 function duckPart(name, html) {
@@ -164,13 +249,16 @@ function duckDraw() {
   if (duckPart('stage', duckStage(kit, ducks))) {
     duckState.frame = 0;
     // The stage was drawn again (a duck was added or renamed): a replay that was showing is put back.
-    if (duckState.replay) duckState.root.querySelector('.duck-video').src = `/api/duck/replay?show=${encodeURIComponent(duckState.replay)}`;
+    if (duckState.replay) duckState.root.querySelector('.duck-video').src = duckState.replay;
   }
   const status = duckState.status, asked = duckState.asked;
   const performing = Boolean(asked) || Boolean(status && ['starting', 'running'].includes(status.state));
   const canRun = Boolean(duckState.robot) && Boolean(status && status.running);
   const bound = (duckState.robot && status && status.skills) || {};
-  duckPart('shows', `<ul class="duck-shows">${kit.shows.map(s => duckShowRow(s, canRun, performing, bound[s.id])).join('')}</ul>`);
+  const open = duckState.evidence && duckState.evidence.show;
+  duckPart('shows', `<ul class="duck-shows">${kit.shows.map(s => duckShowRow(s, canRun, performing, bound[s.id], s.id === open)).join('')}</ul>`);
+  duckPart('evidence', duckEvidenceBlock(duckState.evidence, duckState.training));
+  duckState.root.querySelector('[data-duck-part="evidence"]').hidden = !duckState.evidence;
   duckPart('training', duckTrainingBlock(duckState.training, Date.now() / 1000));
   duckLive();
 }
@@ -179,7 +267,8 @@ function duckLive() {
   const root = duckState.root, kit = duckKit(), status = duckState.status;
   const line = root.querySelector('.duck-line');
   if (!line) return;
-  const said = duckState.robot ? duckRunLine(status, duckState.asked, kit.shows) : {text: '', tone: ''};
+  const said = duckState.replay && duckState.replayLabel ? {text: duckState.replayLabel, tone: ''}
+    : duckState.robot ? duckRunLine(status, duckState.asked, kit.shows) : {text: '', tone: ''};
   if (line.textContent !== said.text) line.textContent = said.text;
   line.dataset.tone = said.tone;
   const performing = Boolean(duckState.asked) || Boolean(status && ['starting', 'running'].includes(status.state));
@@ -245,6 +334,15 @@ async function duckTrainingPoll() {
   duckState.trainingTimer = setTimeout(duckTrainingPoll, soon ? 2500 : DUCK_TRAINING_MS);
 }
 
+function duckPlay(source, label) {
+  duckState.replay = source;
+  duckState.replayLabel = label;
+  const video = duckState.root.querySelector('.duck-video');
+  video.src = source;
+  duckDraw();
+  video.play().catch(() => { /* the person presses play */ });
+}
+
 async function duckClick(event) {
   const target = event.target.closest('button');
   if (!target || !duckState.root.contains(target)) return;
@@ -256,13 +354,32 @@ async function duckClick(event) {
       duckState.asked = await api('sims/duck/perform', {robot_id: duckState.robot, show: target.dataset.duckRun});
       duckPoll();
     } else if (target.dataset.duckReplay) {
-      duckState.replay = target.dataset.duckReplay;
-      const video = duckState.root.querySelector('.duck-video');
-      video.src = `/api/duck/replay?show=${encodeURIComponent(duckState.replay)}`;
+      duckPlay(`/api/duck/replay?show=${encodeURIComponent(target.dataset.duckReplay)}`, '');
+    } else if (target.dataset.duckRecording) {
+      // Issue #79: the recording of one accepted episode plays on the stage.
+      const [show, group, seed] = target.dataset.duckRecording.split('|');
+      const title = (duckKit().shows.find(s => s.id === show) || {}).title || show;
+      duckPlay(`/api/duck/recording?show=${encodeURIComponent(show)}&group=${encodeURIComponent(group)}&seed=${encodeURIComponent(seed)}`,
+        `录像：${title} · ${group === 'fixed' ? '固定组' : '独立组'} · 起姿 ${seed}`);
+      duckState.root.querySelector('.duck-stage').scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    } else if (target.dataset.duckEvidence) {
+      const show = target.dataset.duckEvidence;
+      if (duckState.evidence && duckState.evidence.show === show) { duckState.evidence = null; duckDraw(); return; }
+      duckState.evidence = {show, loading: true};
       duckDraw();
-      video.play().catch(() => { /* the person presses play */ });
+      duckState.root.querySelector('[data-duck-part="evidence"]').scrollIntoView({block: 'nearest', behavior: 'smooth'});
+      let found;
+      try { found = await api('duck/evidence', {show}); } catch (error) { found = {show, error: error.message || '没有读到这个模型的记录'}; }
+      if (duckState.evidence && duckState.evidence.show === show) { duckState.evidence = found; duckDraw(); }
+    } else if ('duckEvidenceClose' in target.dataset) {
+      const show = duckState.evidence && duckState.evidence.show;
+      duckState.evidence = null;
+      duckDraw();
+      const back = show && duckState.root.querySelector(`[data-duck-evidence="${CSS.escape(show)}"]`);
+      if (back) back.focus();
     } else if ('duckLive' in target.dataset) {
       duckState.replay = '';
+      duckState.replayLabel = '';
       const video = duckState.root.querySelector('.duck-video');
       video.pause();
       video.removeAttribute('src');
@@ -294,7 +411,7 @@ function duckRoot() {
   root.className = 'duck';
   root.setAttribute('aria-label', 'Microduck AD-P102 的技能模型');
   root.innerHTML = '<div data-duck-part="head"></div><div class="duck-body"><div data-duck-part="stage"></div><div data-duck-part="shows"></div></div>'
-    + '<div class="duck-training" data-duck-part="training"></div>';
+    + '<div class="duck-ev" data-duck-part="evidence" hidden></div><div class="duck-training" data-duck-part="training"></div>';
   root.addEventListener('click', duckClick);
   // A video that is taken out of the page and put back (a redraw) stops; it goes on if it was playing.
   root.addEventListener('playing', () => { duckState.playing = true; }, true);

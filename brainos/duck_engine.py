@@ -77,7 +77,7 @@ def load(package):
         raise EngineError('技能模型包里缺少（唯一的）权重文件或场景文件')
     checkpoint = weights[0]
     try:
-        policy = load_policy(checkpoint)
+        policy = load_policy(checkpoint, package)        # issue #79: some shows' policies have parts in the package
     except (CheckpointError, OSError) as exc:
         raise EngineError(str(exc)) from None
     task = policy.task

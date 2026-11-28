@@ -59,3 +59,38 @@
 .duck-skill-tag{padding:1px 7px;border-radius:4px;border:1px solid currentColor;font-size:9.5px;letter-spacing:.04em}
 .duck-skill[data-tone="good"]>span:last-child{color:var(--green)}
 .duck-skill[data-tone="bad"]>span:last-child{color:var(--red)}
+/* Issue #79: how one model was trained and accepted, between the models and the training table. */
+.duck-chip.duck-archived{background:#eceae6;color:#7a7368}
+.duck-ev{border-top:1px solid var(--line);padding:18px var(--duck-gap) 22px;background:linear-gradient(180deg,#fffdf5 0,var(--surface) 140px)}
+.duck-ev-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px}
+.duck-ev-head h3{font-size:18px;letter-spacing:-.3px;margin:4px 0 0}
+.duck-ev h4{font-size:12px;letter-spacing:.6px;color:var(--muted);font-weight:650;margin:0 0 10px}
+.duck-ev-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:var(--duck-gap);align-items:start}
+.duck-ev-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;margin:0 0 12px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--line)}
+.duck-ev-facts div{background:var(--surface);padding:9px 11px}
+.duck-ev-facts dt{font-size:9.5px;color:var(--muted);letter-spacing:.3px}
+.duck-ev-facts dd{margin:3px 0 0;font-size:12.5px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.duck-ev-method,.duck-ev-rule,.duck-ev-sum,.duck-ev-none{font-size:11px;line-height:1.75;color:#5f6f66;margin:0 0 10px;max-width:70ch}
+.duck-ev-sum b{color:var(--ink);font-variant-numeric:tabular-nums}
+.duck-ev-group{margin:0 0 14px}
+.duck-ev-group h5{display:flex;align-items:baseline;gap:10px;font-size:12px;margin:0 0 6px}
+.duck-ev-group h5 b{font-size:15px;font-variant-numeric:tabular-nums}
+.duck-ev-group h5 span{font-size:10.5px;color:var(--muted);font-weight:400}
+.duck-cases th,.duck-cases td,.duck-runs th,.duck-runs td{padding:6px 10px;font-variant-numeric:tabular-nums}
+.duck-cases td,.duck-runs td{font-size:11px}
+.duck-runs td:last-child{white-space:normal}
+.duck-cases .button.small{min-height:24px;padding:3px 10px}
+.duck-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.duck-pass{color:var(--green);font-weight:600}
+.duck-fail{color:var(--red);font-weight:600}
+.duck-ev-control{display:flex;gap:10px;align-items:baseline;font-size:11px;line-height:1.7;color:#5f6f66;margin:4px 0 0;padding:10px 12px;border-radius:8px;background:#f5f3ea}
+.duck-ev-control b{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;flex:none}
+.duck-ev-history{margin-top:18px}
+.duck-ev-versions{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.duck-ev-versions li{border:1px solid var(--line);border-left:3px solid #d7d2c4;border-radius:8px;padding:9px 12px}
+.duck-ev-versions li[data-current=true]{border-left-color:var(--duck-yellow)}
+.duck-ev-versions div{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:12px}
+.duck-ev-versions div span{font-size:10.5px;color:var(--muted)}
+.duck-ev-versions p{margin:4px 0 0;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+@media (max-width:1100px){.duck-ev-grid{grid-template-columns:1fr}}
+@media (max-width:600px){.duck-ev{padding:16px}.duck-cases th,.duck-cases td{padding:6px 6px}.duck-cases td:first-child{font-size:10px}}
