@@ -91,14 +91,28 @@ function acSkillLabel(skill, offered) {
   return offered.some(s => s !== skill && s.name === skill.name) ? `${skill.name} · v${skill.version}` : skill.name;
 }
 
+// Issue #73: what the cloud's 「技能发布」 gave for the brand and model (`cloud` of the server's answer), when it could not be read.
+function acCloudNote(cloud) {
+  if (!cloud || cloud.status === 'ok') return '';
+  if (cloud.status === 'signed_out') return ' 没有登录云平台，「技能发布」里的技能没有列出：在“云平台账户”页登录后重新打开。';
+  return ` 没有读到「技能发布」里的技能：${cloud.error || '云平台没有回答'}。`;
+}
+
 // What is said above the steps once the skills of the brand and model were made ready (`result` of the server).
 function acStatus(result, count) {
   if (result.product === null) return '这台机器人还没有填写品牌型号：在“我的机器人”里填写后，它的技能才能直接选用。';
   const unread = ((result.unread || []).length ? ` 有 ${result.unread.length} 台没有读到：${result.unread.join('、')}。` : '') +
     ((result.skipped || []).length ? ` 有 ${result.skipped.length} 个技能的说明不完整，没有列出：${result.skipped.join('、')}。` : '');
-  if (count) return `这个品牌型号有 ${count} 个技能可以直接选用，不用先安装。` + unread;
-  if (!result.connected) return '这个品牌型号的机器人现在都没有连接，读不到它的技能：先连接一台，再回来创建。';
-  return '这个品牌型号还没有可用的技能。' + unread;
+  const cloud = acCloudNote(result.cloud), published = result.cloud?.count ? `（${result.cloud.count} 个来自「技能发布」）` : '';
+  if (count) {
+    return `这个品牌型号有 ${count} 个技能可以直接选用${published}，不用先安装。` + cloud +
+      (result.connected ? '' : ' 它的机器人都没有连接，机器人上自己装的技能连接后才列得出。') + unread;
+  }
+  if (!result.connected) {
+    return '这个品牌型号的机器人都没有连接' + (result.cloud?.status === 'ok' ? '，「技能发布」里也没有发布给它的技能：先连接一台，或者在「技能发布」里发布给这个品牌型号。'
+      : '，读不到它的技能：先连接一台，再回来创建。' + cloud);
+  }
+  return '这个品牌型号还没有可用的技能。' + cloud + unread;
 }
 
 // ---------------------------------------------------------------- on the page

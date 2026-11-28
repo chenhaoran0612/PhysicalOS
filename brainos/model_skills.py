@@ -11,16 +11,19 @@ The owner's words: 「点击创建，需要绑定给对应任务和机器人的�
 * **What the robot lacks is installed when it is needed.** Before an on-site test, a skill of the
   application that the robot does not have, and that comes with the app, is installed on it
   (:meth:`ModelSkills.install_missing`). A skill the robot has in any version is left alone.
+* **What is published for the brand and model is among them** (issue #73, 「能力是发布给品牌型号的」): every
+  release the cloud skill library (「技能发布」) holds for it, whether or not one of its robots is connected,
+  and it is installed from the cloud before an on-site test like a bundled one (brainos/published_skills.py).
 
 A skill record is what it was before (``Platform.add_skill``): nothing is added to it, so digests of
 skills and applications are computed as before. Which package a record came from is found again by
 the skill's id and version when it is needed.
 
-The three functions below the class reach the robots and the skill library; the tests replace them.
+The functions below the class reach the robots, the skill library and the cloud; the tests replace them.
 """
 import secrets
 
-from . import robot_caps, robot_model, robot_scope, task_apps
+from . import published_skills, robot_caps, robot_model, robot_scope, task_apps
 from .errors import CodedError
 
 robot_kind = task_apps.robot_kind
@@ -68,7 +71,7 @@ class ModelSkills:
             # A record made for a robot with no brand and model would belong to none and be offered to
             # every other robot. Such a robot keeps what it has until its brand and model is filled in.
             return {'skills': self._records(robot), 'added': 0, 'connected': len(peers), 'unread': [], 'skipped': [],
-                    'product': None}
+                    'product': None, 'cloud': {'status': 'ok', 'count': 0, 'error': None}}
         for peer in peers:
             items = installed_on(peer)
             if items is None:
@@ -77,6 +80,9 @@ class ModelSkills:
             for item in items:
                 found.setdefault((item['id'], item['version']), item)
         for item in (library_for(peers[0]) if peers else []):
+            found.setdefault((item['id'], item['version']), item)
+        cloud = published_for(self.platform, robot)         # issue #73: what 「技能发布」 holds for this brand and model
+        for item in cloud['items']:
             found.setdefault((item['id'], item['version']), item)
         added = 0
         with self.store.atomic():
@@ -95,7 +101,7 @@ class ModelSkills:
                 added += 1
             skills = self._records(robot)
         return {'skills': skills, 'added': added, 'connected': len(peers), 'unread': unread, 'skipped': skipped,
-                'product': robot_model.of(robot)}
+                'product': robot_model.of(robot), 'cloud': {'status': cloud['status'], 'count': len(cloud['items']), 'error': cloud['error']}}
 
     # ------------------------------------------------------------------ an application is made for a task
     def create(self, p):
@@ -120,9 +126,21 @@ class ModelSkills:
             return application
 
     # ------------------------------------------------------------------ what the robot lacks
+    def _step_skills(self, application):
+        """``{entrypoint: the skill record of its first step}`` of ``application`` (``{}`` for a record that is gone)."""
+        out = {}
+        for step in application.get('steps', []):
+            if isinstance(step, dict) and step.get('entrypoint') and step['entrypoint'] not in out:
+                try:
+                    out[step['entrypoint']] = self.store.get('skills', step.get('skill_id'))
+                except ValueError:
+                    out[step['entrypoint']] = {}
+        return out
+
     def install_missing(self, application, robot_id=None):
         """In an on-site test, once the application has passed its check: install the skills of ``application`` that the robot does not have
-        and that come with the app. Returns the names of what was installed.
+        and that come with the app, or whose version was published to the cloud for its brand and model (issue #73). Returns the names of
+        what was installed.
 
         Nothing is done when the robot cannot be found or read: the check that follows says why."""
         try:
@@ -139,14 +157,26 @@ class ModelSkills:
         lacking = [key for key in dict.fromkeys(wanted) if key and key not in have]
         if not lacking:
             return []
-        library = {item['id']: item for item in library_for(robot)}
+        library, records, cloud = {item['id']: item for item in library_for(robot)}, self._step_skills(application), None
         done = []
         for key in lacking:
-            item = library.get(key)
+            item, put, version = library.get(key), install_example, records[key].get('version')
+            if not item or (version and item['version'] != version):
+                # Issue #73: the release of the step's version that was published for this brand and model.
+                cloud = cloud or published_for(self.platform, robot)
+                release = next((r for r in cloud['items'] if (r['id'], r['version']) == (key, version)), None)
+                if release and sorted(release['requires']) != sorted(records[key].get('requires') or []):
+                    raise CodedError(f"云端「技能发布」里的「{records[key].get('name') or key}」v{version} 和创建应用时不一样了（需要的设备能力变了），"
+                                     '没有自动安装：请在应用里重新选这个技能（修改工作流），再做现场测试', 'skill_auto_install_failed')
+                if release:
+                    item, put = release, install_published
+                elif not item and cloud['status'] == 'failed':
+                    raise CodedError(f"技能「{records[key].get('name') or key}」还不在「{robot['name']}」上，随应用提供的技能里也没有它；"
+                                     f"要从云端「技能发布」装它，但没有读到云平台：{cloud['error']}", 'skill_auto_install_failed')
             if not item:
                 continue                            # not ours to install: the device says what it lacks
             name = item.get('title') or key
-            outcome = install_example(self.platform, robot, item)
+            outcome = put(self.platform, robot, item)
             if outcome.get('status') != 'succeeded' and key in {x['id'] for x in installed_on(robot) or []}:
                 outcome = {'status': 'succeeded'}       # the answer was lost, the skill is there
             if outcome.get('status') != 'succeeded':
@@ -217,3 +247,13 @@ def install_example(platform, robot, item):
                                                  'request_id': 'auto-' + secrets.token_hex(12)})
     except ValueError as error:
         return {'status': 'refused', 'error': str(error)}
+
+
+def published_for(platform, robot):
+    """Issue #73: the releases the cloud holds for the brand and model of ``robot`` (``published_skills.releases_for``)."""
+    return published_skills.releases_for(platform, robot_model.of(robot))
+
+
+def install_published(platform, robot, item):
+    """Issue #73: install the release ``item`` names on ``robot``; the operation record, as kept."""
+    return published_skills.install(platform, robot, item)
