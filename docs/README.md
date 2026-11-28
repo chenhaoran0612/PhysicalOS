@@ -44,6 +44,7 @@
 | [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md) | 资料库：页面、桌面端后台、云平台三段怎么配合，分片上传与续传；issue #51 起按品牌型号归属，见 MODEL_LIBRARY.md |
 | [MODEL_LIBRARY.md](MODEL_LIBRARY.md) | 资料库按品牌型号归属：同品牌同型号的机器人共用、旧资料怎么归过去、改一份资料的品牌型号、机器人模型（URDF，可带网格）单独一栏、接口、验证范围（issue #51） |
 | [LIBRARY_BY_PRODUCT.md](LIBRARY_BY_PRODUCT.md) | 资料库先选品牌型号再看资料；机器人模型是资料列表里的一行（「仿真使用中」）；一个「上传资料」选用途；模型格式 URDF、MJCF（能仿真）和 SDF、USD、STP（只保存）；云端 `GET /library/products`（issue #77） |
+| [PUBLIC_LIBRARY.md](PUBLIC_LIBRARY.md) | 公共资料库：所有账号都能读、只有平台运营人员能改的一组资料；`library-import --dir` 导入；收集脚本 `scripts/library_collect.py` 和来源表，收集的数据不在仓库里（issue #78） |
 | [PRODUCT_NAME.md](PRODUCT_NAME.md) | 产品名称 Physical OS、应用和安装包的名字、数据目录在第一次启动时改名、登录页（issue #55） |
 | [ROBOT_NO_TASK.md](ROBOT_NO_TASK.md) | 添加机器人不需要任务，也不会顺带建任务；任务在创建时绑定机器人（issue #56） |
 | [APP_GALLERY.md](APP_GALLERY.md) | 「机器人应用」是应用瀑布流：应用有自己的页面，画出工作流（按顺序调用的技能）；技能在单独的页面；创建应用选品牌型号（issue #60） |
@@ -51,6 +52,7 @@
 | [PUBLISHED_SKILLS.md](PUBLISHED_SKILLS.md) | 创建、修改应用时，云端「技能发布」里发布给这个品牌型号的全部版本都可以选，机器人没有连接也可以；现场测试前机器人上缺的版本从云端装；表单读云端最多等 8 秒，读不到时照常可用（issue #73） |
 | [SKILL_INSTALL_GUIDE.md](SKILL_INSTALL_GUIDE.md) | 从「机器人应用」安装技能时机器人没连上：对话框写明原因，带「安装管理层」「接入已有的管理层」「重新连接」（issue #62） |
 | [DUCK_SKILLS.md](DUCK_SKILLS.md) | Microduck AD-P102（双足小鸭）作为仿真机器人；它训练出来的技能模型在应用里按原策略真跑，「训练与改进」页看训练进展；模型文件只进安装包（issue #63） |
+| [DUCK_TRAINING_DATA.md](DUCK_TRAINING_DATA.md) | 小鸭的六个新模型、它们的训练过程、每个验收回合的结果和原速录像；应用里按验收时的步数逐场跑通；以前添加的仿真小鸭启动时换成新模型（issue #79） |
 | [TRAINED_SKILLS.md](TRAINED_SKILLS.md) | 仿真里训练出的模型就是机器人的技能：能力标准 1.3 的 `policy.run`；Microduck AD-P102 每个有模型包的节目是一个技能 `duck.<节目>`，仿真小鸭启动时自带并登记到品牌型号的技能里（issue #67） |
 | [MODEL_HUB.md](MODEL_HUB.md) | 模型库、训练与改进、训练与测试数据：看板加卡片墙，模型按九个分类、各有指标；模型文件上传成为版本；评测库和训练库；一轮一轮的改进（基线评测、找短板、应用外训练、评测候选、决定）；归账号（issue #71） |
 | [MODEL_HUB_HISTORY.md](MODEL_HUB_HISTORY.md) | 一轮改进的候选版本从历史中选：模型已有的版本，小鸭的技能模型还有训练看板评估过的模型文件（只从本机的看板取，按 SHA-256 核对后收进模型库）（issue #76） |
