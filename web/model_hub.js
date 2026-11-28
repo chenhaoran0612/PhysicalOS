@@ -392,18 +392,19 @@ function hubRoundBody(st, data, model, round, live) {
       `<div class="button-row">${button('写下短板和做法', 'hub-diagnose', '', round.id)}${baseEval ? button('看这次评测', 'hub-eval-open', 'secondary', baseEval.id) : ''}</div>`;
   }
   if (round.status === 'training') {
-    return `<p class="mh-say">训练在应用外进行。训练完，把新的模型文件传到这里，成为这一轮的候选版本。</p>${noted}` +
-      `<div class="button-row">${button('上传新模型文件', 'hub-version-add', '', `${model.id}|${round.id}`)}</div>`;
+    // Issue #76: the candidate does not have to be uploaded; 「从历史中选择」 is web/model_hub_history.js.
+    return `<p class="mh-say">训练在应用外进行。训练完，上传新的模型文件，或者从历史中选一个，成为这一轮的候选版本。</p>${noted}` +
+      `<div class="button-row">${button('上传新模型文件', 'hub-version-add', '', `${model.id}|${round.id}`)}${button('从历史中选择', 'hub-history', 'secondary', `${model.id}|${round.id}`)}</div>`;
   }
   if (round.status === 'candidate') {
-    return `<p class="mh-say">候选版本「${h(candidate ? candidate.label : '')}」已经传上来。在同一个评测集上评测它。</p>${noted}${candidate ? hubEvalAsk(st, data, model, round, candidate, live) : ''}` +
-      `<p class="mh-swap">${button('传错了，换一个候选版本', 'hub-version-add', 'secondary small', `${model.id}|${round.id}`)}</p>`;
+    return `<p class="mh-say">候选版本是「${h(candidate ? candidate.label : '')}」。在同一个评测集上评测它。</p>${noted}${candidate ? hubEvalAsk(st, data, model, round, candidate, live) : ''}` +
+      `<p class="mh-swap">${button('换一个候选版本', 'hub-history', 'secondary small', `${model.id}|${round.id}`)}</p>`;
   }
   const verdict = round.comparison.primary === 'better' ? (round.candidate_met ? '主指标变好，并且达标。' : round.candidate_met === false ? '主指标变好，但还没有全部达标。' : '主指标变好。')
     : round.comparison.primary === 'worse' ? '主指标比起点差。' : round.comparison.primary === 'same' ? '主指标没有变化。' : '两次评测没有共同的主指标，无法比较。';
   return `<p class="mh-say mh-verdict ${h(round.comparison.primary)}">${h(verdict)}</p>${hubCompareTable(cat, round, set)}${noted}` +
     (candidateEval && candidate ? `<details class="mh-again"><summary>重新评测，或换一个候选版本</summary>${hubEvalAsk(st, data, model, round, candidate, live)}` +
-      `<p class="mh-swap">${button('换一个候选版本', 'hub-version-add', 'secondary small', `${model.id}|${round.id}`)}</p></details>` : '') +
+      `<p class="mh-swap">${button('换一个候选版本', 'hub-history', 'secondary small', `${model.id}|${round.id}`)}</p></details>` : '') +
     `<div class="button-row">${button('采纳为当前版本', 'hub-round-accept', '', round.id)}${button('不采纳', 'hub-round-reject', 'secondary', round.id)}</div>`;
 }
 
