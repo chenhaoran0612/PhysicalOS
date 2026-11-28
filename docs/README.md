@@ -43,6 +43,7 @@
 | [PACKAGE_DELIVERY.md](PACKAGE_DELIVERY.md) | 把资料库里的驱动安装包送到设备并核对：只送「可用」的、取和送两段各自续传、三处核对校验值、文件名换名、交给修复流程的送达记录 |
 | [MATERIAL_LIBRARY.md](MATERIAL_LIBRARY.md) | 资料库：页面、桌面端后台、云平台三段怎么配合，分片上传与续传；issue #51 起按品牌型号归属，见 MODEL_LIBRARY.md |
 | [MODEL_LIBRARY.md](MODEL_LIBRARY.md) | 资料库按品牌型号归属：同品牌同型号的机器人共用、旧资料怎么归过去、改一份资料的品牌型号、机器人模型（URDF，可带网格）单独一栏、接口、验证范围（issue #51） |
+| [LIBRARY_BY_PRODUCT.md](LIBRARY_BY_PRODUCT.md) | 资料库先选品牌型号再看资料；机器人模型是资料列表里的一行（「仿真使用中」）；一个「上传资料」选用途；模型格式 URDF、MJCF（能仿真）和 SDF、USD、STP（只保存）；云端 `GET /library/products`（issue #77） |
 | [PRODUCT_NAME.md](PRODUCT_NAME.md) | 产品名称 Physical OS、应用和安装包的名字、数据目录在第一次启动时改名、登录页（issue #55） |
 | [ROBOT_NO_TASK.md](ROBOT_NO_TASK.md) | 添加机器人不需要任务，也不会顺带建任务；任务在创建时绑定机器人（issue #56） |
 | [APP_GALLERY.md](APP_GALLERY.md) | 「机器人应用」是应用瀑布流：应用有自己的页面，画出工作流（按顺序调用的技能）；技能在单独的页面；创建应用选品牌型号（issue #60） |
@@ -52,10 +53,11 @@
 | [DUCK_SKILLS.md](DUCK_SKILLS.md) | Microduck AD-P102（双足小鸭）作为仿真机器人；它训练出来的技能模型在应用里按原策略真跑，「训练与改进」页看训练进展；模型文件只进安装包（issue #63） |
 | [TRAINED_SKILLS.md](TRAINED_SKILLS.md) | 仿真里训练出的模型就是机器人的技能：能力标准 1.3 的 `policy.run`；Microduck AD-P102 每个有模型包的节目是一个技能 `duck.<节目>`，仿真小鸭启动时自带并登记到品牌型号的技能里（issue #67） |
 | [MODEL_HUB.md](MODEL_HUB.md) | 模型库、训练与改进、训练与测试数据：看板加卡片墙，模型按九个分类、各有指标；模型文件上传成为版本；评测库和训练库；一轮一轮的改进（基线评测、找短板、应用外训练、评测候选、决定）；归账号（issue #71） |
+| [MODEL_HUB_HISTORY.md](MODEL_HUB_HISTORY.md) | 一轮改进的候选版本从历史中选：模型已有的版本，小鸭的技能模型还有训练看板评估过的模型文件（只从本机的看板取，按 SHA-256 核对后收进模型库）（issue #76） |
 | [ICONS.md](ICONS.md) | 图标表：全部图标一种画法（24 网格、线宽 1.75、圆角、不填色），侧栏每页有自己的图标；按钮和提示里的符号（← ↗ ✓ × ☰ …）在页面渲染后画成图标，原字符留在页面里；标志 A（N 加箭头），侧栏、登录页和安装包图标是同一个；新增侧栏页面要在 `NX_ICON_PATHS` 里加同名图标（issue #72） |
 | [SKILL_PRODUCTS.md](SKILL_PRODUCTS.md) | 技能包按品牌型号归属：「安装技能包」只列出这台机器人品牌型号的技能包和通用技能包，别的品牌型号的包不显示也装不上；归属表 `runtime/examples/skills/products.json`（issue #69） |
 | [RUN_RECORDS.md](RUN_RECORDS.md) | 运行数据：每次运行跟到结束并保存结果、事件和采样；「验证与测试」「部署与运行」是数字板加记录列表，「仿真试运行」加了仿真运行记录；点一行看这次运行的路线、曲线、步骤和事件（issue #70） |
-| [TASK_SIM.md](TASK_SIM.md) | 仿真试运行按任务来做：页面只列任务；任务的品牌型号决定仿真哪一种机器人，环境由工程助手按任务构建一次、保存在任务上，进入仿真时装上任务用到的技能（issue #66） |
+| [TASK_SIM.md](TASK_SIM.md) | 仿真试运行按任务来做：页面只列任务；任务的品牌型号决定仿真哪一种机器人，进入任务后按技能列出，每个技能有自己的环境，由工程助手构建一次、保存在任务上（构建有 400000 Token 的额度），进入仿真时装上用到的技能（issue #66、#74、#75） |
 | [BRAND_MODEL_INPUT.md](BRAND_MODEL_INPUT.md) | 品牌、型号各一个可下拉可输入的框，添加机器人和资料库上传都用它（issue #61） |
 | [PAGE_TITLES.md](PAGE_TITLES.md) | 侧栏页面的标题统一按「工作台」的写法（issue #57） |
 | [SIM_PROFILES.md](SIM_PROFILES.md) | 仿真机器人按类型、品牌、型号添加：内置档案、模型包怎么打、同一品牌型号的不同写法、旧仿真机器人删除一次（issue #54） |
