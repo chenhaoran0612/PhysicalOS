@@ -390,6 +390,7 @@ const UX_CODES = {
   duck_show_missing: ['state', '这个安装里没有这个技能模型，或这个仿真小鸭添加得比它早。', '换一个有模型包的节目，或重新添加一个仿真小鸭'],
   duck_package_changed: ['state', '这个技能模型包不是登记的那一份，没有使用。', '请安装完整的版本；自己构建时重新运行 scripts/duck_kit.py'],
   duck_package_invalid: ['state', '这个技能模型包打不开或内容不完整。', '请安装完整的版本'],
+  duck_evidence_invalid: ['state', '这个技能模型包里的训练记录和它自己的校验清单对不上。', '请安装完整的版本'],   // issue #79
   duck_robot_unknown: ['state', '没有找到这个仿真小鸭。', '回到「我的机器人」确认它还在，或重新添加一个'],
   duck_not_running: ['state', '这个仿真小鸭没有在运行。', '在「我的机器人」里启动它，再运行技能模型'],
   duck_seed_invalid: ['input', '起姿编号需要是 0 到 4294967295 之间的整数。', '改成范围内的整数再试'],

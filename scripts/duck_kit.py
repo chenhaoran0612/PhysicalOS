@@ -9,14 +9,17 @@ under a non-commercial licence, and the weights are the training project's. They
 the build computer (``--private``, else ``$NEUXMIND_PRIVATE_DUCK``, else ``~/code/PhysicalOS-private/duck``)::
 
     shows/<package file name>      the packages named in brainos/duck_kit.py SHOWS
+    recordings/<file name>         the recordings of every accepted episode (duck_kit.RECORDINGS, issue #79)
     training.json                  the training progress when the packages were collected
 
 ``collect`` fills that folder from a checkout of the training project and, when the project's dashboard is
-running on this computer, takes a copy of the training progress. A package whose checksum is not the one
-in ``SHOWS`` is not copied; the script prints the checksum it found, so that the list can be updated on
-purpose.
+running on this computer, takes a copy of the training progress. Since issue #79 the packages come out of
+the delivery bundle (duck_kit.BUNDLE, ``reports/training/models/``), a package of an older delivery from
+its own folder. A bundle or package whose checksum is not the one in ``duck_kit.py`` is not copied; the
+script prints the checksum it found, so that the list can be updated on purpose.
 
-``build`` makes ``<out>/``: the packages under ``shows/<id>.zip`` (checksum checked again), the physics
+``build`` makes ``<out>/``: the packages under ``shows/<id>.zip`` (checksum checked again), the recordings
+as ``recordings.zip`` (likewise), the physics
 engine the packages were accepted on (MuJoCo 3.10.0, and onnxruntime for the two third-party gait
 policies) unpacked from their wheels into ``engine/``, ``training.json``, ``NOTICE.txt`` and ``kit.json``.
 The wheels are downloaded once into ``.build/duck-kit-wheels`` (``--offline`` uses only what is there).
@@ -35,12 +38,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from brainos import duck_kit  # noqa: E402
+from brainos import duck_evidence, duck_kit  # noqa: E402
 
 PRIVATE_ENV = 'NEUXMIND_PRIVATE_DUCK'
 DEFAULT_PRIVATE = Path.home() / 'code' / 'PhysicalOS-private' / 'duck'
 WHEELS = {'mujoco': duck_kit.ENGINE['mujoco'], 'onnxruntime': duck_kit.ENGINE['onnxruntime'], 'typing_extensions': '4.12.2'}
-# Where a package is in the training project (relative to its root).
+# Where the delivery is in the training project (relative to its root); a package that is not in the bundle
+# is looked for in its show's own folder there.
+DELIVERY = 'reports/training/models'
 SOURCES = {
     'bow_roll': 'reports/training/models/bow_roll', 'water': 'reports/training/models/water',
     'penalty': 'reports/training/models/penalty', 'drunk': 'reports/training/models/drunk',
@@ -67,6 +72,10 @@ shows/*.zip
   - velstand.onnx, roulade.onnx: Pollen Robotics microduck-policies, Apache-2.0.
   - The show policies (*.pt), choreography and judges: the duck-rl training project.
 
+recordings.zip
+  A video and a record of every accepted episode of the models in shows/ (the duck-rl training project's
+  "120 场原速录像与索引"). The videos show the same robot meshes as the packages: the same terms apply.
+
 engine/
   MuJoCo {mujoco} (Apache-2.0, Google DeepMind), onnxruntime {onnxruntime} (MIT, Microsoft),
   typing_extensions (PSF-2.0), from their wheels on pypi.org, with viewers, tests and headers removed.
@@ -92,23 +101,71 @@ def private_dir(named):
     return Path(named or os.environ.get(PRIVATE_ENV) or DEFAULT_PRIVATE)
 
 
+def _bundle_members(path):
+    """The packages in the delivery bundle by file name, when the bundle is the registered one."""
+    if not path.is_file():
+        say(f'  没有找到交付包：{path}')
+        return None
+    found = sha256(path)
+    if found != duck_kit.BUNDLE['sha256']:
+        say(f'  交付包已经换了（{found}），登记的是 {duck_kit.BUNDLE["sha256"]}；没有从里面复制')
+        return None
+    archive = zipfile.ZipFile(path)
+    folder = duck_kit.BUNDLE['folder']
+    return archive, {duck_evidence.member_name(i)[len(folder):]: i for i in archive.infolist()
+                     if duck_evidence.member_name(i).startswith(folder) and not i.is_dir()}
+
+
+def _collect_show(show, source, bundle, private):
+    """Copy one show's package into the private folder; ``True`` when it is there with the registered checksum."""
+    target = private / 'shows' / show['package']
+    part = target.with_name(target.name + '.part')
+    if bundle and show['package'] in bundle[1]:
+        with bundle[0].open(bundle[1][show['package']]) as stream, open(part, 'wb') as out:
+            shutil.copyfileobj(stream, out, 1 << 20)
+    else:
+        path = source / SOURCES.get(show['id'], f'{DELIVERY}/{show["id"]}') / show['package']
+        if not path.is_file():
+            say(f'  没有找到 {show["id"]}：{path}')
+            return False
+        shutil.copyfile(path, part)
+    found = sha256(part)
+    if found != show['sha256']:
+        part.unlink()
+        say(f'  {show["id"]}：训练项目里的包已经换了（{found}），登记的是 {show["sha256"]}；没有复制')
+        return False
+    os.replace(part, target)
+    say(f'  已复制 {show["id"]}  {target.stat().st_size} 字节')
+    return True
+
+
+def _collect_recordings(source, private):
+    path = source / DELIVERY / duck_kit.RECORDINGS['file']
+    if not path.is_file():
+        say(f'  没有找到录像包：{path}')
+        return False
+    found = sha256(path)
+    if found != duck_kit.RECORDINGS['sha256']:
+        say(f'  录像包已经换了（{found}），登记的是 {duck_kit.RECORDINGS["sha256"]}；没有复制')
+        return False
+    (private / 'recordings').mkdir(parents=True, exist_ok=True)
+    target = private / 'recordings' / duck_kit.RECORDINGS['file']
+    shutil.copyfile(path, target.with_name(target.name + '.part'))
+    os.replace(target.with_name(target.name + '.part'), target)
+    say(f'  已复制录像包  {target.stat().st_size} 字节')
+    return True
+
+
 def collect(args):
     source, private = Path(args.source).expanduser(), private_dir(args.private)
     (private / 'shows').mkdir(parents=True, exist_ok=True)
-    problems = 0
-    for show in duck_kit.PACKAGED:
-        path = source / SOURCES[show['id']] / show['package']
-        if not path.is_file():
-            say(f'  没有找到 {show["id"]}：{path}')
-            problems += 1
-            continue
-        found = sha256(path)
-        if found != show['sha256']:
-            say(f'  {show["id"]}：训练项目里的包已经换了（{found}），登记的是 {show["sha256"]}；没有复制')
-            problems += 1
-            continue
-        shutil.copyfile(path, private / 'shows' / show['package'])
-        say(f'  已复制 {show["id"]}  {path.stat().st_size} 字节')
+    bundle = _bundle_members(source / DELIVERY / duck_kit.BUNDLE['file'])
+    try:
+        problems = sum(not _collect_show(show, source, bundle, private) for show in duck_kit.PACKAGED)
+    finally:
+        if bundle:
+            bundle[0].close()
+    problems += not _collect_recordings(source, private)
     url = duck_kit.dashboard_url()
     training = duck_kit.fetch_training(url) if url and not args.no_training else None
     if training:
@@ -208,13 +265,20 @@ def build(args):
     training = private / 'training.json'
     if training.is_file():
         shutil.copyfile(training, out / 'training.json')
+    recordings = private / 'recordings' / duck_kit.RECORDINGS['file']        # issue #79
+    has_recordings = recordings.is_file() and sha256(recordings) == duck_kit.RECORDINGS['sha256']
+    if has_recordings:
+        shutil.copyfile(recordings, out / duck_kit.RECORDINGS['kit'])
+    else:
+        say('  没有登记的录像包：这次的套件里没有逐场录像')
     (out / 'NOTICE.txt').write_text(NOTICE.format(**duck_kit.ENGINE), encoding='utf-8')
     kit = {'schema': 'duck.kit.v1', 'built_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'shows': shows,
            'engine': {**duck_kit.ENGINE, 'python': f'{sys.version_info[0]}.{sys.version_info[1]}', 'present': has_engine},
-           'training': training.is_file()}
+           'training': training.is_file(),
+           'recordings': {'file': duck_kit.RECORDINGS['file'], 'sha256': duck_kit.RECORDINGS['sha256']} if has_recordings else None}
     (out / 'kit.json').write_text(json.dumps(kit, ensure_ascii=False, indent=1), encoding='utf-8')
     size = sum(p.stat().st_size for p in out.rglob('*') if p.is_file())
-    say(f'小鸭套件：{len(shows)} 个技能模型包，引擎{"已" if has_engine else "未"}收入，共 {size / 1e6:.1f} MB → {out}')
+    say(f'小鸭套件：{len(shows)} 个技能模型包，引擎{"已" if has_engine else "未"}收入，录像{"已" if has_recordings else "未"}收入，共 {size / 1e6:.1f} MB → {out}')
     return 0
 
 

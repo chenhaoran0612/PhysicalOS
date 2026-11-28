@@ -66,7 +66,7 @@ const engine = process.env.BRAIN_BROWSER === 'webkit' ? playwright.webkit : play
     await page.locator('.duck-frame:not([hidden])').waitFor();
     await shot('duck-02-performing');
     const said = await says('完整演完', 60000);
-    must(/用时 4\.5\d 秒/.test(said), 'The bow did not take the recorded 4.5 s: ' + said);
+    must(/用时 18\.36 秒/.test(said), 'The bow did not take the recorded 18.36 s (issue #79: round 140, seed 1700003000): ' + said);
     await shot('duck-03-done');
     await block.locator('[data-duck-replay="bow_roll"]').click();
     const video = block.locator('.duck-video');
@@ -117,7 +117,9 @@ const engine = process.env.BRAIN_BROWSER === 'webkit' ? playwright.webkit : play
   must(real ? /训练看板|安装包里的记录/.test(head) : head.includes('安装包里的记录') && head.includes('共 12 轮'), 'The training block does not say where its figures come from: ' + head);
   if (!real) {
     const cells = await training.locator('tbody tr').first().locator('td').allInnerTexts();
-    must(cells[1].includes('10/10') && cells[1].includes('第 3 轮第 8 次') && cells[2].includes('7/10') && cells[3].includes('5 次'), 'Best, latest and count are wrong: ' + cells);
+    const titles = await training.locator('thead th').allInnerTexts();         // issue #79 added columns: read them by their titles
+    const at = title => cells[titles.indexOf(title)] || '';
+    must(at('历史最佳').includes('10/10') && at('历史最佳').includes('第 3 轮第 8 次') && at('最新评估').includes('7/10') && at('评估').includes('5 次'), 'Best, latest and count are wrong: ' + cells);
     must(await training.locator('svg.duck-spark polyline').count() === 1, 'No trend line');
   }
   must(await training.locator('a[target=_blank]').count() === 1, 'No way to the full dashboard');

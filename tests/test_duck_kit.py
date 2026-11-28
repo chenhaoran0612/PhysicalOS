@@ -236,13 +236,27 @@ class Listed(unittest.TestCase):
     def test_every_packaged_skill_model_names_one_package_by_checksum_and_how_it_was_accepted(self):
         ids = [show['id'] for show in duck_kit.SHOWS]
         self.assertEqual(len(ids), len(set(ids)))
-        self.assertEqual([s['id'] for s in duck_kit.SHOWS if s['status'] == duck_kit.TRAINING], ['floor_spin', 'recharge'])
-        for show in duck_kit.PACKAGED:
-            self.assertRegex(show['sha256'], r'^[0-9a-f]{64}$')
-            self.assertTrue(show['package'].endswith('.zip') and show['origin'] and show['acceptance'], show['id'])
-            fixed, independent = show['acceptance']['fixed'], show['acceptance']['independent']
-            delivered = fixed == [10, 10] and independent == [10, 10]
-            self.assertEqual(show['status'] == duck_kit.DELIVERED, delivered, show['id'])     # 交付要求两组各 10/10
+        # Issue #79: the delivery of 2026-11-27 has all six models; the short drunk show is no longer delivered
+        self.assertEqual([s['id'] for s in duck_kit.PACKAGED], ['bow_roll', 'drunk_circle', 'water', 'floor_spin', 'penalty', 'recharge'])
+        self.assertEqual([s['id'] for s in duck_kit.SHOWS if s['status'] == duck_kit.ARCHIVED], ['drunk'])
+        seeds = set()
+        for show in duck_kit.SHOWS:
+            for version, current in duck_kit.versions(show):
+                self.assertRegex(version['sha256'], r'^[0-9a-f]{64}$')
+                self.assertTrue(version['package'].endswith('.zip') and version['origin'] and version['acceptance'], show['id'])
+                group = duck_kit.seed_group(version['independent_from'])          # every version has its own independent group
+                self.assertFalse(seeds & set(group), show['id'])
+                self.assertFalse(set(group) & set(duck_kit.seed_group(duck_kit.HOME_SEEDS[0])), show['id'])
+                seeds |= set(group)
+                self.assertEqual(bool(version.get('legacy')), not current, show['id'])     # what came before #79 keeps its ids
+            if show.get('package'):
+                fixed, independent = show['acceptance']['fixed'], show['acceptance']['independent']
+                delivered = fixed == [10, 10] and independent == [10, 10]
+                self.assertEqual(show['status'] == duck_kit.DELIVERED, delivered, show['id'])     # 交付要求两组各 10/10
+                low, high = show['seconds']
+                self.assertTrue(15 <= low <= high <= 30, show['id'])                            # the 15–30 s show clock
+        packages = [v['package'] for s in duck_kit.SHOWS for v, _ in duck_kit.versions(s)]
+        self.assertEqual(len(packages), len(set(packages)))
 
     def test_no_weights_video_or_mesh_of_the_duck_is_kept_in_the_repository(self):
         kept = [p for p in ROOT.rglob('*') if p.suffix.lower() in ('.pt', '.onnx', '.mp4', '.stl')
@@ -454,33 +468,50 @@ class RealKit(unittest.TestCase):
                     self.assertEqual(hashlib.file_digest(stream, 'sha256').hexdigest(), show['sha256'], show['id'])
         self.assertTrue(kit['shows'])
 
-    def test_the_bow_runs_exactly_as_recorded_without_pytorch_on_the_pinned_engine(self):
-        kit = duck_kit.read_kit(REAL_KIT)
-        if 'bow_roll' not in kit['shows']:
-            self.skipTest('no bow_roll package in this kit')
+    def perform(self, show, seed):
+        """Unpack a show's package from the real kit and let the physics child perform it once from ``seed``."""
         with tempfile.TemporaryDirectory() as tmp:
-            package = duck_kit.unpack(REAL_KIT / 'shows' / 'bow_roll.zip', Path(tmp) / 'bow')
+            package = duck_kit.unpack(REAL_KIT / 'shows' / f'{show}.zip', Path(tmp) / show)
             env = {**os.environ, 'PYTHONPATH': os.pathsep.join([str(ROOT), os.environ.get('PYTHONPATH', '')])}
             child = subprocess.Popen([sys.executable, '-u', '-m', 'brainos.duck_engine', '--package', str(package), '--view', str(Path(tmp) / 'view'),
                                       '--engine', str(duck_paths.engine_dir(REAL_KIT))], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, env=env, text=True)
             try:
                 ready = json.loads(child.stdout.readline())
-                self.assertEqual((ready['event'], ready['task'], ready['mujoco']), ('ready', 'bow_roll', duck_kit.ENGINE['mujoco']), ready)
-                child.stdin.write(json.dumps({'cmd': 'show', 'id': 'r', 'seed': 1_700_003_000}) + '\n')
+                self.assertEqual((ready['event'], ready['task'], ready['mujoco']), ('ready', show, duck_kit.ENGINE['mujoco']), ready)
+                child.stdin.write(json.dumps({'cmd': 'show', 'id': 'r', 'seed': seed}) + '\n')
                 child.stdin.flush()
-                done = None
                 for line in child.stdout:
                     event = json.loads(line)
                     if event['event'] == 'done':
-                        done = event
-                        break
+                        return event
             finally:
                 child.stdin.close()
                 child.wait(10)
                 child.stdout.close()
-        # The delivered replay of this seed: 227 control steps, 4.54 s (the package's 使用说明.md).
-        self.assertEqual((done['success'], done['steps'], done['duration_s'], done['phases'][-1]), (True, 227, 4.54, '回正'), done)
+        self.fail(f'{show} did not finish')
+
+    def test_the_bow_runs_exactly_as_recorded_without_pytorch_on_the_pinned_engine(self):
+        if 'bow_roll' not in duck_kit.read_kit(REAL_KIT)['shows']:
+            self.skipTest('no bow_roll package in this kit')
+        done = self.perform('bow_roll', 1_700_003_000)
+        # The delivered record of this seed (120场验收.csv of the delivery of 2026-11-27): 918 control steps, 18.36 s.
+        self.assertEqual((done['success'], done['steps'], done['duration_s'], done['phases'][-1]), (True, 918, 18.36, '昂首收礼'), done)
+
+    def test_every_model_runs_its_first_accepted_episode_exactly_as_its_package_recorded_it(self):
+        # Issue #79: the two-actor floor dance, the recharge show's parent actors and PyTorch's own tanh (brainos.duck_tanh)
+        # are what make these equal; with numpy's tanh the two-lap walk failed 4 of its 20 accepted episodes.
+        app = Platform(tempfile.mkdtemp(prefix='nx-duck-real-'))
+        self.addCleanup(app.close)
+        app.duck.kit = REAL_KIT
+        for show in duck_kit.PACKAGED:
+            if show['id'] not in duck_kit.read_kit(REAL_KIT)['shows']:
+                continue
+            with self.subTest(show=show['id']):
+                group = next(g for g in app.duck.evidence({'show': show['id']})['records']['groups'] if g['id'] == 'independent')
+                case = group['cases'][0]
+                done = self.perform(show['id'], case['seed'])
+                self.assertEqual((done['success'], done['steps']), (True, case['steps']), done)
 
 
 @unittest.skipUnless(HAVE_MUJOCO, 'needs the mujoco package')

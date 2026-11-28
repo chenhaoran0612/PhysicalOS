@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const sandbox = {};
 vm.createContext(sandbox);
 const d = vm.runInContext(readFileSync('web/duck.js', 'utf8') +
-  '\n;({duckKit, duckScore, duckOrigin, duckRobots, duckReason, duckRunLine, duckSpark, duckFigure, duckAgo, duckTrainingSource, duckShowRow, duckTrainingBlock, duckStage, duckHead, duckSkillLine})', sandbox);
+  '\n;({duckKit, duckScore, duckOrigin, duckRobots, duckReason, duckRunLine, duckSpark, duckFigure, duckAgo, duckTrainingSource, duckShowRow, duckTrainingBlock, duckStage, duckHead, duckSkillLine, duckSeconds, duckRelease, duckEvidenceBlock, duckAcceptance, duckTraining, duckVersions})', sandbox);
 
 let checks = 0;
 const ok = (condition, what) => { assert.ok(condition, what); checks += 1; };
@@ -104,5 +104,44 @@ ok(!d.duckTrainingBlock({source: 'none', tasks: []}, 5).includes('<table'), 'no 
 const hostile = d.duckTrainingBlock({source: 'live', tasks: [{id: 't', title: 't', active: true, evaluations: '<b>9</b>',
   best: {round: 1, update: 1, successes: 1, episodes: '<img src=x>'}, latest: null, series: []}]}, 5);
 ok(!hostile.includes('<img') && !hostile.includes('<b>9'), 'figures from the dashboard are never markup');
+
+// ---- issue #79: each model's time, its training and acceptance, the versions before it
+same([d.duckSeconds([16.76, 16.78]), d.duckSeconds([17.9, 17.9]), d.duckSeconds(null), d.duckSeconds([1, 'x'])], ['16.76–16.78 秒', '17.90 秒', '', ''], 'a time on the show clock');
+same(d.duckRelease({round: 132, update: 1, fixed: [10, 10], independent: [10, 10], seconds: [16.76, 16.78], device: 'Mac CPU'}),
+  {score: '10/10 · 10/10', where: '第 132 轮第 1 次 · 16.76–16.78 秒 · Mac CPU'}, 'the delivered version');
+same(d.duckRelease(null), {score: '—', where: ''}, 'no delivered version');
+const water = {id: 'water', title: '单脚探水', summary: '探水。', status: 'delivered', status_name: '已交付', packaged: true, seconds: [16.76, 16.78],
+  origin: {round: 132, update: 1, steps: 3456, device: 'Mac CPU'}, acceptance: {fixed: [10, 10], independent: [10, 10]}, history: [{round: 6}]};
+const waterRow = d.duckShowRow(water, true, false, null, true);
+ok(waterRow.includes('每段 16.76–16.78 秒') && waterRow.includes('data-duck-evidence="water"') && waterRow.includes('aria-expanded="true"'), 'a model row has its time and its records');
+const archived = d.duckShowRow({id: 'drunk', title: '旧版', summary: '短。', status: 'archived', status_name: '已归档', packaged: false, note: '不再交付。', history: [{round: 3}]}, true, false, null, false);
+ok(archived.includes('duck-archived') && archived.includes('data-duck-evidence="drunk"') && !archived.includes('data-duck-run') && !archived.includes('没有它的模型包'),
+  'an archived model has no run button but its records');
+const evidence = {show: 'water', title: '单脚探水', problem: '', versions: [
+  {current: true, in_kit: true, round: 132, update: 1, steps: 3456, device: 'Mac CPU', acceptance: {fixed: [10, 10], independent: [10, 10]}, independent_from: 3293174000, seconds: [16.76, 16.78]},
+  {current: false, in_kit: false, round: 6, update: 4, steps: 8192, device: 'NVIDIA A100', acceptance: {fixed: [10, 10], independent: [10, 10]}, independent_from: 1826014600}],
+  records: {checkpoint_sha256: 'c', protocol: {min_s: 15, max_s: 30},
+    training: {updates: 1, requested_updates: 12, steps: 3456, stop_reason: '固定组十个起姿全部通过后停止', device: 'Mac CPU', torch: '2.5.1', mujoco: '3.10.0',
+      method: 'residual PPO', config: {num_envs: 4, learning_rate: 2e-6}},
+    groups: [{id: 'fixed', name: '固定组', passed: 10, total: 10, min_s: 16.78, max_s: 16.78, cases: [{seed: 1700003000, success: true, steps: 839, duration_s: 16.78, recording: true}]},
+      {id: 'independent', name: '独立组', passed: 9, total: 10, min_s: 16.76, max_s: 16.78, cases: [{seed: 3293174000, success: false, reason: 'nonfoot_ground_contact', steps: 300, duration_s: 6, recording: false}]},
+      {id: 'zero', name: '独立组 · 只按编舞', passed: 7, total: 10, min_s: null, max_s: null, cases: []}]}};
+const task = {id: 'water', run_count: 7, run_steps: 1154432, evaluations: 84, runs: [{round: 6, state: 'completed', updates: 4, steps: 8192, device: 'cuda'}, {round: 132, state: 'startup_failed', updates: null, steps: 0, device: 'CPU'}]};
+const panel = d.duckEvidenceBlock(evidence, {tasks: [task]});
+ok(panel.includes('第 132 轮第 1 次更新') && panel.includes('3,456') && panel.includes('1 / 最多 12') && panel.includes('学习率') && panel.includes('residual PPO'), 'the training run and its settings');
+ok(panel.includes('一共训练了 <b>7</b> 轮') && panel.includes('1,154,432') && panel.indexOf('第 132 轮</td>') < panel.indexOf('第 6 轮</td>') && panel.includes('没有启动'), 'the runs, newest first');
+ok(panel.includes('data-duck-recording="water|fixed|1700003000"') && !panel.includes('water|independent|3293174000'), 'a recording plays only where there is one');
+ok(panel.includes('没有通过：脚以外的部位触地') && panel.includes('15–30 秒'), 'a failed episode says why; the rule is said');
+ok(panel.includes('<b>7/10</b> 对照') && panel.includes('从 7 个提高到 9 个'), 'the control without the trained correction');
+ok(panel.includes('随这个安装带来') && panel.includes('旧版本，不随这个安装带来') && panel.includes('起姿 1826014600 起'), 'every version, the old ones marked');
+ok(d.duckEvidenceBlock({show: 'water', loading: true}, null).includes('正在读取') && d.duckEvidenceBlock(null, null) === '', 'loading and closed');
+ok(d.duckEvidenceBlock({...evidence, records: null, problem: ''}, null).includes('没有逐场的验收记录') &&
+  d.duckEvidenceBlock(evidence, null).includes('本机的训练看板没有应答'), 'what is missing is said');
+const nasty = d.duckEvidenceBlock({...evidence, records: {...evidence.records, training: {...evidence.records.training, method: '<img src=x onerror=1>'},
+  groups: [{id: 'fixed', name: '<b>x</b>', passed: 1, total: 1, cases: [{seed: '<i>1</i>', success: true, steps: 1, duration_s: 1, recording: true}]}]}}, null);
+ok(!nasty.includes('<img') && !nasty.includes('<b>x') && !nasty.includes('<i>1'), 'what the records say is never markup');
+const trained = d.duckTrainingBlock({source: 'live', tasks: [{id: 'water', title: '单脚探水', active: true, best: null, latest: null, evaluations: 84, series: [],
+  release: {round: 132, update: 1, fixed: [10, 10], independent: [10, 10], seconds: [16.76, 16.78]}, run_count: 7, run_steps: 1154432}]}, 5);
+ok(trained.includes('交付的版本') && trained.includes('10/10 · 10/10') && trained.includes('7 轮') && trained.includes('1,154,432 步'), 'the table has the delivered version and the training');
 
 console.log(`duck_logic: ${checks} checks passed`);

@@ -256,10 +256,12 @@ def make_handler(application):
                 if picture is None:
                     return self.respond({'error':'还没有画面'},404)
                 return self.respond(picture,mime='image/png')
-            if path=='/api/duck/replay':                                    # issue #63: the recorded replay of a skill model (a video)
-                from .duck_kit import replay_response
-                wanted=parse_qs(urlparse(self.path).query).get('show',[''])[0]
-                answer=replay_response(application.workspace(user).duck.replay(wanted),self.headers.get('Range'))
+            if path in ('/api/duck/replay','/api/duck/recording'):          # issue #63: the recorded replay of a skill model (a video); issue #79: one accepted episode
+                from .duck_kit import replay_response,video_response
+                query=parse_qs(urlparse(self.path).query)
+                wanted,seed=query.get('show',[''])[0],query.get('seed',[''])[0]
+                answer=(video_response(application.workspace(user).duck.recording(wanted,query.get('group',[''])[0],int(seed) if seed.isascii() and seed.isdigit() and len(seed)<=10 else None),self.headers.get('Range'))
+                        if path=='/api/duck/recording' else replay_response(application.workspace(user).duck.replay(wanted),self.headers.get('Range')))
                 if answer is None:
                     return self.respond({'error':'这个技能模型没有录像'},404)
                 status,headers,body=answer
@@ -451,6 +453,7 @@ def make_handler(application):
                         # ux05-fix (Q7-03): global safety watch (stop not obeyed, latch guard, calibration)
                         'robots/safety':service.robot_safety,
                         'skills/examples':service.skill_examples,
+                        'duck/evidence':service.duck.evidence,                      # issue #79: how a duck's skill model was trained and accepted
                         'cloud/probe':service.cloud.probe,
                         'cloud/configure':service.cloud.configure,
                         'cloud/register':service.cloud.register,
