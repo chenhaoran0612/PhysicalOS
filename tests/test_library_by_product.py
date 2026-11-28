@@ -251,6 +251,7 @@ class AnMjcfModelIsBuilt(unittest.TestCase):
         geoms = [mujoco_name(model, 'geom', i) for i in range(model.ngeom)]
         self.assertEqual(geoms.count('floor'), 1)                                 # the scene's floor only
         self.assertNotIn('robot/floor', geoms)
+        self.assertGreater(world.stand_height, 0.3)            # placed by the simulation, not 0.5 m up as the file says
         summary = mujoco_build.settle(world, 0.5)
         self.assertEqual(summary['joints'], ['hip', 'knee', 'roll', 'wag', 'unnamed_joint_2'])
         self.assertTrue(world.robot_geoms)

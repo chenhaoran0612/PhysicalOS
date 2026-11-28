@@ -7,7 +7,8 @@
 * the robot is the body at the top of the world with the most hinge and slide joints below it; everything
   else the file puts into the world (floor, lights, cameras, sites, other bodies) is removed — the scene is
   the simulation's own;
-* the robot's free joint is removed: the simulation carries the robot (``mujoco_build``);
+* the robot's free joint and its position in the file are removed: the simulation carries and places the robot
+  (``mujoco_build``);
 * the file's own actuators, sensors, keyframes, contact pairs and exclusions, tendons and equality
   constraints are removed, except an equality that couples one joint to another (that joint then follows,
   like a URDF ``mimic``). Every other hinge and slide joint gets the simulation's position actuator;
@@ -68,6 +69,9 @@ def _keep_robot(spec, notes):
     for joint in list(robot.joints):
         if joint.type == mujoco.mjtJoint.mjJNT_FREE:
             spec.delete(joint)
+    # Where the file puts the robot belongs to its own scene: the simulation places it (and finds its standing
+    # height, mujoco_build). Left as it was, a duck put at 0.2 m stood 13 mm above the floor.
+    robot.pos = [0.0, 0.0, 0.0]
     return robot
 
 
