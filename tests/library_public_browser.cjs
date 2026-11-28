@@ -88,7 +88,9 @@ let failed = async () => {};
   // 4 · Back as the ordinary account: the model is 可用 for it too.
   await page.keyboard.press('Escape').catch(() => {});
   await signInToCloud(cfg.email);
-  must((await row('demo-arm.zip').innerText()).includes('可用'), 'the confirmed public model is not 可用 for an ordinary account');
+  // Since #77 the usable model a brand and model simulates with reads 「仿真使用中」 rather than 「可用」.
+  const usableText = await row('demo-arm.zip').innerText();
+  must(usableText.includes('仿真使用中') || usableText.includes('可用'), 'the confirmed public model is not usable for an ordinary account');
   await shot('4-usable-for-everyone');
   must(errors.length === 0, 'page errors: ' + errors.join(' | '));
   console.log(JSON.stringify({ok: true, ...result}));
