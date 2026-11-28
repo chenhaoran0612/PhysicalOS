@@ -47,7 +47,7 @@ issue #77 的原话：资料库进来，先筛选品牌和型号，再展示资�
   - `<include>` 展开后的元素总数有上限（20 万），一个文件被引用多次每次都算；
   - `<compiler>` 的目录换成 `meshes`，其余设置（角度单位、`autolimits` …）保留；
   - 没有名字的关节起名 `unnamed_joint_<n>`，和云端的解析结果一致。
-- `brainos/mujoco_mjcf_build.py`（新，只在仿真进程里加载 MuJoCo）：机器人是世界下面关节最多的那棵刚体树；其余的（地面、灯光、相机、标记点、别的刚体）去掉；去掉自由关节；文件自己的执行器、传感器、关键帧、接触对和排除、肌腱去掉；关节耦合（一个关节跟随另一个的 equality）保留，跟随的关节不加执行器，和 URDF 的 `mimic` 一样。关节的类型和上限用 MuJoCo 编译后的结果（默认类、度换成弧度都已处理），力矩取 `actuatorfrcrange`，否则取文件里驱动它的执行器能给的。质量和惯量的下限和 URDF 一样，没有几何体的刚体也能编译。
+- `brainos/mujoco_mjcf_build.py`（新，只在仿真进程里加载 MuJoCo）：机器人是世界下面关节最多的那棵刚体树；其余的（地面、灯光、相机、标记点、别的刚体）去掉；去掉自由关节和文件给它的位置（由仿真来放，站立高度和 URDF 一样算：不去掉时，文件里放在 0.2 米高的小黄鸭会离地 13 毫米）；文件自己的执行器、传感器、关键帧、接触对和排除、肌腱去掉；关节耦合（一个关节跟随另一个的 equality）保留，跟随的关节不加执行器，和 URDF 的 `mimic` 一样。关节的类型和上限用 MuJoCo 编译后的结果（默认类、度换成弧度都已处理），力矩取 `actuatorfrcrange`，否则取文件里驱动它的执行器能给的。质量和惯量的下限和 URDF 一样，没有几何体的刚体也能编译。
 - `brainos/mujoco_build.py`：`model_format` 是 `mjcf` 时用上面这个读机器人，其余不变（载体、执行器、站立高度、碰撞规则和 URDF 一样）。挂接前把仿真自己的 `<option>`（时间步长、积分器、求解器次数…）抄给机器人：文件自己写的设置本来就不用，不抄的话 MuJoCo 4 每次挂接都会警告“Attach conflict”，并在当前目录写一个 `MUJOCO_LOG.TXT`。
 - 仿真缺模型时的提示改成“上传它的 URDF 或 MJCF 模型”。
 
@@ -59,7 +59,7 @@ issue #77 的原话：资料库进来，先筛选品牌和型号，再展示资�
 - `tests/test_library_by_product.py`：品牌型号清单的合并和旧云平台；MJCF 的准备（只留这里写的文件、include、网格目录、拒绝的情况）；MuJoCo 里建出来的机器人（关节、力矩、跟随、去掉的东西、站立）。`tests/test_mujoco_sim.py` 一条提示文字跟着改了。
 - `tests/model_library_logic.cjs`：选哪个品牌型号、那一排、模型提示、模型行。
 - `tests/mujoco_sim_browser.cjs`：按新的页面走一遍（自动选中、从提示上传模型、确认后「仿真使用中」、文档和模型列在一起），再建仿真环境。
-- 用小黄鸭训练包里的真实 MJCF（`reports/adp102/scene.xml`，38 个网格、28 个关节）在本机跑过准备和建模（本地文件，没有进仓库）。
+- 用小黄鸭训练包里的真实 MJCF（`reports/adp102/scene.xml`，38 个网格、28 个关节）和 #78 要导入的 WonderDuck MJCF（照 #78 的打包方式：`scene.xml`、它包含的 `robot_groundcontact.xml`、`assets/`）在本机跑过云端读取、准备和建模：都只有一个主文件，网格齐全，站立时最低处离地 3 毫米（本地文件，没有进仓库）。#78 的 STEP 文件（`鸭子.stp`，471 MB）开头是 `ISO-10303-21;`，符合检查，大小在机器人模型上限 512 MiB 以内。
 
 没有验证的：真机；外面部署的云平台；PostgreSQL（`GET /library/products` 用的是 `lower()`、`min()`、`count()`、`sum(case …)`，云端全套只在 SQLite 上跑过）；很大的 STP / USD 文件（测试里只有几十字节）。
 
