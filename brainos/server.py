@@ -170,6 +170,8 @@ def make_handler(application):
             extra=extra or {'/material_parse.js':('material_parse.js','text/javascript; charset=utf-8'),'/material_parse.css':('material_parse.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #30: what a repair session found in the library, likewise.
             extra=extra or {'/repair_materials.js':('repair_materials.js','text/javascript; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #78: the public library on the 资料库 page, likewise.
+            extra=extra or {'/library_public.js':('library_public.js','text/javascript; charset=utf-8'),'/library_public.css':('library_public.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # issue #51: the library by brand and model, and MuJoCo simulation environments
             extra=extra or {'/model_library.js':('model_library.js','text/javascript; charset=utf-8'),'/model_library.css':('model_library.css','text/css; charset=utf-8'),
                             '/mujoco_sim.js':('mujoco_sim.js','text/javascript; charset=utf-8'),'/mujoco_sim.css':('mujoco_sim.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)

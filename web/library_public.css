@@ -1,0 +1,20 @@
+/* Issue #78: materials of the public library (公共资料库) on the 资料库 page. */
+.lp-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+  background: var(--surface);
+  font-size: 11px;
+  line-height: 17px;
+  vertical-align: 1px;
+}
+/* What changes a material is hidden on a row the viewer may only read (the cloud refuses it anyway). */
+tr[data-lp-read-only] [data-library-action="delete"],
+tr[data-lp-read-only] [data-ml-action="move"] { display: none; }
+.lp-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.lp-read-only .mp-actions, .lp-read-only .mp-missing { display: none; }
+.lp-note { margin-bottom: 8px; }
+.lp-fields :is(input, textarea, select):disabled { background: var(--bg); color: var(--ink); -webkit-text-fill-color: var(--ink); opacity: 1; }

@@ -119,7 +119,7 @@ def move(db: Database, who: library.Who, material_id: str, payload) -> dict:
         if material.kind == types.BUNDLE:
             raise conflict("程序和场景数据属于一台设备，不能改到品牌型号下", code="bundle_needs_device")
         key = _key(material, product)
-        same, named = _clash(s, p.org_id, material, key)
+        same, named = _clash(s, material.org_id, material, key)       # issue #78: a public one is checked where it is
         if same is not None:
             raise ApiError(409, "material_exists", "这个品牌型号下已经有这份资料的这个版本", material_id=same.id)
         if named is not None:
