@@ -193,7 +193,7 @@ class Platform:
         from . import sim_profiles
         result['product_aliases'] = sim_profiles.aliases()      # issue #54: other spellings of a brand and model
         result.update(events=self.store.list('events')[:80], agents=AGENTS, families=FAMILIES,
-                      system={'version': '0.21.16', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
+                      system={'version': '0.21.17', 'mode': 'local-preview', 'identity': 'workspace-isolated'})
         result.update(self.engineering.snapshot())
         result.update(self.hardware.snapshot())
         result.update(self.heartbeat.snapshot())    # issue #24: the workspace is shown, so its heartbeat runs; the states are asked for apart

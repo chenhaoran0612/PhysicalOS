@@ -1,4 +1,4 @@
-NeuxMind Physical OS 0.21.16 — macOS Apple Silicon 开发预览
+NeuxMind Physical OS 0.21.17 — macOS Apple Silicon 开发预览
 
 要求：Apple Silicon（M1 或更新），macOS 13 或更新。
 安装：将 NeuxMind Physical OS.app 拖入 Applications，然后打开。
