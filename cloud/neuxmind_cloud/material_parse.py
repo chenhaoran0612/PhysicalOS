@@ -728,9 +728,9 @@ def view(material: Material, job: MaterialParse | None) -> dict:
 
 def get_result(session: Session, p, material_id: str) -> dict:
     p.require(library.READ)
-    material = library._own_material(session, p, material_id)
+    material = library._own_material(session, p, material_id, read=True)        # issue #78: also a public one
     library_bundle.refuse_parse(material)
-    return view(material, _job(session, material_id))
+    return library.library_public.result_marks(p, material, view(material, _job(session, material_id)))
 
 
 def _edit(session: Session, p, material_id: str, payload) -> tuple[Material, MaterialParse, list[str]]:

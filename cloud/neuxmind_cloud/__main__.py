@@ -7,6 +7,7 @@
     python3 -m neuxmind_cloud grant-operator <email>               # refuses unverified accounts
     python3 -m neuxmind_cloud revoke-operator <email>
     python3 -m neuxmind_cloud sweep                     # run the reservation/session clean-up once
+    python3 -m neuxmind_cloud library-import --dir DIR [--dry-run]   # issue #78: files of DIR/manifest.json → public library
 
 Management commands need direct database access (``DATABASE_URL``); they are
 the only way to create a platform operator besides the e-mail allow-list.
@@ -18,6 +19,7 @@ import json
 import sys
 
 COMMANDS = ("serve", "init-db", "create-operator", "verify-email", "grant-operator", "revoke-operator", "sweep")
+COMMANDS += ("library-import",)     # issue #78: the public library (library_public.py)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,6 +31,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--name", help="create-operator: display name")
     parser.add_argument("--force", action="store_true",
                         help="verify-email: revoke the account's existing sessions and API keys")
+    parser.add_argument("--dir", help="library-import: the folder holding manifest.json")
+    parser.add_argument("--dry-run", action="store_true", help="library-import: check only, store nothing")
     args = parser.parse_args(argv)
 
     from .config import Settings
@@ -82,6 +86,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc.message}", file=sys.stderr)
             return 1
         return 0
+    if args.command == "library-import":
+        from . import library_public
+
+        return library_public.main(settings, args.dir, args.dry_run)
     if args.command == "sweep":
         from .maintenance import sweep
 

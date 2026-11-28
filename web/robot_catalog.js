@@ -36,10 +36,12 @@ const ROBOT_CATALOG = [
     rcM('银毅 NE01', 'humanoid', '', ['NE01']), rcM('破风者 RX', 'humanoid', '', ['RX'])]},
   {vendor: '星玑科技', aliases: ['星玑', 'xingji', 'xinji'], models: [rcM('CS1', 'quadruped', 'xingji-cs1', ['CS-DOG1'])]},
   {vendor: 'Microduck', aliases: ['小鸭'], models: [rcM('AD-P102', 'other', 'microduck-adp102', ['AD-P102 二版'])]},   // issue #63; #65: of the type 其他
+  {vendor: '幻尔科技', aliases: ['幻尔', 'hiwonder'], models: [rcM('WonderDuck', 'other')]},   // issue #78: a Microduck-based duck
   {vendor: '宇树科技', aliases: ['宇树', 'unitree', 'unitree robotics'], models: [
     rcM('Go2', 'quadruped', 'unitree-go2'), rcM('Go1', 'quadruped', 'unitree-go1'), rcM('A1', 'quadruped', 'unitree-a1'),
     rcM('B2', 'quadruped'), rcM('Go2-W', 'wheel_legged'), rcM('B2-W', 'wheel_legged'),
-    rcM('G1', 'humanoid', 'unitree-g1'), rcM('H1', 'humanoid', 'unitree-h1'), rcM('H1-2', 'humanoid'), rcM('R1', 'humanoid'), rcM('Z1', 'manipulator', 'unitree-z1')]},
+    rcM('G1', 'humanoid', 'unitree-g1'), rcM('H1', 'humanoid', 'unitree-h1'), rcM('H1-2', 'humanoid'), rcM('R1', 'humanoid'), rcM('Z1', 'manipulator', 'unitree-z1'),
+    rcM('R1-7A', 'manipulator', '', ['R1 Robotic Arm', 'R1 机械臂'])]},   // issue #78
   {vendor: '云深处科技', aliases: ['云深处', 'deep robotics'], models: [
     rcM('绝影 Lite3', 'quadruped', 'deeprobotics-lite3', ['Lite3']), rcM('绝影 X30', 'quadruped', '', ['X30']), rcM('山猫 M20', 'wheel_legged', 'deeprobotics-m20', ['M20'])]},
   {vendor: 'Boston Dynamics', aliases: ['波士顿动力'], models: [rcM('Spot', 'quadruped', 'boston-dynamics-spot')]},

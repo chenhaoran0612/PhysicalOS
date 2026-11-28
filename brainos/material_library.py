@@ -47,6 +47,8 @@ START_FIELDS += ('device_id', 'device_name')
 MATERIAL_KEYS += ('device_id', 'device_name')
 # Issue #51: ``kind: "model"`` asks for the upload to be kept as the robot model of its brand and model.
 START_FIELDS += ('kind',)
+# Issue #78: a material of the public library (every account sees it; only platform operators change it).
+MATERIAL_KEYS += ('public', 'read_only')
 UPLOAD_KEYS = ('id', 'status', 'resumed', 'filename', 'kind', 'format', 'size', 'sha256', 'chunk_bytes',
                'chunk_count', 'received_count', 'received_bytes', 'expires_at')
 CHUNK_KEYS = ('upload_id', 'index', 'received_count', 'chunk_count', 'received_bytes')

@@ -1,0 +1,2925 @@
+{
+ "about": "Issue #78: where the data of the public library comes from (scripts/library_collect.py reads this; docs/PUBLIC_LIBRARY.md). models: one robot model per entry, from a GitHub repository at a pinned commit (urdf, xacro, or a URDF inside an archive of the repository) or from the private model folder (private). local_models: a model taken out of an archive in the materials folder. packages: a repository at a pinned commit as GitHub's source archive. local: a file of the materials folder (root materials) or of the page captures (root extra). skipped: brands and models of the catalogue with no public model, and why. licence_name empty = the source has no licence file (internal reference only).",
+ "models": [
+  {
+   "id": "unitree-go2",
+   "vendor": "宇树科技",
+   "model": "Go2",
+   "type": "quadruped",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/go2_description/urdf/go2_description.urdf",
+   "paths": [
+    "robots/go2_description/urdf/go2_description.urdf",
+    "robots/go2_description/dae/*"
+   ],
+   "mesh_paths": [
+    "robots/go2_description/dae"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause"
+  },
+  {
+   "id": "unitree-g1",
+   "vendor": "宇树科技",
+   "model": "G1",
+   "type": "humanoid",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/g1_description/g1_23dof.urdf",
+   "paths": [
+    "robots/g1_description/g1_23dof.urdf",
+    "robots/g1_description/meshes/*"
+   ],
+   "mesh_paths": [
+    "robots/g1_description/meshes"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "notes": "23 自由度版本。"
+  },
+  {
+   "id": "unitree-z1",
+   "vendor": "宇树科技",
+   "model": "Z1",
+   "type": "manipulator",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/z1_description/xacro/z1.urdf",
+   "paths": [
+    "robots/z1_description/xacro/z1.urdf",
+    "robots/z1_description/meshes/visual/*"
+   ],
+   "mesh_paths": [
+    "robots/z1_description/meshes/visual"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "notes": "URDF 里没有夹爪。"
+  },
+  {
+   "id": "unitree-r1-7a-left",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/r1-7a_sdk",
+   "commit": "534484f874f9b8e776d82488473f045a9839a2ce",
+   "archive": "urdf/URDF_R1-7A.tar.gz",
+   "paths": [
+    "urdf/URDF_R1-7A.tar.gz"
+   ],
+   "urdf": "R1_Robotic_Arm_L_V1.2-1127/R1_Robotic_Arm_L_V1.2-1127/urdf/R1_Robotic_Arm_L_V1.2-1127.urdf",
+   "mesh_paths": [
+    "R1_Robotic_Arm_L_V1.2-1127/R1_Robotic_Arm_L_V1.2-1127/meshes"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "version": "官方 SDK 左臂 V1.2-1127 (534484f)",
+   "notes": "宇树官方 SDK 仓库里的 URDF_R1-7A.tar.gz 中的左臂。"
+  },
+  {
+   "id": "unitree-r1-7a-right",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/r1-7a_sdk",
+   "commit": "534484f874f9b8e776d82488473f045a9839a2ce",
+   "archive": "urdf/URDF_R1-7A.tar.gz",
+   "paths": [
+    "urdf/URDF_R1-7A.tar.gz"
+   ],
+   "urdf": "R1_Robotic_Arm_R_V1.2-1023/R1_Robotic_Arm_V1.2/R1_Robotic_Arm/urdf/R1_Robotic_Arm.urdf",
+   "mesh_paths": [
+    "R1_Robotic_Arm_R_V1.2-1023/R1_Robotic_Arm_V1.2/R1_Robotic_Arm/meshes"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "version": "官方 SDK 右臂 V1.2-1023 (534484f)",
+   "notes": "宇树官方 SDK 仓库里的 URDF_R1-7A.tar.gz 中的右臂。"
+  },
+  {
+   "id": "unitree-r1-7a-gripper",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/R1-7A",
+   "commit": "e2faf3ec17f589db2139c51b020592a4a05f836b",
+   "urdf": "assets/r1arm/R1_Robotic_Arm.urdf",
+   "paths": [
+    "assets/r1arm/*"
+   ],
+   "mesh_paths": [
+    "assets/r1arm/meshes"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "version": "遥操作仓库 单臂带 Dex1 夹爪 (e2faf3e)",
+   "notes": "宇树 R1-7A 遥操作仓库里的单臂模型，带 Dex1 夹爪。"
+  },
+  {
+   "id": "unitree-r1-7a-dual",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/R1-7A",
+   "commit": "e2faf3ec17f589db2139c51b020592a4a05f836b",
+   "urdf": "assets/r1_a7/A7.urdf",
+   "paths": [
+    "assets/r1_a7/*"
+   ],
+   "mesh_paths": [
+    "assets/r1_a7/meshes"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "version": "遥操作仓库 双臂 A7 (e2faf3e)",
+   "notes": "宇树 R1-7A 遥操作仓库里的双臂整机模型（腰、头、两条臂和 Dex1 夹爪）。"
+  },
+  {
+   "id": "deeprobotics-lite3",
+   "vendor": "云深处科技",
+   "model": "绝影 Lite3",
+   "type": "quadruped",
+   "repo": "DeepRoboticsLab/deep_robotics_model",
+   "commit": "d1a3900e7faf7eda9e28f20715b42e871dbfd295",
+   "urdf": "Lite3/urdf/Lite3.urdf",
+   "paths": [
+    "Lite3/urdf/*"
+   ],
+   "mesh_paths": [
+    "Lite3/urdf"
+   ],
+   "licence": "LICENSE.txt",
+   "licence_name": "BSD-3-Clause"
+  },
+  {
+   "id": "deeprobotics-m20",
+   "vendor": "云深处科技",
+   "model": "山猫 M20",
+   "type": "wheel_legged",
+   "repo": "DeepRoboticsLab/deep_robotics_model",
+   "commit": "d1a3900e7faf7eda9e28f20715b42e871dbfd295",
+   "urdf": "M20/urdf/M20.urdf",
+   "paths": [
+    "M20/urdf/*"
+   ],
+   "mesh_paths": [
+    "M20/urdf"
+   ],
+   "licence": "LICENSE.txt",
+   "licence_name": "BSD-3-Clause"
+  },
+  {
+   "id": "agibot-a3",
+   "vendor": "智元机器人",
+   "model": "A3",
+   "type": "humanoid",
+   "repo": "AgibotTech/A3-A3U-robot-model",
+   "commit": "589f508ff357447c610a3f3004419035ddc8f153",
+   "urdf": "a3_t2d5/urdf/model.urdf",
+   "paths": [
+    "a3_t2d5/urdf/model.urdf",
+    "a3_t2d5/meshes/*"
+   ],
+   "mesh_paths": [
+    "a3_t2d5/meshes"
+   ],
+   "licence": "LICENSE.txt",
+   "licence_name": "MulanPSL-2.0"
+  },
+  {
+   "id": "zsibot-l2u",
+   "vendor": "智身科技",
+   "model": "钢镚 L2-U",
+   "type": "wheel_legged",
+   "private": "zsibot-l2u",
+   "urdf": "urdf/xg2_wheel_ULTRA.urdf",
+   "mesh_paths": [
+    "meshes"
+   ],
+   "licence": null,
+   "licence_name": "厂家文件，不公开",
+   "version": "厂家文件 xg2_wheel_ULTRA",
+   "notes": "厂家提供的 URDF 和网格，不在网上；只放在这个云平台的公共资料库里。"
+  },
+  {
+   "id": "xingji-cs1",
+   "vendor": "星玑科技",
+   "model": "CS1",
+   "type": "quadruped",
+   "private": "xingji-cs1",
+   "urdf": "robot_description.urdf",
+   "mesh_paths": [],
+   "licence": null,
+   "licence_name": "厂家文件，不公开",
+   "version": "从设备读到的 URDF",
+   "notes": "从设备上读到的 URDF，没有网格文件（外形只能看关节结构）；只放在这个云平台的公共资料库里。"
+  },
+  {
+   "id": "unitree-go1",
+   "vendor": "宇树科技",
+   "model": "Go1",
+   "type": "quadruped",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/go1_description/urdf/go1.urdf",
+   "mesh_paths": [
+    "robots/go1_description/meshes"
+   ],
+   "paths": [
+    "robots/go1_description/meshes/*",
+    "robots/go1_description/urdf/go1.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Contains Gazebo plugin tags (one $(find go1_gazebo) inside a plugin); harmless for geometry. Xacro sources in robots/go1_description/xacro."
+  },
+  {
+   "id": "unitree-a1",
+   "vendor": "宇树科技",
+   "model": "A1",
+   "type": "quadruped",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/a1_description/urdf/a1.urdf",
+   "mesh_paths": [
+    "robots/a1_description/meshes"
+   ],
+   "paths": [
+    "robots/a1_description/meshes/*",
+    "robots/a1_description/urdf/a1.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Gazebo plugin tags present ($(find a1_gazebo) inside a plugin), harmless."
+  },
+  {
+   "id": "unitree-b2",
+   "vendor": "宇树科技",
+   "model": "B2",
+   "type": "quadruped",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/b2_description/urdf/b2_description.urdf",
+   "mesh_paths": [
+    "robots/b2_description/meshes"
+   ],
+   "paths": [
+    "robots/b2_description/meshes/*",
+    "robots/b2_description/urdf/b2_description.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "A MuJoCo-oriented copy also exists at robots/b2_description_mujoco/xml/b2_description.urdf."
+  },
+  {
+   "id": "unitree-go2-w",
+   "vendor": "宇树科技",
+   "model": "Go2-W",
+   "type": "wheel_legged",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/go2w_description/urdf/go2w_description.urdf",
+   "mesh_paths": [
+    "robots/go2w_description/dae"
+   ],
+   "paths": [
+    "robots/go2w_description/dae/*",
+    "robots/go2w_description/urdf/go2w_description.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "17 .dae and 4 .stl references, all in the dae/ folder."
+  },
+  {
+   "id": "unitree-b2-w",
+   "vendor": "宇树科技",
+   "model": "B2-W",
+   "type": "wheel_legged",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/b2w_description/urdf/b2w_description.urdf",
+   "mesh_paths": [
+    "robots/b2w_description/meshes"
+   ],
+   "paths": [
+    "robots/b2w_description/meshes/*",
+    "robots/b2w_description/urdf/b2w_description.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause"
+  },
+  {
+   "id": "unitree-h1",
+   "vendor": "宇树科技",
+   "model": "H1",
+   "type": "humanoid",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/h1_description/urdf/h1.urdf",
+   "mesh_paths": [
+    "robots/h1_description/meshes"
+   ],
+   "paths": [
+    "robots/h1_description/meshes/*",
+    "robots/h1_description/urdf/h1.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "URDF uses the .STL files; the folder also holds .dae copies that are not referenced. h1_with_hand.urdf is the variant with hands."
+  },
+  {
+   "id": "unitree-h1-2",
+   "vendor": "宇树科技",
+   "model": "H1-2",
+   "type": "humanoid",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/h1_2_description/h1_2.urdf",
+   "mesh_paths": [
+    "robots/h1_2_description/meshes"
+   ],
+   "paths": [
+    "robots/h1_2_description/h1_2.urdf",
+    "robots/h1_2_description/meshes/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Relative mesh paths (meshes/*.STL). Siblings: h1_2_handless.urdf, h1_2_with_FTP_hand.urdf."
+  },
+  {
+   "id": "unitree-r1",
+   "vendor": "宇树科技",
+   "model": "R1",
+   "type": "humanoid",
+   "repo": "unitreerobotics/unitree_ros",
+   "commit": "157ff950351e5f535e03c5d85a16b7d594b3dbcc",
+   "urdf": "robots/r1_description/R1.urdf",
+   "mesh_paths": [
+    "robots/r1_description/meshes"
+   ],
+   "paths": [
+    "robots/r1_description/R1.urdf",
+    "robots/r1_description/meshes/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "R1 humanoid, relative mesh paths. Other R1 variants in the same repo: r1_air_description, r1_a5_description, r1_a7_description, r1_7a_description, r1d_description."
+  },
+  {
+   "id": "deeprobotics-x30",
+   "vendor": "云深处科技",
+   "model": "绝影 X30",
+   "type": "quadruped",
+   "repo": "DeepRoboticsLab/deep_robotics_model",
+   "commit": "d1a3900e7faf7eda9e28f20715b42e871dbfd295",
+   "urdf": "X30/urdf/X30.urdf",
+   "mesh_paths": [
+    "X30/urdf/meshes"
+   ],
+   "paths": [
+    "X30/urdf/X30.urdf",
+    "X30/urdf/meshes/*"
+   ],
+   "licence": "LICENSE.txt",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Same repo as Lite3. Relative ./meshes/*.STL (4 files). MJCF also at X30/mjcf/X30.xml."
+  },
+  {
+   "id": "zsibot-l1",
+   "vendor": "智身科技",
+   "model": "钢镚 L1",
+   "type": "quadruped",
+   "repo": "zsibot/genisom_model",
+   "commit": "e6aa98e22d38ae3fdf4d448f79820295e78e83a5",
+   "urdf": "zsl-1/urdf/ZSL-1.urdf",
+   "mesh_paths": [
+    "zsl-1/meshes"
+   ],
+   "paths": [
+    "zsl-1/meshes/*",
+    "zsl-1/urdf/ZSL-1.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official zsibot org (GENISOM AI). Robot name ZSL-1, mesh paths ../meshes/*.STL (relative to urdf/). The same model is also a .rar download in zsibot/genisom_docs (l1/assets/downloads/zsl-1-urdf.rar) and MJCF key xgb in zsibot/MATRiX_Python_SDK (no licence)."
+  },
+  {
+   "id": "zsibot-l1-w",
+   "vendor": "智身科技",
+   "model": "钢镚 L1-W",
+   "type": "wheel_legged",
+   "repo": "zsibot/genisom_model",
+   "commit": "e6aa98e22d38ae3fdf4d448f79820295e78e83a5",
+   "urdf": "zsl-1w/urdf/ZSL-1W.urdf",
+   "mesh_paths": [
+    "zsl-1w/meshes"
+   ],
+   "paths": [
+    "zsl-1w/meshes/*",
+    "zsl-1w/urdf/ZSL-1W.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Robot name ZSL-1W (= zsl1_w), mesh paths ../meshes/*.STL. MJCF key xgw in zsibot/MATRiX_Python_SDK."
+  },
+  {
+   "id": "zsibot-l1-maker",
+   "vendor": "智身科技",
+   "model": "钢镚 L1 Maker",
+   "type": "quadruped",
+   "repo": "zsibot/genisom_model",
+   "commit": "e6aa98e22d38ae3fdf4d448f79820295e78e83a5",
+   "urdf": "zsl-1/urdf/ZSL-1.urdf",
+   "mesh_paths": [
+    "zsl-1/meshes"
+   ],
+   "paths": [
+    "zsl-1/meshes/*",
+    "zsl-1/urdf/ZSL-1.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "exact": false,
+   "research_notes": "No Maker-specific URDF. L1 Maker is the teaching kit of the same L1 platform (reseller page says it behaves like the standard L1), so the ZSL-1 URDF is used.",
+   "notes": "L1 Maker 是同一个 L1 机身的教学套件，没有单独的 URDF，用的是钢镚 L1（ZSL-1）的模型。"
+  },
+  {
+   "id": "zsibot-l2-w",
+   "vendor": "智身科技",
+   "model": "钢镚 L2-W",
+   "type": "wheel_legged",
+   "repo": "causiniris/matrix_robotac_2026",
+   "commit": "ec56d33e93027bb62536c09c327c4700e8bf7cfe",
+   "urdf": "src/robot_mujoco/zsibot_robots/xgw2/xg_wheel_2.urdf",
+   "mesh_paths": [
+    "src/robot_mujoco/zsibot_robots/xgw2/assets"
+   ],
+   "paths": [
+    "src/robot_mujoco/zsibot_robots/xgw2/assets/*",
+    "src/robot_mujoco/zsibot_robots/xgw2/xg_wheel_2.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "exact": false,
+   "research_notes": "Doubtful: a third-party RobotAC competition kit built on MATRiX that bundles the vendor's xgw2 model (robot name just 'DOG'). MATRiX docs call xgw2 the 'second wheeled XG variant'. Identifying it as L2-W is my inference: link names and leg lengths match the private L2-U URDF (xg2_wheel_ULTRA), which is about 2 kg heavier. URDF points to ../meshes/*.STL, but the 17 STL files sit in xgw2/assets/, so the packer must rewrite the paths. The LICENSE file reads 'Copyright (c) 2025, ZsiBot' (BSD-3-Clause).",
+   "notes": "取自一个比赛仓库（xgw2/xg_wheel_2.urdf，许可证写着 ZsiBot 版权）；按连杆名称和腿长与 L2-U 的厂家文件对得上推断是 L2-W，不是厂家直接发布的。"
+  },
+  {
+   "id": "zsibot-m1",
+   "vendor": "智身科技",
+   "model": "铜锤 M1",
+   "type": "quadruped",
+   "repo": "zsibot/genisom_docs",
+   "commit": "0877ce5f7609c3071cbd9756e4947841235c9f2f",
+   "archive": "m1/assets/downloads/m1-urdf.zip",
+   "urdf": "ZJ_V3_URDF_V1_1/ZJ_V3_URDF_V1_1.urdf",
+   "mesh_paths": [
+    "ZJ_V3_URDF_V1_1/meshes"
+   ],
+   "paths": [
+    "m1/assets/downloads/m1-urdf.zip"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official M1 URDF, but it ships as a 44 MB zip (44299231 bytes) in the vendor's docs repo, which has no licence. Inside: ZJ_V3_URDF_V1_1.urdf (robot ZJ_V3_URDF_V1_1, wheel-legged, 29 package://ZJ_V3_URDF_V1_1/meshes/*.STL refs, all 29 present). Skip the __MACOSX/ entries and meshes/base_link.m_p. Checked via the zip central directory and the URDF member only (range reads, nothing saved). MJCF alternative: zsibot/MATRiX_Python_SDK model/zgws/zgws.xml (key zgws, preview 'zsm-1w', no licence).",
+   "notes": "智身官方文档仓库里的 m1-urdf.zip（ZJ_V3_URDF_V1_1），仓库没有许可证。"
+  },
+  {
+   "id": "bostondynamics-spot",
+   "vendor": "Boston Dynamics",
+   "model": "Spot",
+   "type": "quadruped",
+   "repo": "rai-opensource/spot_description",
+   "commit": "156d1802bfb117f219dbfce7597d283d5fabc968",
+   "xacro": "spot_description/urdf/spot.urdf.xacro",
+   "xacro_args": {
+    "arm": "false"
+   },
+   "ros_packages": {
+    "spot_description": "spot_description"
+   },
+   "mesh_paths": [
+    "spot_description/meshes/base/visual",
+    "spot_description/meshes/base/collision"
+   ],
+   "paths": [
+    "spot_description/*",
+    "spot_description/meshes/base/collision/*",
+    "spot_description/meshes/base/visual/*",
+    "spot_description/urdf/spot.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MIT AND BSD-3-Clause",
+   "research_notes": "RAI Institute (formerly bdaiinstitute, Boston Dynamics AI Institute), not Boston Dynamics itself. LICENSE holds MIT (RAI) plus BSD-3-Clause (Clearpath); GitHub shows NOASSERTION. Includes spot_macro.xacro, spot_arm_macro.urdf, spot_gripper_macro.urdf, spot_feet_macro.urdf, empty.urdf via $(find spot_description); $(optenv SPOT_URDF_EXTRAS) defaults to empty.urdf. Visual .obj meshes use .mtl/.png files in meshes/base/visual and meshes/. Use arm:=true for Spot with arm. spot_simple.urdf.xacro is a simpler variant. Official BD URDF zips exist in boston-dynamics/spot-sdk (files/spot_base_urdf.zip)"
+  },
+  {
+   "id": "anybotics-anymal-c",
+   "vendor": "ANYbotics",
+   "model": "ANYmal C",
+   "type": "quadruped",
+   "repo": "ANYbotics/anymal_c_simple_description",
+   "commit": "87b68511622f0f17e78d9ddca7d862f150a93fb4",
+   "urdf": "urdf/anymal.urdf",
+   "mesh_paths": [
+    "meshes"
+   ],
+   "paths": [
+    "meshes/*",
+    "urdf/anymal.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ANYbotics 'simple' description, repo root is the ROS package. Commit is master head; robot_descriptions.py pins f160b8f..., where the URDF and meshes are identical (only package.xml and rviz differ)."
+  },
+  {
+   "id": "anybotics-anymal-d",
+   "vendor": "ANYbotics",
+   "model": "ANYmal D",
+   "type": "quadruped",
+   "repo": "ANYbotics/anymal_d_simple_description",
+   "commit": "d5bf4dc3a81af81a16b9598fc15c98e339f45a33",
+   "urdf": "urdf/anymal.urdf",
+   "mesh_paths": [
+    "meshes"
+   ],
+   "paths": [
+    "meshes/*",
+    "urdf/anymal.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ANYbotics 'simple' description. Commit is master head; robot_descriptions.py pins 6adc147..., same URDF and meshes (only package.xml differs)."
+  },
+  {
+   "id": "ur-ur3e",
+   "vendor": "Universal Robots",
+   "model": "UR3e",
+   "type": "manipulator",
+   "repo": "UniversalRobots/Universal_Robots_ROS2_Description",
+   "commit": "0eb1a861f7772fceb38510d90fa2f98ec668070c",
+   "xacro": "urdf/ur.urdf.xacro",
+   "xacro_args": {
+    "ur_type": "ur3e",
+    "name": "ur3e"
+   },
+   "ros_packages": {
+    "ur_description": "."
+   },
+   "mesh_paths": [
+    "meshes/ur3e"
+   ],
+   "paths": [
+    "*",
+    "meshes/ur3e/*",
+    "urdf/ur.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official, rolling branch head. Package ur_description is the repo root; xacro also reads config/ur3e/*.yaml (joint_limits, default_kinematics, physical_parameters, visual_parameters) via $(find ur_description). Only ur_type is required; name defaults to 'ur'."
+  },
+  {
+   "id": "ur-ur5e",
+   "vendor": "Universal Robots",
+   "model": "UR5e",
+   "type": "manipulator",
+   "repo": "UniversalRobots/Universal_Robots_ROS2_Description",
+   "commit": "0eb1a861f7772fceb38510d90fa2f98ec668070c",
+   "xacro": "urdf/ur.urdf.xacro",
+   "xacro_args": {
+    "ur_type": "ur5e",
+    "name": "ur5e"
+   },
+   "ros_packages": {
+    "ur_description": "."
+   },
+   "mesh_paths": [
+    "meshes/ur5e"
+   ],
+   "paths": [
+    "*",
+    "meshes/ur5e/*",
+    "urdf/ur.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. Needs config/ur5e/*.yaml from the same repo."
+  },
+  {
+   "id": "ur-ur10e",
+   "vendor": "Universal Robots",
+   "model": "UR10e",
+   "type": "manipulator",
+   "repo": "UniversalRobots/Universal_Robots_ROS2_Description",
+   "commit": "0eb1a861f7772fceb38510d90fa2f98ec668070c",
+   "xacro": "urdf/ur.urdf.xacro",
+   "xacro_args": {
+    "ur_type": "ur10e",
+    "name": "ur10e"
+   },
+   "ros_packages": {
+    "ur_description": "."
+   },
+   "mesh_paths": [
+    "meshes/ur10e"
+   ],
+   "paths": [
+    "*",
+    "meshes/ur10e/*",
+    "urdf/ur.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. Needs config/ur10e/*.yaml from the same repo."
+  },
+  {
+   "id": "ur-ur16e",
+   "vendor": "Universal Robots",
+   "model": "UR16e",
+   "type": "manipulator",
+   "repo": "UniversalRobots/Universal_Robots_ROS2_Description",
+   "commit": "0eb1a861f7772fceb38510d90fa2f98ec668070c",
+   "xacro": "urdf/ur.urdf.xacro",
+   "xacro_args": {
+    "ur_type": "ur16e",
+    "name": "ur16e"
+   },
+   "ros_packages": {
+    "ur_description": "."
+   },
+   "mesh_paths": [
+    "meshes/ur16e",
+    "meshes/ur10e"
+   ],
+   "paths": [
+    "*",
+    "meshes/ur10e/*",
+    "meshes/ur16e/*",
+    "urdf/ur.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. config/ur16e/visual_parameters.yaml uses ur16e meshes only for upperarm/forearm and reuses ur10e meshes for base, shoulder and wrists, so both mesh folders are needed."
+  },
+  {
+   "id": "ur-ur20",
+   "vendor": "Universal Robots",
+   "model": "UR20",
+   "type": "manipulator",
+   "repo": "UniversalRobots/Universal_Robots_ROS2_Description",
+   "commit": "0eb1a861f7772fceb38510d90fa2f98ec668070c",
+   "xacro": "urdf/ur.urdf.xacro",
+   "xacro_args": {
+    "ur_type": "ur20",
+    "name": "ur20"
+   },
+   "ros_packages": {
+    "ur_description": "."
+   },
+   "mesh_paths": [
+    "meshes/ur20"
+   ],
+   "paths": [
+    "*",
+    "meshes/ur20/*",
+    "urdf/ur.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. Repo code is BSD-3-Clause, but the UR20 meshes are NOT: meshes/ur20/LICENSE.txt is Universal Robots' 'Terms and Conditions for Use of Graphical Documentation' (robot_descriptions flags it as non-free). Ship that file with the meshes and treat them as restricted.",
+   "notes": "UR20 的网格文件另有 Universal Robots 的图形文件条款（在 meshes/ur20/LICENSE.txt），不是 BSD-3-Clause。"
+  },
+  {
+   "id": "kuka-lbr-iisy",
+   "vendor": "KUKA",
+   "model": "LBR iisy",
+   "type": "manipulator",
+   "repo": "kuka-ros/kuka_robot_descriptions",
+   "commit": "5ddbc41ce8726fd680bcc19562d78bcabfbdf96d",
+   "xacro": "kuka_lbr_iisy_support/urdf/lbr_iisy3_r760.urdf.xacro",
+   "xacro_args": {
+    "mode": "mock"
+   },
+   "ros_packages": {
+    "kuka_lbr_iisy_support": "kuka_lbr_iisy_support",
+    "kuka_resources": "kuka_resources"
+   },
+   "mesh_paths": [
+    "kuka_lbr_iisy_support/meshes/lbr_iisy3_r760"
+   ],
+   "paths": [
+    "kuka_lbr_iisy_support/*",
+    "kuka_lbr_iisy_support/meshes/lbr_iisy3_r760/*",
+    "kuka_lbr_iisy_support/urdf/lbr_iisy3_r760.urdf.xacro",
+    "kuka_resources/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Catalog names the family; picked LBR iisy 3 R760. Same package also has lbr_iisy8_r930, lbr_iisy11_r1300 and lbr_iisy15_r930 (urdf/<name>.urdf.xacro, meshes/<name>; iisy8 visuals are dae). Default driver_version rsi_only needs no driver package; driver_version:=eac would look up kuka_iiqka_eac_driver (not in repo)."
+  },
+  {
+   "id": "kuka-kr-agilus",
+   "vendor": "KUKA",
+   "model": "KR AGILUS",
+   "type": "manipulator",
+   "repo": "kuka-ros/kuka_robot_descriptions",
+   "commit": "5ddbc41ce8726fd680bcc19562d78bcabfbdf96d",
+   "xacro": "kuka_agilus_support/urdf/kr6_r900_2.urdf.xacro",
+   "xacro_args": {
+    "mode": "mock"
+   },
+   "ros_packages": {
+    "kuka_agilus_support": "kuka_agilus_support",
+    "kuka_resources": "kuka_resources"
+   },
+   "mesh_paths": [
+    "kuka_agilus_support/meshes/kr6_r900_2"
+   ],
+   "paths": [
+    "kuka_agilus_support/*",
+    "kuka_agilus_support/meshes/kr6_r900_2/*",
+    "kuka_agilus_support/urdf/kr6_r900_2.urdf.xacro",
+    "kuka_resources/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Catalog names the family; picked KR 6 R900-2. Other AGILUS models in the same package: kr4_r600, kr6_r700_2, kr7_r900_3, kr10_r900_2, kr10_r1100_2, kr10_r1100_3, kr13_r900_3, kr16_r1100_3."
+  },
+  {
+   "id": "abb-irb-120",
+   "vendor": "ABB",
+   "model": "IRB 120",
+   "type": "manipulator",
+   "repo": "ros-industrial/abb",
+   "commit": "45f4769d826cf3ac62a65495f2db67b78b0c81df",
+   "xacro": "abb_irb120_support/urdf/irb120_3_58.xacro",
+   "ros_packages": {
+    "abb_irb120_support": "abb_irb120_support",
+    "abb_resources": "abb_resources"
+   },
+   "mesh_paths": [
+    "abb_irb120_support/meshes/irb120_3_58"
+   ],
+   "paths": [
+    "abb_irb120_support/*",
+    "abb_irb120_support/meshes/irb120_3_58/*",
+    "abb_irb120_support/urdf/irb120_3_58.xacro",
+    "abb_resources/*"
+   ],
+   "licence": "abb_irb120_support/LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "ROS-Industrial (ABB publishes no descriptions itself). No repo-root licence; each package has its own Apache-2.0 LICENSE (abb_resources/LICENSE too). noetic-devel and ros2 branches point at the same commit. irb120t_3_58.xacro is the IRB 120T variant."
+  },
+  {
+   "id": "abb-irb-1200",
+   "vendor": "ABB",
+   "model": "IRB 1200",
+   "type": "manipulator",
+   "repo": "ros-industrial/abb",
+   "commit": "45f4769d826cf3ac62a65495f2db67b78b0c81df",
+   "xacro": "abb_irb1200_support/urdf/irb1200_5_90.xacro",
+   "ros_packages": {
+    "abb_irb1200_support": "abb_irb1200_support",
+    "abb_resources": "abb_resources"
+   },
+   "mesh_paths": [
+    "abb_irb1200_support/meshes/irb1200_5_90"
+   ],
+   "paths": [
+    "abb_irb1200_support/*",
+    "abb_irb1200_support/meshes/irb1200_5_90/*",
+    "abb_irb1200_support/urdf/irb1200_5_90.xacro",
+    "abb_resources/*"
+   ],
+   "licence": "abb_irb1200_support/LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "ROS-Industrial. Picked IRB 1200-5/0.9; irb1200_7_70.xacro (7/0.7) also exists and reuses part of the 5_90 meshes."
+  },
+  {
+   "id": "fanuc-crx-5ia",
+   "vendor": "FANUC",
+   "model": "CRX-5iA",
+   "type": "manipulator",
+   "repo": "FANUC-CORPORATION/fanuc_description",
+   "commit": "fb40c9803a826ba68c7c8e28ba904a25efa7fcd2",
+   "xacro": "fanuc_crx_description/robot/crx5ia.urdf.xacro",
+   "ros_packages": {
+    "fanuc_crx_description": "fanuc_crx_description"
+   },
+   "mesh_paths": [
+    "fanuc_crx_description/meshes/crx5ia"
+   ],
+   "paths": [
+    "fanuc_crx_description/*",
+    "fanuc_crx_description/meshes/crx5ia/*",
+    "fanuc_crx_description/robot/crx5ia.urdf.xacro"
+   ],
+   "licence": "LICENSES/Apache-2.0.txt",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official FANUC (2025 ROS 2 driver). GitHub detects no licence because texts are in a REUSE-style LICENSES/ folder; README and package.xml state Apache-2.0. Large repo: fetch only fanuc_crx_description."
+  },
+  {
+   "id": "fanuc-crx-10ia",
+   "vendor": "FANUC",
+   "model": "CRX-10iA",
+   "type": "manipulator",
+   "repo": "FANUC-CORPORATION/fanuc_description",
+   "commit": "fb40c9803a826ba68c7c8e28ba904a25efa7fcd2",
+   "xacro": "fanuc_crx_description/robot/crx10ia.urdf.xacro",
+   "ros_packages": {
+    "fanuc_crx_description": "fanuc_crx_description"
+   },
+   "mesh_paths": [
+    "fanuc_crx_description/meshes/crx10ia"
+   ],
+   "paths": [
+    "fanuc_crx_description/*",
+    "fanuc_crx_description/meshes/crx10ia/*",
+    "fanuc_crx_description/robot/crx10ia.urdf.xacro"
+   ],
+   "licence": "LICENSES/Apache-2.0.txt",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official FANUC. Exact CRX-10iA; the /L and /L Paint variants are crx10ia_l and crx10ia_lp in the same package."
+  },
+  {
+   "id": "fanuc-lr-mate-200id",
+   "vendor": "FANUC",
+   "model": "LR Mate 200iD",
+   "type": "manipulator",
+   "repo": "FANUC-CORPORATION/fanuc_description",
+   "commit": "fb40c9803a826ba68c7c8e28ba904a25efa7fcd2",
+   "xacro": "fanuc_lrmate_description/robot/lrmate200id.urdf.xacro",
+   "ros_packages": {
+    "fanuc_lrmate_description": "fanuc_lrmate_description"
+   },
+   "mesh_paths": [
+    "fanuc_lrmate_description/meshes/lrmate200id"
+   ],
+   "paths": [
+    "fanuc_lrmate_description/*",
+    "fanuc_lrmate_description/meshes/lrmate200id/*",
+    "fanuc_lrmate_description/robot/lrmate200id.urdf.xacro"
+   ],
+   "licence": "LICENSES/Apache-2.0.txt",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official FANUC. Variants 200iD/4S, /7C, /7L, /7LC, /7WE are also in fanuc_lrmate_description/robot/."
+  },
+  {
+   "id": "kinova-gen3",
+   "vendor": "Kinova",
+   "model": "Gen3",
+   "type": "manipulator",
+   "repo": "Kinovarobotics/ros2_kortex",
+   "commit": "b2aa46b29ae8fadd5b293c57e3500925c61eb8e8",
+   "xacro": "kortex_description/robots/gen3.xacro",
+   "xacro_args": {
+    "dof": "7",
+    "vision": "false",
+    "gripper": ""
+   },
+   "ros_packages": {
+    "kortex_description": "kortex_description"
+   },
+   "mesh_paths": [
+    "kortex_description/arms/gen3/7dof/meshes"
+   ],
+   "paths": [
+    "kortex_description/*",
+    "kortex_description/arms/gen3/7dof/meshes/*",
+    "kortex_description/robots/gen3.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. dof has no default and must be given (7, or 6 for the 6-DoF Gen3 with meshes in arms/gen3/6dof/meshes). GitHub reports NOASSERTION but LICENSE is the BSD-3-Clause text. Do not use robots/gen3_2f85.urdf: it has absolute file:///root/... mesh paths."
+  },
+  {
+   "id": "kinova-gen3-lite",
+   "vendor": "Kinova",
+   "model": "Gen3 lite",
+   "type": "manipulator",
+   "repo": "Kinovarobotics/ros2_kortex",
+   "commit": "b2aa46b29ae8fadd5b293c57e3500925c61eb8e8",
+   "urdf": "kortex_description/robots/gen3_lite.urdf",
+   "mesh_paths": [
+    "kortex_description/arms/gen3_lite/6dof/meshes",
+    "kortex_description/grippers/gen3_lite_2f/meshes"
+   ],
+   "paths": [
+    "kortex_description/arms/gen3_lite/6dof/meshes/*",
+    "kortex_description/grippers/gen3_lite_2f/meshes/*",
+    "kortex_description/robots/gen3_lite.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. Plain URDF of the Gen3 lite with its 2-finger gripper, package:// paths. Xacro version: robots/gen3_lite_gen3_lite_2f.xacro."
+  },
+  {
+   "id": "ufactory-xarm-6",
+   "vendor": "UFACTORY",
+   "model": "xArm 6",
+   "type": "manipulator",
+   "repo": "xArm-Developer/xarm_ros2",
+   "commit": "ac736c92b02de7ca7e0be6f737d77d46707464d8",
+   "xacro": "xarm_description/urdf/xarm_device.urdf.xacro",
+   "xacro_args": {
+    "robot_type": "xarm",
+    "dof": "6"
+   },
+   "ros_packages": {
+    "xarm_description": "xarm_description",
+    "xarm_controller": "xarm_controller"
+   },
+   "mesh_paths": [
+    "xarm_description/meshes/xarm6"
+   ],
+   "paths": [
+    "xarm_controller/*",
+    "xarm_description/*",
+    "xarm_description/meshes/xarm6/*",
+    "xarm_description/urdf/xarm_device.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official, humble branch head (same commit robot_descriptions pins). xarm_controller is only looked up to build the ros2_control params path; passing a non-empty ros2_control_params avoids it. mesh_suffix defaults to stl. add_gripper:=true adds meshes/gripper/xarm; model1300:=true uses meshes/xarm6_1305 (obj collisions)."
+  },
+  {
+   "id": "ufactory-xarm-7",
+   "vendor": "UFACTORY",
+   "model": "xArm 7",
+   "type": "manipulator",
+   "repo": "xArm-Developer/xarm_ros2",
+   "commit": "ac736c92b02de7ca7e0be6f737d77d46707464d8",
+   "xacro": "xarm_description/urdf/xarm_device.urdf.xacro",
+   "xacro_args": {
+    "robot_type": "xarm",
+    "dof": "7"
+   },
+   "ros_packages": {
+    "xarm_description": "xarm_description",
+    "xarm_controller": "xarm_controller"
+   },
+   "mesh_paths": [
+    "xarm_description/meshes/xarm7"
+   ],
+   "paths": [
+    "xarm_controller/*",
+    "xarm_description/*",
+    "xarm_description/meshes/xarm7/*",
+    "xarm_description/urdf/xarm_device.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. Same notes as xArm 6."
+  },
+  {
+   "id": "ufactory-lite-6",
+   "vendor": "UFACTORY",
+   "model": "Lite 6",
+   "type": "manipulator",
+   "repo": "xArm-Developer/xarm_ros2",
+   "commit": "ac736c92b02de7ca7e0be6f737d77d46707464d8",
+   "xacro": "xarm_description/urdf/xarm_device.urdf.xacro",
+   "xacro_args": {
+    "robot_type": "lite",
+    "dof": "6"
+   },
+   "ros_packages": {
+    "xarm_description": "xarm_description",
+    "xarm_controller": "xarm_controller"
+   },
+   "mesh_paths": [
+    "xarm_description/meshes/lite6"
+   ],
+   "paths": [
+    "xarm_controller/*",
+    "xarm_description/*",
+    "xarm_description/meshes/lite6/*",
+    "xarm_description/urdf/xarm_device.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. robot_type is 'lite' (the xacro switches on robot_type == 'lite'). Visual meshes exist as stl and dae; default mesh_suffix stl."
+  },
+  {
+   "id": "ufactory-850",
+   "vendor": "UFACTORY",
+   "model": "850",
+   "type": "manipulator",
+   "repo": "xArm-Developer/xarm_ros2",
+   "commit": "ac736c92b02de7ca7e0be6f737d77d46707464d8",
+   "xacro": "xarm_description/urdf/xarm_device.urdf.xacro",
+   "xacro_args": {
+    "robot_type": "uf850",
+    "dof": "6"
+   },
+   "ros_packages": {
+    "xarm_description": "xarm_description",
+    "xarm_controller": "xarm_controller"
+   },
+   "mesh_paths": [
+    "xarm_description/meshes/uf850"
+   ],
+   "paths": [
+    "xarm_controller/*",
+    "xarm_description/*",
+    "xarm_description/meshes/uf850/*",
+    "xarm_description/urdf/xarm_device.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. robot_type uf850 (macro in urdf/uf850/)."
+  },
+  {
+   "id": "flexiv-rizon-4",
+   "vendor": "Flexiv",
+   "model": "Rizon 4",
+   "type": "manipulator",
+   "repo": "flexivrobotics/flexiv_description",
+   "commit": "2fc4f62329fa95e0280b7a1e45c4392397b401fb",
+   "xacro": "urdf/flexiv.urdf.xacro",
+   "xacro_args": {
+    "robot_type": "Rizon4"
+   },
+   "ros_packages": {
+    "flexiv_description": "."
+   },
+   "mesh_paths": [
+    "meshes/Rizon4"
+   ],
+   "paths": [
+    "*",
+    "meshes/Rizon4/*",
+    "urdf/flexiv.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official, jazzy branch head. Package root is the repo root; reads config/Rizon4/*.yaml and config/single_robot_mounting.yaml. Visual meshes are obj with .mtl files next to them (keep the .mtl)."
+  },
+  {
+   "id": "flexiv-rizon-4s",
+   "vendor": "Flexiv",
+   "model": "Rizon 4s",
+   "type": "manipulator",
+   "repo": "flexivrobotics/flexiv_description",
+   "commit": "2fc4f62329fa95e0280b7a1e45c4392397b401fb",
+   "xacro": "urdf/flexiv.urdf.xacro",
+   "xacro_args": {
+    "robot_type": "Rizon4s"
+   },
+   "ros_packages": {
+    "flexiv_description": "."
+   },
+   "mesh_paths": [
+    "meshes/Rizon4s"
+   ],
+   "paths": [
+    "*",
+    "meshes/Rizon4s/*",
+    "urdf/flexiv.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official. Reads config/Rizon4s/*.yaml."
+  },
+  {
+   "id": "flexiv-rizon-10",
+   "vendor": "Flexiv",
+   "model": "Rizon 10",
+   "type": "manipulator",
+   "repo": "flexivrobotics/flexiv_description",
+   "commit": "2fc4f62329fa95e0280b7a1e45c4392397b401fb",
+   "xacro": "urdf/flexiv.urdf.xacro",
+   "xacro_args": {
+    "robot_type": "Rizon10"
+   },
+   "ros_packages": {
+    "flexiv_description": "."
+   },
+   "mesh_paths": [
+    "meshes/Rizon10"
+   ],
+   "paths": [
+    "*",
+    "meshes/Rizon10/*",
+    "urdf/flexiv.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official. Reads config/Rizon10/*.yaml. Rizon10s and Rizon10R also available."
+  },
+  {
+   "id": "rethink-sawyer",
+   "vendor": "Rethink Robotics",
+   "model": "Sawyer",
+   "type": "manipulator",
+   "repo": "RethinkRobotics/sawyer_robot",
+   "commit": "d1ef3d0ca83d0a943839783efd9b162e6930f2b7",
+   "xacro": "sawyer_description/urdf/sawyer.urdf.xacro",
+   "xacro_args": {
+    "gazebo": "false",
+    "pedestal": "true",
+    "electric_gripper": "false"
+   },
+   "ros_packages": {
+    "sawyer_description": "sawyer_description"
+   },
+   "mesh_paths": [
+    "sawyer_description/meshes/sawyer_pv",
+    "sawyer_description/meshes/sawyer_mp1",
+    "sawyer_description/meshes/sawyer_mp3"
+   ],
+   "paths": [
+    "sawyer_description/*",
+    "sawyer_description/meshes/sawyer_mp1/*",
+    "sawyer_description/meshes/sawyer_mp3/*",
+    "sawyer_description/meshes/sawyer_pv/*",
+    "sawyer_description/urdf/sawyer.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official, ROS 1 (last push 2021). Mesh files use upper-case extensions (.DAE, .STL). electric_gripper:=true needs intera_tools_description from RethinkRobotics/intera_common (other repo). pedestal:=false drops the pedestal. MJCF also in mujoco_menagerie rethink_robotics_sawyer."
+  },
+  {
+   "id": "agilex-piper",
+   "vendor": "松灵机器人",
+   "model": "PiPER",
+   "type": "manipulator",
+   "repo": "agilexrobotics/piper_ros",
+   "commit": "ac41fcbcdda598f01b51cf6175ed9a24d0dacadc",
+   "urdf": "src/piper_description/urdf/piper_description.urdf",
+   "mesh_paths": [
+    "src/piper_description/meshes"
+   ],
+   "paths": [
+    "src/piper_description/meshes/*",
+    "src/piper_description/urdf/piper_description.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MIT",
+   "research_notes": "Official; same repo and commit robot_descriptions.py pins (noetic head). Arm with gripper (link7/8). piper_no_gripper_description.urdf sits next to it. Meshes folder also holds unused dae/ copies. Newer official agilexrobotics/agx_arm_urdf (MIT) has piper/urdf/piper_description.urdf without gripper; mujoco_menagerie has agilex_piper (MJCF)."
+  },
+  {
+   "id": "arx-l5",
+   "vendor": "方舟无限",
+   "model": "L5",
+   "type": "manipulator",
+   "repo": "ARXroboticsX/ARX_Model",
+   "commit": "e58172bd0874ff8c940700dc87f64a9ce951718d",
+   "urdf": "X5/X5A/urdf/X5A.urdf",
+   "mesh_paths": [
+    "X5/X5A/meshes"
+   ],
+   "paths": [
+    "X5/X5A/meshes/*",
+    "X5/X5A/urdf/X5A.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official ARX model repo, no licence file. ARX names the package X5A; mujoco_menagerie arx_l5 states the ARX L5 is derived from this X5/X5A URDF, and its wrist offsets match arx5-sdk models/L5.urdf. X5A was removed on 2026-11-22, so this pin is the last commit that has it (same files as the menagerie's reference commit af6fe43). Alternatives: mujoco_menagerie arx_l5 (MJCF, BSD-3-Clause, ARX copyright); real-stanford/arx5-sdk models/L5.urdf (MIT, but its meshes/L5 folder is missing).",
+   "notes": "ARX 官方仓库里的 X5A 模型；MuJoCo Menagerie 说 L5 由它而来，腕部尺寸也对得上。ARX 在 2026-11-22 删掉了这个模型，这里固定在删之前的提交。",
+   "exact": false
+  },
+  {
+   "id": "arx-r5",
+   "vendor": "方舟无限",
+   "model": "R5",
+   "type": "manipulator",
+   "repo": "ARXroboticsX/ARX_Model",
+   "commit": "a45e8dbb4b1844ae7aef62d16182e5f1724da6d3",
+   "urdf": "R5/R5a/urdf/R5a.urdf",
+   "mesh_paths": [
+    "R5/R5a/meshes"
+   ],
+   "paths": [
+    "R5/R5a/meshes/*",
+    "R5/R5a/urdf/R5a.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official ARX model repo, no licence file. Package is named R5a (R5 arm with gripper, joints 7/8 prismatic). The BSD-3-Clause ARXroboticsX/R5 SDK repo only has a mesh-less kinematic URDF (R5_master.urdf)."
+  },
+  {
+   "id": "arx-x5",
+   "vendor": "方舟无限",
+   "model": "X5",
+   "type": "manipulator",
+   "repo": "ARXroboticsX/ARX_Model",
+   "commit": "a45e8dbb4b1844ae7aef62d16182e5f1724da6d3",
+   "urdf": "X5/X5-2023/urdf/X5.urdf",
+   "mesh_paths": [
+    "X5/X5-2023/meshes"
+   ],
+   "paths": [
+    "X5/X5-2023/meshes/*",
+    "X5/X5-2023/urdf/X5.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official ARX model repo, no licence file. X5/X5-2023-newbase is the same arm with a newer base (also package name X5); a 2025 version exists only as X5/X5-2025.7z. The BSD-3-Clause ARXroboticsX/ARX_X5 SDK repo only has mesh-less kinematic URDFs."
+  },
+  {
+   "id": "realman-rm65-b",
+   "vendor": "睿尔曼",
+   "model": "RM65-B",
+   "type": "manipulator",
+   "repo": "RealManRobot/rm_models",
+   "commit": "cff49bb40f5ed0728505c03bff0e521a0dc21acd",
+   "urdf": "RM65/urdf/RM65-B/urdf/RM65-B.urdf",
+   "mesh_paths": [
+    "RM65/urdf/RM65-B/meshes"
+   ],
+   "paths": [
+    "RM65/urdf/RM65-B/meshes/*",
+    "RM65/urdf/RM65-B/urdf/RM65-B.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official RealMan model repo. LICENSE is the Apache-2.0 notice (GitHub shows NOASSERTION). Variants RM65-6F, -6FB, -B-V sit next to it."
+  },
+  {
+   "id": "realman-rm75-b",
+   "vendor": "睿尔曼",
+   "model": "RM75-B",
+   "type": "manipulator",
+   "repo": "RealManRobot/rm_models",
+   "commit": "cff49bb40f5ed0728505c03bff0e521a0dc21acd",
+   "urdf": "RM75/urdf/RM75-B/urdf/RM75-B.urdf",
+   "mesh_paths": [
+    "RM75/urdf/RM75-B/meshes"
+   ],
+   "paths": [
+    "RM75/urdf/RM75-B/meshes/*",
+    "RM75/urdf/RM75-B/urdf/RM75-B.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official RealMan model repo, 7-DoF. LICENSE is the Apache-2.0 notice (GitHub shows NOASSERTION)."
+  },
+  {
+   "id": "realman-eco65",
+   "vendor": "睿尔曼",
+   "model": "ECO65",
+   "type": "manipulator",
+   "repo": "RealManRobot/rm_models",
+   "commit": "cff49bb40f5ed0728505c03bff0e521a0dc21acd",
+   "urdf": "ECO65/urdf/ECO65-B/urdf/ECO65-B.urdf",
+   "mesh_paths": [
+    "ECO65/urdf/ECO65-B/meshes"
+   ],
+   "paths": [
+    "ECO65/urdf/ECO65-B/meshes/*",
+    "ECO65/urdf/ECO65-B/urdf/ECO65-B.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official RealMan model repo; ECO65-B is the base variant (ECO65-6F / -6FB with force sensor sit next to it). LICENSE is the Apache-2.0 notice (GitHub shows NOASSERTION)."
+  },
+  {
+   "id": "dobot-cr5",
+   "vendor": "越疆",
+   "model": "CR5",
+   "type": "manipulator",
+   "repo": "Dobot-Arm/TCP-IP-ROS-6AXis",
+   "commit": "0924e785f1827b7125ba4ba2bc3325811ed21c18",
+   "urdf": "dobot_description/urdf/cr5_robot.urdf",
+   "mesh_paths": [
+    "dobot_description/meshes/cr5"
+   ],
+   "paths": [
+    "dobot_description/meshes/cr5/*",
+    "dobot_description/urdf/cr5_robot.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MIT",
+   "research_notes": "Official ROS1 package (default branch feature/v4-optimization, contains main). Kinematics equal to the CR-series V3 ROS2 repo (DOBOT_6Axis_ROS2_V3, no licence). The CRA-series cr5 (CR5A) is in Dobot-Arm/DOBOT_6Axis_ROS2_V4 dobot_rviz/urdf/cr5_robot.urdf with tiny offset differences.",
+   "notes": "原版 CR5 的模型；新的 CR5A 在越疆 DOBOT_6Axis_ROS2_V4 仓库里，尺寸略有不同。"
+  },
+  {
+   "id": "dobot-nova-5",
+   "vendor": "越疆",
+   "model": "Nova 5",
+   "type": "manipulator",
+   "repo": "Dobot-Arm/DOBOT_6Axis_ROS2_V4",
+   "commit": "7807ef8fb31e8f86a76cd474a4a9cddffef6eca9",
+   "urdf": "dobot_rviz/urdf/nova5_robot.urdf",
+   "mesh_paths": [
+    "dobot_rviz/meshes/nova5"
+   ],
+   "paths": [
+    "dobot_rviz/meshes/nova5/*",
+    "dobot_rviz/urdf/nova5_robot.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MIT",
+   "research_notes": "Official ROS2 package. Same kinematics as the V3 repo. A xacro twin is cra_description/urdf/nova5_robot.xacro (meshes in cra_description/meshes/nova5)."
+  },
+  {
+   "id": "dobot-mg400",
+   "vendor": "越疆",
+   "model": "MG400",
+   "type": "manipulator",
+   "repo": "Dobot-Arm/MG400_ROS",
+   "commit": "2bcf6a988311096a6096a2dc4de60dc76f72e80e",
+   "urdf": "mg400_description/urdf/mg400_description.urdf",
+   "mesh_paths": [
+    "mg400_description/meshes"
+   ],
+   "paths": [
+    "mg400_description/meshes/*",
+    "mg400_description/urdf/mg400_description.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MIT",
+   "research_notes": "Official ROS1 package. MG400 is a parallel-link arm: the URDF is an open tree with extra joints (j2_2, j3_2, j4_2 ...) for the parallel links, so the loop is not closed in the file.",
+   "notes": "MG400 是平行连杆机械臂，URDF 没有把闭链闭合。"
+  },
+  {
+   "id": "dobot-magician-e6",
+   "vendor": "越疆",
+   "model": "Magician E6",
+   "type": "manipulator",
+   "repo": "Dobot-Arm/DOBOT_6Axis_ROS2_V4",
+   "commit": "7807ef8fb31e8f86a76cd474a4a9cddffef6eca9",
+   "urdf": "dobot_rviz/urdf/me6_robot.urdf",
+   "mesh_paths": [
+    "dobot_rviz/meshes/me6"
+   ],
+   "paths": [
+    "dobot_rviz/meshes/me6/*",
+    "dobot_rviz/urdf/me6_robot.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MIT",
+   "research_notes": "Official ROS2 package; Dobot names it me6 (README: 'E6 / ME6'). A xacro twin is cra_description/urdf/me6_robot.xacro."
+  },
+  {
+   "id": "jaka-zu-5",
+   "vendor": "节卡",
+   "model": "Zu 5",
+   "type": "manipulator",
+   "repo": "JAKARobotics/jaka_ros2",
+   "commit": "294878a45314d9079c4c10274bebeeadb28734cd",
+   "urdf": "src/jaka_description/urdf/jaka_zu5.urdf",
+   "mesh_paths": [
+    "src/jaka_description/meshes/jaka_zu5_meshes"
+   ],
+   "paths": [
+    "src/jaka_description/meshes/jaka_zu5_meshes/*",
+    "src/jaka_description/urdf/jaka_zu5.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official JAKA ROS2 repo, no licence file. Same URDFs also in JAKARobotics/jaka_ros1 (and the older JakaCobot org)."
+  },
+  {
+   "id": "jaka-zu-7",
+   "vendor": "节卡",
+   "model": "Zu 7",
+   "type": "manipulator",
+   "repo": "JAKARobotics/jaka_ros2",
+   "commit": "294878a45314d9079c4c10274bebeeadb28734cd",
+   "urdf": "src/jaka_description/urdf/jaka_zu7.urdf",
+   "mesh_paths": [
+    "src/jaka_description/meshes/jaka_zu7_meshes"
+   ],
+   "paths": [
+    "src/jaka_description/meshes/jaka_zu7_meshes/*",
+    "src/jaka_description/urdf/jaka_zu7.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official JAKA ROS2 repo, no licence file."
+  },
+  {
+   "id": "jaka-zu-12",
+   "vendor": "节卡",
+   "model": "Zu 12",
+   "type": "manipulator",
+   "repo": "JAKARobotics/jaka_ros2",
+   "commit": "294878a45314d9079c4c10274bebeeadb28734cd",
+   "urdf": "src/jaka_description/urdf/jaka_zu12.urdf",
+   "mesh_paths": [
+    "src/jaka_description/meshes/jaka_zu12_meshes"
+   ],
+   "paths": [
+    "src/jaka_description/meshes/jaka_zu12_meshes/*",
+    "src/jaka_description/urdf/jaka_zu12.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official JAKA ROS2 repo, no licence file."
+  },
+  {
+   "id": "jaka-minicobo",
+   "vendor": "节卡",
+   "model": "MiniCobo",
+   "type": "manipulator",
+   "repo": "JAKARobotics/jaka_ros2",
+   "commit": "294878a45314d9079c4c10274bebeeadb28734cd",
+   "urdf": "src/jaka_description/urdf/jaka_minicobo.urdf",
+   "mesh_paths": [
+    "src/jaka_description/meshes/jaka_minicobo_meshes"
+   ],
+   "paths": [
+    "src/jaka_description/meshes/jaka_minicobo_meshes/*",
+    "src/jaka_description/urdf/jaka_minicobo.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official JAKA ROS2 repo, no licence file."
+  },
+  {
+   "id": "aubo-i5",
+   "vendor": "遨博",
+   "model": "i5",
+   "type": "manipulator",
+   "repo": "AuboRobot/aubo_robot",
+   "commit": "32210c0b465bc4eef4de01a0917a878c3b24e799",
+   "urdf": "aubo_robot/aubo_description/urdf/aubo_i5.urdf",
+   "mesh_paths": [
+    "aubo_robot/aubo_description/meshes/aubo_i5"
+   ],
+   "paths": [
+    "aubo_robot/aubo_description/meshes/aubo_i5/*",
+    "aubo_robot/aubo_description/urdf/aubo_i5.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ROS1 repo (default branch Noetic). Visual dae, collision stl. Official AuboRobot/aubo_description (no licence) has newer per-revision URDFs (aubo_i5.urdf, aubo_i5H ...)."
+  },
+  {
+   "id": "aubo-i10",
+   "vendor": "遨博",
+   "model": "i10",
+   "type": "manipulator",
+   "repo": "AuboRobot/aubo_robot",
+   "commit": "32210c0b465bc4eef4de01a0917a878c3b24e799",
+   "urdf": "aubo_robot/aubo_description/urdf/aubo_i10.urdf",
+   "mesh_paths": [
+    "aubo_robot/aubo_description/meshes/aubo_i10"
+   ],
+   "paths": [
+    "aubo_robot/aubo_description/meshes/aubo_i10/*",
+    "aubo_robot/aubo_description/urdf/aubo_i10.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ROS1 repo (default branch Noetic). Visual dae, collision stl."
+  },
+  {
+   "id": "aubo-i16",
+   "vendor": "遨博",
+   "model": "i16",
+   "type": "manipulator",
+   "repo": "AuboRobot/aubo_robot",
+   "commit": "32210c0b465bc4eef4de01a0917a878c3b24e799",
+   "urdf": "aubo_robot/aubo_description/urdf/aubo_i16.urdf",
+   "mesh_paths": [
+    "aubo_robot/aubo_description/meshes/aubo_i16"
+   ],
+   "paths": [
+    "aubo_robot/aubo_description/meshes/aubo_i16/*",
+    "aubo_robot/aubo_description/urdf/aubo_i16.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ROS1 repo (default branch Noetic). Visual dae, collision stl."
+  },
+  {
+   "id": "elite-ec66",
+   "vendor": "艾利特",
+   "model": "EC66",
+   "type": "manipulator",
+   "repo": "Elite-Robots/ROS",
+   "commit": "8387ad5269152b749d18005136576141aa96dfb9",
+   "urdf": "src/elite_description/urdf/ec66_description.urdf",
+   "mesh_paths": [
+    "src/elite_description/meshes/ec66"
+   ],
+   "paths": [
+    "src/elite_description/meshes/ec66/*",
+    "src/elite_description/urdf/ec66_description.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official Elite ROS1 repo for the EC series; no licence file (package.xml says TODO)."
+  },
+  {
+   "id": "elite-cs66",
+   "vendor": "艾利特",
+   "model": "CS66",
+   "type": "manipulator",
+   "repo": "Elite-Robots/Elite_Robots_CS_ROS2_Driver",
+   "commit": "3e9e8ca8c9a56b5a5965d15ba4ddd751addd7c33",
+   "xacro": "eli_cs_robot_description/urdf/cs.urdf.xacro",
+   "xacro_args": {
+    "cs_type": "cs66",
+    "name": "cs66"
+   },
+   "ros_packages": {
+    "eli_cs_robot_description": "eli_cs_robot_description"
+   },
+   "mesh_paths": [
+    "eli_cs_robot_description/meshes/cs66"
+   ],
+   "paths": [
+    "eli_cs_robot_description/*",
+    "eli_cs_robot_description/meshes/cs66/*",
+    "eli_cs_robot_description/urdf/cs.urdf.xacro"
+   ],
+   "licence": "eli_cs_robot_description/LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official ROS2 driver, UR-style xacro; parameters come from eli_cs_robot_description/config/cs66/*.yaml, and only that package is referenced. No licence at repo root; the description package has its own Apache-2.0 LICENSE (package.xml says Apache-2.0). Visual dae, collision stl."
+  },
+  {
+   "id": "elite-cs612",
+   "vendor": "艾利特",
+   "model": "CS612",
+   "type": "manipulator",
+   "repo": "Elite-Robots/Elite_Robots_CS_ROS2_Driver",
+   "commit": "3e9e8ca8c9a56b5a5965d15ba4ddd751addd7c33",
+   "xacro": "eli_cs_robot_description/urdf/cs.urdf.xacro",
+   "xacro_args": {
+    "cs_type": "cs612",
+    "name": "cs612"
+   },
+   "ros_packages": {
+    "eli_cs_robot_description": "eli_cs_robot_description"
+   },
+   "mesh_paths": [
+    "eli_cs_robot_description/meshes/cs612"
+   ],
+   "paths": [
+    "eli_cs_robot_description/*",
+    "eli_cs_robot_description/meshes/cs612/*",
+    "eli_cs_robot_description/urdf/cs.urdf.xacro"
+   ],
+   "licence": "eli_cs_robot_description/LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Same xacro as CS66 with cs_type:=cs612 (config/cs612/*.yaml). No licence at repo root; the description package has its own Apache-2.0 LICENSE."
+  },
+  {
+   "id": "rokae-xmate-er3",
+   "vendor": "珞石",
+   "model": "xMate ER3",
+   "type": "manipulator",
+   "repo": "RokaeRobot/rokae_ros2",
+   "commit": "d6a508c38513d4c39b2f10f14275d0e26df7fb43",
+   "urdf": "rokae_description/urdf/xMateER3.urdf.xacro",
+   "mesh_paths": [
+    "rokae_description/meshes/xMateER3"
+   ],
+   "paths": [
+    "rokae_description/meshes/xMateER3/*",
+    "rokae_description/urdf/xMateER3.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official Rokae ROS2 repo. The file is named .urdf.xacro but contains no xacro elements, so it is plain URDF as-is (running xacro on it also works)."
+  },
+  {
+   "id": "rokae-xmate-er7",
+   "vendor": "珞石",
+   "model": "xMate ER7",
+   "type": "manipulator",
+   "repo": "RokaeRobot/rokae_ros2",
+   "commit": "d6a508c38513d4c39b2f10f14275d0e26df7fb43",
+   "xacro": "rokae_description/urdf/xMateER7.urdf.xacro",
+   "ros_packages": {
+    "rokae_description": "rokae_description"
+   },
+   "mesh_paths": [
+    "rokae_description/meshes/xMateER7"
+   ],
+   "paths": [
+    "rokae_description/*",
+    "rokae_description/meshes/xMateER7/*",
+    "rokae_description/urdf/xMateER7.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official Rokae ROS2 repo. No args needed; it includes rokae_description/urdf/materials.xacro only. The plain rokae_xMateER7_moveit_config/config/gazebo_XME7.urdf uses a different (older) joint convention, so the xacro is preferred."
+  },
+  {
+   "id": "rokae-xmate-cr7",
+   "vendor": "珞石",
+   "model": "xMate CR7",
+   "type": "manipulator",
+   "repo": "RokaeRobot/rokae_ros2",
+   "commit": "d6a508c38513d4c39b2f10f14275d0e26df7fb43",
+   "xacro": "rokae_description/urdf/xMateCR7.urdf.xacro",
+   "ros_packages": {
+    "rokae_description": "rokae_description"
+   },
+   "mesh_paths": [
+    "rokae_description/meshes/xMateCR7"
+   ],
+   "paths": [
+    "rokae_description/*",
+    "rokae_description/meshes/xMateCR7/*",
+    "rokae_description/urdf/xMateCR7.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official Rokae ROS2 repo. No args needed (robot_ip/local_ip have defaults); includes rokae_description/urdf/materials.xacro only. A plain URDF with the same joint origins is rokae_xMateCR7_moveit_config/config/gazebo_xMateCR7.urdf."
+  },
+  {
+   "id": "hans-elfin-5",
+   "vendor": "大族机器人",
+   "model": "Elfin 5",
+   "type": "manipulator",
+   "repo": "huayan-robotics/elfin_robot",
+   "commit": "1c642fbdcd6a2467084288fe373f945bc38a8c52",
+   "xacro": "elfin_description/urdf/elfin5.urdf.xacro",
+   "ros_packages": {
+    "elfin_description": "elfin_description"
+   },
+   "mesh_paths": [
+    "elfin_description/meshes/elfin5"
+   ],
+   "paths": [
+    "elfin_description/*",
+    "elfin_description/meshes/elfin5/*",
+    "elfin_description/urdf/elfin5.urdf.xacro"
+   ],
+   "licence": "LICENSE.txt",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official; hans-robot/elfin_robot now redirects to huayan-robotics/elfin_robot (Han's Robot renamed Huayan). Pinned on default branch melodic. No args; includes only elfin_description xacros (gazebo, transmission, materials)."
+  },
+  {
+   "id": "hans-elfin-10",
+   "vendor": "大族机器人",
+   "model": "Elfin 10",
+   "type": "manipulator",
+   "repo": "huayan-robotics/elfin_robot",
+   "commit": "1c642fbdcd6a2467084288fe373f945bc38a8c52",
+   "xacro": "elfin_description/urdf/elfin10.urdf.xacro",
+   "ros_packages": {
+    "elfin_description": "elfin_description"
+   },
+   "mesh_paths": [
+    "elfin_description/meshes/elfin10"
+   ],
+   "paths": [
+    "elfin_description/*",
+    "elfin_description/meshes/elfin10/*",
+    "elfin_description/urdf/elfin10.urdf.xacro"
+   ],
+   "licence": "LICENSE.txt",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official; hans-robot/elfin_robot redirects to huayan-robotics/elfin_robot. Pinned on default branch melodic. No args."
+  },
+  {
+   "id": "elephant-mycobot-280",
+   "vendor": "大象机器人",
+   "model": "myCobot 280",
+   "type": "manipulator",
+   "repo": "elephantrobotics/mycobot_ros",
+   "commit": "c0d6fbe8f7d9b18b46a9fcb0b041e5bc2d66196b",
+   "urdf": "mycobot_description/urdf/mycobot_280_m5/mycobot_280_m5.urdf",
+   "mesh_paths": [
+    "mycobot_description/urdf/mycobot_280_m5"
+   ],
+   "paths": [
+    "mycobot_description/urdf/mycobot_280_m5/*",
+    "mycobot_description/urdf/mycobot_280_m5/mycobot_280_m5.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ROS1 repo (noetic); very large repo (650 MB), fetch only the listed folders. Meshes sit beside the URDF. M5 version chosen; mycobot_280_pi / _jn / _arduino variants exist. mycobot_ros2 (no licence) has the same models."
+  },
+  {
+   "id": "elephant-mycobot-320",
+   "vendor": "大象机器人",
+   "model": "myCobot 320",
+   "type": "manipulator",
+   "repo": "elephantrobotics/mycobot_ros",
+   "commit": "c0d6fbe8f7d9b18b46a9fcb0b041e5bc2d66196b",
+   "urdf": "mycobot_description/urdf/mycobot_320_m5_2022/new_mycobot_pro_320_m5_2022.urdf",
+   "mesh_paths": [
+    "mycobot_description/urdf/mycobot_320_m5_2022"
+   ],
+   "paths": [
+    "mycobot_description/urdf/mycobot_320_m5_2022/*",
+    "mycobot_description/urdf/mycobot_320_m5_2022/new_mycobot_pro_320_m5_2022.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ROS1 repo; current 2022 hardware, M5 version (pi_2022 and old m5_2020 variants exist). Meshes sit beside the URDF."
+  },
+  {
+   "id": "elephant-mecharm-270",
+   "vendor": "大象机器人",
+   "model": "mechArm 270",
+   "type": "manipulator",
+   "repo": "elephantrobotics/mycobot_ros",
+   "commit": "c0d6fbe8f7d9b18b46a9fcb0b041e5bc2d66196b",
+   "urdf": "mycobot_description/urdf/mecharm_270_m5/mecharm_270_m5.urdf",
+   "mesh_paths": [
+    "mycobot_description/urdf/mecharm_270_m5"
+   ],
+   "paths": [
+    "mycobot_description/urdf/mecharm_270_m5/*",
+    "mycobot_description/urdf/mecharm_270_m5/mecharm_270_m5.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official ROS1 repo; M5 version (mecharm_270_pi variant exists). Meshes sit beside the URDF."
+  },
+  {
+   "id": "franka-panda",
+   "vendor": "Franka Robotics",
+   "model": "Panda",
+   "type": "manipulator",
+   "repo": "frankarobotics/franka_description",
+   "commit": "7aeeddc449edf8d62b594f9e36a81da53e7796f9",
+   "xacro": "robots/fer/fer.urdf.xacro",
+   "xacro_args": {
+    "hand": "true"
+   },
+   "ros_packages": {
+    "franka_description": "."
+   },
+   "mesh_paths": [
+    "meshes/robots/fer",
+    "meshes/robot_ee/franka_hand_white"
+   ],
+   "paths": [
+    "*",
+    "meshes/robot_ee/franka_hand_white/*",
+    "meshes/robots/fer/*",
+    "robots/fer/fer.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official. 'fer' (Franka Emika Robot) is the Panda's name in current franka_description. hand defaults to true (Franka Hand, white meshes); hand:=false gives the bare arm. Also reads robots/fer/*.yaml and end_effectors/franka_hand/*. Same commit robot_descriptions pins."
+  },
+  {
+   "id": "franka-fr3",
+   "vendor": "Franka Robotics",
+   "model": "FR3",
+   "type": "manipulator",
+   "repo": "frankarobotics/franka_description",
+   "commit": "7aeeddc449edf8d62b594f9e36a81da53e7796f9",
+   "xacro": "robots/fr3/fr3.urdf.xacro",
+   "xacro_args": {
+    "hand": "true"
+   },
+   "ros_packages": {
+    "franka_description": "."
+   },
+   "mesh_paths": [
+    "meshes/robots/fr3",
+    "meshes/robot_ee/franka_hand_white"
+   ],
+   "paths": [
+    "*",
+    "meshes/robot_ee/franka_hand_white/*",
+    "meshes/robots/fr3/*",
+    "robots/fr3/fr3.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official. Newer hardware revisions are also there: robots/fr3v2/fr3v2.urdf.xacro and robots/fr3v2_1/fr3v2_1.urdf.xacro (meshes/robots/fr3v2, fr3v2_1)."
+  },
+  {
+   "id": "kuka-lbr-iiwa-7-r800",
+   "vendor": "KUKA",
+   "model": "LBR iiwa 7 R800",
+   "type": "manipulator",
+   "repo": "lbr-stack/lbr_fri_ros2_stack",
+   "commit": "52f816bd59cbd2390efc890cca0ad61389e4ccb3",
+   "xacro": "lbr_description/urdf/iiwa7/iiwa7.xacro",
+   "xacro_args": {
+    "mode": "mock"
+   },
+   "ros_packages": {
+    "lbr_description": "lbr_description"
+   },
+   "mesh_paths": [
+    "lbr_description/meshes/iiwa7"
+   ],
+   "paths": [
+    "lbr_description/*",
+    "lbr_description/meshes/iiwa7/*",
+    "lbr_description/urdf/iiwa7/iiwa7.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Community (lbr-stack, KCL), humble branch; KUKA's own kuka_robot_descriptions has no iiwa 7. On the jazzy branch this moved to lbr-stack/lbr_iiwa7_r800_description (commit 64a0cc38708988c631873b74070f3ee418327c68, urdf/lbr_iiwa7_r800.urdf.xacro, 2 MB) which has no LICENSE file (package.xml says Apache-2.0). Plain-URDF alternative: facebookresearch/differentiable-robot-model d7bd1b3b8ef1d6dabe9b68474a622185c510e112 diff_robot_data/kuka_iiwa/urdf/iiwa7.urdf (MIT; mesh paths are relative to diff_robot_data/kuka_iiwa/, not to the urdf folder)."
+  },
+  {
+   "id": "kuka-lbr-iiwa-14-r820",
+   "vendor": "KUKA",
+   "model": "LBR iiwa 14 R820",
+   "type": "manipulator",
+   "repo": "kuka-ros/kuka_robot_descriptions",
+   "commit": "5ddbc41ce8726fd680bcc19562d78bcabfbdf96d",
+   "xacro": "kuka_lbr_iiwa_support/urdf/lbr_iiwa14_r820.urdf.xacro",
+   "xacro_args": {
+    "mode": "mock"
+   },
+   "ros_packages": {
+    "kuka_lbr_iiwa_support": "kuka_lbr_iiwa_support",
+    "kuka_resources": "kuka_resources"
+   },
+   "mesh_paths": [
+    "kuka_lbr_iiwa_support/meshes/lbr_iiwa14_r820"
+   ],
+   "paths": [
+    "kuka_lbr_iiwa_support/*",
+    "kuka_lbr_iiwa_support/meshes/lbr_iiwa14_r820/*",
+    "kuka_lbr_iiwa_support/urdf/lbr_iiwa14_r820.urdf.xacro",
+    "kuka_resources/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official KUKA ROS 2 descriptions (moved kroshu -> kuka-ros; both copies are archived but public, and kroshu/kuka_drivers still pulls kuka-ros master). Large repo: fetch only the two packages. mode:=gazebo would need kuka_gazebo (in the same repo); mock/hardware need nothing else."
+  },
+  {
+   "id": "abb-gofa-crb-15000",
+   "vendor": "ABB",
+   "model": "GoFa CRB 15000",
+   "type": "manipulator",
+   "repo": "ros-industrial/abb",
+   "commit": "45f4769d826cf3ac62a65495f2db67b78b0c81df",
+   "xacro": "abb_crb15000_support/urdf/crb15000_5_95.xacro",
+   "ros_packages": {
+    "abb_crb15000_support": "abb_crb15000_support",
+    "abb_resources": "abb_resources"
+   },
+   "mesh_paths": [
+    "abb_crb15000_support/meshes/crb15000_5_95"
+   ],
+   "paths": [
+    "abb_crb15000_support/*",
+    "abb_crb15000_support/meshes/crb15000_5_95/*",
+    "abb_crb15000_support/urdf/crb15000_5_95.xacro",
+    "abb_resources/*"
+   ],
+   "licence": "abb_crb15000_support/LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "ROS-Industrial. CRB 15000-5/0.95 is the original GoFa (GoFa 5). GoFa 12 is crb15000_12_127.xacro in the same package."
+  },
+  {
+   "id": "abb-yumi-irb-14000",
+   "vendor": "ABB",
+   "model": "YuMi IRB 14000",
+   "type": "manipulator",
+   "repo": "kth-ros-pkg/yumi",
+   "commit": "4520af912c0ab3532225d84fed2cabe4870379bd",
+   "urdf": "yumi_description/urdf/yumi.urdf",
+   "mesh_paths": [
+    "yumi_description/meshes"
+   ],
+   "paths": [
+    "yumi_description/meshes/*",
+    "yumi_description/urdf/yumi.urdf"
+   ],
+   "licence": "license.dat",
+   "licence_name": "BSD-2-Clause",
+   "research_notes": "Community (KTH, ROS 1, last push 2019); not ABB. Plain URDF (xacro output) with both arms and grippers; uses meshes/, meshes/coarse/, meshes/gripper/, meshes/gripper/coarse/. Contains Gazebo plugin tags (gazebo_mimic, gazebo_ros_control) that non-Gazebo loaders ignore. robot_descriptions uses a copy in ankurhanda/robot-assets instead."
+  },
+  {
+   "id": "yaskawa-gp7",
+   "vendor": "Yaskawa",
+   "model": "GP7",
+   "type": "manipulator",
+   "repo": "Yaskawa-Global/motoman_ros2_support_packages",
+   "commit": "a77f186048bd3c35fc3bb5142f9d9270dbebe69f",
+   "xacro": "motoman_gp7_support/urdf/gp7.xacro",
+   "ros_packages": {
+    "motoman_gp7_support": "motoman_gp7_support",
+    "motoman_resources": "motoman_resources"
+   },
+   "mesh_paths": [
+    "motoman_gp7_support/meshes"
+   ],
+   "paths": [
+    "motoman_gp7_support/*",
+    "motoman_gp7_support/meshes/*",
+    "motoman_gp7_support/urdf/gp7.xacro",
+    "motoman_resources/*"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official Yaskawa ROS 2 support packages. No licence file anywhere in the repo; package.xml says BSD-3-Clause and README badges say Apache-2.0 / BSD-3-Clause. ros-industrial/motoman (noetic-devel 846fbbc57c60223f12bf4795ea6404982d57709e) has the same GP7 package, also without a licence file."
+  },
+  {
+   "id": "yaskawa-hc10",
+   "vendor": "Yaskawa",
+   "model": "HC10",
+   "type": "manipulator",
+   "repo": "Yaskawa-Global/motoman_ros2_support_packages",
+   "commit": "a77f186048bd3c35fc3bb5142f9d9270dbebe69f",
+   "xacro": "motoman_hc10_support/urdf/hc10.xacro",
+   "ros_packages": {
+    "motoman_hc10_support": "motoman_hc10_support",
+    "motoman_resources": "motoman_resources"
+   },
+   "mesh_paths": [
+    "motoman_hc10_support/meshes/hc10"
+   ],
+   "paths": [
+    "motoman_hc10_support/*",
+    "motoman_hc10_support/meshes/hc10/*",
+    "motoman_hc10_support/urdf/hc10.xacro",
+    "motoman_resources/*"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official Yaskawa. No licence file (package.xml BSD-3-Clause). HC10DT / HC10DT B10 / HC10DTP B00 variants are also in motoman_hc10_support/urdf/."
+  },
+  {
+   "id": "trossen-viperx-300-s",
+   "vendor": "Trossen Robotics",
+   "model": "ViperX 300 S",
+   "type": "manipulator",
+   "repo": "Interbotix/interbotix_ros_manipulators",
+   "commit": "01c557d65f781697c3a05bffebafbd3404e03eab",
+   "xacro": "interbotix_ros_xsarms/interbotix_xsarm_descriptions/urdf/vx300s.urdf.xacro",
+   "xacro_args": {
+    "hardware_type": "fake"
+   },
+   "ros_packages": {
+    "interbotix_xsarm_descriptions": "interbotix_ros_xsarms/interbotix_xsarm_descriptions"
+   },
+   "mesh_paths": [
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/vx300s_meshes",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/interbotix_black.png"
+   ],
+   "paths": [
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/*",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/interbotix_black.png/*",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/vx300s_meshes/*",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/urdf/vx300s.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official (Interbotix = Trossen), ROS 2 rolling branch head (= jazzy). The xacro also includes control.urdf.xacro, gazebo_configs.urdf.xacro and ar_tag.urdf.xacro from the same folder; material texture meshes/interbotix_black.png. Only hardware_type:=gz_classic needs interbotix_xsarm_sim / interbotix_common_sim (other repos). main branch is ROS 1."
+  },
+  {
+   "id": "trossen-widowx-250-s",
+   "vendor": "Trossen Robotics",
+   "model": "WidowX 250 S",
+   "type": "manipulator",
+   "repo": "Interbotix/interbotix_ros_manipulators",
+   "commit": "01c557d65f781697c3a05bffebafbd3404e03eab",
+   "xacro": "interbotix_ros_xsarms/interbotix_xsarm_descriptions/urdf/wx250s.urdf.xacro",
+   "xacro_args": {
+    "hardware_type": "fake"
+   },
+   "ros_packages": {
+    "interbotix_xsarm_descriptions": "interbotix_ros_xsarms/interbotix_xsarm_descriptions"
+   },
+   "mesh_paths": [
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/wx250s_meshes",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/interbotix_black.png"
+   ],
+   "paths": [
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/*",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/interbotix_black.png/*",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/meshes/wx250s_meshes/*",
+    "interbotix_ros_xsarms/interbotix_xsarm_descriptions/urdf/wx250s.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official. Same notes as vx300s."
+  },
+  {
+   "id": "lerobot-so-arm100",
+   "vendor": "LeRobot",
+   "model": "SO-ARM100",
+   "type": "manipulator",
+   "repo": "TheRobotStudio/SO-ARM100",
+   "commit": "141aea7bcac2744d92998e30268c413202a56f96",
+   "urdf": "Simulation/SO100/so100.urdf",
+   "mesh_paths": [
+    "Simulation/SO100/assets"
+   ],
+   "paths": [
+    "Simulation/SO100/assets/*",
+    "Simulation/SO100/so100.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official. Plain URDF, mesh paths relative ('assets/...'). Repo is large (CAD/STEP files): fetch only Simulation/SO100 and LICENSE."
+  },
+  {
+   "id": "lerobot-so-101",
+   "vendor": "LeRobot",
+   "model": "SO-101",
+   "type": "manipulator",
+   "repo": "TheRobotStudio/SO-ARM100",
+   "commit": "141aea7bcac2744d92998e30268c413202a56f96",
+   "urdf": "Simulation/SO101/so101_new_calib.urdf",
+   "mesh_paths": [
+    "Simulation/SO101/assets"
+   ],
+   "paths": [
+    "Simulation/SO101/assets/*",
+    "Simulation/SO101/so101_new_calib.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official. Follower arm, new calibration (the LeRobot default); also so101_old_calib.urdf, so101_leader_new_calib.urdf, so101_new_calib_camera.urdf and MJCF so101_new_calib.xml. assets/ also holds Onshape .part files that the URDF does not use."
+  },
+  {
+   "id": "apptronik-apollo",
+   "vendor": "Apptronik",
+   "model": "Apollo",
+   "type": "humanoid",
+   "repo": "google-deepmind/mujoco_menagerie",
+   "commit": "79a68d43c43bf2a2b281495be4c0fe7759506db2",
+   "mjcf": "apptronik_apollo/apptronik_apollo.xml",
+   "label": "MJCF",
+   "assets": [
+    "assets"
+   ],
+   "paths": [
+    "apptronik_apollo/*"
+   ],
+   "licence": "apptronik_apollo/LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "MJCF only; no public URDF (apptronik GitHub account has no repos). meshdir=assets, all meshes present. Repo is large; fetch only the apptronik_apollo folder. Licence is per model folder (repo-level NOASSERTION)."
+  },
+  {
+   "id": "agility-digit",
+   "vendor": "Agility Robotics",
+   "model": "Digit",
+   "type": "humanoid",
+   "repo": "adubredu/DigitRobot.jl",
+   "commit": "bd3b99e2297c48c5f818f521791a9f8daf3ee303",
+   "urdf": "urdf/digit_model.urdf",
+   "mesh_paths": [
+    "urdf"
+   ],
+   "paths": [
+    "urdf/*",
+    "urdf/digit_model.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Community repo (listed in awesome-robot-descriptions), no licence; Agility publishes no URDF. Meshes are referenced as package://urdf/*.obj, i.e. the urdf/ folder itself (with .mtl files). Joints are 'continuous' (22) with closed-chain rods; this is the Digit v3-era model, not the 2023+ head/hands version.",
+   "notes": "社区仓库，没有许可证；是旧版 Digit（v3）的模型，不是现在带新头部和手的版本。闭链的连杆没有闭合。"
+  },
+  {
+   "id": "pndbotics-adam-lite",
+   "vendor": "PNDbotics",
+   "model": "Adam Lite",
+   "type": "humanoid",
+   "repo": "pndbotics/pnd_models",
+   "commit": "38420a65d20219b095e9a78e22f0f9af7256c23f",
+   "urdf": "adam_lite/adam_lite.urdf",
+   "mesh_paths": [
+    "adam_lite/meshes"
+   ],
+   "paths": [
+    "adam_lite/adam_lite.urdf",
+    "adam_lite/meshes/*"
+   ],
+   "licence": "adam_license.txt",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official PNDbotics repo. adam_license.txt is BSD-3-Clause text (GitHub shows NOASSERTION). Relative meshes/*.dae refs, all 27 present; MJCF adam_lite/adam_lite.xml uses adam_lite/assets OBJ. README warns about the toe collision orientation. Repo is large; fetch only adam_lite/. MJCF also in mujoco_menagerie/pndbotics_adam_lite (MIT)."
+  },
+  {
+   "id": "pal-talos",
+   "vendor": "PAL Robotics",
+   "model": "TALOS",
+   "type": "humanoid",
+   "repo": "stack-of-tasks/talos-data",
+   "commit": "77169405d6a48a5d3f3f75eb014209f375ff23b6",
+   "urdf": "urdf/talos_full.urdf",
+   "mesh_paths": [
+    "meshes"
+   ],
+   "paths": [
+    "meshes/*",
+    "urdf/talos_full.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "LGPL-3.0",
+   "research_notes": "Tag v2.0.0, same commit as robot_descriptions.py; later tag v2.1.0 (master) keeps only xacro for the full model. package://talos_data/meshes/... -> repo root; all 48 present (subfolders arm, gripper, head, torso, v2, sensors). Also urdf/talos_full_v2.urdf and talos_reduced.urdf. PAL's xacro: pal-robotics/talos_robot."
+  },
+  {
+   "id": "robotis-op3",
+   "vendor": "ROBOTIS",
+   "model": "OP3",
+   "type": "humanoid",
+   "repo": "ROBOTIS-GIT/ROBOTIS-OP3-Common",
+   "commit": "0780e54c2064a42089b0cf970d716ae44fec9233",
+   "xacro": "op3_description/urdf/robotis_op3.urdf.xacro",
+   "ros_packages": {
+    "op3_description": "op3_description"
+   },
+   "mesh_paths": [
+    "op3_description/meshes"
+   ],
+   "paths": [
+    "op3_description/*",
+    "op3_description/meshes/*",
+    "op3_description/urdf/robotis_op3.urdf.xacro"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official, master (ROS 1; jazzy-devel branch exists at 6f7d56ccef6f78061925c56c6bd9d134d243f911). No args; includes $(find op3_description)/urdf/*.xacro (structure, visuals, inertia, gazebo, transmissions). package://op3_description/meshes/*.stl, all 21 present. MJCF in mujoco_menagerie/robotis_op3."
+  },
+  {
+   "id": "booster-t1",
+   "vendor": "加速进化",
+   "model": "T1",
+   "type": "humanoid",
+   "repo": "BoosterRobotics/booster_assets",
+   "commit": "12a97516f57469078707afb587a5f84c1cb110d1",
+   "urdf": "robots/T1/T1_23dof.urdf",
+   "mesh_paths": [
+    "robots/T1/meshes"
+   ],
+   "paths": [
+    "robots/T1/T1_23dof.urdf",
+    "robots/T1/meshes/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official vendor assets repo. Mesh refs are relative (meshes/*.STL), all 25 present. Same folder also has T1_29dof.urdf, T1_locomotion.urdf and MJCF. robot_descriptions.py uses the older booster_gym/resources/T1/T1_serial.urdf instead."
+  },
+  {
+   "id": "booster-k1",
+   "vendor": "加速进化",
+   "model": "K1",
+   "type": "humanoid",
+   "repo": "BoosterRobotics/booster_assets",
+   "commit": "12a97516f57469078707afb587a5f84c1cb110d1",
+   "urdf": "robots/K1/K1_22dof.urdf",
+   "mesh_paths": [
+    "robots/K1/meshes"
+   ],
+   "paths": [
+    "robots/K1/K1_22dof.urdf",
+    "robots/K1/meshes/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official vendor assets repo, same commit as T1. Relative mesh refs, all 24 present. K1_locomotion.urdf and MJCF also in robots/K1."
+  },
+  {
+   "id": "fourier-n1",
+   "vendor": "傅利叶",
+   "model": "N1",
+   "type": "humanoid",
+   "repo": "FFTAI/Wiki-GRx-Models",
+   "commit": "f8e683f00d1d99deb882deb9dfce6030095b466a",
+   "urdf": "N1/urdf/N1_raw.urdf",
+   "mesh_paths": [
+    "N1/meshes"
+   ],
+   "paths": [
+    "N1/meshes/*",
+    "N1/urdf/N1_raw.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official, branch FourierN1 (same commit as robot_descriptions.py). The LICENSE at this commit is Apache-2.0, although GitHub reports GPL-3.0 for the repo (that is the master branch). Mesh refs ../meshes/*.STL, all 29 present. N1_rotor.urdf is a variant with rotor inertia."
+  },
+  {
+   "id": "fourier-gr-1",
+   "vendor": "傅利叶",
+   "model": "GR-1",
+   "type": "humanoid",
+   "repo": "FFTAI/Wiki-GRx-Models",
+   "commit": "7d96c758f048fe1bf92b3258864d94771ae0c093",
+   "urdf": "GRX/GR1/gr1t1/basic_urdf/gr1t1.urdf",
+   "mesh_paths": [
+    "GRX/GR1/gr1t1/meshes/gr1t1"
+   ],
+   "paths": [
+    "GRX/GR1/gr1t1/basic_urdf/gr1t1.urdf",
+    "GRX/GR1/gr1t1/meshes/gr1t1/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "GPL-3.0",
+   "research_notes": "Official, master. GRX/GR1/README.md maps product GR-1 to code name GR1T1 (GR1T2 = GR-1 Pro). Mesh refs ../meshes/gr1t1/*.STL, all 35 present. With-hand variant: GRX/GR1/gr1t1/urdf/gr1t1_fourier_hand_6dof.urdf. robot_descriptions.py pins an older commit (351245ac) whose GRX/GR1/GR1T1 paths no longer exist on master."
+  },
+  {
+   "id": "fourier-gr-2",
+   "vendor": "傅利叶",
+   "model": "GR-2",
+   "type": "humanoid",
+   "repo": "FFTAI/Wiki-GRx-Models",
+   "commit": "7d96c758f048fe1bf92b3258864d94771ae0c093",
+   "urdf": "GRX/GR2/gr2v3_8_7/basic_urdf/gr2v3_8_7.urdf",
+   "mesh_paths": [
+    "GRX/GR2/gr2v3_8_7/meshes/gr2v3_8_7"
+   ],
+   "paths": [
+    "GRX/GR2/gr2v3_8_7/basic_urdf/gr2v3_8_7.urdf",
+    "GRX/GR2/gr2v3_8_7/meshes/gr2v3_8_7/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "GPL-3.0",
+   "research_notes": "Official, master; the 2025-11 commit says this is the most recent GR2 URDF. Mesh refs ../meshes/gr2v3_8_7/*.STL, all 31 present; MJCF in GRX/GR2/gr2v3_8_7/mjcf. Alternatives: GRX/GR2/GR2v3.0.1/urdf/GR2v3.0.1.urdf (master), or branch FourierGR2 @ 9ad42d37cb9c91be5db3c52a8c5d2c0e39981a0c GR2/urdf/GR2_raw.urdf whose LICENSE is Apache-2.0."
+  },
+  {
+   "id": "agibot-a2",
+   "vendor": "智元机器人",
+   "model": "远征 A2",
+   "type": "humanoid",
+   "repo": "Link-U-OS/rl_training",
+   "commit": "8bf8fd8bbcc38d09731d1b15f894ce7388b08c3d",
+   "urdf": "resources/robots/agibot_a2/urdf/agibot_a2_dof12.urdf",
+   "mesh_paths": [
+    "resources/robots/agibot_a2/meshes/public",
+    "resources/robots/agibot_a2/meshes/convex"
+   ],
+   "paths": [
+    "resources/robots/agibot_a2/meshes/convex/*",
+    "resources/robots/agibot_a2/meshes/public/*",
+    "resources/robots/agibot_a2/urdf/agibot_a2_dof12.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MulanPSL-2.0",
+   "research_notes": "Link-U-OS is AgiBot's robot-OS org; README calls it Raise A2 open-sourced by Agibot (robot name a2_t2d0_ultra). Complete and self-contained (relative ../meshes refs, all 91 present), but only the 12 leg joints are revolute; arms, waist and head are fixed. A 22-DoF model_public.urdf exists in Link-U-OS/rl_deploy @ 2f6f2f4d2a7058e527e15882fa32539baafa13a5 (mujoco_sim/resource/model/a2_t2d0_ultra/urdf/) but its meshes/convex collision folder is not in that repo. A community copy (Seb-project/Agibot-A2-path-tools, no licence) is missing 2 meshes.",
+   "notes": "智元 Link-U-OS 的远征 A2 模型，只有腿部 12 个关节能动，手臂、腰、头是固定的。"
+  },
+  {
+   "id": "agibot-x2",
+   "vendor": "智元机器人",
+   "model": "灵犀 X2",
+   "type": "humanoid",
+   "repo": "AgibotTech/agibot_x2_urdf",
+   "commit": "575cc6b988f976c23550e0db85aa1e5475d3652d",
+   "urdf": "X2_URDF-v1.4.0/X2-Ultra.urdf",
+   "mesh_paths": [
+    "X2_URDF-v1.4.0/meshes"
+   ],
+   "paths": [
+    "X2_URDF-v1.4.0/X2-Ultra.urdf",
+    "X2_URDF-v1.4.0/meshes/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "MulanPSL-2.0",
+   "research_notes": "Official. v1.4.0 is the current X2 Ultra ('X2 Ultra -N' nameplate); v1.3.0/x2_ultra.urdf is the earlier X2 Ultra and v1.4.0/X2-EDU.urdf the EDU variant. Mesh refs ./meshes/*.stl, all 40 present. Careful when packing: meshes/meshes is a symlink to '.' (loop)."
+  },
+  {
+   "id": "agibot-g1",
+   "vendor": "智元机器人",
+   "model": "精灵 G1",
+   "type": "humanoid",
+   "repo": "shenyan0712/agibot_g1_description",
+   "commit": "559d9aefb95a6e24ee0659f2c3effd431304fc5b",
+   "xacro": "urdf/g1/g1.xacro",
+   "ros_packages": {
+    "g1_robot_description": "."
+   },
+   "mesh_paths": [
+    "urdf/g1/meshes"
+   ],
+   "paths": [
+    "*",
+    "urdf/g1/g1.xacro",
+    "urdf/g1/meshes/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Community repo (not AgiBot); licence is the uploader's. Meshes are FBX, which many URDF tools cannot load. The xacro includes ./left_arm, right_arm, left/right_omnipicker xacros and uses package://${pkg_name}/urdf/g1/meshes/*.fbx with pkg_name=g1_robot_description (package.xml says agibot_g1_description) -> repo root; all refs present. Do not use its prebuilt urdf/G1_omnipicker.urdf: 11 of 30 meshes missing. Official G1 URDFs in AgibotTech/genie_sim reference genie_robot_description FBX meshes that are not published.",
+   "notes": "社区仓库（不是智元发布的），许可证是上传者写的；网格是 FBX，仿真读不了。"
+  },
+  {
+   "id": "ubtech-walker-s2",
+   "vendor": "优必选",
+   "model": "Walker S2",
+   "type": "humanoid",
+   "repo": "UBTECH-Robot/WalkerS2-Model",
+   "commit": "ca2ab983363d52a5e22ddf3a4d979ceaa675c374",
+   "urdf": "walker_s2_urdf_with_hand3/walker_s2.urdf",
+   "mesh_paths": [
+    "walker_s2_urdf_with_hand3/meshes"
+   ],
+   "paths": [
+    "walker_s2_urdf_with_hand3/meshes/*",
+    "walker_s2_urdf_with_hand3/walker_s2.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "LicenseRef-OpenAtom-Open-Hardware-License-1.0",
+   "research_notes": "Official (UBTECH-Robot org). README: model is for Walker S2 EDU and is the official GHRC 2026 sim model. Version with 3rd-gen dexterous hands; relative meshes/*.STL refs, all 59 present. Gripper variant: walker_s2_with_gripper_urdf/walker_s2.urdf (38 meshes, all present). Repo is large mainly because of USD files. OpenAtom Open Hardware License has no SPDX id (file header also says 'Version 0.4.3')."
+  },
+  {
+   "id": "ubtech-tiangong-walker",
+   "vendor": "优必选",
+   "model": "天工行者",
+   "type": "humanoid",
+   "repo": "UBTECH-Robot/Walker_TienKung_URDF",
+   "commit": "6901312d8516fc0e7f0410ed6a55a6bd8bfbfa5e",
+   "urdf": "urdf/tiangong2.0_pro_urdf.urdf",
+   "mesh_paths": [
+    "meshes"
+   ],
+   "paths": [
+    "meshes/*",
+    "urdf/tiangong2.0_pro_urdf.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "LicenseRef-OpenAtom-Open-Hardware-License-1.0",
+   "research_notes": "Official UBTECH repo whose README names it the Walker TienKung URDF package; files are the Tiangong 2.0 Pro model (package tiangong2pro_urdf = repo root, all 37 meshes present). 30 revolute joints, while press gives 20 DoF for Walker TienKung, so check the variant. With hands: urdf/tiangong2.0_pro_with_hands.urdf. A DEX variant is in UBTECH-Robot/Walker_TienKung_DEX_URDF; X-Humanoid's own models are in Open-X-Humanoid/TienKung_URDF (~440 MB). Licence has no SPDX id.",
+   "notes": "优必选官方的天工行者 URDF 仓库，文件是天工 2.0 Pro（30 个转动关节），和公开报道的 20 自由度不一致，版本可能不同。"
+  },
+  {
+   "id": "engineai-pm01",
+   "vendor": "众擎机器人",
+   "model": "PM01",
+   "type": "humanoid",
+   "repo": "engineai-robotics/engineai_robotics_description",
+   "commit": "1d2d7601f520f716863c32a83abe9c77b26ee06c",
+   "urdf": "pm01_edu/urdf/serial_pm01_edu.urdf",
+   "mesh_paths": [
+    "pm01_edu/meshes"
+   ],
+   "paths": [
+    "pm01_edu/meshes/*",
+    "pm01_edu/urdf/serial_pm01_edu.urdf"
+   ],
+   "licence": null,
+   "licence_name": "",
+   "research_notes": "Official, no licence file. Meshes are referenced as package://resource/robot/pm01_edu/meshes/*.dae, i.e. strip 'package://resource/robot/' to get the repo path; all 25 present (OBJ copies also in the folder). Robot engineai_pm01, 24 revolute joints (README: PM01 v2 Edu). A BSD-3-Clause alternative: engineai-robotics/engineai_ros2_workspace @ 42c0f1227058adb55b0455bd1b724e5428c91448, src/simulation/mujoco/assets/resource/robot/pm_v2/urdf/serial_pm_v2.urdf (STL)."
+  },
+  {
+   "id": "galbot-galbot-g1",
+   "vendor": "银河通用",
+   "model": "Galbot G1",
+   "type": "humanoid",
+   "repo": "GalaxyGeneralRobotics/galbot_one_golf_description",
+   "commit": "2d496b053f0d4e9e2688f59fac66022f447226be",
+   "urdf": "urdf/galbot_one_golf.urdf",
+   "mesh_paths": [
+    "urdf/meshes/visual",
+    "urdf/meshes/collision"
+   ],
+   "paths": [
+    "urdf/galbot_one_golf.urdf",
+    "urdf/meshes/collision/*",
+    "urdf/meshes/visual/*"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official Galbot org. Named 'Galbot One Golf'; matching it to G1 is my inference from its structure (omni chassis, lifting leg, two 7-DoF arms, grippers, head) and the org's only other model being S1. Visual meshes are GLB (not supported by every URDF loader), collision STL; relative refs, all 118 present. Fixed-wheel variant urdf/galbot_one_golf_fixed_base.urdf; MJCF (OBJ meshes) in mjcf/.",
+   "notes": "官方仓库名叫 Galbot One Golf，按结构（全向底盘、升降腿、两条 7 自由度臂、夹爪、头）推断就是 G1。可视网格是 GLB，仿真读不了。"
+  },
+  {
+   "id": "leju-kuavo",
+   "vendor": "乐聚机器人",
+   "model": "夸父 KUAVO",
+   "type": "humanoid",
+   "repo": "LejuRobotics/LejuLab-Train",
+   "commit": "845f373949d9084e59510f96cf4c82a2089f0781",
+   "urdf": "source/leju_robot/leju_robot/assets/robots/kuavos54/urdf/biped_s54.urdf",
+   "mesh_paths": [
+    "source/leju_robot/leju_robot/assets/robots/kuavos54/meshes"
+   ],
+   "paths": [
+    "source/leju_robot/leju_robot/assets/robots/kuavos54/meshes/*",
+    "source/leju_robot/leju_robot/assets/robots/kuavos54/urdf/biped_s54.urdf"
+   ],
+   "licence": "LICENCE",
+   "licence_name": "Apache-2.0",
+   "research_notes": "Official Leju org. Kuavo hardware version S54 (newest in this repo; kuavos53 also present). Relative ../meshes refs, all 33 present. Official alternative LejuRobotics/kuavo-ros-opensource (MIT) is about 4.7 GB."
+  },
+  {
+   "id": "robotera-l7",
+   "vendor": "星动纪元",
+   "model": "星动 L7",
+   "type": "humanoid",
+   "repo": "roboterax/humanoid-lab",
+   "commit": "b5b1092051564b9d1cc87fd089a2baf9bc4493a1",
+   "urdf": "source/era_okcc_humanoid_lab/era_okcc_humanoid_lab/assets/xbot_description/urdf/l7_29dof_neck_fixed.urdf",
+   "mesh_paths": [
+    "source/era_okcc_humanoid_lab/era_okcc_humanoid_lab/assets/xbot_description/meshes"
+   ],
+   "paths": [
+    "source/era_okcc_humanoid_lab/era_okcc_humanoid_lab/assets/xbot_description/meshes/*",
+    "source/era_okcc_humanoid_lab/era_okcc_humanoid_lab/assets/xbot_description/urdf/l7_29dof_neck_fixed.urdf"
+   ],
+   "licence": "LICENCE.txt",
+   "licence_name": "MIT",
+   "research_notes": "Official RobotEra org (roboterax). 29-DoF L7 with neck fixed. Relative ../meshes refs, all 49 present. MJCF: deploy/l7_29dof_neck_fixed/l7_29dof_neck_fixed.xml."
+  },
+  {
+   "id": "robotera-star1",
+   "vendor": "星动纪元",
+   "model": "星动 STAR1",
+   "type": "humanoid",
+   "repo": "roboterax/models",
+   "commit": "e8660e664e39e5b80ebb1f252e1b77b0e6929cff",
+   "urdf": "star1/urdf/l3_with_hand_fixedpin_xml.urdf",
+   "mesh_paths": [
+    "star1/meshes"
+   ],
+   "paths": [
+    "star1/meshes/*",
+    "star1/urdf/l3_with_hand_fixedpin_xml.urdf"
+   ],
+   "licence": "LICENSE",
+   "licence_name": "BSD-3-Clause",
+   "research_notes": "Official RobotEra repo; README calls it the STAR1 URDF (55 DoF incl. hands, robot name 'l3'). Relative ../meshes refs, all 77 present."
+  }
+ ],
+ "local_models": [
+  {
+   "id": "hiwonder-wonderduck-mjcf",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "zip": "WonderDuck/3 源码资料/wonderduck_rl-main.zip",
+   "dir": "wonderduck_rl/src/mjlab_microduck/robot/microduck",
+   "main": "scene.xml",
+   "assets": [
+    "assets"
+   ],
+   "licences": [
+    "wonderduck_rl/LICENSE",
+    "wonderduck_rl/LICENSE-MODELS.md"
+   ],
+   "licence_name": "Apache-2.0（MJCF）；网格 CC BY-NC-SA 4.0（署名、非商用）",
+   "label": "MJCF",
+   "version": "wonderduck_rl 厂家资料包",
+   "notes": "MuJoCo 的 MJCF 模型（scene.xml 和它包含的 robot_groundcontact.xml、网格），取自厂家给的训练工程 wonderduck_rl。基于 Pollen Robotics 的 Microduck。"
+  },
+  {
+   "id": "microduck-adp102-mjcf",
+   "vendor": "Microduck",
+   "model": "AD-P102",
+   "type": "other",
+   "root": "duck_rl",
+   "dir": "reports/adp102",
+   "main": "scene.xml",
+   "flatten": true,
+   "extras": [
+    "模型与验证.md",
+    "registration.json",
+    "front-side.png"
+   ],
+   "where": "duck-rl 训练工程 reports/adp102",
+   "label": "MJCF",
+   "licence_name": "供应商打印件 STL 与 Pollen Robotics 的 CC BY-NC-SA 4.0 网格（署名、非商用）；仅供内部参考",
+   "version": "AD-P102 二版 HD1910 820g",
+   "notes": "应用里 Microduck 仿真套件（issue #63）用的同一个 MJCF：二版普通脚、HD1910 舵机标称参数；网格从 duck-rl 的 3D 资料里拷进 assets/，引用改成包内路径。"
+  }
+ ],
+ "packages": [
+  {
+   "id": "unitree-r1-7a-sdk",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/r1-7a_sdk",
+   "commit": "534484f874f9b8e776d82488473f045a9839a2ce",
+   "what": "R1-7A 机械臂底层控制 SDK（C++，含 URDF 压缩包和示例）",
+   "licence_name": "BSD-3-Clause",
+   "filename": "r1-7a_sdk.zip"
+  },
+  {
+   "id": "unitree-r1-7a-teleop",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/R1-7A",
+   "commit": "e2faf3ec17f589db2139c51b020592a4a05f836b",
+   "what": "R1-7A 单臂、双臂遥操作，多相机录制和回放（含 MuJoCo 场景和训练部署说明）",
+   "licence_name": "",
+   "filename": "R1-7A-teleoperation.zip"
+  },
+  {
+   "id": "hiwonder-wonderduck-studio",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "repo": "Hiwonder/wonderduck_studio",
+   "commit": "382ec32af8d508c45199d516f7283b3242af5759",
+   "what": "WonderDuck Studio 源码（电脑上控制、调试鸭子的程序）",
+   "licence_name": "AGPL-3.0",
+   "filename": "wonderduck_studio.zip"
+  },
+  {
+   "id": "unitree-r1-7a-sdk-dex1",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/r1-7a_sdk",
+   "commit": "4c02302d61093bcfb2bb4253ff3dd6d4236b7d7d",
+   "what": "R1-7A 底层控制 SDK 的 r1-dex-1 分支（夹爪内走线版本）",
+   "licence_name": "BSD-3-Clause",
+   "filename": "r1-7a_sdk-r1-dex-1.zip",
+   "version": "r1-7a_sdk r1-dex-1 分支 (4c02302)"
+  },
+  {
+   "id": "unitree-r1-7a-sdk-algo",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "repo": "unitreerobotics/r1-7a_sdk",
+   "commit": "44eb7f1f9a204a5210054e971bf30d4951f83156",
+   "what": "R1-7A 底层控制 SDK 的 algo 分支（零重力模式、动作录制回放等算法，Ubuntu 24.04）",
+   "licence_name": "BSD-3-Clause",
+   "filename": "r1-7a_sdk-algo.zip",
+   "version": "r1-7a_sdk algo 分支 (44eb7f1)"
+  }
+ ],
+ "local": [
+  {
+   "id": "unitree-r1-7a-guide-01",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 01 用户手册.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：用户手册：安装、电机驱动和 485 通信协议（含参考代码）。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-guide-02",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 02 关于R1-7A.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：关于 R1-7A：产品概述和参数。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-guide-03",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 03 安装方式.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：安装方式：物品清单、固定和线缆连接。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-guide-05",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 05 使用及SDK部署.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：使用及 SDK 部署：硬件连接、编译和 demo。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-guide-06",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 06 夹爪内走线版本.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：夹爪内走线版本：SDK 的 r1-dex-1 分支。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-guide-07",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 07 图形化控制台.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：图形化控制台 r1_7a_web：安装、使用、HTTP 接口和安全设计。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-guide-08",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 08 算法集成.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：算法集成：零重力模式、动作录制回放。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-guide-09",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/R1-7A 开发指南 09 获取SDK与开发资源.md",
+   "version": "宇树文档中心 2026-11-28",
+   "what": "R1-7A 开发指南：获取 SDK 与开发资源：SDK、STEP 简化模型和 URDF 的下载地址。",
+   "source": "宇树科技文档中心 support.unitree.com 的 R1-7a 开发指南页面，2026-11-28 取下转成 Markdown（文件开头写着原网址）。"
+  },
+  {
+   "id": "unitree-r1-7a-step",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "kind": "model",
+   "path": "unitree-r1-7a/R1-7A 简化模型 STEP.zip",
+   "filename": "R1-7A 简化模型 STEP.zip",
+   "version": "宇树文档中心 STEP 0928",
+   "what": "R1-7A 简化三维模型（STEP，带末端造型，可以自己配灵巧手等末端执行器），作为机器人模型保存；仿真用不了这种格式。",
+   "source": "宇树文档中心「获取SDK与开发资源」页的下载链接 https://oss-global-cdn.unitree.com/static/564832cf9c644bab9d7f06a7268c1b75.zip 。",
+   "notes": "需要资料库接受 STP 格式的机器人模型（issue #77）后才能被读成“只保存”。"
+  },
+  {
+   "id": "unitree-r1-7a-console",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "root": "extra",
+   "path": "unitree-r1-7a/r1_7a_web_console 图形化控制台.zip",
+   "filename": "r1_7a_web_console-1.0.0.zip",
+   "version": "r1_7a_web_console 1.0.0",
+   "what": "R1-7A 图形化控制台 r1_7a_web 1.0.0（网页控制台，含 x86 预编译程序、页面、标定文件和通讯库）。",
+   "source": "宇树文档中心「图形化控制台」页的下载链接 https://oss-global-cdn.unitree.com/static/fd1e418e66eb409e9a33907bfc01615b.zip 。"
+  },
+  {
+   "id": "unitree-r1-7a-manual",
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "type": "manipulator",
+   "device": "unitree-r1-7a",
+   "path": "R1-7A/R1-7A-中文(1).pdf",
+   "filename": "R1-7A 机械臂产品手册（中文）.pdf",
+   "version": "厂家资料 2026-11",
+   "what": "R1-7A 机械臂产品手册（中文）。",
+   "source": "用户提供（materials/R1-7A）。"
+  },
+  {
+   "id": "wonderduck-manual",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/1 使用手册.pdf",
+   "filename": "1 使用手册.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck 使用手册。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料）。"
+  },
+  {
+   "id": "wonderduck-studio-guide",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/2.WonderDuck Studio 使用说明.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck Studio 使用说明。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料）。"
+  },
+  {
+   "id": "wonderduck-rl-basics",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/3 强化学习基础.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "强化学习基础（教程）。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料）。"
+  },
+  {
+   "id": "wonderduck-wonderrl",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/4.1 WonderRL应用.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderRL 应用（教程）。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料）。"
+  },
+  {
+   "id": "wonderduck-train-windows",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/4.2 WonderDuck 训练与仿真推理(Windows版本).pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck 训练与仿真推理（Windows 版本）。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料）。"
+  },
+  {
+   "id": "wonderduck-train-ubuntu",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/4.3 WonderDuck 训练与仿真推理(Ubuntu版本).pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck 训练与仿真推理（Ubuntu 版本）。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料）。"
+  },
+  {
+   "id": "wonderduck-deploy",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/5.WonderDuck 真机部署.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck 真机部署。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料）。"
+  },
+  {
+   "id": "wonderduck-sd-card",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/1.教程资料/附录/头部SD卡更换教程.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "附录：头部 SD 卡更换教程。",
+   "source": "厂家资料包（materials/WonderDuck/1.教程资料/附录）。"
+  },
+  {
+   "id": "wonderduck-remote-access",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/2 软件工具/2 远程桌面软件/1.SSH远程登陆客户端/远程访问和远程传输文件.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "远程访问和远程传输文件（SSH 登录鸭子）。",
+   "source": "厂家资料包（materials/WonderDuck/2 软件工具）。"
+  },
+  {
+   "id": "wonderduck-schematic-exp",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/4 硬件资料/SCH_Wonderduck-EXP_V1.0(1).pdf",
+   "filename": "SCH_Wonderduck-EXP_V1.0.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "扩展板原理图 EXP V1.0。",
+   "source": "厂家资料包（materials/WonderDuck/4 硬件资料）。"
+  },
+  {
+   "id": "wonderduck-schematic-pwr",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/4 硬件资料/Wonderduck-PWR_V.0.pdf",
+   "version": "厂家资料包 2026-11",
+   "what": "电源板原理图 PWR V.0。",
+   "source": "厂家资料包（materials/WonderDuck/4 硬件资料）。"
+  },
+  {
+   "id": "wonderduck-step",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/4 硬件资料/鸭子.stp",
+   "filename": "WonderDuck 整机结构.stp",
+   "version": "厂家资料包 2026-11",
+   "kind": "model",
+   "what": "整机三维结构（STEP），作为机器人模型保存；仿真用不了这种格式。",
+   "source": "厂家资料包（materials/WonderDuck/4 硬件资料）。",
+   "notes": "需要资料库接受 STP 格式的机器人模型（issue #77）后才能导入。"
+  },
+  {
+   "id": "wonderduck-source",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/3 源码资料/wonderduck-main.zip",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck 机器人控制程序源码（Rust，基于 Pollen Robotics Microduck；Apache-2.0）。",
+   "source": "厂家资料包（materials/WonderDuck/3 源码资料），也在 https://github.com/Hiwonder/wonderduck 。"
+  },
+  {
+   "id": "wonderduck-rl-source",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/3 源码资料/wonderduck_rl-main.zip",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck 强化学习训练源码（mjlab / MuJoCo Warp，PPO；代码 Apache-2.0，网格 CC BY-NC-SA 4.0）。",
+   "source": "厂家资料包（materials/WonderDuck/3 源码资料）。"
+  },
+  {
+   "id": "wonderduck-rl-project",
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "type": "other",
+   "device": "hiwonder-wonderduck",
+   "path": "WonderDuck/2 软件工具/5 模型训练工程包/wonderduck_rl.zip",
+   "filename": "wonderduck_rl 训练工程包.zip",
+   "version": "厂家资料包 2026-11",
+   "what": "WonderDuck 模型训练工程包（带已训练的 ONNX 模型：行走、站立、坐下起立、踢球等，和训练日志）。",
+   "source": "厂家资料包（materials/WonderDuck/2 软件工具/5 模型训练工程包）。"
+  }
+ ],
+ "skipped": [
+  {
+   "vendor": "智身科技",
+   "model": "钢镚 L2",
+   "why": "智身的 GitHub 仓库、MATRiX 及其分支和代码搜索里都没有 L2（点足）的 URDF 或 MJCF。"
+  },
+  {
+   "vendor": "智身科技",
+   "model": "铅球 SP1",
+   "why": "智身的 GitHub、文档、MATRiX 和网上都没有 SP1 的模型。"
+  },
+  {
+   "vendor": "智身科技",
+   "model": "银毅 NE01",
+   "why": "2026 年发布的人形机器人，只有新闻稿；智身的 GitHub 和代码搜索里没有 URDF 或 MJCF。"
+  },
+  {
+   "vendor": "智身科技",
+   "model": "破风者 RX",
+   "why": "人形机器人（2026 北京马拉松）；智身的 GitHub 和代码搜索里没有公开的 URDF 或 MJCF。"
+  },
+  {
+   "vendor": "Tesla",
+   "model": "Optimus",
+   "why": "特斯拉没有公开 URDF 或 MJCF；搜到的只有爱好者做的网页三维模型。"
+  },
+  {
+   "vendor": "Figure",
+   "model": "Figure 02",
+   "why": "Figure 和社区都没有公开的 URDF 或 MJCF。"
+  },
+  {
+   "vendor": "Figure",
+   "model": "Figure 03",
+   "why": "没有公开的 URDF 或 MJCF；只有一个空的“拆解三维模型”仓库，不是机器人描述文件。"
+  },
+  {
+   "vendor": "1X",
+   "model": "NEO",
+   "why": "1X 只公开了世界模型 1xgpt，没有 URDF 或 MJCF；搜索也没有。"
+  },
+  {
+   "vendor": "优必选",
+   "model": "Walker S1",
+   "why": "优必选的 GitHub 只有 Walker S2 和天工行者的模型，没有 S1；S2 是后一代，没有拿来代替。"
+  },
+  {
+   "vendor": "众擎机器人",
+   "model": "SE01",
+   "why": "众擎官方账号有 PM01、T800、T800 Pro 和 SA01 的模型，没有 SE01；搜索也没有。"
+  }
+ ],
+ "not_collected": [
+  {
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "what": "5 系统镜像/wonderduck_rk3566_20261118.zip",
+   "why": "只有百度网盘的下载，文件夹里是没下载完的半个文件（.baiduyun.p.downloading，178 MB）；网上没有别的下载地址。要收的话需要先在百度网盘里下完整。"
+  },
+  {
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "what": "4 硬件资料/HX-08LCM双轴磁编码舵机",
+   "why": "文件夹里只有一个指向百度网盘的网页（带提取码）；幻尔官网和 GitHub 上都没有这款舵机的公开资料。"
+  },
+  {
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "what": "2 软件工具：手机 App（Wonderbot-V2.4.0.apk）、WonderRL Windows 安装程序（.exe）、镜像烧录和格式化工具、MobaXterm 安装包",
+   "why": "是安装程序，不是资料库接收的类型（资料库收文档、URDF 和驱动安装包）；苹果版 App 在 App Store 搜 WonderBot。"
+  },
+  {
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "what": "带「(1)」的重复文件（教程 PDF、源码 zip、原理图）",
+   "why": "和不带「(1)」的那份内容完全相同，只收一份。"
+  },
+  {
+   "vendor": "幻尔科技",
+   "model": "WonderDuck",
+   "what": "Hiwonder-docs/WonderDuck-vite（GitHub 上的在线文档站）",
+   "why": "是编译好的网页程序（内容在 JavaScript 里），内容和厂家资料包里的教程 PDF 相同。"
+  },
+  {
+   "vendor": "宇树科技",
+   "model": "R1-7A",
+   "what": "materials/R1-7A 里的聊天截图",
+   "why": "只是两个文档网址，网址指向的开发指南页面已经取下收进来了。"
+  }
+ ]
+}

@@ -46,6 +46,7 @@ from . import audit
 from . import library_types as types
 from . import library_bundle      # issue #43: kind "bundle"
 from . import library_model       # issue #51: kind "model"
+from . import library_public      # issue #78: the public library
 from .auth import Principal, _throttle, bearer_token
 from .config import Settings
 from .db import Database, advisory_lock
@@ -266,9 +267,9 @@ def formats_view(settings: Settings) -> dict:
 
 
 # ------------------------------------------------------------------ lookups
-def _own_material(session: Session, p: Principal, material_id: str) -> Material:
+def _own_material(session: Session, p: Principal, material_id: str, read: bool = False) -> Material:
     material = session.get(Material, material_id) if MATERIAL_ID.fullmatch(material_id or "") else None
-    if material is None or material.org_id != p.org_id:
+    if material is None or not library_public.check(p, material.org_id, read):
         raise not_found("资料不存在")
     return material
 
@@ -684,7 +685,7 @@ def list_materials(session: Session, p: Principal, filters: dict) -> dict:
     limit, offset = filters.get("limit", DEFAULT_LIST), filters.get("offset", 0)
     if not 1 <= limit <= MAX_LIST or not 0 <= offset <= MAX_OFFSET:
         raise bad_request(f"limit 须为 1–{MAX_LIST}，offset 须为 0–{MAX_OFFSET}")
-    query = select(Material).where(Material.org_id == p.org_id)
+    query = select(Material).where(Material.org_id.in_(library_public.orgs(p)))
     for column, allowed in (("kind", types.KINDS), ("status", PARSE_STATES), ("format", tuple(types.BY_ID))):
         value = filters.get(column)
         if value is None:
@@ -708,18 +709,19 @@ def list_materials(session: Session, p: Principal, filters: dict) -> dict:
     total = session.execute(select(func.count()).select_from(query.subquery())).scalar_one()
     rows = session.execute(query.order_by(Material.created_at.desc(), Material.id.desc())
                            .limit(limit).offset(offset)).scalars()
-    return {"materials": [material_view(m) for m in rows], "total": total, "limit": limit, "offset": offset}
+    return {"materials": [{**material_view(m), **library_public.marks(p, m)} for m in rows], "total": total, "limit": limit, "offset": offset}
 
 
 def get_material(session: Session, p: Principal, material_id: str) -> dict:
     p.require(READ)
-    return material_view(_own_material(session, p, material_id))
+    material = _own_material(session, p, material_id, read=True)
+    return {**material_view(material), **library_public.marks(p, material)}
 
 
 def content_location(session: Session, p: Principal, store: LibraryStore, material_id: str) -> tuple[str, dict]:
     """``(path of the stored file, material view)`` for a download."""
     p.require(READ)
-    material = _own_material(session, p, material_id)
+    material = _own_material(session, p, material_id, read=True)
     if store.object_size(material.org_id, material.sha256) is None:
         raise not_found("这份资料的文件已经不在云端", code="content_missing")
     return store.object_path(material.org_id, material.sha256), material_view(material)

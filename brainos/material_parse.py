@@ -14,6 +14,7 @@ MAX_DEPTH, MAX_TEXT, MAX_ITEMS = 6, 5000, 5000
 VIEW_KEYS = ('material', 'kind', 'fields', 'note', 'stage', 'status', 'status_detail', 'values', 'not_applicable',
              'missing', 'warnings', 'error', 'retrying', 'parser', 'revision', 'edited_by', 'edited_at', 'confirmed_by',
              'confirmed_at', 'editable')
+VIEW_KEYS += ('public', 'read_only')     # issue #78: the public library
 
 
 def plain(value, depth=0):
