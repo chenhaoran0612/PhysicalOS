@@ -1,4 +1,4 @@
-/* Issue #66: 仿真试运行 by task (web/task_sim.js). The list of tasks, and one task's stage with its skills. */
+/* Issues #66 and #75: 仿真试运行 by task (web/task_sim.js). The list of tasks, a task's skills, and one skill's stage. */
 .tsim{--tsim-stage:#16241f;--tsim-glow:#2c4038;--tsim-accent:#c9e88f;--tsim-gap:clamp(16px,1.2vw + 8px,28px);--tsim-ease:cubic-bezier(.16,1,.3,1)}
 .tsim [hidden]{display:none!important}
 .tsim [data-tsim-part]:empty{display:none}
@@ -8,8 +8,8 @@
 
 /* ---- the list of tasks */
 .tsim-cards{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--tsim-gap)}
-.tsim-card{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden;transition:transform .28s var(--tsim-ease),border-color .16s}
-.tsim-card:hover,.tsim-card:focus-within{transform:translateY(-2px);border-color:#c9d8c3}
+.tsim-card,.tsim-skill-card{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden;transition:transform .28s var(--tsim-ease),border-color .16s}
+.tsim-card:hover,.tsim-card:focus-within,.tsim-skill-card:hover,.tsim-skill-card:focus-within{transform:translateY(-2px);border-color:#c9d8c3}
 .tsim-card-shot{position:relative;aspect-ratio:16/9;background:radial-gradient(120% 90% at 50% 0,var(--tsim-glow) 0,var(--tsim-stage) 72%);overflow:hidden}
 .tsim-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .tsim-thumb-robot{object-fit:contain;padding:14px;filter:drop-shadow(0 10px 18px #0006)}
@@ -22,17 +22,29 @@
 .tsim-card dl div{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;font-size:11.5px}
 .tsim-card dt{color:var(--muted)}
 .tsim-card dd{margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tsim-card .button{margin-top:auto;align-self:flex-start}
+.tsim-card .button,.tsim-skill-card .button{margin-top:auto;align-self:flex-start}
 .tsim-none{padding:44px 24px;border:1px dashed #cfdacb;border-radius:14px;text-align:center}
 .tsim-none b{font-size:16px}
 .tsim-none p{margin:8px auto 16px;max-width:46ch;font-size:12px;line-height:1.8;color:var(--muted)}
+
+/* ---- one task: its skills, each with its own environment (issue #75) */
+.tsim-skills-head{margin:26px 0 12px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.tsim-skills-head>span{font-size:11.5px;color:var(--muted)}
+.tsim-skill-card.is-here{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
+.tsim-here{position:absolute;right:12px;top:12px;padding:4px 9px;border-radius:99px;background:var(--tsim-accent);color:#1d2c12;font-size:10.5px;font-weight:600}
+.tsim-origin{margin:0;font-size:11px;letter-spacing:.2px;color:var(--green);font-weight:550}
+.tsim-strip{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-radius:12px;background:var(--tsim-stage);color:#d6e2da}
+.tsim-strip p{margin:0;font-size:12.5px;line-height:1.7}
+.tsim-strip b{color:#fff;font-weight:600}
+.tsim-strip .button.secondary{background:#24362f;border-color:#44584f;color:#e3ece6}
+.tsim-blocked{margin-bottom:var(--tsim-gap)}
 
 /* ---- one task */
 .tsim-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
 .tsim-head h1{margin:6px 0 8px;overflow-wrap:anywhere}
 .tsim-head p{margin:0;font-size:12px;color:var(--muted);line-height:1.7}
 .tsim-body{display:grid;grid-template-columns:minmax(0,6fr) minmax(0,5fr);gap:var(--tsim-gap);align-items:start}
-.tsim[data-mode=list] .tsim-body{display:none}
+.tsim[data-mode=list] .tsim-body,.tsim[data-mode=task] .tsim-body{display:none}
 .tsim-left{position:sticky;top:12px;display:grid;gap:var(--tsim-gap);min-width:0}
 .tsim-right{display:grid;gap:var(--tsim-gap);min-width:0}
 .tsim-stage{border-radius:14px;overflow:hidden;background:var(--tsim-stage);box-shadow:0 22px 44px -26px #0f2a1faa}
@@ -84,9 +96,12 @@
 .tsim-id{display:inline-block;margin-top:7px;font-size:10px;color:var(--muted)}
 .tsim-skill-actions{display:flex;flex-direction:column;gap:7px;min-width:92px}
 .tsim-run .contract-line{border:0;padding:0;margin:0}
+.tsim-panel.tsim-skill{padding:20px 22px;border:1px solid var(--line)}
+.tsim-panel.tsim-skill h2{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.tsim-panel.tsim-skill h2 .status{font-size:10px;font-weight:550}
 @keyframes tsim-pulse{50%{opacity:.25}}
-/* Issue #74: inside a task, the list of its simulated runs (web/run_boards.js) waits until there is an environment */
-#main:has(.tsim[data-mode=task]:not([data-built="1"])) [data-rb-sim]{display:none}
-@media (prefers-reduced-motion:reduce){.tsim-line[data-tone=busy]::before,.tsim-busy::before{animation:none}.tsim-card,.tsim-cover .button{transition:none}.tsim-card:hover,.tsim-card:focus-within{transform:none}}
+/* Issue #74: inside a task, the list of its simulated runs (web/run_boards.js) waits until there is an environment (#75: on a skill's page, that skill's) */
+#main:has(.tsim:not([data-mode=list]):not([data-built="1"])) [data-rb-sim]{display:none}
+@media (prefers-reduced-motion:reduce){.tsim-line[data-tone=busy]::before,.tsim-busy::before{animation:none}.tsim-card,.tsim-skill-card,.tsim-cover .button{transition:none}.tsim-card:hover,.tsim-card:focus-within,.tsim-skill-card:hover,.tsim-skill-card:focus-within{transform:none}}
 @media (max-width:1100px){.tsim-body{grid-template-columns:1fr}.tsim-left{position:static}}
 @media (max-width:600px){.tsim-skill{grid-template-columns:1fr}.tsim-skill-actions{flex-direction:row;flex-wrap:wrap}.tsim-panel{padding:16px}}

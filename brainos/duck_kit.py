@@ -470,6 +470,15 @@ class DuckKit:
         self.platform.audit('duck.show', {'robot_id': robot['id'], 'show': show['id'], 'run_id': record['id']}, robot.get('project_id'))
         return {'run_id': record['id'], 'robot_id': robot['id'], 'show': show['id']}
 
+    def stage(self, p):
+        """Issue #75: put a simulated duck on the stage one of its skill models was trained on (each skill has its own
+        environment). The body loads it in the background; ``status`` says ``staging`` until it stands there."""
+        robot = self._duck(p)
+        show = p.get('show') if isinstance(p.get('show'), str) else ''
+        if show not in self._config(robot).get('shows', {}):
+            raise CodedError('这个仿真小鸭没有这个技能模型', 'duck_show_missing')
+        return self._command(robot, {'cmd': 'stage', 'show': show})
+
     def stop(self, p):
         """End the show a simulated duck is performing (route ``sims/duck/stop``)."""
         robot = self._duck(p)
@@ -517,6 +526,7 @@ class DuckKit:
                     'phases': [str(x)[:40] for x in result.get('phases', []) if isinstance(x, str)][:12]},
                 'error': str(record.get('error') or record.get('fault') or '')[:500],
                 'engine': str(engine.get('mujoco') or '')[:20],
+                'stage': str(record.get('stage') or '')[:40], 'staging': str(record.get('staging') or '')[:40] if alive else '',
                 'shows': sorted(self._config(robot).get('shows', {})),
                 'skills': {str(k): {'skill': str(v.get('skill') or ''), 'version': str(v.get('version') or ''),
                                     'installed': v.get('installed') is True, 'error': str(v.get('error') or '')[:300]}

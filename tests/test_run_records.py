@@ -200,6 +200,52 @@ class FollowTests(unittest.TestCase):
         self.records.detail({'operation_id': 'skill-run-old'})
         self.assertEqual(self.records._get.paths, ['/v2/runs/run-1'])                 # kept: not asked again
 
+    # Issue #75: a robot's 「2 次，0 次完成」 counted two runs that had both succeeded: the older one had ended unseen
+    # and stayed 「已受理」 in every list until its own page was opened.
+    def settle(self, device):
+        self.records.follow = True
+        self.records._get = device
+        self.records.overview({})
+        thread = self.records.settling
+        if thread is not None:
+            thread.join(timeout=20)
+            self.assertFalse(thread.is_alive())
+
+    def test_the_lists_read_back_the_end_of_a_run_nobody_followed(self):
+        self.operation('skill-run-old', created_at='2026-01-01T00:00:00+00:00')
+        device = Device(ends_after=0)
+        self.settle(device)
+        summary = self.platform.store.list(run_records.KIND)[0]
+        self.assertEqual((summary['operation_id'], summary['state'], summary['run_status'], summary['note']),
+                         ('skill-run-old', 'final', 'succeeded', run_records.READ_BACK_NOTE))
+        self.assertEqual(device.paths, ['/v2/runs/run-1'])
+        self.settle(device)                                                       # once: a run with its record is not asked about again
+        self.assertEqual(device.paths, ['/v2/runs/run-1'])
+
+    def test_a_robot_that_cannot_answer_is_asked_again_only_after_a_while(self):
+        self.operation('skill-run-old', created_at='2026-01-01T00:00:00+00:00')
+        device = Device(fail=True)
+        self.settle(device)
+        self.settle(device)
+        self.assertEqual(device.paths, ['/v2/runs/run-1'])
+        self.assertEqual(self.platform.store.list(run_records.KIND), [])
+        with mock.patch.object(run_records, 'SETTLE_RETRY_S', 0):
+            self.settle(Device(ends_after=0))
+        self.assertEqual(self.platform.store.list(run_records.KIND)[0]['run_status'], 'succeeded')
+
+    def test_a_run_whose_following_was_cut_off_is_read_back_by_the_lists_too(self):
+        self.operation()
+        self.follow(Device(fail=True))
+        self.assertEqual(self.records._record('skill-run-1')['state'], 'lost')
+        self.settle(Device(ends_after=0))
+        record = self.records._record('skill-run-1')
+        self.assertEqual((record['state'], record['run_status'], record['note']), ('final', 'succeeded', run_records.READ_BACK_NOTE))   # it had no samples before it was cut off
+
+    def test_a_young_run_with_no_record_is_left_to_its_follower(self):
+        self.operation()
+        self.records.follow = True
+        self.assertEqual(self.records._unsettled(), [])                           # ensure() follows it (and reads it back when it had ended)
+
     def test_a_run_without_data_says_why_and_an_unknown_one_is_refused(self):
         self.operation('skill-run-old', created_at='2026-01-01T00:00:00+00:00')
         self.records.follow = True

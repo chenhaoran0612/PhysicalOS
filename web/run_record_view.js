@@ -146,10 +146,61 @@ function rrEvents(record) {
     `${typeof e.index === 'number' ? ` ${e.index + 1}` : ''}</b><span>${h([e.message, e.error].filter(Boolean).join(' · '))}</span></li>`).join('')}</ol></section>`;
 }
 
+// Issue #75: what a skill returned (and the parameters it was given) as the rows of the facts above: one line each,
+// Chinese names, a nested value as 「系统健康 · 正常」, true/false as 是/否, an empty value as 无 — never a box inside a row.
+const RR_KEYS = {health: '系统健康', ok: '正常', mode: '模式', errors: '错误', simulated: '仿真', family: '本体类型', available: '读到的状态',
+                 completed: '做完', model: '技能模型', steps: '步数', duration_s: '用时（秒）', success: '成功', reason: '原因', phases: '阶段',
+                 loops: '圈数', waypoints: '路点', place: '地点', places: '地点', seed: '起姿编号', visited: '到过的地点'};
+const RR_MODES = {'sim:stand': '仿真里站着待命', 'sim:fault': '仿真出错'};
+const RR_ROWS_MAX = 80;
+const RR_DEPTH_MAX = 6;          // a value nested deeper is not spelled out (a device can send thousands of levels)
+
+function rrKey(key) {
+  if (Object.hasOwn(RR_KEYS, key)) return RR_KEYS[key];
+  const readable = globalThis.nxReadable;
+  return readable && readable.hasLabel(key) ? readable.label(key) : String(key);
+}
+
+function rrScalar(key, value) {
+  if (value === null || value === undefined || value === '') return '无';
+  if (typeof value === 'boolean') return value ? '是' : '否';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(Math.round(value * 1000) / 1000) : '—';
+  const text = String(value);
+  if (key === 'family' && typeof familyNames === 'object' && familyNames && Object.hasOwn(familyNames, text)) return familyNames[text];
+  if (key === 'mode') return Object.hasOwn(RR_MODES, text) ? RR_MODES[text] : text.startsWith('sim:show:') ? '仿真里正在表演 ' + text.slice(9) : text;
+  return text;
+}
+
+// [[label, text]] for every value inside `value`; at most RR_ROWS_MAX rows (the last one says how many were left out).
+function rrRows(value) {
+  const out = [];
+  let left = 0;
+  const put = (path, text) => { if (out.length < RR_ROWS_MAX) out.push([path.join(' · '), text]); else left += 1; };
+  const walk = (path, key, v, depth) => {
+    if (out.length >= RR_ROWS_MAX) return put(path, '');       // counted, not walked
+    if (Array.isArray(v)) {
+      if (!v.length) return put(path, '无');
+      if (v.every(x => x === null || typeof x !== 'object')) return put(path, v.map(x => rrScalar(key, x)).join('、'));
+      if (depth >= RR_DEPTH_MAX) return put(path, `${v.length} 项，层次太深，见下面「收集到的运行数据」`);
+      return v.forEach((x, i) => walk([...path, `第 ${i + 1} 项`], key, x, depth + 1));
+    }
+    if (v && typeof v === 'object') {
+      const entries = Object.entries(v);
+      if (!entries.length) return put(path, '无');
+      if (depth >= RR_DEPTH_MAX) return put(path, `${entries.length} 项，层次太深，见下面「收集到的运行数据」`);
+      return entries.forEach(([k, x]) => walk([...path, rrKey(k)], k, x, depth + 1));
+    }
+    return put(path, rrScalar(key, v));
+  };
+  if (value && typeof value === 'object') walk([], '', value, 0);
+  else put(['结果'], rrScalar('', value));
+  if (left) out.push(['…', `还有 ${left} 项没有列出，见下面「收集到的运行数据」`]);
+  return out;
+}
+
 const rrValues = (title, value) => (value === undefined || value === null || (typeof value === 'object' && !Object.keys(value).length) ? ''
-  : `<section class="rr-block"><h2>${h(title)}</h2>${typeof value === 'object' && !Array.isArray(value)
-    ? `<dl class="rr-values">${Object.entries(value).map(([k, v]) => `<div><dt>${h(k)}</dt><dd>${h(typeof v === 'object' ? JSON.stringify(v) : v)}</dd></div>`).join('')}</dl>`
-    : `<p class="rr-plain">${h(typeof value === 'object' ? JSON.stringify(value) : value)}</p>`}</section>`);
+  : `<section class="rr-block"><h2>${h(title)}</h2><dl class="rr-values">${rrRows(value).map(([k, v]) =>
+    `<div><dt>${h(k || '结果')}</dt><dd>${h(v)}</dd></div>`).join('')}</dl></section>`);
 
 // The cases of a report as steps; what is not a case is left out.
 const rrCases = cases => (Array.isArray(cases) ? cases : []).filter(c => c && typeof c === 'object').map(c => ({name: c.name, status: c.passed ? 'succeeded' : 'failed', detail: c.detail}));
