@@ -1,0 +1,43 @@
+/* Issue #72 — 整体 Icon 优化. One way to draw every icon (web/icons.js has the table): 24 × 24 grid,
+   stroke 1.75, round ends and corners, no fill, the colour of the words next to it. Loaded after style.css. */
+:root {
+  --nx-icon-stroke: 1.75;
+  /* The mark: N whose last stroke leaves as an arrow. desktop/icon.swift draws the same shape. */
+  --nx-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='12 12 40 40' fill='none' stroke='%23000' stroke-width='5.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 45V19L36 45V29L46 19M37 19h9v9'/%3E%3C/svg%3E");
+}
+
+/* Icons drawn by icon() of app.js, wherever a page puts them. */
+:is(button, .button, .nav-icon, .stat-icon, .pipeline-icon, .agent-avatar, .model-symbol, .inv-avatar, .af-eye, .body-family) svg[viewBox="0 0 24 24"] {
+  fill: none;
+  stroke-width: var(--nx-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A symbol that used to be a character (← ↗ ✓ × ☰ …). The character stays for readers and for copying. */
+.nx-glyph { display: inline; }
+svg.nx-i, button svg.nx-i, .button svg.nx-i {
+  display: inline-block;
+  vertical-align: -0.2em;
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--nx-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Kept in the line (no box of its own), so innerText and a copy read exactly as before. */
+.nx-glyph-text { font-size: 0; line-height: 0; color: transparent; }
+
+/* The mark, in the colour the old characters had (lime on the dark side, green on a light ground). */
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  font-size: 0;
+  background: currentColor;
+  -webkit-mask: var(--nx-mark) center / contain no-repeat;
+  mask: var(--nx-mark) center / contain no-repeat;
+}
+.brand-mark span { display: none; }
