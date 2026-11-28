@@ -223,6 +223,8 @@ def make_handler(application):
             extra=extra or {'/app_create.js':('app_create.js','text/javascript; charset=utf-8'),'/app_create.css':('app_create.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             # Issue #62: why a skill cannot be installed on a robot that is not connected, and the step that fixes it.
             extra=extra or {'/skill_install_guide.js':('skill_install_guide.js','text/javascript; charset=utf-8'),'/skill_install_guide.css':('skill_install_guide.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
+            # Issue #72: one table of icons for the console, and the mark.
+            extra=extra or {'/icons.js':('icons.js','text/javascript; charset=utf-8'),'/icons.css':('icons.css','text/css; charset=utf-8')}.get(urlparse(self.path).path)
             if extra:
                 return self.respond((ROOT/'web'/extra[0]).read_bytes(),mime=extra[1])
             path=urlparse(self.path).path
