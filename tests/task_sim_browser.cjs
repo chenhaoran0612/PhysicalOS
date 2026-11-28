@@ -82,7 +82,9 @@ const engine = process.env.BRAIN_BROWSER === 'webkit' ? playwright.webkit : play
   if (physics) {
     const form = root.locator('[data-tsim-form]');
     await form.waitFor();
-    await form.locator('[type=submit]').click();                        // the agent needs consent: refused in place
+    await page.locator('#main [data-rb-sim]').waitFor({state: 'attached'});
+    must(!(await page.locator('#main [data-rb-sim]').isVisible()), 'The list of the task\'s simulated runs shows before the task has an environment (issue #74)');
+    await form.locator('[type=submit]').click();                      // the agent needs consent: refused in place
     await eventually(async () => (await form.locator('.form-error').innerText()).includes('同意'), 'Building with the agent without consent is not refused in the form');
     await shot('sim66-02-build-form');
     await root.locator('[data-tsim-empty]').click();
@@ -91,6 +93,8 @@ const engine = process.env.BRAIN_BROWSER === 'webkit' ? playwright.webkit : play
     await eventually(() => root.locator('.tsim-preview').evaluate(img => img.complete && img.naturalWidth > 0).catch(() => false), 'The preview of the saved environment did not load');
   }
   await root.locator('[data-tsim-enter]').waitFor();
+  await page.locator('#main [data-rb-sim]').waitFor({state: 'visible'});         // issue #74: now there is something to run in
+  must((await page.locator('#main [data-rb-sim]').innerText()).includes('这个任务的仿真运行记录'), 'The list of the task\'s simulated runs is not there once the task has an environment');
   must(await root.locator('.tsim-skill [data-tsim-run]').isDisabled(), 'A skill can be run before the simulation is entered');
   await shot('sim66-03-saved');
 

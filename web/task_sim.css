@@ -85,6 +85,8 @@
 .tsim-skill-actions{display:flex;flex-direction:column;gap:7px;min-width:92px}
 .tsim-run .contract-line{border:0;padding:0;margin:0}
 @keyframes tsim-pulse{50%{opacity:.25}}
+/* Issue #74: inside a task, the list of its simulated runs (web/run_boards.js) waits until there is an environment */
+#main:has(.tsim[data-mode=task]:not([data-built="1"])) [data-rb-sim]{display:none}
 @media (prefers-reduced-motion:reduce){.tsim-line[data-tone=busy]::before,.tsim-busy::before{animation:none}.tsim-card,.tsim-cover .button{transition:none}.tsim-card:hover,.tsim-card:focus-within{transform:none}}
 @media (max-width:1100px){.tsim-body{grid-template-columns:1fr}.tsim-left{position:static}}
 @media (max-width:600px){.tsim-skill{grid-template-columns:1fr}.tsim-skill-actions{flex-direction:row;flex-wrap:wrap}.tsim-panel{padding:16px}}

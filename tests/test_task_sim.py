@@ -377,6 +377,91 @@ class WrittenByTheAgent(Case):
             time.sleep(0.2)
         self.assertFalse((self.app.mujoco.scenes_dir / given).exists())
 
+    # Issue #74: on 2026-11-28 the real agent looked around the workspace three times, at about 10 400 tokens a
+    # request, and was stopped by the engine's default observation limit of 30 000 before it wrote scene.json
+    # (「工程助手没有写出环境描述：会话被停止了」). The stand-in below counts tokens like that real run.
+    def agent_like_the_real_one(self):
+        from brainos import agent_runtime
+        from test_product import Server
+        if agent_runtime.binary_path():
+            self.skipTest('counts the tokens of the stand-in agent; a real engine counts its own')
+        model_class = looks_around()
+        model_class.command = self.model.command
+        server = Server(model_class)
+        self.addCleanup(server.close)
+        model = self.app.engineering.model_add({'project_id': self.task_['id'], 'name': 'Looks around', 'model': 'fixture-agent',
+                                                'base_url': server.url + '/v1', 'api_key': 'fixture-' + 'k' * 20})
+        return {**self.ask, 'model_id': model['id']}
+
+    def test_an_agent_that_looks_around_first_has_tokens_enough_to_write_the_environment(self):
+        from unittest import mock
+        from brainos import agent_runtime, engineering, mujoco_sim
+        import mujoco_support as ms
+        from test_mujoco_sim import writes
+        self.model.command = writes(ms.scene())
+        ask = self.agent_like_the_real_one()
+        with mock.patch.object(agent_runtime, 'AgentProcess', counting(REAL_REQUEST_TOKENS)):
+            self.sim.build(ask)
+            view = self.built(self.task_)
+        self.assertIsNone(view['build'], view)
+        self.assertEqual(view['environment']['source'], 'agent')
+        session = self.app.store.get('agent_sessions', self.sim._record(self.task_['id'])['saved']['session_id'])
+        self.assertGreater(session['usage']['totalTokens'], 30000)               # more than the engine's default allows
+        self.assertEqual(session['max_tokens'], mujoco_sim.AGENT_TOKENS)
+        self.assertGreaterEqual(mujoco_sim.AGENT_TOKENS, engineering.CLOUD_MIN_TOKENS)   # a cloud model can build too
+        self.assertNotIn('cat scene.json', session['objective'])                 # a big environment is not read back whole
+
+    def test_a_build_stopped_at_its_token_limit_says_so(self):
+        from unittest import mock
+        from brainos import agent_runtime, mujoco_sim
+        import mujoco_support as ms
+        from test_mujoco_sim import writes
+        self.model.command = writes(ms.scene())
+        ask = self.agent_like_the_real_one()
+        with mock.patch.object(agent_runtime, 'AgentProcess', counting(REAL_REQUEST_TOKENS)), \
+                mock.patch.object(mujoco_sim, 'AGENT_TOKENS', 30000):
+            self.sim.build(ask)
+            view = self.built(self.task_)
+        self.assertEqual((view['build']['status'], view['environment']), ('failed', None))
+        self.assertIn('用完了这次构建的 Token 额度（30000）', view['build']['error'])
+
+
+REAL_REQUEST_TOKENS = 10400
+
+
+def counting(per_request):
+    """The stand-in agent, counting ``per_request`` tokens for every request to the model."""
+    from codex_standin import CodexStandIn
+
+    class Counting(CodexStandIn):
+        asked = 0
+
+        def _emit(self, method, params, request_id=None):
+            if method == 'thread/tokenUsage/updated':
+                self.asked += 1
+                params = {**params, 'tokenUsage': {'total': {'totalTokens': per_request * self.asked}, 'last': {'totalTokens': per_request}}}
+            return super()._emit(method, params, request_id)
+    return Counting
+
+
+def looks_around():
+    import json
+    from test_mujoco_sim import SceneModel
+
+    class LooksAround(SceneModel):
+        """Like the real agent: three commands that look around the workspace, then the one that writes, then done."""
+        looks = ('ls -1', 'cat SIMULATION.json', 'wc -c SIMULATION.json')
+
+        def select_item(self, data, _fallback):
+            done = sum(1 for x in data.get('input', []) if x.get('type') == 'function_call_output')
+            if done > len(self.looks):
+                return {'id': 'msg_done', 'type': 'message', 'role': 'assistant', 'status': 'completed',
+                        'content': [{'type': 'output_text', 'text': '环境描述已写好。', 'annotations': []}]}
+            command = self.looks[done] if done < len(self.looks) else type(self).command
+            return {'id': f'fc_{done}', 'type': 'function_call', 'call_id': f'call_{done}', 'name': 'exec_command',
+                    'arguments': json.dumps({'cmd': command})}
+    return LooksAround
+
 
 @unittest.skipUnless(HAVE_MUJOCO, 'needs the mujoco package')
 class Duck(test_duck_kit.Case):
