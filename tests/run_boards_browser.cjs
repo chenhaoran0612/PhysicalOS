@@ -121,12 +121,22 @@ let failed = async () => {};
   await shots('deployment');
   await log.locator('tr.rb-row').last().click();                       // the whole row opens the record
   await page.waitForFunction(() => location.hash === '#record');
+  await main.locator('.rr-page').waitFor();                            // the address changes before the page of the record is drawn
   await expectText(main, ['安装技能包 · patrol_places']);
   must(await page.locator('#navigation a[href="#deployment"].active').count() === 1, 'opened from 部署与运行');
   await main.locator('.tw-back a').click();
   await page.waitForFunction(() => location.hash === '#deployment');
+  await main.locator('.rb-board').waitFor();
   await open('harness');
   await main.locator('[data-sim-explain="only"]').waitFor();
+  // Nothing changes now: the page must not be drawn again and again (the lists poll their records every 3 s).
+  const redraws = await page.evaluate(() => new Promise(resolve => {
+    let n = 0;
+    const seen = new MutationObserver(list => { n += list.filter(m => m.target.id === 'main').length; });
+    seen.observe(document.getElementById('main'), {childList: true});
+    setTimeout(() => { seen.disconnect(); resolve(n); }, 9000);
+  }));
+  must(redraws <= 3, `the page was drawn ${redraws} times in 9 s with nothing changing`);
   await main.locator('.page-head [data-action="harness-pick"]').click();
   await page.locator('#dialog[open]').waitFor();
   await page.locator('#dialog [data-action="close"]').first().click();
