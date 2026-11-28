@@ -47,6 +47,7 @@
 | [ROBOT_NO_TASK.md](ROBOT_NO_TASK.md) | 添加机器人不需要任务，也不会顺带建任务；任务在创建时绑定机器人（issue #56） |
 | [APP_GALLERY.md](APP_GALLERY.md) | 「机器人应用」是应用瀑布流：应用有自己的页面，画出工作流（按顺序调用的技能）；技能在单独的页面；创建应用选品牌型号（issue #60） |
 | [APP_CREATE.md](APP_CREATE.md) | 「机器人应用」只展示已创建的应用；创建应用时选任务（必选）和品牌型号，这个品牌型号的技能直接可以编排，不用先安装；机器人上没有的技能在现场测试时自动装上；随应用带的技能包只算属于这个品牌型号的和通用的（issue #68） |
+| [PUBLISHED_SKILLS.md](PUBLISHED_SKILLS.md) | 创建、修改应用时，云端「技能发布」里发布给这个品牌型号的全部版本都可以选，机器人没有连接也可以；现场测试前机器人上缺的版本从云端装；表单读云端最多等 8 秒，读不到时照常可用（issue #73） |
 | [SKILL_INSTALL_GUIDE.md](SKILL_INSTALL_GUIDE.md) | 从「机器人应用」安装技能时机器人没连上：对话框写明原因，带「安装管理层」「接入已有的管理层」「重新连接」（issue #62） |
 | [DUCK_SKILLS.md](DUCK_SKILLS.md) | Microduck AD-P102（双足小鸭）作为仿真机器人；它训练出来的技能模型在应用里按原策略真跑，「训练与改进」页看训练进展；模型文件只进安装包（issue #63） |
 | [TRAINED_SKILLS.md](TRAINED_SKILLS.md) | 仿真里训练出的模型就是机器人的技能：能力标准 1.3 的 `policy.run`；Microduck AD-P102 每个有模型包的节目是一个技能 `duck.<节目>`，仿真小鸭启动时自带并登记到品牌型号的技能里（issue #67） |
