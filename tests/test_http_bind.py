@@ -11,7 +11,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler
 from unittest import mock
 
-from brainos import edge, server
+from brainos import edge, run_records, server
 from brainos.httpd import FastBindHTTPServer
 
 
@@ -38,7 +38,8 @@ class EntryPointTests(unittest.TestCase):
     def test_console_main_binds_without_reverse_dns_lookup(self):
         with tempfile.TemporaryDirectory() as state, no_reverse_lookup(), stop_serving(), \
                 mock.patch.object(sys, "argv", ["brainos.server", "--port", "0", "--state-dir", state]), \
-                mock.patch("signal.signal"), mock.patch("builtins.print"):
+                mock.patch("signal.signal"), mock.patch("builtins.print"), \
+                mock.patch.object(run_records, "FOLLOW", run_records.FOLLOW):   # main() turns following on (#70); not for later tests
             server.main()
 
     def test_edge_main_binds_without_reverse_dns_lookup(self):
